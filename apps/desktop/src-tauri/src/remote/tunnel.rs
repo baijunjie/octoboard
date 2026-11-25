@@ -101,6 +101,15 @@ pub struct Link {
     closed: AtomicBool,
     /// Whether `keep_up` has an attempt under way.
     keeping_up: AtomicBool,
+    /// The addresses of the remote machine each connection through a forwarded port was tried at,
+    /// in order, by where the connection came from: a test tells its own connections' from those
+    /// of anything else that connects to the port.
+    #[cfg(test)]
+    pub(super) forward_tries: Mutex<Vec<(std::net::SocketAddr, &'static str)>>,
+    /// How many of the window's connections have asked for the SSH connection, for a test to wait
+    /// until those it made have.
+    #[cfg(test)]
+    asks: watch::Sender<usize>,
 }
 
 impl Link {
@@ -129,6 +138,10 @@ impl Link {
             live: watch::Sender::new(true),
             closed: AtomicBool::new(false),
             keeping_up: AtomicBool::new(false),
+            #[cfg(test)]
+            forward_tries: Mutex::default(),
+            #[cfg(test)]
+            asks: watch::Sender::new(0),
         }
     }
 
@@ -301,7 +314,10 @@ impl Link {
     /// Carries `stream`, one of the window's connections, to the daemon's owner endpoint until
     /// either side closes it.
     async fn carry(&self, mut stream: TcpStream) {
-        let Some(session) = self.reach(Pace::Asked(Instant::now())).await else {
+        let asked_at = Instant::now();
+        #[cfg(test)]
+        self.asks.send_modify(|asks| *asks += 1);
+        let Some(session) = self.reach(Pace::Asked(asked_at)).await else {
             return;
         };
         if self.reread.swap(false, Ordering::SeqCst) {
@@ -411,7 +427,7 @@ mod tests {
     use super::super::ssh::test_server::{answer, Behaviour, TestServer};
     use super::super::ssh::Secret;
     use super::*;
-    use crate::test_support::ClosedPort;
+    use crate::test_support::{is_port_probe, port_probed, ClosedPort, PATIENCE};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     fn target(server: &TestServer) -> Target {
@@ -424,23 +440,11 @@ mod tests {
         }
     }
 
-    struct Running {
-        port: u16,
-        keys: Arc<Mutex<Vec<String>>>,
-        stop: watch::Sender<bool>,
-        link: Arc<Link>,
-        serving: tokio::task::JoinHandle<()>,
-    }
-
-    /// A link over a connection to `server`, served without looking at the SSH connection between
-    /// the window's connections, so that nothing but the test makes it again.
-    async fn run(server: &TestServer) -> Running {
-        run_with(server, target(server), Duration::from_secs(3600)).await
-    }
-
-    /// A link over a connection to `server` that makes it again with `target`, served looking at
-    /// the SSH connection every `every`.
-    async fn run_with(server: &TestServer, target: Target, every: Duration) -> Running {
+    /// A link over a connection to `server` that makes it again with `target`, and the keys the
+    /// window was pointed at. Nothing serves it, so only the test asks anything of it: the port a
+    /// served link listens on takes a connection from anything on the machine
+    /// (`crate::test_support::port_probe`), which the link carries like the window's own.
+    async fn linked(server: &TestServer, target: Target) -> (Arc<Link>, Arc<Mutex<Vec<String>>>) {
         let session = ssh::connect(&self::target(server)).await.unwrap();
         let keys = Arc::new(Mutex::new(Vec::new()));
         let seen = keys.clone();
@@ -451,6 +455,28 @@ mod tests {
             "aa".into(),
             move |key| seen.lock().unwrap().push(key),
         ));
+        (link, keys)
+    }
+
+    struct Running {
+        port: u16,
+        keys: Arc<Mutex<Vec<String>>>,
+        stop: watch::Sender<bool>,
+        link: Arc<Link>,
+        serving: tokio::task::JoinHandle<()>,
+    }
+
+    /// A link over a connection to `server`, served without looking at the SSH connection between
+    /// the connections made to its port. A test of a served link asserts what its own connections
+    /// got, and nothing that one more connection to the port would change.
+    async fn run(server: &TestServer) -> Running {
+        run_with(server, target(server), Duration::from_secs(3600)).await
+    }
+
+    /// A link over a connection to `server` that makes it again with `target`, served looking at
+    /// the SSH connection every `every`.
+    async fn run_with(server: &TestServer, target: Target, every: Duration) -> Running {
+        let (link, keys) = linked(server, target).await;
         let listener = bind().await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let (stop, stopped) = watch::channel(false);
@@ -470,38 +496,90 @@ mod tests {
         // The proxy's half-close: the bytes sent come back, then the end.
         stream.shutdown().await.unwrap();
         let mut back = Vec::new();
-        tokio::time::timeout(Duration::from_secs(10), stream.read_to_end(&mut back))
+        tokio::time::timeout(PATIENCE, stream.read_to_end(&mut back))
             .await
             .expect("the echo came back")
             .unwrap();
         back
     }
 
-    /// Waits until none of the window's connections is being carried.
+    /// Sends the daemon's probe to the window's port, as anything on the machine may at any
+    /// moment, and gives the first line of what came back.
+    async fn stranger(port: u16) -> String {
+        port_probed(port).await
+    }
+
+    /// Waits until none of the connections made to the window's port is being carried.
     async fn idle(link: &Link) {
-        let _ = link.open.subscribe().wait_for(|open| *open == 0).await;
+        tokio::time::timeout(PATIENCE, link.open.subscribe().wait_for(|open| *open == 0))
+            .await
+            .expect("every connection was let go")
+            .expect("the link lives");
     }
 
     /// Drops the host's side of every connection and waits until the link's SSH connection has
-    /// ended.
-    async fn dropped(running: &Running, server: &TestServer) {
-        let session = running.link.slot.lock().await.session.clone().unwrap();
+    /// ended. The slot is held from before the drop and handed back: nothing makes the connection
+    /// again, a stranger's connection to the window's port neither, until the test lets it go.
+    async fn dropped<'a>(link: &'a Link, server: &TestServer) -> tokio::sync::MutexGuard<'a, Slot> {
+        let slot = link.slot.lock().await;
+        let session = slot.session.clone().unwrap();
         server.drop_connections();
         session.closed().await;
+        slot
+    }
+
+    fn proxies(server: &TestServer) -> usize {
+        server
+            .commands()
+            .iter()
+            .filter(|command| *command == "'octoboardd' proxy")
+            .count()
+    }
+
+    /// Carries a connection made as the window makes one over `link`, sends `text` through it and
+    /// gives what came back by its end. The connection is the test's alone, with no port anything
+    /// else could connect to.
+    async fn carried(link: &Arc<Link>, text: &[u8]) -> Vec<u8> {
+        let (accepted, mut window) = window_connection().await;
+        let carrying = {
+            let link = link.clone();
+            tokio::spawn(async move { link.carry(accepted).await })
+        };
+        window.write_all(text).await.unwrap();
+        // The proxy's half-close: the bytes sent come back, then the end.
+        window.shutdown().await.unwrap();
+        let mut back = Vec::new();
+        tokio::time::timeout(PATIENCE, window.read_to_end(&mut back))
+            .await
+            .expect("the echo came back")
+            .unwrap();
+        carrying.await.unwrap();
+        back
     }
 
     #[tokio::test]
     async fn each_connection_is_carried_by_a_proxy_run() {
         let server = TestServer::start(Behaviour::default()).await;
+        let (link, _) = linked(&server, target(&server)).await;
+        assert_eq!(carried(&link, b"hello").await, b"hello");
+        assert_eq!(carried(&link, b"again").await, b"again");
+        assert_eq!(proxies(&server), 2);
+        assert_eq!(
+            server.connections(),
+            1,
+            "one SSH connection carries them all"
+        );
+    }
+
+    #[tokio::test]
+    async fn every_connection_made_to_the_window_s_port_is_carried() {
+        let server = TestServer::start(Behaviour::default()).await;
         let running = run(&server).await;
         assert_eq!(echo(running.port, b"hello").await, b"hello");
+        // A stranger's connection is carried like the window's own: the proxy sends its request
+        // back.
+        assert!(is_port_probe(&stranger(running.port).await));
         assert_eq!(echo(running.port, b"again").await, b"again");
-        let proxies = server
-            .commands()
-            .iter()
-            .filter(|command| *command == "'octoboardd' proxy")
-            .count();
-        assert_eq!(proxies, 2);
         assert_eq!(
             server.connections(),
             1,
@@ -514,17 +592,29 @@ mod tests {
         let server = TestServer::start(Behaviour::default()).await;
         let running = run(&server).await;
         assert_eq!(echo(running.port, b"one").await, b"one");
-        let mut live = running.link.live();
-        assert!(*live.borrow_and_update());
-        dropped(&running, &server).await;
-        // Seen dropped at a look at the connection, which the serving loop takes every interval.
-        running.link.note_live();
-        assert!(!*live.borrow_and_update());
+        drop(dropped(&running.link, &server).await);
+        // Whichever connection comes first has it made again, a stranger's here, and the
+        // window's is carried over the one made.
+        assert!(is_port_probe(&stranger(running.port).await));
         assert_eq!(echo(running.port, b"two").await, b"two");
-        assert!(*live.borrow());
+        assert!(*running.link.live().borrow());
         assert_eq!(server.connections(), 2);
         // The key, read again over the new connection, did not change: the window is left alone.
         assert!(running.keys.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_dropped_connection_is_told_down_at_a_look_and_up_once_it_is_made_again() {
+        let server = TestServer::start(Behaviour::default()).await;
+        let (link, _) = linked(&server, target(&server)).await;
+        let mut live = link.live();
+        assert!(*live.borrow_and_update());
+        drop(dropped(&link, &server).await);
+        // Seen dropped at a look at the connection, which the serving loop takes every interval.
+        link.note_live();
+        assert!(!*live.borrow_and_update());
+        assert!(link.reach(Pace::Asked(Instant::now())).await.is_some());
+        assert!(*live.borrow());
     }
 
     #[tokio::test]
@@ -536,13 +626,18 @@ mod tests {
             ..target(&server)
         };
         let running = run_with(&server, nowhere, Duration::from_secs(3600)).await;
-        dropped(&running, &server).await;
-        // Nothing listens at the host's port: the window's connection is closed at once.
+        drop(dropped(&running.link, &server).await);
+        // Nothing listens at the host's port: a connection is closed with nothing carried, a
+        // stranger's and then the window's.
+        assert_eq!(stranger(running.port).await, "");
         let mut stream = TcpStream::connect(("127.0.0.1", running.port))
             .await
             .unwrap();
         let mut back = Vec::new();
-        let _ = tokio::time::timeout(Duration::from_secs(30), stream.read_to_end(&mut back)).await;
+        tokio::time::timeout(PATIENCE, stream.read_to_end(&mut back))
+            .await
+            .expect("the connection was closed")
+            .unwrap();
         assert!(back.is_empty());
         assert!(
             std::net::TcpListener::bind(("127.0.0.1", running.port)).is_err(),
@@ -554,8 +649,11 @@ mod tests {
     async fn a_key_rotated_while_disconnected_is_followed() {
         let server = TestServer::start(Behaviour::default()).await;
         let running = run(&server).await;
-        dropped(&running, &server).await;
+        let down = dropped(&running.link, &server).await;
         server.set_address(Some(answer("bb")));
+        drop(down);
+        // Read over the new connection, whichever connection has it made: a stranger's here.
+        assert!(is_port_probe(&stranger(running.port).await));
         assert_eq!(echo(running.port, b"x").await, b"x");
         assert_eq!(*running.keys.lock().unwrap(), vec!["bb".to_owned()]);
     }
@@ -564,11 +662,18 @@ mod tests {
     async fn a_key_rotated_while_connected_is_followed_once_the_window_reconnects() {
         let server = TestServer::start(Behaviour::default()).await;
         let running = run(&server).await;
-        assert_eq!(echo(running.port, b"x").await, b"x");
-        // Rotating the key closes every connection the window had open; its next one reads the
-        // key again, before it is carried.
-        idle(&running.link).await;
+        // The sequence held: the key is rotated while the SSH connection is up and before
+        // anything was carried, so no connection reads it at first (the key is read again only
+        // over a new SSH connection, or once every connection made to the port has ended); the
+        // first connection ends; the next one made when none is open reads the new key. Rotating
+        // before the first connection, not after it, leaves no moment at which a stranger's
+        // connection could read the old key again and still be open when the last one comes.
         server.set_address(Some(answer("cc")));
+        assert_eq!(echo(running.port, b"x").await, b"x");
+        assert!(is_port_probe(&stranger(running.port).await));
+        // Rotating the key closes every connection the window had open; the next one after none
+        // is open reads the key again, before it is carried.
+        idle(&running.link).await;
         assert_eq!(echo(running.port, b"y").await, b"y");
         assert_eq!(*running.keys.lock().unwrap(), vec!["cc".to_owned()]);
         assert_eq!(server.connections(), 1);
@@ -593,13 +698,13 @@ mod tests {
     #[tokio::test]
     async fn the_current_connection_is_told_while_the_slot_is_busy_and_not_once_it_is_gone() {
         let server = TestServer::start(Behaviour::default()).await;
-        let running = run(&server).await;
+        let (link, _) = linked(&server, target(&server)).await;
         // A reconnection or a carry holding the slot does not make a live connection look down.
-        let _busy = running.link.slot.lock().await;
-        assert!(running.link.current().is_some());
-        drop(_busy);
-        running.link.close().await;
-        assert!(running.link.current().is_none());
+        let busy = link.slot.lock().await;
+        assert!(link.current().is_some());
+        drop(busy);
+        link.close().await;
+        assert!(link.current().is_none());
     }
 
     #[tokio::test]
@@ -608,77 +713,97 @@ mod tests {
         let running = run(&server).await;
         running.link.close().await;
         // A carry that comes after the close, as one under way when the window closed does, finds
-        // no connection and makes none.
+        // no connection and makes none: a stranger's through the port, and one asked for here.
+        assert_eq!(stranger(running.port).await, "");
         assert!(running.link.session().await.is_none());
         assert_eq!(server.connections(), 1);
         assert!(running.link.slot.lock().await.session.is_none());
     }
 
     /// Notes a failed attempt at `at`, as `reach` does, its pause still running.
-    async fn failed(link: &Link, at: Instant) {
-        let mut slot = link.slot.lock().await;
+    fn failed(slot: &mut Slot, at: Instant) {
         slot.failures = 6;
         slot.failed_at = Some(at);
         slot.retry_at = Some(at + retry_pause(6));
     }
 
+    /// The application's end of a connection made as the window makes one, for `Link::carry`, and
+    /// the window's end. Whatever else connects to the listener meanwhile is let go.
+    async fn window_connection() -> (TcpStream, TcpStream) {
+        let listener = bind().await.unwrap();
+        let window = TcpStream::connect(listener.local_addr().unwrap())
+            .await
+            .unwrap();
+        loop {
+            let (accepted, from) = listener.accept().await.unwrap();
+            if from == window.local_addr().unwrap() {
+                return (accepted, window);
+            }
+        }
+    }
+
     #[tokio::test]
     async fn a_window_connection_reaches_the_host_in_the_pause_a_failed_attempt_left() {
         let server = TestServer::start(Behaviour::default()).await;
-        let running = run(&server).await;
-        dropped(&running, &server).await;
-        failed(&running.link, Instant::now() - Duration::from_millis(1)).await;
+        let (link, _) = linked(&server, target(&server)).await;
+        let mut down = dropped(&link, &server).await;
+        failed(&mut down, Instant::now() - Duration::from_millis(1));
+        drop(down);
         // A forward waits out the pause.
-        assert!(running.link.session().await.is_none());
+        assert!(link.session().await.is_none());
         assert_eq!(server.connections(), 1);
         // The window spaces its attempts itself, and its Try again attempts at once: the host,
         // back meanwhile, is reached.
-        assert_eq!(echo(running.port, b"back").await, b"back");
+        assert_eq!(carried(&link, b"back").await, b"back");
         assert_eq!(server.connections(), 2);
-        assert!(*running.link.live().borrow());
+        assert!(*link.live().borrow());
     }
 
     #[tokio::test]
     async fn window_connections_made_while_an_attempt_fails_take_its_failure_and_make_no_other() {
         let server = TestServer::start(Behaviour::default()).await;
-        // A host that takes the connection and drops it a second later without a word, counting
-        // the attempts made to it.
-        let host = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
-        let host_port = host.local_addr().unwrap().port();
-        let attempts = Arc::new(Mutex::new(0usize));
-        let counted = attempts.clone();
-        tokio::spawn(async move {
-            while let Ok((stream, _)) = host.accept().await {
-                *counted.lock().unwrap() += 1;
-                tokio::spawn(async move {
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    drop(stream);
-                });
-            }
-        });
-        let silent = Target {
-            port: host_port,
+        let closed = ClosedPort::new();
+        let nowhere = Target {
+            port: closed.port(),
             ..target(&server)
         };
-        let running = run_with(&server, silent, Duration::from_secs(3600)).await;
-        dropped(&running, &server).await;
-        let mut streams = Vec::new();
+        let (link, _) = linked(&server, nowhere).await;
+        // The slot is held as an attempt under way holds it, until every connection has asked:
+        // when the attempt ends is then not a time the connections have to be made within. The
+        // link is not served, so the four made here are all that ask.
+        let under_way = dropped(&link, &server).await;
+        let mut windows = Vec::new();
+        let mut carrying = Vec::new();
         for _ in 0..4 {
-            streams.push(
-                TcpStream::connect(("127.0.0.1", running.port))
-                    .await
-                    .unwrap(),
-            );
+            let (accepted, window) = window_connection().await;
+            let link = link.clone();
+            carrying.push(tokio::spawn(async move { link.carry(accepted).await }));
+            windows.push(window);
         }
-        for mut stream in streams {
+        tokio::time::timeout(
+            PATIENCE,
+            link.asks
+                .subscribe()
+                .wait_for(|asks| *asks >= windows.len()),
+        )
+        .await
+        .expect("every connection asked")
+        .expect("the link lives");
+        // The first to take the slot finds nothing listening at the host's port; the others asked
+        // before that attempt failed.
+        drop(under_way);
+        for mut window in windows {
             let mut back = Vec::new();
-            tokio::time::timeout(Duration::from_secs(10), stream.read_to_end(&mut back))
+            tokio::time::timeout(PATIENCE, window.read_to_end(&mut back))
                 .await
                 .expect("the connection was closed")
                 .unwrap();
             assert!(back.is_empty());
         }
-        assert_eq!(*attempts.lock().unwrap(), 1);
+        for carried in carrying {
+            carried.await.unwrap();
+        }
+        assert_eq!(link.slot.lock().await.failures, 1);
     }
 
     #[tokio::test]
@@ -688,35 +813,23 @@ mod tests {
             secret: Secret::Password("wrong".into()),
             ..target(&server)
         };
-        let running = run_with(&server, refused, Duration::from_secs(3600)).await;
-        dropped(&running, &server).await;
-        assert!(running
-            .link
-            .reach(Pace::Asked(Instant::now()))
-            .await
-            .is_none());
+        let (link, _) = linked(&server, refused).await;
+        drop(dropped(&link, &server).await);
+        assert!(link.reach(Pace::Asked(Instant::now())).await.is_none());
         assert_eq!(server.connections(), 2);
         {
-            let slot = running.link.slot.lock().await;
+            let slot = link.slot.lock().await;
             assert!(slot.refused);
             let pause = slot.retry_at.unwrap() - slot.failed_at.unwrap();
             assert_eq!(pause, REFUSED_PAUSE);
         }
         // Neither the window's connections nor the others ask again meanwhile.
-        assert!(running
-            .link
-            .reach(Pace::Asked(Instant::now()))
-            .await
-            .is_none());
-        assert!(running.link.session().await.is_none());
+        assert!(link.reach(Pace::Asked(Instant::now())).await.is_none());
+        assert!(link.session().await.is_none());
         assert_eq!(server.connections(), 2);
         // The window's Try again does.
-        running.link.retry_now().await;
-        assert!(running
-            .link
-            .reach(Pace::Asked(Instant::now()))
-            .await
-            .is_none());
+        link.retry_now().await;
+        assert!(link.reach(Pace::Asked(Instant::now())).await.is_none());
         assert_eq!(server.connections(), 3);
     }
 
@@ -728,14 +841,10 @@ mod tests {
             port: closed.port(),
             ..target(&server)
         };
-        let running = run_with(&server, nowhere, Duration::from_secs(3600)).await;
-        dropped(&running, &server).await;
-        assert!(running
-            .link
-            .reach(Pace::Asked(Instant::now()))
-            .await
-            .is_none());
-        let slot = running.link.slot.lock().await;
+        let (link, _) = linked(&server, nowhere).await;
+        drop(dropped(&link, &server).await);
+        assert!(link.reach(Pace::Asked(Instant::now())).await.is_none());
+        let slot = link.slot.lock().await;
         assert!(!slot.refused);
         assert_eq!(
             slot.retry_at.unwrap() - slot.failed_at.unwrap(),
@@ -744,17 +853,35 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_link_makes_a_dropped_connection_again_by_itself() {
+    async fn a_look_at_a_dropped_connection_makes_it_again_with_no_connection_asking() {
+        let server = TestServer::start(Behaviour::default()).await;
+        let (link, _) = linked(&server, target(&server)).await;
+        let mut live = link.live();
+        drop(dropped(&link, &server).await);
+        // What the serving loop does at each look.
+        link.note_live();
+        link.keep_up();
+        assert!(!*live.borrow_and_update());
+        tokio::time::timeout(PATIENCE, live.wait_for(|live| *live))
+            .await
+            .expect("the connection was made again")
+            .expect("the link lives");
+        assert!(link.current().is_some());
+        assert_eq!(server.connections(), 2);
+    }
+
+    #[tokio::test]
+    async fn the_serving_loop_looks_at_the_connection_between_the_window_s_connections() {
         let server = TestServer::start(Behaviour::default()).await;
         let running = run_with(&server, target(&server), Duration::from_millis(50)).await;
         let mut live = running.link.live();
-        dropped(&running, &server).await;
-        // Made again with no connection of the window asking for it, and then told up.
-        tokio::time::timeout(Duration::from_secs(10), async {
-            while server.connections() < 2 {
-                tokio::time::sleep(Duration::from_millis(20)).await;
+        drop(dropped(&running.link, &server).await);
+        // Made again with no connection made here. (A stranger's connection to the port would
+        // have it made again too; that a look alone does is held by the test above.)
+        tokio::time::timeout(PATIENCE, async {
+            while running.link.current().is_none() {
+                live.changed().await.expect("the link lives");
             }
-            live.wait_for(|live| *live).await.unwrap();
         })
         .await
         .expect("the connection was made again");

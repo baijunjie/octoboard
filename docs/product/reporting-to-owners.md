@@ -143,7 +143,9 @@ are used up or a retry does not go ahead, and says which. See "When the selected
 
 **No report is synthesised for a turn that was cancelled** — by the user in the terminal, or by its owner's
 `interrupt_session` (see `docs/product/interrupting-turns.md`): the session is back at its prompt, awaiting
-instructions. How a cancel that fires no hook event is recognised is in `docs/product/turns-hooks-do-not-report.md`.
+instructions. How a cancel that fires no hook event is recognised is in `docs/product/turns-hooks-do-not-report.md`,
+and how one is read from the status the program in the session's terminal reports is in "From the root record to the
+session's status" and "What reports can say beside an agent's hooks" in `docs/product/program-status-reports.md`.
 
 Grok Build reports no turn end at all for some turns, and the backstop Octoboard falls back on
 there fires about a minute after the turn ends, so a synthesised report for one of those turns

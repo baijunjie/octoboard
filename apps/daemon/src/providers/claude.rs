@@ -1,10 +1,10 @@
 //! Claude Code's descriptor, with its on-disk layout and the names in it only its own modules use.
 
-use super::layout::AgentLayout;
+use super::layout::{AgentLayout, ConfigDirVarNames};
 use super::{
     AgentId, Capabilities, DeliveryQuirks, DetectionMarkers, InteractionKinds, ModelDisplay,
-    ProviderCode, ProviderDescriptor, QuotaWindowKind, QuotaWindowNaming, SessionWindowName,
-    SettingChoice, SettingDescriptor, SettingKind, SwitchDefault,
+    NativeMemory, ProviderCode, ProviderDescriptor, QuotaWindowKind, QuotaWindowNaming,
+    SessionWindowName, SettingChoice, SettingDescriptor, SettingKind, SwitchDefault,
 };
 
 /// Claude Code is not yet trusted with the session's directory, so the project's own `allow`
@@ -16,6 +16,9 @@ impl AgentId {
     pub const CLAUDE: AgentId = AgentId(DESCRIPTOR.id);
 }
 
+/// The instruction file Claude Code reads from the working directory.
+pub(crate) const CLAUDE_INSTRUCTION_FILE: &str = "CLAUDE.md";
+
 /// Where Claude Code keeps its transcripts, one directory per working directory.
 pub(crate) const CLAUDE_RECORDS_DIR: &str = "projects";
 
@@ -26,6 +29,7 @@ pub(crate) const CLAUDE_RECORDS_DIR: &str = "projects";
 /// directory unless one is exported (`crate::adapter::claude::settings::global_config_file`).
 pub(crate) const LAYOUT: AgentLayout = AgentLayout {
     config_dir_var: "CLAUDE_CONFIG_DIR",
+    config_dir_var_names: ConfigDirVarNames::Directory,
     default_dir: ".claude",
     records_dir: CLAUDE_RECORDS_DIR,
     archived_records_dir: None,
@@ -72,6 +76,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         "CLAUDE_CODE_BRIDGE_MCP_CARRIER",
         "CLAUDE_CODE_BRIDGE_OWNER_ACCOUNT_UUID",
         "CLAUDE_CODE_BRIDGE_OWNER_ORG_UUID",
+        "CLAUDE_CODE_CHILD_NOTES_DIR",
         "CLAUDE_CODE_CHILD_SESSION",
         "CLAUDE_CODE_ENTRYPOINT",
         "CLAUDE_CODE_ENVIRONMENT_KIND",
@@ -86,11 +91,17 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         "CLAUDE_PID",
         "CLAUDE_PROJECT_DIR",
     ],
-    instruction_file: "CLAUDE.md",
+    command_environment: &[
+        ("COREPACK_ENABLE_AUTO_PIN", "0"),
+        ("GIT_EDITOR", "true"),
+        ("NoDefaultCurrentDirectoryInExePath", "1"),
+    ],
+    instruction_file: CLAUDE_INSTRUCTION_FILE,
     // A line `@AGENTS.md` loads that file's text, with no confirmation for a file inside the
     // working directory (Claude Code 2.1.319).
     instruction_import_prefix: Some("@"),
     tool_name_prefix: "mcp__",
+    tool_name_separator: "__",
     ask_question_tool: Some("AskUserQuestion"),
     quit_keys: None,
     capabilities: Capabilities {
@@ -109,6 +120,8 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         // `docs/agent-cli-reference.md`, "Folder-trust confirmations".
         console_trust: super::ConsoleTrust::Answered,
         config_sharing: true,
+        owned_accounts: true,
+        login_flow: true,
         mcp_inventory: true,
         // Measured: on exit it kills the group of each shell it still runs, a shell that leads a
         // group of its own as a direct child of the agent.
@@ -130,6 +143,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         ],
         session_window: SessionWindowName::Session,
         weekly_all_models: true,
+        credit_period: None,
     },
     model_display: ModelDisplay {
         family_version: true,
@@ -139,7 +153,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         retired: &["best"],
     },
     compatibility_source: true,
-    native_memory_switch: true,
+    native_memory: NativeMemory::Switchable,
     settings: &[
         SettingDescriptor {
             id: "approval_mode",
@@ -202,12 +216,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn its_launch_overrides_are_these_compatibility_switches() {
+        let overridable: Vec<_> = AgentId::CLAUDE
+            .descriptor()
+            .overridable_settings()
+            .map(|setting| setting.id)
+            .collect();
+        assert_eq!(overridable, ["codex_compatibility"]);
+    }
+
+    #[test]
     fn the_layout_names_are_the_ones_claude_code_writes() {
         assert_eq!(AgentId::CLAUDE.descriptor().layout, &LAYOUT);
         assert_eq!(
             LAYOUT,
             AgentLayout {
                 config_dir_var: "CLAUDE_CONFIG_DIR",
+                config_dir_var_names: ConfigDirVarNames::Directory,
                 default_dir: ".claude",
                 records_dir: "projects",
                 archived_records_dir: None,

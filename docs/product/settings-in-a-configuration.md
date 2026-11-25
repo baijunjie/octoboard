@@ -155,8 +155,7 @@ holds:
 - **Provider settings** (see "Provider settings" in `docs/product/per-agent-settings.md`), under `provider_settings`, an
   object keyed by agent, each holding an object keyed by setting id with the user's explicit choice: `true` or `false`
   for a switch, the choice's text for a choice setting. Only the settings their provider declares as carried are in it —
-  today every provider setting: all three agents' Permission approval, Codex's and Grok Build's Claude compatibility,
-  Claude Code's and Grok Build's Codex compatibility and Claude Code's Simple shell commands, `{"claude":
+  each setting the provider declares exportable, including permission approval, compatibility switches and Claude Code’s Simple shell commands, `{"claude":
   {"approval_mode": "bypass", "codex_compatibility": true, "simple_shell_commands": true}, "codex":
   {"claude_compatibility": true}}` say — and of those only the ones the user made a choice for: a setting never chosen
   for is absent, so on the importing machine it keeps following that machine's default — an unset switch there is

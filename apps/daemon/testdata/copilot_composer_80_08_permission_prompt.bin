@@ -1,0 +1,56 @@
+[?25l❯ [K
+
+ [1m←[m open sidebar · Interactive · Manual Approval · [1m/[m command[38;3H[?25h[?25l[24;38r[38;1H
+[r[37;3HCMD:tool bash {"command":"touch made-by-probe","description":"make a file"}
+
+
+ Interactive · Manual Approval · [1m@[m files/sessions · [1m#[m issue[38;3H[?25h[?25l[24;37r[24;1HM[r[38;1H❯
+
+ [94m●[m [94mW[34morking[m [1mctrl+c[m interrupt                                 [38;3H[?25h]7501;state=working:app=copilot\[?25l[13A❯ CMD:tool bash {"command":"touch made-by-probe","description":"make a  02:36
+   file"}[38;3H[?25h]7501;state=blocked:app=copilot:kind=permission\[?25l[H
+
+[2;90m│[m [34m ╰─╯╰─╯[m  Copilot v1.0.114 uses AI.  [2;90m│[m  Use the tabs above to explore your… [2;90m│[m ┃
+[2C[35m █ [96m▘▝[35m █[m  Check for mistakes.[4;39H[2;90m│[m  /model — Switch models across prov… [2;90m│[m ┃
+[2C[35m  ▔▔▔▔ [5;42H[m               [23C[37m┃
+[2C[m                                                                           [2;90m│[m [37m┃
+[2;90m╰────────────────────────────────────────────────────────────────────────────╯[m [37m┃
+[78C[m[1K [37m┃
+[m [33m![m Model "standin" is not in the built-in catalog. Using defaults for: prompt  [37m┃
+[m   tokens (COPILOT_PROVIDER_MAX_PROMPT_TOKENS), output tokens                  [37m┃
+[3C[m(COPILOT_PROVIDER_MAX_OUTPUT_TOKENS). Run [37m copilot help providers [m for[6C[37m┃
+[C[m  configuration details.                                                      [37m┃
+[78C[m[1K [37m┃
+[C[m❯ CMD:slow                                                              02:36 [37m┃
+[78C[m[1K [37m┃
+[C[34m●[m slow slow slow slow[57C[37m┃
+[78C[m[1K [37m┃
+[3C[m└ [33mIncomplete response[55C[37m┃
+[78C[m[1K [37m┃
+[C[34m●[m Operation cancelled by user[49C[37m┃
+[78C[m[1K [37m┃
+[C[m❯ CMD:tool bash {"command":"touch made-by-probe","description":"make a  02:36 [37m┃
+[C[m  file"}                     [49C[37m┃
+[79C┃
+[90m╭──────────────────────────────────────────────────────────────────────────────╮
+│[m [1mmake a file[66C[0;90m│
+│[m [90m────────────────────────────────────────────────────────────────────────────[m [90m│
+│[m [90m╭──────────────────────────────────────────────────────────────────────────╮[m [90m│
+│[m [90m│[m touch made-by-probe[54C[90m│[m [90m│
+│[m [90m╰──────────────────────────────────────────────────────────────────────────╯[m [90m│
+│[78C│
+│[m Do you want to run this command?[45C[90m│
+│[78C│
+│[m [97;44m❯[39m [97m1. Yes[39m                                                                    [m [90m│
+│[m   2. Yes, and don't ask again for `touch` in this directory[18C[90m│
+│[m   (/private/tmp/copilot-probe/w80)[43C[90m│
+│[m   3. No, and tell Copilot what to do differently (Esc to stop)               [90m│
+│[78C│
+│[m [1m↑/↓[m to navigate · [1menter[m to select · [1mesc[m to cancel                            [90m│
+╰──────────────────────────────────────────────────────────────────────────────[?7l╯[?7h[m[3;24r[24;1H
+
+
+[r[3;80H┃
+[79C┃
+[79C┃[17B ○ [1mShell [mmake a file[59C[37m┃
+[3C[mtouch made-by-probe[57C[37m┃
+[79C┃[m

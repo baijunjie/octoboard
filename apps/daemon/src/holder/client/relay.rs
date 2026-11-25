@@ -16,6 +16,9 @@ pub struct RelayRequest {
     /// The path's parameter: the session id, or for the MCP route its token.
     pub param: String,
     pub body: Vec<u8>,
+    /// The hook route's `event` query parameter, the name of the event for a payload that names
+    /// none; no other route has one.
+    pub event: Option<String>,
 }
 
 /// What the HTTP route would have answered.

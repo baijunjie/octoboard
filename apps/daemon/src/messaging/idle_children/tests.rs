@@ -305,3 +305,23 @@ fn a_credited_turn_keeps_the_last_report() {
     state.turn_started("worker", Some("go on"));
     assert_eq!(state.last_report("worker"), None);
 }
+
+/// A message held until the next one is written is on its way to nobody, so a session whose queue
+/// holds only that is idle after its report, and its owner is told; a message a drain may take
+/// beside it is one on its way.
+#[test]
+fn a_held_message_alone_leaves_a_session_idle_after_its_report() {
+    let (state, _dir, _hub) = team_state(
+        "idle-after-held",
+        &[("worker", "hub", false, SessionStatus::Idle)],
+    );
+    state
+        .note_report_accepted("worker", false, state.turn_opened("worker"))
+        .unwrap();
+    state.outbox.queue_held("worker", "given back");
+    assert_eq!(state.outbox.len("worker"), 1);
+    assert!(idle_after_report(&state, &worker(&state)).is_some());
+
+    state.queue_message("worker", "next");
+    assert_eq!(idle_after_report(&state, &worker(&state)), None);
+}

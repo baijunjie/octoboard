@@ -32,8 +32,7 @@ support, stored by a build that did, is read as in "Data of an agent this build 
 The console dialog, at most 768 px wide, shows both in one **Default agent** group, as two fields, **Console sessions**
 and **Project sessions**, under a note that a project with its own default agent uses that instead. The two fields sit
 side by side in two equal columns, one under the other in a window narrower than 768 px; each field's name sits above
-its picker, which spans the width of its column. Each field takes one of the three supported agents (Claude Code, Codex,
-Grok Build). Console sessions starts on Claude Code in the creation form — or, when Claude Code cannot be picked (see
+its picker, which spans the width of its column. Each field takes a supported agent. Console sessions starts on Claude Code in the creation form — or, when Claude Code cannot be picked (see
 "Which agents the agent pickers list" below), on the first added agent that can, so it never starts on an agent that
 cannot be chosen. Project sessions starts on its first entry, **Same as console sessions**, which names the agent the
 Console sessions field currently holds, with that agent's icon dimmed, and follows that field as it changes; the agents
@@ -72,7 +71,7 @@ its Advanced options agent tabs (see "The Advanced section" in `docs/product/mod
 the same rule: one entry per agent that can be picked, in the order of the added agents, and an agent that cannot be
 picked only while the console still holds a value for it, marked with the same badge after its name. Several such
 agents come after the ones that can be picked, the added ones first in the order of the added agents, then the others
-in the order Claude Code, Codex, Grok Build.
+in the order in “The agents and their order” in `docs/product/supported-agents.md`.
 
 Settings' Add account form is the deliberate exception, and lists every added agent, installed or not (see "Adding,
 editing and removing an account" in `docs/product/agent-accounts.md`).
@@ -144,6 +143,11 @@ Each agent's config directory is where that agent keeps its own configuration, l
 | Claude Code | what Claude Code itself takes from `CLAUDE_CONFIG_DIR` | `~/.claude` |
 | Codex | what Codex itself takes from `CODEX_HOME` | `~/.codex` |
 | Grok Build | the Grok home, what Grok itself takes from `GROK_HOME` | `~/.grok` |
+| Antigravity CLI | The user’s Antigravity home. Octoboard prepares a private launch directory. | `~/.gemini` |
+| GitHub Copilot CLI | `COPILOT_HOME` | `~/.copilot` |
+| OpenCode | The `opencode` directory under `XDG_DATA_HOME` | `~/.local/share/opencode` |
+| Qwen Code | `QWEN_HOME` | `~/.qwen` |
+| Pi | `PI_CODING_AGENT_DIR` | `~/.pi/agent` |
 
 How each agent is pointed at its directory is in "The launch environment" in `docs/product/launching-agents.md` and in
 `docs/product/per-agent-launch-specifics.md`. An account other than the default one can share the default account's
@@ -236,7 +240,7 @@ but only for a session that has a conversation on the agent's side to resume. A 
 one opened and never typed into, unless it was opened to resume a conversation (see
 `docs/product/resuming-a-conversation-by-its-session-id.md`) — launches into the missing directory instead, and the
 directory is created as above; a Codex session whose directory Octoboard cannot create is refused on this same path.
-This narrower refusal holds for all three agents, and the message names the agent and the directory and says to recreate
+This narrower refusal holds where the agent requires an existing account directory, and the message names the agent and the directory and says to recreate
 it or to point the account at a different one. Grok Build is refused on this same path whenever its pinned directory is
 not an initialized Grok home — one Grok has actually been run against — whether or not there is a conversation to
 resume, since an empty directory would keep neither its login nor its conversation; see "A Grok Build config directory"

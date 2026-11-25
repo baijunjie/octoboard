@@ -449,6 +449,49 @@ fn a_version_moves_with_a_write() {
     assert_ne!(before, version(&stat(&path, Links::Keep).unwrap()));
 }
 
+/// A regular file has a change time, and it moves when the file's attributes change. On Unix it
+/// is Node's `ctimeMs` of the stat's change time.
+#[test]
+fn a_change_time_is_read_and_moves_with_an_attribute_change() {
+    let dir = ScratchDir::new("fs-change-time");
+    let path = dir.join("file");
+    std::fs::write(&path, "one").unwrap();
+    let before = change_time_ms(&path).expect("a regular file has a change time");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let metadata = std::fs::metadata(&path).unwrap();
+        assert_eq!(before, node_ms(metadata.ctime(), metadata.ctime_nsec()));
+    }
+
+    // Past a tick of the host's file times (up to about 16 ms on Windows).
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&path, permissions.clone()).unwrap();
+    let after = change_time_ms(&path).expect("a regular file has a change time");
+    #[allow(clippy::permissions_set_readonly_false)]
+    permissions.set_readonly(false);
+    std::fs::set_permissions(&path, permissions).unwrap();
+
+    assert!(after > before, "{after} after {before}");
+}
+
+/// A `FILETIME` is Node's `ctimeMs` of the same instant, after the epoch and before it, and 0 is
+/// no change time.
+#[test]
+fn a_filetime_is_read_as_node_reads_it() {
+    // 1795100767.270903249 s, kept to the 100 ns a FILETIME counts.
+    let filetime = UNIX_EPOCH_FILETIME + 17_951_007_672_709_032;
+    assert_eq!(filetime_node_ms(filetime), Some(1795100767270.9033));
+    // Half a second before the epoch: -1 s and 500 000 000 ns.
+    assert_eq!(
+        filetime_node_ms(UNIX_EPOCH_FILETIME - 5_000_000),
+        Some(-500.0)
+    );
+    assert_eq!(filetime_node_ms(0), None);
+}
+
 /// Windows runs a file by its extension, and the read-only attribute is what `set_read_only`
 /// sets.
 #[cfg(windows)]

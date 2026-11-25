@@ -188,7 +188,20 @@ fn the_full_gate_refuses_an_account_whose_quota_is_used_up() {
         let (code, params) = coded(&refusal(account).expect("refused"));
         assert_eq!(code, error_code::ACCOUNT_NOT_SIGNED_IN);
         assert_eq!(params["agent"], AgentId::CLAUDE.label());
+        assert_eq!(params["agent_id"], "claude");
+        // The default account's directory is not known until the agent's availability is.
+        assert_eq!(
+            params.get("config_dir").map(String::as_str),
+            account.map(|_| "/home/u/.claude-alt")
+        );
     }
+    state.set_agent_availability(vec![crate::protocol::AgentAvailability {
+        agent: AgentId::CLAUDE,
+        availability: Availability::Available,
+        default_account_dir: Some("/home/u/.claude".to_string()),
+    }]);
+    let (_, params) = coded(&refusal(None).expect("refused"));
+    assert_eq!(params["config_dir"], "/home/u/.claude");
 }
 
 /// A disabled account, the default one included, is refused for a new session whether the
@@ -396,7 +409,7 @@ async fn an_account_found_not_logged_in_is_refused_and_a_failed_reading_is_not()
         Some(Some("claude-a".to_string()))
     );
     assert_eq!(
-        preferred_weekly_account_except(&state, AgentId::CLAUDE, &[], true).unwrap(),
+        switch_target_except(&state, AgentId::CLAUDE, &[], true).unwrap(),
         None,
         "the automatic switch wants an account it can read now"
     );
@@ -1333,4 +1346,263 @@ fn the_candidate_accounts_are_listed_with_their_names_and_directories() {
             ),
         ]
     );
+}
+
+/// A provider with no quota probe and no windows has its accounts' sign-in read apart from quota
+/// (`AccountOps::sign_in_state`): opening a session on one is refused with `account_not_signed_in` once it
+/// reads as signed out and accepted once it reads as signed in, and automatic selection passes a
+/// signed-out account over without losing the signed-in one's place in the saved order. A reading
+/// that cannot tell refuses nothing.
+#[tokio::test]
+async fn an_account_of_a_provider_with_no_quota_is_refused_and_chosen_by_its_sign_in_reading() {
+    use crate::accounts::quotas::{refresh_for_test, Scope, ShellSource};
+    use crate::providers::test_provider::SIGN_IN_RECORD;
+
+    let (state, dir) = state_for_opening("sign-in-reading-choice");
+    state.set_agent_availability(vec![crate::protocol::AgentAvailability {
+        agent: AgentId::TEST,
+        availability: Availability::Available,
+        default_account_dir: None,
+    }]);
+    state.store.set_auto_select_account(true).unwrap();
+    set_account_disabled(&state, AgentId::TEST, None, true).unwrap();
+    let mut dirs = Vec::new();
+    for id in ["first", "second"] {
+        let account_dir = dir.join(id);
+        std::fs::create_dir(&account_dir).unwrap();
+        state
+            .store
+            .insert_account(&Account {
+                id: id.to_string(),
+                agent: AgentId::TEST,
+                name: id.to_string(),
+                config_dir: account_dir.to_string_lossy().into_owned(),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: false,
+                versions: Default::default(),
+            })
+            .unwrap();
+        dirs.push(account_dir);
+    }
+    let shell: ShellSource = Arc::new(|| Ok(Default::default()));
+    let scope = Scope {
+        agent: Some(AgentId::TEST),
+        account: None,
+    };
+    let record = |index: usize, text: &str| {
+        std::fs::write(dirs[index].join(SIGN_IN_RECORD), text).unwrap();
+    };
+    let read_again = || async {
+        for id in ["first", "second"] {
+            state.account_quotas.make_due(AgentId::TEST, Some(id));
+        }
+        refresh_for_test(&state, &scope, shell.clone()).await;
+    };
+    let named = |account: &str| OpenRequest {
+        agent: Some(AgentId::TEST),
+        account: Some(Some(account.to_string())),
+        ..open_request()
+    };
+    let chosen = || {
+        resolve_open(
+            &state,
+            &OpenRequest {
+                agent: Some(AgentId::TEST),
+                ..open_request()
+            },
+        )
+        .map(|resolved| resolved.account_id)
+    };
+
+    // Cannot tell: nothing is refused, and the saved order decides.
+    read_again().await;
+    assert!(resolve_open(&state, &named("first")).is_ok());
+    assert_eq!(chosen().unwrap().as_deref(), Some("first"));
+
+    record(0, "signed-out\n");
+    record(1, "signed-in two@example.com\n");
+    read_again().await;
+    let refused = resolve_open(&state, &named("first"))
+        .err()
+        .expect("refused");
+    assert_eq!(code_of(&refused), error_code::ACCOUNT_NOT_SIGNED_IN);
+    assert!(resolve_open(&state, &named("second")).is_ok());
+    // The signed-out account is passed over by automatic selection.
+    assert_eq!(chosen().unwrap().as_deref(), Some("second"));
+
+    record(0, "signed-in one@example.com\n");
+    read_again().await;
+    assert!(resolve_open(&state, &named("first")).is_ok());
+    assert_eq!(chosen().unwrap().as_deref(), Some("first"));
+}
+
+/// Adds a stored account of the test-only provider (no quota probe, no windows) for each of
+/// `readings` (its id, and whether it is signed in) and holds a reading for it, as the account poll
+/// would publish it from the provider's sign-in reading: signed in with an email, or signed out.
+/// The accounts' directories are `/tmp/<id>`.
+fn hold_sign_in_readings(state: &Arc<AppState>, readings: &[(&str, bool)]) {
+    use crate::protocol::{AccountQuota, QuotaUnavailable};
+
+    state.set_agent_availability(vec![crate::protocol::AgentAvailability {
+        agent: AgentId::TEST,
+        availability: Availability::Available,
+        default_account_dir: None,
+    }]);
+    set_account_disabled(state, AgentId::TEST, None, true).unwrap();
+    for (id, signed_in) in readings {
+        state
+            .store
+            .insert_account(&Account {
+                id: id.to_string(),
+                agent: AgentId::TEST,
+                name: id.to_string(),
+                config_dir: format!("/tmp/{id}"),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: false,
+                versions: Default::default(),
+            })
+            .unwrap();
+        state.account_quotas.hold_in_dir_for_test(
+            &AccountQuota {
+                reset_credits: None,
+                agent: AgentId::TEST,
+                account: Some(id.to_string()),
+                fetched_at: 1,
+                plan: None,
+                email: signed_in.then(|| format!("{id}@example.com")),
+                windows: Vec::new(),
+                unavailable: (!signed_in).then(|| {
+                    QuotaUnavailable::new(
+                        crate::protocol::quota_unavailable_code::NOT_SIGNED_IN,
+                        "not signed in",
+                        &[],
+                    )
+                }),
+            },
+            &format!("/tmp/{id}"),
+        );
+    }
+}
+
+/// An account of a provider with no quota has no window to be used up, so it passes every gate a
+/// used-up account would fail (a switch and a handoff's receiving session use the full one) and is
+/// refused only as signed out; with automatic selection on it keeps its place in the saved order.
+#[tokio::test]
+async fn an_account_with_no_quota_is_never_used_up_and_keeps_its_place_in_the_saved_order() {
+    let (state, _dir) = state_for_opening("no-quota-never-used-up");
+    state.store.set_auto_select_account(true).unwrap();
+    hold_sign_in_readings(&state, &[("first", true), ("second", true), ("out", false)]);
+    let refusal = |account: &str, gate: AccountGate| {
+        let request = OpenRequest {
+            agent: Some(AgentId::TEST),
+            account: Some(Some(account.to_string())),
+            ..open_request()
+        };
+        resolve_open_with(&state, &request, gate)
+            .err()
+            .map(|err| code_of(&err))
+    };
+    for gate in [
+        AccountGate::Full,
+        AccountGate::NewSession,
+        AccountGate::DisabledOnly,
+    ] {
+        assert_eq!(refusal("first", gate), None, "{gate:?}");
+    }
+    for gate in [AccountGate::Full, AccountGate::NewSession] {
+        assert_eq!(
+            refusal("out", gate),
+            Some(error_code::ACCOUNT_NOT_SIGNED_IN),
+            "{gate:?}"
+        );
+    }
+    assert_eq!(refusal("out", AccountGate::DisabledOnly), None);
+
+    // A handoff's receiving session is held to the full gate.
+    let on = |account: &str| OpenRequest {
+        agent: Some(AgentId::TEST),
+        account: Some(Some(account.to_string())),
+        ..open_request()
+    };
+    assert_eq!(
+        check_handoff_open(&state, &on("first")).await.unwrap(),
+        AgentId::TEST
+    );
+    let refused = check_handoff_open(&state, &on("out")).await.unwrap_err();
+    assert_eq!(code_of(&refused), error_code::ACCOUNT_NOT_SIGNED_IN);
+
+    // The saved order decides among accounts of no quota, and a signed-out one is passed over.
+    let chosen = || {
+        resolve_open(
+            &state,
+            &OpenRequest {
+                agent: Some(AgentId::TEST),
+                ..open_request()
+            },
+        )
+        .map(|resolved| resolved.account_id)
+        .unwrap()
+    };
+    state
+        .store
+        .reorder_accounts(
+            AgentId::TEST,
+            &[
+                Some("out".to_string()),
+                Some("second".to_string()),
+                None,
+                Some("first".to_string()),
+            ],
+        )
+        .unwrap();
+    assert_eq!(chosen().as_deref(), Some("second"));
+    state
+        .store
+        .reorder_accounts(
+            AgentId::TEST,
+            &[
+                Some("first".to_string()),
+                Some("second".to_string()),
+                Some("out".to_string()),
+                None,
+            ],
+        )
+        .unwrap();
+    assert_eq!(chosen().as_deref(), Some("first"));
+    // No account is used up, so none qualifies as the one that becomes usable soonest.
+    assert_eq!(
+        soonest_available_account(&state, AgentId::TEST).unwrap(),
+        None
+    );
+}
+
+/// The automatic switch at a usage limit has no quota to weigh for a provider with no quota window:
+/// its target is the first usable account in the saved order other than the current one, a
+/// signed-out account is passed over, and none is picked when no other account is usable.
+#[test]
+fn the_switch_target_of_a_provider_with_no_quota_is_the_next_usable_account_in_saved_order() {
+    let (state, _dir) = state_for_opening("no-quota-switch-target");
+    hold_sign_in_readings(
+        &state,
+        &[("a", true), ("out", false), ("b", true), ("c", true)],
+    );
+    let order = |ids: &[&str]| {
+        let mut order: Vec<Option<String>> = ids.iter().map(|id| Some(id.to_string())).collect();
+        order.push(None);
+        state.store.reorder_accounts(AgentId::TEST, &order).unwrap();
+    };
+    let target = |except: &[&str]| {
+        let except: Vec<Option<String>> = except.iter().map(|id| Some(id.to_string())).collect();
+        switch_target_except(&state, AgentId::TEST, &except, true).unwrap()
+    };
+    order(&["a", "out", "b", "c"]);
+    // The next signed-in account in the saved order, the signed-out one passed over.
+    assert_eq!(target(&["a"]), Some(Some("b".to_string())));
+    assert_eq!(target(&["a", "b"]), Some(Some("c".to_string())));
+    order(&["c", "b", "a", "out"]);
+    assert_eq!(target(&["c"]), Some(Some("b".to_string())));
+    // Nothing else usable: the default account is turned off, the rest are excepted or signed out.
+    assert_eq!(target(&["a", "b", "c"]), None);
 }

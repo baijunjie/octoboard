@@ -139,7 +139,8 @@ pub(super) async fn archive_during_relaunch(switching: bool, succeeds: bool) {
             Some(session) => Ok(term::Launch {
                 session,
                 agent_session_id: None,
-                notice: None,
+                notices: Vec::new(),
+                first_message: None,
             }),
             None => Err(anyhow::anyhow!("delayed launch failure")),
         }

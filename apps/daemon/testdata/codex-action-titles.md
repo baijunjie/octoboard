@@ -6,7 +6,7 @@ are retained; command output and conversation text are excluded.
 
 The installed CLI at capture time was Codex 0.162.1. The running session's executable version was not
 independently queried. These title forms also match the observations for Codex 0.163.0 recorded in
-`docs/agent-cli-reference.md`, "Across the three agents".
+`docs/agent-cli-reference.md`, "Across the agents".
 
 - `codex_approval_title.bin`: the actual `Action Required` title, terminated by BEL.
 - `codex_working_title.bin`: the ordinary spinning title from the same session, the near miss that

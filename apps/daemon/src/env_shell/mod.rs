@@ -8,12 +8,17 @@
 //!   launch and another for callers on someone else's schedule.
 //! - `resolve.rs` finds a binary on a snapshot's `PATH`, as what starts it.
 //! - `proxy.rs` reads the proxy a snapshot names for a host.
+//! - `session_exports.rs` builds a launch's environment over a snapshot and records every variable
+//!   the launch changed, so that an environment a daemon started inside that session inherits can
+//!   have them put back (`outside_session`, which the snapshot and any other reading of an
+//!   inherited environment go through).
 //!
 //! This file is the module's face: callers name these functions, not the files.
 
 mod cache;
 mod proxy;
 mod resolve;
+mod session_exports;
 mod snapshot;
 
 use std::collections::HashMap;
@@ -22,9 +27,12 @@ use anyhow::Result;
 
 use crate::protocol::{error_code, CodedError};
 
-pub use proxy::proxy_for;
+pub use proxy::{proxy_for, proxy_for_url};
 pub use resolve::{resolve_binary, resolve_program};
-pub use snapshot::is_filtered;
+#[cfg(test)]
+pub use session_exports::session_environment;
+pub use session_exports::session_environment_with;
+pub use snapshot::{forget_inherited_session, outside_session};
 
 static CACHE: cache::Cache = cache::Cache::new();
 

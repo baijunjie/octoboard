@@ -490,11 +490,24 @@ it("isolates each served label in the list of agents an unavailable agent's mess
   }
 });
 
-it.each(["sign_in", "kick", "reset_credit", "config_sharing", "other"])("words a refused %s by the provider's name, not its wire id", (operation) => {
+it.each(["sign_in", "kick", "reset_credit", "config_sharing", "owned_accounts", "other"])("words a refused %s by the provider's name, not its wire id", (operation) => {
   for (const language of ["en", "zh-CN"] as const) {
     const text = daemonMessage(language, "provider_unsupported", { agent: "grok", operation }, "fallback", { ...records, providers: TEST_PROVIDERS });
     expect(text).toContain("Grok Build");
     expect(text).not.toMatch(/\{\w+\}/);
+  }
+});
+
+it("has the owned-accounts refusal's own message in every catalog, worded by the provider's name rather than the generic one", () => {
+  const key = "daemon.provider_unsupported.owned_accounts";
+  const served = { ...records, providers: TEST_PROVIDERS };
+  for (const [language, catalog] of Object.entries(CATALOGS) as [Language, Record<string, unknown> | undefined][]) {
+    expect(catalog?.[key], language).toBeDefined();
+    const own = daemonMessage(language, "provider_unsupported", { agent: "grok", operation: "owned_accounts" }, "fallback", served);
+    const generic = daemonMessage(language, "provider_unsupported", { agent: "grok", operation: "other" }, "fallback", served);
+    expect(own, language).toContain("Grok Build");
+    expect(own, language).not.toBe(generic);
+    expect(own, language).not.toBe("fallback");
   }
 });
 
@@ -713,5 +726,25 @@ describe("why a dropped file failed, as a plain-text line says it", () => {
     const generic = `${isolate("a.txt")} could not be attached. The operation could not be completed.`;
     expect(lineOf([entry("a.txt", "a_code_from_a_newer_daemon", "raw")])).toEqual([generic]);
     expect(lineOf([entry("a.txt", "a_code_from_a_newer_daemon", "raw")], "en", () => undefined)).toEqual([generic]);
+  });
+});
+
+describe("a slash command the agent would not run as written", () => {
+  it("names the command run in its place where the daemon offers one", () => {
+    const params = { agent: "OpenCode", command: "/probe", offered: "/probecmd" };
+    expect(messageCode("command_not_recognised", params)).toBe("command_not_recognised");
+    expect(daemonMessage("en", "command_not_recognised", params, "x", records)).toContain(isolate("/probecmd"));
+  });
+
+  it("is worded with the command offered whatever its params, the no-such-command reading having a code of its own", () => {
+    expect(messageCode("command_not_recognised", { agent: "OpenCode", command: "/zzz", offered: "" })).toBe("command_not_recognised");
+  });
+
+  it("says the agent has no such command under command_not_found", () => {
+    const params = { agent: "OpenCode", command: "/zzz" };
+    expect(messageCode("command_not_found", params)).toBe("command_not_found");
+    const text = daemonMessage("en", "command_not_found", params, "x", records);
+    expect(text).toBe(`${isolate("OpenCode")} has no command ${isolate("/zzz")}, so the command was not sent. Clear it from the input box if it is still there.`);
+    expect(CATALOGS.en?.["daemon.command_not_found.alertTitle"]).toBe("Command not sent");
   });
 });

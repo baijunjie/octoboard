@@ -59,8 +59,9 @@ Paths in this doc that do not start with `apps/` or `packages/` are relative to 
   for `navDocs` and for the Features group's labels) and fails until both sides agree.
 - The website links to docs pages by their path (`docsPages` in `apps/web/seo/site-seo.ts`); a website test reads this
   app's `src/content/docs/` to check that every such page exists in every language. These cross-package reads are
-  declared in `scripts/verify/scope.mjs` (`DOCS_IMPORTS_FROM_UI`, `DOCS_READS_WEB`, `WEB_READS_DOCS`), which selects the
-  docs checks when one of those files changes. The `system` values' sources are declared there too (`DOCS_READS_DAEMON`: `apps/daemon/testdata/docs_uninstall_command.json`; `DOCS_READS_NATIVE`: `apps/desktop/src-tauri/testdata/docs_system_paths.json`, `tauri.conf.json` and `windows/installer-hooks.nsh`), each fixture held to its source by the test of the crate it sits in.
+  in `scripts/verify/scope.mjs` (`DOCS_READS_WEB`, `WEB_READS_DOCS` declared by hand; `DOCS_IMPORTS_FROM_UI` derived
+  from this app's sources by `scripts/verify/ui-imports.mjs`), which selects the docs checks when one of those files
+  changes. The `system` values' sources are declared there too (`DOCS_READS_DAEMON`: `apps/daemon/testdata/docs_uninstall_command.json`; `DOCS_READS_NATIVE`: `apps/desktop/src-tauri/testdata/docs_system_paths.json`, `tauri.conf.json` and `windows/installer-hooks.nsh`), each fixture held to its source by the test of the crate it sits in.
 - The screenshot script imports `packages/ui/scripts/gallery-browser.mjs` and `scripts/verify/lock.mjs`, and its
   manifest module imports the first for the wildcard matcher; both are named in `DOCS_RUNS_UI_GALLERY`, which selects
   the docs checks when either changes. The script needs the UI package's Playwright and Vite (resolved from `packages/ui`, whose

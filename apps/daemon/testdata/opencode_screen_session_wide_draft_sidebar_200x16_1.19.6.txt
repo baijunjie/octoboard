@@ -1,0 +1,16 @@
+  ┃
+  ┃  say hi                                                                                                                                                     Done.
+  ┃
+                                                                                                                                                                Context
+     Done.                                                                                                                                                      2 tokens
+                                                                                                                                                                0% used
+     ▣  Build · M · 489ms                                                                                                                                       $0.00 spent
+
+  ┃                                                                                                                                                             LSP
+  ┃  你好，世界啊                                                                                                                                               LSPs are disabled
+  ┃  ok
+  ┃
+  ┃  Build · M Stub                                                                                                                                             /tmp/probe/cwd
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+   /tmp/probe/cwd                                                                                                                         2  ctrl+p commands    • OpenCode 1.19.6
+

@@ -3,10 +3,14 @@
   mask-image: none;
 }
 
-/* A strip with a control flush with its end (`AgentTabList`'s `trailing`) moves HeroUI's scroll-forward chevron
-   to just before it. Unlayered, so it wins over HeroUI's rule in `@layer components`. */
+/* Leave room for the trailing controls and the 1rem chevron with a quarter rem on either side.
+   Unlayered, so it wins over HeroUI's rule in `@layer components`. */
+.tabs__list-container[data-trailing-control] {
+  padding-inline-end: calc(var(--tab-trailing-width) + 1.5rem);
+}
+
 .tabs__list-container[data-trailing-control] > .tabs__list-container__scroll-next {
-  inset-inline-end: 1.75rem;
+  inset-inline-end: calc(var(--tab-trailing-width) + 0.25rem);
 }
 
 /* An underline strip's rule is its container's bottom border, below the scroller, and the selected tab's underline ends

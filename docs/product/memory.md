@@ -24,7 +24,7 @@ Memory section (`memory_enabled` to the daemon and to the settings tools), **off
   Memory, for sessions launched afterwards; neither the console session's instruction file nor a project session's
   role description says anything of a memory; and no launch touches the agent's own memory.
 - **While it is on**, every session is offered the memory tools for its own memory and starts with its index, and every
-  launch turns the agent's own memory off (see "The agents' own memory" below).
+  launch turns the agent's own memory off where one launch can (see "The agents' own memory" below).
 
 The launch-time effects (the tools offered, the memory text, the agent's own memory) follow the setting as it stands at
 each launch, a resume and an account switch included, so a change reaches only sessions launched afterwards; one launch
@@ -40,20 +40,32 @@ application settings an agent may help with (see "Application settings: `get_set
 
 ## The agents' own memory
 
-Each supported agent keeps a memory of its own across sessions, split by agent and by account, which a session on
+Several supported agents keep a memory of their own across sessions, split by agent and by account, which a session on
 another agent or account never sees. While Octoboard's memory is on, every session Octoboard launches, console and
-project sessions alike, has its agent's own memory turned off for that launch, so that it keeps what it learns in
-Octoboard's memory alone:
+project sessions alike, has its agent's own memory turned off for that launch where one launch can turn it off, with the following behavior for each agent:
 
 | Agent | Turned off by |
 |---|---|
 | Claude Code | the environment variable `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` |
 | Codex | the launch argument `-c features.memories=false` |
 | Grok Build | the environment variable `GROK_MEMORY=0` |
+| Antigravity CLI | No native memory. |
+| GitHub Copilot CLI | Copilot Memory follows the account's setting. Its CLI cannot turn it off for one launch. |
+| OpenCode | No native memory. |
+| Qwen Code | The launch disables managed auto memory and auto dream through the launch's system settings. |
+| Pi | No native memory. |
 
 Each switch outranks the user's own setting for that agent's memory. It is part of the per-launch injection: nothing is
 written into the agent's or the user's configuration, and the memory files an agent wrote before are neither read, moved
 nor deleted. While Octoboard's memory is off, each agent's own memory is left as the agent and the user set it.
+
+An agent whose own memory no launch can turn off keeps it beside Octoboard's, as the agent and the user set it. The
+memory setting's description says which is which: under the sentence about Octoboard's memory, it names the agents whose
+own memory those sessions turn off and the agents whose own memory those sessions leave as it is set and cannot turn off,
+from the fact the daemon serves with each provider's information (`ProviderInfo.native_memory`); an agent with no memory
+of its own is not named, nor is an agent the user has not added (the added agents are named in the order Settings lists
+them, every served one while the daemon has not settled the list), and with a daemon that serves no such fact, no agent
+is named.
 
 ## Console memory
 
@@ -252,7 +264,9 @@ whatever the memory setting says:
 
 - **Let sessions share Octoboard's memory**, the switch of "Turning the memory on and off" above. Off, its description
   says what turning it on will do; on, what is happening now: sessions launched from then on read and save Octoboard's
-  memory, which every agent shares, and their agent's own memory is turned off. It saves as Settings' other switches do
+  memory, which every agent shares. Each on a line of its own under that sentence, one names the agents whose own memory
+  those sessions turn off, the other the agents whose own memory they leave as it is set (see "The agents' own memory"
+  above); a line with no agent to name is left out. It saves as Settings' other switches do
   (see "How switches save" in `docs/product/settings.md`).
 - **Memory of removed projects**, whose description says that a removed project's memory is kept and that adding a
   project at the same folder picks it up again. Its control is the number of folders whose memory is left behind, while

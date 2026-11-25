@@ -24,6 +24,19 @@ describe("accountOption", () => {
     expect(option.reason).toBeUndefined();
   });
 
+  it("draws no usage bar for an account of a provider that declares no plan quota, and still says it is not logged in", () => {
+    const own = (extra: Partial<ChoiceEntry> = {}) => entry({ agent: "test_agent", key: "test_agent:w", ...extra });
+    const free = accountOption(t, TEST_PROVIDERS, own(), 0, false, true);
+    expect(free.icon).toBeUndefined();
+    expect(free.detail).toBeUndefined();
+    expect(free.isDisabled).toBe(false);
+    const signedOut = accountOption(t, TEST_PROVIDERS, own({ signedOut: true }), 0, false, true);
+    expect(signedOut.icon).toBeUndefined();
+    expect(signedOut.reason).toEqual({ state: "Not logged in" });
+    expect(signedOut.isDisabled).toBe(true);
+    expect(accountOption(t, TEST_PROVIDERS, entry(), 0, false, true).icon).toBeDefined();
+  });
+
   it("lists an account whose sharing change runs as unavailable, without a reason", () => {
     const option = accountOption(t, TEST_PROVIDERS, entry({ changingSharing: true }), 0, false, true);
     expect(option.isDisabled).toBe(true);

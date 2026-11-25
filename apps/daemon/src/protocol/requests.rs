@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
+use super::accounts::LoginAnswer;
 use super::agents::{AgentId, Change, Launch, LaunchChange, PerAgent};
 #[cfg(test)]
 use super::bindings;
@@ -754,8 +755,9 @@ pub enum RequestBody {
     /// Writes a slash command, `command`, one line beginning with `/` and its arguments, into a
     /// running session for its agent to run as one of its own commands, for a provider that
     /// declares `slash_commands`. Answered with `ack` once written. Refused as `send_message` is,
-    /// and with `command_not_recognised` where the agent would run another command in its place
-    /// (its completion offers a different one), the command then cleared from the input box.
+    /// with `command_not_recognised` where the agent would run another command in its place (its
+    /// completion offers a different one), and with `command_not_found` where its list says it has
+    /// no such command, the command then cleared from the input box.
     SendCommand {
         session: String,
         command: String,
@@ -790,7 +792,8 @@ pub enum RequestBody {
     /// base64-encoded, of at most 10 MiB decoded (see `crate::session::pasted_image`), or `upload`
     /// names an upload of this connection whose parts hold it; exactly one of the two is given.
     /// Answered with `pasted_image_saved`. Refused with `unknown_session` or
-    /// `session_not_running`, and for an upload with `upload_unavailable` or
+    /// `session_not_running`, with `provider_unsupported` (operation `message_images`) for a
+    /// session whose provider takes no images, and for an upload with `upload_unavailable` or
     /// `upload_parts_mismatch`.
     SavePastedImage {
         session: String,
@@ -803,9 +806,9 @@ pub enum RequestBody {
     },
     /// Starts uploading a pasted image of `size` bytes (1 to 10 MiB) in parts, for a running
     /// session; served on the control connection, which holds the parts. Answered with
-    /// `pasted_image_upload_created`. Refused with `unknown_session`, `session_not_running`, or
-    /// `limit_exceeded` (`image_uploads`, `image_upload_bytes`). See
-    /// `crate::session::upload`.
+    /// `pasted_image_upload_created`. Refused with `unknown_session`, `session_not_running`,
+    /// `provider_unsupported` (as `save_pasted_image` is), or `limit_exceeded` (`image_uploads`,
+    /// `image_upload_bytes`). See `crate::session::upload`.
     CreatePastedImageUpload {
         session: String,
         size: u64,
@@ -1330,11 +1333,12 @@ pub enum RequestBody {
     /// caches (Codex's Apps) instead of reading what it holds. Answered with
     /// `account_mcp_inventory_read` once the CLI has answered, which can take a minute (a minute
     /// and a quarter for Claude Code, whose sign-in is checked first): every server is connected
-    /// to. A second request for the same account while one is running joins
-    /// it and gets the same inventory. Nothing the account holds is written. Refused only with
-    /// `unknown_account` for an account that does not exist or is not `agent`'s; every other
-    /// failure (not signed in, CLI missing, timeout, an agent that cannot list) is the
-    /// inventory's `unavailable`. See "Account MCP inventory" in `PROTOCOL.md`.
+    /// to. A second request for the same account while one is running joins it and gets the same
+    /// inventory. Nothing the account holds is written. Refused with `unknown_account` for an
+    /// account that does not exist or is not `agent`'s, and with `provider_unsupported` (operation
+    /// `mcp_inventory`) for a provider that cannot list; every other failure (not signed in, CLI
+    /// missing, timeout) is the inventory's `unavailable`. See "Account MCP inventory" in
+    /// `PROTOCOL.md`.
     ReadAccountMcpInventory {
         agent: AgentId,
         #[serde(default)]
@@ -1392,6 +1396,21 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
         account: Option<String>,
+    },
+    /// Brings the user's answer to the question an account's login waits on (`AccountLogin`'s
+    /// `question`): `question` is that question's `id`, so an answer to one that is no longer asked
+    /// is not taken for the next. Answered with `ack`; the login goes on, and its next
+    /// `account_login_updated` no longer carries the question. The daemon never answers a question
+    /// by itself: a login whose question nobody answers ends as any other does, cancelled or timed
+    /// out. Refused with `login_not_running` when the account has no login running, and with
+    /// `login_question_not_open` when its login is not waiting on that question.
+    AnswerAccountLoginQuestion {
+        agent: AgentId,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
+        account: Option<String>,
+        question: String,
+        answer: LoginAnswer,
     },
     /// Checks the installed CLI of the agents it selects, in the background: its version, how it
     /// was installed (which decides what updates it) and the latest version published for that.
@@ -1584,11 +1603,12 @@ pub enum RequestBody {
     /// holds it, with `account_sharing_in_progress` while a change of its account's sharing moves
     /// the account's directory, with `daemon_shutting_down` once a planned stop has begun, with
     /// `process_shares_agent_console` or `process_in_agent_command_group` for a tree that cannot
-    /// be kept, and with `native_app_unavailable` for an agent with no such application, one that
-    /// is not installed, a session with no conversation yet and a conversation id the agent would
-    /// not take, and with `shell_environment_timeout` when the shell environment cannot be
-    /// captured; `native_app_unavailable` also answers a failed launch, and `session_did_not_stop`
-    /// (param `cause` `open_in_app`) a process that does not end, after the archive. A
+    /// be kept, with `provider_unsupported` (operation `native_app`) for an agent with no such
+    /// application, with `native_app_unavailable` for one that is not installed, a session with no
+    /// conversation yet and a conversation id the agent would not take, and with
+    /// `shell_environment_timeout` when the shell environment cannot be captured;
+    /// `native_app_unavailable` also answers a failed launch, and `session_did_not_stop` (param
+    /// `cause` `open_in_app`) a process that does not end, after the archive. A
     /// `session_working` found only by the check repeated after the chosen trees were kept leaves
     /// them kept, and the session running. Where the application may not see the conversation (the
     /// default account's directory, the only one it reads, does not hold its latest record, which
@@ -1876,6 +1896,7 @@ impl RequestBody {
             | Self::SignOutAccountMcpServer { .. }
             | Self::CancelAccountMcpSignIn { .. }
             | Self::CancelAccountLogin { .. }
+            | Self::AnswerAccountLoginQuestion { .. }
             | Self::CheckAgentClis { .. }
             | Self::UpdateAgentCli { .. }
             | Self::CheckDaemonUpdate

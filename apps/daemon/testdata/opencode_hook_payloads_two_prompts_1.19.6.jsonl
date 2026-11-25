@@ -1,0 +1,7 @@
+{"format":1,"hook_event_name":"session.created","session_id":"ses_dfb32a75cffeUer4nxmiNdp85V"}
+{"format":1,"hook_event_name":"turn.started","turn_id":"msg_204cd58c90019cv03Ilqrg7gHa","prompt":"run BASHQ now","session_id":"ses_dfb32a75cffeUer4nxmiNdp85V"}
+{"format":1,"hook_event_name":"question.asked","session_id":"ses_dfb32a75cffeUer4nxmiNdp85V","request_id":"que_204cd609c001taDbO39o2VfWC4","tool":"question"}
+{"format":1,"hook_event_name":"permission.asked","session_id":"ses_dfb32a75cffeUer4nxmiNdp85V","request_id":"per_204cd60c1001T3dVfv5UHWzF3y","tool":"bash"}
+{"format":1,"hook_event_name":"permission.replied","session_id":"ses_dfb32a75cffeUer4nxmiNdp85V","request_id":"per_204cd60c1001T3dVfv5UHWzF3y"}
+{"format":1,"hook_event_name":"question.replied","session_id":"ses_dfb32a75cffeUer4nxmiNdp85V","request_id":"que_204cd609c001taDbO39o2VfWC4"}
+{"format":1,"hook_event_name":"session.idle","turn_id":"msg_204cd58c90019cv03Ilqrg7gHa","last_assistant_message":"Final answer from stub.","session_id":"ses_dfb32a75cffeUer4nxmiNdp85V"}

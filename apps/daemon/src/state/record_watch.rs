@@ -57,6 +57,15 @@ impl AppState {
             == Some(&generation)
     }
 
+    /// The generation of this session's current record watch, if it has one.
+    pub fn current_record_watch(&self, id: &str) -> Option<u64> {
+        self.record_watch_generations
+            .lock()
+            .expect("record watch lock poisoned")
+            .get(id)
+            .copied()
+    }
+
     /// Runs `write` only while `generation` is still this session's current record watch, and says
     /// what it returned, or `None` for a watch retired or superseded meanwhile. The bookkeeping
     /// stays locked across `write`, so a hook starting or ending a watch waits for it instead of

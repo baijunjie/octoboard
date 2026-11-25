@@ -8,8 +8,8 @@ use crate::test_support::{app_state, PATIENCE};
 
 /// Applies `body` as a hook that names no launch would post it, as one configured by an earlier
 /// build does.
-fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
-    super::apply_hook(state, session_id, None, body);
+fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8], event: Option<&str>) {
+    super::apply_hook(state, session_id, None, body, event);
 }
 
 /// A completion notification trims the list once the session is working: trimmed while it is
@@ -31,12 +31,12 @@ async fn a_completion_notification_does_not_publish_a_plain_idle_before_the_turn
         .unwrap();
     let stop =
         br#"{"hook_event_name": "Stop", "background_tasks": [{"id": "b1", "type": "shell"}]}"#;
-    apply_hook(&state, "s", stop);
+    apply_hook(&state, "s", stop, None);
     assert_eq!(state.background_tasks_of("s").len(), 1);
     let mut events = state.subscribe();
 
     let notified = br#"{"hook_event_name": "UserPromptSubmit", "prompt": "<task-notification><task-id>b1</task-id></task-notification>"}"#;
-    apply_hook(&state, "s", notified);
+    apply_hook(&state, "s", notified, None);
 
     let mut published = Vec::new();
     while let Ok(Event::SessionUpserted { session }) = events.try_recv() {
@@ -69,7 +69,7 @@ async fn only_claude_codes_task_notification_prompt_counts_as_a_completion_notic
         let mut session = crate::test_support::console_session("s", SessionStatus::Idle);
         session.agent = agent;
         state.store.insert_session(&session).unwrap();
-        apply_hook(&state, "s", prompt);
+        apply_hook(&state, "s", prompt, None);
         assert_eq!(state.completion_notices("s"), counted, "{agent:?}");
         // The built-ins declare prompt submission; an unmeasured provider claims no event.
         assert_eq!(
@@ -127,7 +127,7 @@ async fn only_a_grok_error_holds_writes_and_a_prompt_ends_the_hold() {
         let live = crate::test_support::fake_live_session("s", agent, 80, 24, "sleep 30");
         state.register_live(live.clone());
 
-        apply_hook(&state, "s", error.as_bytes());
+        apply_hook(&state, "s", error.as_bytes(), None);
         let hold = state.write_hold("s");
         assert_eq!(
             hold,
@@ -147,7 +147,12 @@ async fn only_a_grok_error_holds_writes_and_a_prompt_ends_the_hold() {
         assert_eq!(state.flush_outbox("s", SessionStatus::Idle), Drain::Pending);
         assert_eq!(state.queued_count("s"), 1);
 
-        apply_hook(&state, "s", br#"{"hook_event_name": "UserPromptSubmit"}"#);
+        apply_hook(
+            &state,
+            "s",
+            br#"{"hook_event_name": "UserPromptSubmit"}"#,
+            None,
+        );
         assert_eq!(state.write_hold("s"), None);
         let deadline = std::time::Instant::now() + PATIENCE;
         while state.queued_count("s") != 0 {
@@ -179,7 +184,7 @@ async fn an_agent_error_hold_runs_out_and_releases_the_queue() {
     let live = crate::test_support::fake_live_session("s", AgentId::GROK, 80, 24, "sleep 30");
     state.register_live(live.clone());
 
-    apply_hook(&state, "s", br#"{"hookEventName": "StopFailure"}"#);
+    apply_hook(&state, "s", br#"{"hookEventName": "StopFailure"}"#, None);
     state.queue_message("s", "go on");
     assert_eq!(state.flush_outbox("s", SessionStatus::Idle), Drain::Pending);
 
@@ -217,6 +222,7 @@ async fn a_grok_prompt_watches_the_title_for_a_cancel_no_hook_reports() {
         &state,
         "s",
         br#"{"hook_event_name": "UserPromptSubmit", "hookEventName": "user_prompt_submit"}"#,
+        None,
     );
     assert_eq!(
         state.store.get_session("s").unwrap().unwrap().status,
@@ -261,12 +267,18 @@ async fn a_grok_card_s_title_does_not_end_the_turn_that_carries_on_after_it() {
     let running = "\x1b]0;\u{280B} - Working\u{2026} - grok\x07".as_bytes();
     let at_prompt = b"\x1b]0;grok\x07";
 
-    apply_hook(&state, "s", br#"{"hook_event_name": "UserPromptSubmit"}"#);
+    apply_hook(
+        &state,
+        "s",
+        br#"{"hook_event_name": "UserPromptSubmit"}"#,
+        None,
+    );
     live.on_output(running);
     apply_hook(
         &state,
         "s",
         br#"{"hook_event_name": "PreToolUse", "toolName": "ask_user_question"}"#,
+        None,
     );
     assert_eq!(status(&state), SessionStatus::WaitingUser);
     live.on_output(at_prompt);
@@ -275,6 +287,7 @@ async fn a_grok_card_s_title_does_not_end_the_turn_that_carries_on_after_it() {
         &state,
         "s",
         br#"{"hook_event_name": "PostToolUse", "toolName": "ask_user_question"}"#,
+        None,
     );
     assert_eq!(status(&state), SessionStatus::Working);
     crate::session::title_interrupt::polls_settled().await;
@@ -420,7 +433,7 @@ async fn a_message_left_unsent_holds_what_follows_until_a_prompt_is_sent() {
         "nothing is written behind the unsent message"
     );
 
-    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path), None);
     let heard = crate::test_support::output_containing(&live, "second message");
     assert!(heard.contains("second message"), "{heard}");
 }
@@ -444,7 +457,7 @@ async fn a_task_notification_does_not_lift_the_hold() {
         "prompt": "<task-notification><task-id>b1</task-id></task-notification>",
         "transcript_path": path,
     });
-    apply_hook(&state, "s", notification.to_string().as_bytes());
+    apply_hook(&state, "s", notification.to_string().as_bytes(), None);
     let second = crate::messaging::delivery::write_message(
         &state,
         "s",
@@ -477,7 +490,7 @@ async fn a_subagents_hand_back_does_not_lift_the_hold() {
                    [Subagent hand-back] The report follows:\n  pass\n</agent-message>",
         "transcript_path": path,
     });
-    apply_hook(&state, "s", hand_back.to_string().as_bytes());
+    apply_hook(&state, "s", hand_back.to_string().as_bytes(), None);
     let second = crate::messaging::delivery::write_message(
         &state,
         "s",
@@ -498,7 +511,12 @@ async fn a_message_the_agent_sends_is_delivered() {
     let sender = std::thread::spawn(move || {
         let _runtime = runtime.enter();
         crate::test_support::output_containing(&live, "a message");
-        apply_hook(&hook_state, "s", &claude_hook("UserPromptSubmit", &path));
+        apply_hook(
+            &hook_state,
+            "s",
+            &claude_hook("UserPromptSubmit", &path),
+            None,
+        );
         live
     });
     let delivery = crate::messaging::delivery::write_message(
@@ -560,15 +578,15 @@ async fn an_owner_is_told_when_a_hook_puts_its_session_in_waiting_for_the_user()
         })
     };
 
-    apply_hook(&state, "w", &claude_hook("UserPromptSubmit", &path));
-    apply_hook(&state, "w", &claude_hook("Stop", &path));
-    apply_hook(&state, "w", &claude_hook("UserPromptSubmit", &path));
-    apply_hook(&state, "w", &claude_hook("PermissionRequest", &path));
+    apply_hook(&state, "w", &claude_hook("UserPromptSubmit", &path), None);
+    apply_hook(&state, "w", &claude_hook("Stop", &path), None);
+    apply_hook(&state, "w", &claude_hook("UserPromptSubmit", &path), None);
+    apply_hook(&state, "w", &claude_hook("PermissionRequest", &path), None);
     assert!(told(1).await, "{}", heard());
-    apply_hook(&state, "w", &claude_hook("PostToolUse", &path));
-    apply_hook(&state, "w", &claude_hook("PermissionRequest", &path));
-    apply_hook(&state, "w", &claude_hook("PostToolUse", &path));
-    apply_hook(&state, "w", &claude_hook("Stop", &path));
+    apply_hook(&state, "w", &claude_hook("PostToolUse", &path), None);
+    apply_hook(&state, "w", &claude_hook("PermissionRequest", &path), None);
+    apply_hook(&state, "w", &claude_hook("PostToolUse", &path), None);
+    apply_hook(&state, "w", &claude_hook("Stop", &path), None);
     assert!(told(1).await, "{}", heard());
     // The owner is written to off the hook's path, on blocking tasks this waits out; the marker
     // then shows whether one of them wrote a second notice.
@@ -581,8 +599,8 @@ async fn an_owner_is_told_when_a_hook_puts_its_session_in_waiting_for_the_user()
     };
     assert_eq!(behind_marker.matches("is waiting for the user").count(), 1);
 
-    apply_hook(&state, "w", &claude_hook("UserPromptSubmit", &path));
-    apply_hook(&state, "w", &claude_hook("PermissionRequest", &path));
+    apply_hook(&state, "w", &claude_hook("UserPromptSubmit", &path), None);
+    apply_hook(&state, "w", &claude_hook("PermissionRequest", &path), None);
     assert!(told(2).await, "{}", heard());
 }
 
@@ -592,8 +610,8 @@ async fn an_owner_is_told_when_a_hook_puts_its_session_in_waiting_for_the_user()
 async fn an_interrupted_claude_turn_goes_back_to_its_prompt() {
     let (state, _dir, _live, path) =
         claude_session_with_transcript("server-interrupt", SessionStatus::Idle);
-    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
-    apply_hook(&state, "s", &claude_hook("PreToolUse", &path));
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path), None);
+    apply_hook(&state, "s", &claude_hook("PreToolUse", &path), None);
 
     std::fs::write(&path, crate::test_support::fresh_interrupt()).unwrap();
 
@@ -606,8 +624,8 @@ async fn an_interrupted_claude_turn_goes_back_to_its_prompt() {
 async fn a_claude_turn_interrupted_after_an_answered_prompt_goes_back_to_its_prompt() {
     let (state, _dir, _live, path) =
         claude_session_with_transcript("server-interrupt-after-hand", SessionStatus::Working);
-    apply_hook(&state, "s", &claude_hook("PermissionRequest", &path));
-    apply_hook(&state, "s", &claude_hook("PostToolUse", &path));
+    apply_hook(&state, "s", &claude_hook("PermissionRequest", &path), None);
+    apply_hook(&state, "s", &claude_hook("PostToolUse", &path), None);
 
     std::fs::write(&path, crate::test_support::fresh_interrupt()).unwrap();
 
@@ -626,10 +644,10 @@ async fn the_first_hook_after_a_prompt_left_arms_the_watch_as_a_move_off_the_pro
     assert_eq!(status(), SessionStatus::Working);
     assert!(live.interaction.lowered());
     // A hook that says nothing of the status leaves the mark for the next.
-    apply_hook(&state, "s", &claude_hook("PreCompact", &path));
+    apply_hook(&state, "s", &claude_hook("PreCompact", &path), None);
     assert!(live.interaction.lowered());
 
-    apply_hook(&state, "s", &claude_hook("PostToolUse", &path));
+    apply_hook(&state, "s", &claude_hook("PostToolUse", &path), None);
     assert!(!live.interaction.lowered());
     std::fs::write(&path, crate::test_support::fresh_interrupt()).unwrap();
     crate::adapter::claude::transcript_watch::polls_ran().await;
@@ -643,7 +661,7 @@ async fn a_hook_of_a_working_session_arms_no_watch_when_no_prompt_left() {
     let (state, _dir, live, path) =
         claude_session_with_transcript("server-interrupt-no-prompt-left", SessionStatus::Working);
     assert!(!live.interaction.lowered());
-    apply_hook(&state, "s", &claude_hook("PostToolUse", &path));
+    apply_hook(&state, "s", &claude_hook("PostToolUse", &path), None);
     std::fs::write(&path, crate::test_support::fresh_interrupt()).unwrap();
     crate::adapter::claude::transcript_watch::polls_ran().await;
     assert_eq!(
@@ -660,10 +678,10 @@ async fn only_the_next_turns_own_interrupt_ends_it() {
     let (state, _dir, _live, path) =
         claude_session_with_transcript("server-interrupt-next-turn", SessionStatus::Idle);
     let status = || state.store.get_session("s").unwrap().unwrap().status;
-    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path), None);
     std::fs::write(&path, crate::test_support::fresh_interrupt()).unwrap();
     // Before the first watch's first poll: the paused clock does not move until the test awaits.
-    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path), None);
 
     crate::adapter::claude::transcript_watch::polls_ran().await;
     assert_eq!(
@@ -693,6 +711,7 @@ async fn a_cancel_claude_carries_on_from_with_a_queued_message_keeps_the_session
             &state,
             "s",
             &claude_turn_hook("UserPromptSubmit", &path, CAPTURED_TURN),
+            None,
         );
     }
     std::fs::write(&path, queued_prompt_after_interrupt(QUEUED_TURN)).unwrap();
@@ -705,7 +724,12 @@ async fn a_cancel_claude_carries_on_from_with_a_queued_message_keeps_the_session
     );
     assert_eq!(state.turn_ends("s"), 1, "the cancelled turn ended");
 
-    apply_hook(&state, "s", &claude_turn_hook("Stop", &path, QUEUED_TURN));
+    apply_hook(
+        &state,
+        "s",
+        &claude_turn_hook("Stop", &path, QUEUED_TURN),
+        None,
+    );
     assert_eq!(status(), SessionStatus::Idle);
     assert!(!state.last_turn_abnormal("s"));
 }
@@ -741,13 +765,13 @@ async fn a_question_waits_through_the_end_of_another_call() {
         })
         .expect("the capture answers the question");
     for event in &events[..answered] {
-        apply_hook(&state, "s", event);
+        apply_hook(&state, "s", event, None);
     }
     let session = state.store.get_session("s").unwrap().unwrap();
     assert_eq!(session.status, SessionStatus::WaitingUser);
 
     for event in &events[answered..] {
-        apply_hook(&state, "s", event);
+        apply_hook(&state, "s", event, None);
     }
     let session = state.store.get_session("s").unwrap().unwrap();
     assert_eq!(session.status, SessionStatus::Idle);
@@ -812,10 +836,10 @@ async fn a_grok_question_waits_through_the_other_calls_of_its_response() {
             .position(|line| is(line, "PostToolUse"))
             .expect("the capture answers the question");
         for line in &lines[..asked] {
-            apply_hook(&state, "s", line.as_bytes());
+            apply_hook(&state, "s", line.as_bytes(), None);
         }
         for line in &lines[asked..answered] {
-            apply_hook(&state, "s", line.as_bytes());
+            apply_hook(&state, "s", line.as_bytes(), None);
             assert_eq!(
                 status_of(&state),
                 SessionStatus::WaitingUser,
@@ -823,7 +847,7 @@ async fn a_grok_question_waits_through_the_other_calls_of_its_response() {
             );
         }
         for line in &lines[answered..] {
-            apply_hook(&state, "s", line.as_bytes());
+            apply_hook(&state, "s", line.as_bytes(), None);
         }
         let session = state.store.get_session("s").unwrap().unwrap();
         assert_eq!(session.status, SessionStatus::Idle, "{capture}");
@@ -856,15 +880,26 @@ async fn a_grok_turn_end_or_denial_lowers_the_hand_of_a_question_still_waiting()
     ] {
         let (state, _dir, _live) =
             grok_session("server-grok-question-ended-by", SessionStatus::Idle);
-        apply_hook(&state, "s", br#"{"hook_event_name": "UserPromptSubmit"}"#);
+        apply_hook(
+            &state,
+            "s",
+            br#"{"hook_event_name": "UserPromptSubmit"}"#,
+            None,
+        );
         apply_hook(
             &state,
             "s",
             &grok_call_hook("PreToolUse", "q", "ask_user_question"),
+            None,
         );
         assert_eq!(status_of(&state), SessionStatus::WaitingUser, "{event}");
 
-        apply_hook(&state, "s", &grok_call_hook(event, id, "ask_user_question"));
+        apply_hook(
+            &state,
+            "s",
+            &grok_call_hook(event, id, "ask_user_question"),
+            None,
+        );
         assert_eq!(status_of(&state), expected, "{event}");
 
         // Nothing is waiting any more, so another call's end is work again.
@@ -872,6 +907,7 @@ async fn a_grok_turn_end_or_denial_lowers_the_hand_of_a_question_still_waiting()
             &state,
             "s",
             &grok_call_hook("PostToolUse", "t2", "run_terminal_command"),
+            None,
         );
         assert_eq!(status_of(&state), SessionStatus::Working, "{event}");
     }
@@ -882,16 +918,23 @@ async fn a_grok_turn_end_or_denial_lowers_the_hand_of_a_question_still_waiting()
 #[tokio::test]
 async fn a_grok_permission_prompt_comes_down_with_the_next_call_to_end() {
     let (state, _dir, _live) = grok_session("server-grok-prompt-next-end", SessionStatus::Idle);
-    apply_hook(&state, "s", br#"{"hook_event_name": "UserPromptSubmit"}"#);
+    apply_hook(
+        &state,
+        "s",
+        br#"{"hook_event_name": "UserPromptSubmit"}"#,
+        None,
+    );
     apply_hook(
         &state,
         "s",
         &grok_call_hook("PreToolUse", "t1", "run_terminal_command"),
+        None,
     );
     apply_hook(
         &state,
         "s",
         br#"{"hook_event_name": "Notification", "notificationType": "permission_prompt"}"#,
+        None,
     );
     assert_eq!(status_of(&state), SessionStatus::WaitingUser);
 
@@ -899,6 +942,7 @@ async fn a_grok_permission_prompt_comes_down_with_the_next_call_to_end() {
         &state,
         "s",
         &grok_call_hook("PostToolUse", "t1", "run_terminal_command"),
+        None,
     );
     assert_eq!(status_of(&state), SessionStatus::Working);
 }
@@ -910,7 +954,7 @@ async fn a_grok_permission_prompt_comes_down_with_the_next_call_to_end() {
 async fn a_grok_question_waits_through_the_failure_or_denial_of_another_call() {
     let (state, _dir, _live) =
         grok_session("server-grok-question-failed-call", SessionStatus::Idle);
-    let hook = |event, id, tool| apply_hook(&state, "s", &grok_call_hook(event, id, tool));
+    let hook = |event, id, tool| apply_hook(&state, "s", &grok_call_hook(event, id, tool), None);
     hook("UserPromptSubmit", "", "");
     hook("PreToolUse", "q", "ask_user_question");
     assert_eq!(status_of(&state), SessionStatus::WaitingUser);
@@ -938,7 +982,14 @@ async fn a_grok_question_waits_through_the_failure_or_denial_of_another_call() {
 #[tokio::test]
 async fn a_grok_hand_stays_up_until_every_waiting_question_has_ended() {
     let (state, _dir, _live) = grok_session("server-grok-two-questions", SessionStatus::Idle);
-    let hook = |event, id| apply_hook(&state, "s", &grok_call_hook(event, id, "ask_user_question"));
+    let hook = |event, id| {
+        apply_hook(
+            &state,
+            "s",
+            &grok_call_hook(event, id, "ask_user_question"),
+            None,
+        )
+    };
     hook("UserPromptSubmit", "");
     hook("PreToolUse", "q1");
     hook("PreToolUse", "q2");
@@ -956,7 +1007,14 @@ async fn a_grok_hand_stays_up_until_every_waiting_question_has_ended() {
 #[tokio::test]
 async fn a_grok_subagents_events_do_not_end_a_waiting_question() {
     let (state, _dir, _live) = grok_session("server-grok-question-subagent", SessionStatus::Idle);
-    let hook = |event, id| apply_hook(&state, "s", &grok_call_hook(event, id, "ask_user_question"));
+    let hook = |event, id| {
+        apply_hook(
+            &state,
+            "s",
+            &grok_call_hook(event, id, "ask_user_question"),
+            None,
+        )
+    };
     hook("UserPromptSubmit", "");
     hook("PreToolUse", "q");
     assert_eq!(status_of(&state), SessionStatus::WaitingUser);
@@ -969,7 +1027,7 @@ async fn a_grok_subagents_events_do_not_end_a_waiting_question() {
             "subagentType": "general-purpose",
         })
         .to_string();
-        apply_hook(&state, "s", body.as_bytes());
+        apply_hook(&state, "s", body.as_bytes(), None);
         assert_eq!(status_of(&state), SessionStatus::WaitingUser, "{event}");
     }
 
@@ -984,13 +1042,14 @@ async fn a_grok_subagents_events_do_not_end_a_waiting_question() {
 async fn a_grok_idle_prompt_does_not_end_a_waiting_question() {
     let (state, _dir, _live) =
         grok_session("server-grok-question-idle-prompt", SessionStatus::Idle);
-    let hook = |event, id, tool| apply_hook(&state, "s", &grok_call_hook(event, id, tool));
+    let hook = |event, id, tool| apply_hook(&state, "s", &grok_call_hook(event, id, tool), None);
     hook("UserPromptSubmit", "", "");
     hook("PreToolUse", "q", "ask_user_question");
     apply_hook(
         &state,
         "s",
         br#"{"hookEventName": "Notification", "notificationType": "idle_prompt"}"#,
+        None,
     );
 
     hook("PostToolUse", "t1", "run_terminal_command");
@@ -1023,7 +1082,7 @@ fn listed_task_ids(state: &Arc<AppState>) -> Vec<String> {
 #[tokio::test]
 async fn a_grok_turn_held_on_background_work_stays_open_until_the_work_is_done() {
     let (state, _dir, _live) = grok_session("server-grok-held-turn", SessionStatus::Idle);
-    let hook = |body: &str| apply_hook(&state, "s", body.as_bytes());
+    let hook = |body: &str| apply_hook(&state, "s", body.as_bytes(), None);
     let prompt = |text: &str| {
         serde_json::json!({"hookEventName": "UserPromptSubmit", "prompt": text}).to_string()
     };
@@ -1056,7 +1115,7 @@ async fn a_grok_turn_held_on_background_work_stays_open_until_the_work_is_done()
 
     // The `idle_prompt` a minute later: neither the turn nor the list changes.
     state.quiet_past_backstop("s");
-    apply_hook(&state, "s", GROK_IDLE_PROMPT);
+    apply_hook(&state, "s", GROK_IDLE_PROMPT, None);
     assert_eq!(status_of(&state), SessionStatus::Idle);
     assert_eq!(listed_task_ids(&state), ["sh1", "sub1"]);
     assert!(state.turn_is_open("s"));
@@ -1075,7 +1134,7 @@ async fn a_grok_turn_held_on_background_work_stays_open_until_the_work_is_done()
     assert_eq!(listed_task_ids(&state), ["sub1"]);
     assert!(state.turn_is_open("s"));
     state.quiet_past_backstop("s");
-    apply_hook(&state, "s", GROK_IDLE_PROMPT);
+    apply_hook(&state, "s", GROK_IDLE_PROMPT, None);
     assert!(state.turn_is_open("s"));
 
     // The subagent's own events never change the list.
@@ -1101,12 +1160,13 @@ async fn a_grok_turn_held_on_background_work_stays_open_until_the_work_is_done()
 #[tokio::test]
 async fn a_grok_teardown_stop_leaves_the_listed_work_alone() {
     let (state, _dir, _live) = grok_session("server-grok-teardown-work", SessionStatus::Idle);
-    apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes());
+    apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes(), None);
     assert_eq!(listed_task_ids(&state), ["sh1", "sub1"]);
     apply_hook(
         &state,
         "s",
         br#"{"hookEventName": "Stop", "reason": "shutdown"}"#,
+        None,
     );
     assert_eq!(listed_task_ids(&state), ["sh1", "sub1"]);
 }
@@ -1119,9 +1179,9 @@ async fn a_grok_stop_without_work_or_a_failed_turn_empties_the_list() {
         r#"{"hookEventName": "StopFailure"}"#,
     ] {
         let (state, _dir, _live) = grok_session("server-grok-emptied-work", SessionStatus::Idle);
-        apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes());
+        apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes(), None);
         assert_eq!(listed_task_ids(&state), ["sh1", "sub1"], "{end}");
-        apply_hook(&state, "s", end.as_bytes());
+        apply_hook(&state, "s", end.as_bytes(), None);
         assert!(state.background_tasks_of("s").is_empty(), "{end}");
     }
 }
@@ -1135,20 +1195,28 @@ async fn a_backstop_turn_end_is_ignored_while_background_work_is_listed() {
     let interpreter = crate::adapter::provider(AgentId::GROK).hooks();
     let backstop = serde_json::json!({"notificationType": "idle_prompt"});
     let read = |state: &Arc<AppState>| {
-        read_turn_boundary(state, "s", interpreter, "Notification", &backstop)
+        // Grok's interpreter reads the payload alone: it is told a session with nothing kept.
+        let unkept = hooks::HookCarry::default();
+        let session = hooks::HookSession::new("s", None, None, &unkept);
+        read_turn_boundary(state, &session, interpreter, "Notification", &backstop)
     };
 
     // A turn open and held on work.
     let (state, _dir, _live) = grok_session("server-grok-backstop-held", SessionStatus::Idle);
-    apply_hook(&state, "s", br#"{"hookEventName": "UserPromptSubmit"}"#);
-    apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes());
+    apply_hook(
+        &state,
+        "s",
+        br#"{"hookEventName": "UserPromptSubmit"}"#,
+        None,
+    );
+    apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes(), None);
     state.quiet_past_backstop("s");
     assert!(!read(&state));
     assert!(state.turn_is_open("s"));
 
     // The work listed and no turn open: still nothing to read in it.
     let (state, _dir, _live) = grok_session("server-grok-backstop-no-turn", SessionStatus::Idle);
-    apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes());
+    apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes(), None);
     assert_eq!(status_of(&state), SessionStatus::Idle);
     assert!(!state.turn_is_open("s"));
     assert!(!read(&state));
@@ -1168,11 +1236,11 @@ async fn an_idle_prompt_after_the_quiet_gate_closes_a_turn_only_when_no_work_is_
 
     // Held on work: the idle prompt arrives long after the `Stop`, and leaves everything as it was.
     let (state, _dir, _live) = grok_session("server-grok-aged-backstop-held", SessionStatus::Idle);
-    apply_hook(&state, "s", prompt);
-    apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes());
+    apply_hook(&state, "s", prompt, None);
+    apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes(), None);
     let ends = state.turn_ends("s");
     state.quiet_past_backstop("s");
-    apply_hook(&state, "s", GROK_IDLE_PROMPT);
+    apply_hook(&state, "s", GROK_IDLE_PROMPT, None);
     assert!(
         state.turn_is_open("s"),
         "the turn is still held on its work"
@@ -1185,11 +1253,11 @@ async fn an_idle_prompt_after_the_quiet_gate_closes_a_turn_only_when_no_work_is_
 
     // Control: a turn left open with nothing listed, as long quiet, is closed by the same event.
     let (state, _dir, _live) = grok_session("server-grok-aged-backstop-free", SessionStatus::Idle);
-    apply_hook(&state, "s", prompt);
+    apply_hook(&state, "s", prompt, None);
     assert!(state.turn_is_open("s"));
     let ends = state.turn_ends("s");
     state.quiet_past_backstop("s");
-    apply_hook(&state, "s", GROK_IDLE_PROMPT);
+    apply_hook(&state, "s", GROK_IDLE_PROMPT, None);
     assert!(!state.turn_is_open("s"), "the backstop closes a quiet turn");
     assert_eq!(state.turn_ends("s"), ends + 1);
     assert_eq!(status_of(&state), SessionStatus::Idle);
@@ -1205,13 +1273,15 @@ async fn a_backstop_still_closes_a_turn_a_later_prompt_joined_while_work_is_list
         &state,
         "s",
         br#"{"hookEventName": "UserPromptSubmit", "prompt": "go"}"#,
+        None,
     );
-    apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes());
+    apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes(), None);
     assert_eq!(status_of(&state), SessionStatus::Idle);
     apply_hook(
         &state,
         "s",
         br#"{"hookEventName": "UserPromptSubmit", "prompt": "and one more thing"}"#,
+        None,
     );
     assert_eq!(status_of(&state), SessionStatus::Working);
     assert!(state.turn_is_open("s"));
@@ -1219,7 +1289,7 @@ async fn a_backstop_still_closes_a_turn_a_later_prompt_joined_while_work_is_list
 
     let ends = state.turn_ends("s");
     state.quiet_past_backstop("s");
-    apply_hook(&state, "s", GROK_IDLE_PROMPT);
+    apply_hook(&state, "s", GROK_IDLE_PROMPT, None);
     assert!(!state.turn_is_open("s"), "the backstop closes the turn");
     assert_eq!(state.turn_ends("s"), ends + 1);
     assert_eq!(status_of(&state), SessionStatus::Idle);
@@ -1250,7 +1320,7 @@ async fn a_captured_grok_run_with_background_work_lists_what_each_stop_says() {
     for line in GROK_BACKGROUND_WORK_TURNS.lines() {
         let payload: serde_json::Value = serde_json::from_str(line).unwrap();
         let own = payload.get("subagentType").is_none();
-        apply_hook(&state, "s", line.as_bytes());
+        apply_hook(&state, "s", line.as_bytes(), None);
         match payload["hook_event_name"].as_str().unwrap() {
             "UserPromptSubmit" if own => {
                 assert_eq!(status_of(&state), SessionStatus::Working, "{line}");
@@ -1292,7 +1362,7 @@ async fn a_helper_agents_tool_events_leave_an_idle_session_idle() {
     for event in ["PreToolUse", "PostToolUse", "PostToolBatch"] {
         let body =
             format!(r#"{{"hook_event_name": "{event}", "agent_id": "h1", "tool_name": "Read"}}"#);
-        apply_hook(&state, "s", body.as_bytes());
+        apply_hook(&state, "s", body.as_bytes(), None);
     }
     let session = state.store.get_session("s").unwrap().unwrap();
     assert_eq!(session.status, SessionStatus::Idle);
@@ -1315,7 +1385,7 @@ async fn subagent_events_keep_the_tasks_of_an_idle_session() {
         ))
         .unwrap();
     let mut events = state.subscribe();
-    let hook = |body: &str| apply_hook(&state, "s", body.as_bytes());
+    let hook = |body: &str| apply_hook(&state, "s", body.as_bytes(), None);
     let published = |events: &mut tokio::sync::broadcast::Receiver<Event>| {
         let mut out = Vec::new();
         while let Ok(Event::SessionUpserted { session }) = events.try_recv() {
@@ -1410,13 +1480,13 @@ async fn subagent_events_inside_a_turn_leave_the_tasks_alone() {
     apply_hook(
         &state,
         "s",
-        br#"{"hook_event_name": "SubagentStart", "agent_id": "a", "agent_type": "general-purpose"}"#,
+        br#"{"hook_event_name": "SubagentStart", "agent_id": "a", "agent_type": "general-purpose"}"#, None,
     );
     assert!(state.background_tasks_of("s").is_empty());
     apply_hook(
         &state,
         "s",
-        br#"{"hook_event_name": "SubagentStop", "agent_id": "a", "agent_type": "general-purpose", "background_tasks": [{"id": "a", "type": "subagent"}, {"id": "b", "type": "shell"}]}"#,
+        br#"{"hook_event_name": "SubagentStop", "agent_id": "a", "agent_type": "general-purpose", "background_tasks": [{"id": "a", "type": "subagent"}, {"id": "b", "type": "shell"}]}"#, None,
     );
     assert!(state.background_tasks_of("s").is_empty());
 }
@@ -1485,12 +1555,12 @@ async fn an_abnormal_turn_end_pauses_the_session_until_the_next_turn_or_a_normal
         let label = format!("{agent:?} {abnormal}");
 
         // Ended abnormally while the session was working: the one publish carries the flag.
-        apply_hook(&state, "s", prompt.as_bytes());
+        apply_hook(&state, "s", prompt.as_bytes(), None);
         assert_eq!(
             last_paused(&mut events),
             Some((SessionStatus::Working, false))
         );
-        apply_hook(&state, "s", abnormal.as_bytes());
+        apply_hook(&state, "s", abnormal.as_bytes(), None);
         assert_eq!(
             last_paused(&mut events),
             Some((SessionStatus::Idle, true)),
@@ -1498,7 +1568,7 @@ async fn an_abnormal_turn_end_pauses_the_session_until_the_next_turn_or_a_normal
         );
 
         // The next prompt ends it.
-        apply_hook(&state, "s", prompt.as_bytes());
+        apply_hook(&state, "s", prompt.as_bytes(), None);
         assert_eq!(
             last_paused(&mut events),
             Some((SessionStatus::Working, false)),
@@ -1508,13 +1578,13 @@ async fn an_abnormal_turn_end_pauses_the_session_until_the_next_turn_or_a_normal
 
         // Ended abnormally again, then normally: the second end is published although the status
         // stays idle.
-        apply_hook(&state, "s", abnormal.as_bytes());
+        apply_hook(&state, "s", abnormal.as_bytes(), None);
         assert_eq!(
             last_paused(&mut events),
             Some((SessionStatus::Idle, true)),
             "{label}"
         );
-        apply_hook(&state, "s", normal.as_bytes());
+        apply_hook(&state, "s", normal.as_bytes(), None);
         assert_eq!(
             last_paused(&mut events),
             Some((SessionStatus::Idle, false)),
@@ -1522,7 +1592,7 @@ async fn an_abnormal_turn_end_pauses_the_session_until_the_next_turn_or_a_normal
         );
 
         // An abnormal end of a session that is idle already is published too.
-        apply_hook(&state, "s", abnormal.as_bytes());
+        apply_hook(&state, "s", abnormal.as_bytes(), None);
         assert_eq!(
             last_paused(&mut events),
             Some((SessionStatus::Idle, true)),
@@ -1567,9 +1637,9 @@ async fn events_that_end_no_turn_leave_the_paused_flag_alone() {
             .unwrap();
         let live = crate::test_support::fake_live_session("s", agent, 80, 24, "sleep 30");
         state.register_live(live.clone());
-        apply_hook(&state, "s", ends_abnormally.as_bytes());
+        apply_hook(&state, "s", ends_abnormally.as_bytes(), None);
         assert!(state.last_turn_abnormal("s"));
-        apply_hook(&state, "s", silent.as_bytes());
+        apply_hook(&state, "s", silent.as_bytes(), None);
         assert!(state.last_turn_abnormal("s"), "{agent:?} {silent}");
         assert!(
             state
@@ -1598,13 +1668,13 @@ async fn a_new_claude_conversation_clears_the_paused_flag() {
         .unwrap();
     let live = crate::test_support::fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
     state.register_live(live.clone());
-    apply_hook(&state, "s", br#"{"hook_event_name": "StopFailure"}"#);
+    apply_hook(&state, "s", br#"{"hook_event_name": "StopFailure"}"#, None);
     assert!(state.last_turn_abnormal("s"));
 
     // A resume or a compaction carries the conversation on, so the turn cut short stays the last.
     for source in ["resume", "compact"] {
         let start = format!(r#"{{"hook_event_name": "SessionStart", "source": "{source}"}}"#);
-        apply_hook(&state, "s", start.as_bytes());
+        apply_hook(&state, "s", start.as_bytes(), None);
         assert!(state.last_turn_abnormal("s"), "{source}");
     }
 
@@ -1613,6 +1683,7 @@ async fn a_new_claude_conversation_clears_the_paused_flag() {
         &state,
         "s",
         br#"{"hook_event_name": "SessionStart", "source": "clear"}"#,
+        None,
     );
     assert!(!state.last_turn_abnormal("s"));
     let mut last = None;
@@ -1649,7 +1720,7 @@ fn session_in_turn(
         .unwrap();
     let live = crate::test_support::fake_live_session("s", agent, 80, 24, "sleep 30");
     state.register_live(live.clone());
-    apply_hook(&state, "s", prompt.as_bytes());
+    apply_hook(&state, "s", prompt.as_bytes(), None);
     assert_eq!(
         state.session_record("s").unwrap().status,
         SessionStatus::Working
@@ -1710,7 +1781,7 @@ async fn a_late_normal_end_of_the_turn_cut_short_clears_the_paused_flag() {
 
         let (state, _dir, _live) = session_in_turn("hook-late-stop", agent, &prompt);
         end_process(&state);
-        apply_hook(&state, "s", stop.as_bytes());
+        apply_hook(&state, "s", stop.as_bytes(), None);
         let record = state.session_record("s").unwrap();
         assert_eq!(record.status, SessionStatus::Interrupted, "{agent:?}");
         assert!(
@@ -1720,7 +1791,7 @@ async fn a_late_normal_end_of_the_turn_cut_short_clears_the_paused_flag() {
 
         let (state, _dir, _live) = session_in_turn("hook-late-other-stop", agent, &prompt);
         end_process(&state);
-        apply_hook(&state, "s", other_stop.as_bytes());
+        apply_hook(&state, "s", other_stop.as_bytes(), None);
         assert!(
             state.last_turn_abnormal("s"),
             "{agent:?}: another turn's end"
@@ -1728,10 +1799,10 @@ async fn a_late_normal_end_of_the_turn_cut_short_clears_the_paused_flag() {
 
         let (state, _dir, _live) = session_in_turn("hook-late-abnormal", agent, &prompt);
         end_process(&state);
-        apply_hook(&state, "s", abnormal.as_bytes());
+        apply_hook(&state, "s", abnormal.as_bytes(), None);
         assert!(state.last_turn_abnormal("s"), "{agent:?}: an abnormal end");
         // The abnormal end settled the turn, so nothing of it is taken as its end any more.
-        apply_hook(&state, "s", stop.as_bytes());
+        apply_hook(&state, "s", stop.as_bytes(), None);
         assert!(state.last_turn_abnormal("s"), "{agent:?}: settled already");
     }
 }
@@ -1753,7 +1824,7 @@ async fn a_late_end_of_the_turn_cut_short_leaves_a_resumed_session_alone() {
         let live = crate::test_support::fake_live_session("s", agent, 80, 24, "sleep 30");
         state.register_live(live.clone());
 
-        apply_hook(&state, "s", stop.as_bytes());
+        apply_hook(&state, "s", stop.as_bytes(), None);
         let record = state.session_record("s").unwrap();
         assert_eq!(record.status, SessionStatus::Idle, "{agent:?}");
         assert!(
@@ -1764,8 +1835,8 @@ async fn a_late_end_of_the_turn_cut_short_leaves_a_resumed_session_alone() {
         // A new turn of the new process is not ended by the old turn's end either, one posted
         // again included.
         let next = prompt.replace("t1", "t2");
-        apply_hook(&state, "s", next.as_bytes());
-        apply_hook(&state, "s", stop.as_bytes());
+        apply_hook(&state, "s", next.as_bytes(), None);
+        apply_hook(&state, "s", stop.as_bytes(), None);
         assert_eq!(
             state.session_record("s").unwrap().status,
             SessionStatus::Working,
@@ -1786,7 +1857,7 @@ async fn a_late_normal_end_of_a_turn_an_archive_cut_short_clears_the_paused_flag
     let archived_at = state.session_record("s").unwrap().ended_at.unwrap();
     exit_at(&state, archived_at + 1_000);
 
-    apply_hook(&state, "s", stop.as_bytes());
+    apply_hook(&state, "s", stop.as_bytes(), None);
     let record = state.session_record("s").unwrap();
     assert_eq!(record.status, SessionStatus::Archived);
     assert_eq!(record.ended_at, Some(archived_at + 1_000));
@@ -1804,7 +1875,7 @@ async fn the_exit_after_an_archive_does_not_set_again_a_flag_a_late_end_cleared(
     state.archive_session_record("s").unwrap();
     assert!(state.last_turn_abnormal("s"));
 
-    apply_hook(&state, "s", stop.as_bytes());
+    apply_hook(&state, "s", stop.as_bytes(), None);
     assert!(!state.last_turn_abnormal("s"));
     let archived_at = state.session_record("s").unwrap().ended_at.unwrap();
     exit_at(&state, archived_at + 1_000);
@@ -1855,10 +1926,20 @@ async fn a_cancelled_codex_turn_starts_what_octoboard_left_in_its_queue() {
     let live =
         crate::test_support::idle_stand_in_of("s", AgentId::CODEX).with_transport(queue.clone());
     state.register_live(live.clone());
-    apply_hook(&state, "s", br#"{"hook_event_name": "UserPromptSubmit"}"#);
-    apply_hook(&state, "s", br#"{"hook_event_name": "Stop"}"#);
-    apply_hook(&state, "s", br#"{"hook_event_name": "UserPromptSubmit"}"#);
-    apply_hook(&state, "s", br#"{"hook_event_name": "Interrupt"}"#);
+    apply_hook(
+        &state,
+        "s",
+        br#"{"hook_event_name": "UserPromptSubmit"}"#,
+        None,
+    );
+    apply_hook(&state, "s", br#"{"hook_event_name": "Stop"}"#, None);
+    apply_hook(
+        &state,
+        "s",
+        br#"{"hook_event_name": "UserPromptSubmit"}"#,
+        None,
+    );
+    apply_hook(&state, "s", br#"{"hook_event_name": "Interrupt"}"#, None);
     let deadline = std::time::Instant::now() + PATIENCE;
     while queue.0.load(std::sync::atomic::Ordering::Acquire) == 0 {
         assert!(
@@ -1905,21 +1986,24 @@ async fn a_permission_prompt_waits_through_the_end_of_another_call() {
     let make = serde_json::json!({"command": "make"});
     let agent = serde_json::json!({"prompt": "go"});
     let hook = |event, id, tool, input| claude_call_hook(event, id, tool, input, &path);
-    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path), None);
     apply_hook(
         &state,
         "s",
         &hook("PreToolUse", Some("t1"), "Bash", make.clone()),
+        None,
     );
     apply_hook(
         &state,
         "s",
         &hook("PreToolUse", Some("t2"), "Agent", agent.clone()),
+        None,
     );
     apply_hook(
         &state,
         "s",
         &hook("PermissionRequest", None, "Bash", make.clone()),
+        None,
     );
     assert_eq!(status_of(&state), SessionStatus::WaitingUser);
 
@@ -1927,10 +2011,16 @@ async fn a_permission_prompt_waits_through_the_end_of_another_call() {
         &state,
         "s",
         &hook("PostToolUse", Some("t2"), "Agent", agent),
+        None,
     );
     assert_eq!(status_of(&state), SessionStatus::WaitingUser);
 
-    apply_hook(&state, "s", &hook("PostToolUse", Some("t1"), "Bash", make));
+    apply_hook(
+        &state,
+        "s",
+        &hook("PostToolUse", Some("t1"), "Bash", make),
+        None,
+    );
     assert_eq!(status_of(&state), SessionStatus::Working);
 }
 
@@ -1942,11 +2032,12 @@ async fn a_failed_other_call_does_not_lower_a_waiting_questions_hand_either() {
     let questions = serde_json::json!({"questions": []});
     let agent = serde_json::json!({"prompt": "go"});
     let hook = |event, id, tool, input| claude_call_hook(event, id, tool, input, &path);
-    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path), None);
     apply_hook(
         &state,
         "s",
         &hook("PreToolUse", Some("t1"), "Agent", agent.clone()),
+        None,
     );
     apply_hook(
         &state,
@@ -1957,6 +2048,7 @@ async fn a_failed_other_call_does_not_lower_a_waiting_questions_hand_either() {
             "AskUserQuestion",
             questions.clone(),
         ),
+        None,
     );
     assert_eq!(status_of(&state), SessionStatus::WaitingUser);
 
@@ -1964,6 +2056,7 @@ async fn a_failed_other_call_does_not_lower_a_waiting_questions_hand_either() {
         &state,
         "s",
         &hook("PostToolUseFailure", Some("t1"), "Agent", agent),
+        None,
     );
     assert_eq!(status_of(&state), SessionStatus::WaitingUser);
 
@@ -1976,6 +2069,7 @@ async fn a_failed_other_call_does_not_lower_a_waiting_questions_hand_either() {
             "AskUserQuestion",
             questions,
         ),
+        None,
     );
     assert_eq!(status_of(&state), SessionStatus::Working);
 }
@@ -1989,11 +2083,12 @@ async fn a_skipped_move_to_work_arms_no_watch() {
     let questions = serde_json::json!({"questions": []});
     let agent = serde_json::json!({"prompt": "go"});
     let hook = |event, id, tool, input| claude_call_hook(event, id, tool, input, &path);
-    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path), None);
     apply_hook(
         &state,
         "s",
         &hook("PreToolUse", Some("t1"), "Agent", agent.clone()),
+        None,
     );
     apply_hook(
         &state,
@@ -2004,6 +2099,7 @@ async fn a_skipped_move_to_work_arms_no_watch() {
             "AskUserQuestion",
             questions.clone(),
         ),
+        None,
     );
     // Retires the watch the question armed and stands in for the watch current now.
     let current = state.begin_record_watch("s");
@@ -2012,6 +2108,7 @@ async fn a_skipped_move_to_work_arms_no_watch() {
         &state,
         "s",
         &hook("PostToolUse", Some("t1"), "Agent", agent),
+        None,
     );
     assert_eq!(status_of(&state), SessionStatus::WaitingUser);
     assert!(state.record_watch_current("s", current));
@@ -2020,6 +2117,7 @@ async fn a_skipped_move_to_work_arms_no_watch() {
         &state,
         "s",
         &hook("PostToolUse", Some("t2"), "AskUserQuestion", questions),
+        None,
     );
     assert_eq!(status_of(&state), SessionStatus::Working);
     assert!(!state.record_watch_current("s", current));
@@ -2040,15 +2138,16 @@ async fn a_batch_prompt_or_turn_end_lowers_the_hand_of_a_call_still_waiting() {
             claude_session_with_transcript("server-question-ended-by", SessionStatus::Idle);
         let questions = serde_json::json!({"questions": []});
         let hook = |event, id, tool, input| claude_call_hook(event, id, tool, input, &path);
-        apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+        apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path), None);
         apply_hook(
             &state,
             "s",
             &hook("PreToolUse", Some("t1"), "AskUserQuestion", questions),
+            None,
         );
         assert_eq!(status_of(&state), SessionStatus::WaitingUser, "{event}");
 
-        apply_hook(&state, "s", &claude_hook(event, &path));
+        apply_hook(&state, "s", &claude_hook(event, &path), None);
         assert_eq!(status_of(&state), expected, "{event}");
 
         // Nothing is waiting any more, so another call's end is work again.
@@ -2056,6 +2155,7 @@ async fn a_batch_prompt_or_turn_end_lowers_the_hand_of_a_call_still_waiting() {
             &state,
             "s",
             &hook("PostToolUse", Some("t2"), "Agent", serde_json::json!({})),
+            None,
         );
         assert_eq!(status_of(&state), SessionStatus::Working, "{event}");
     }
@@ -2076,6 +2176,7 @@ async fn a_prompt_for_an_unseen_call_ends_with_the_next_call() {
             "Write",
             serde_json::json!({"path": "/x"}),
         ),
+        None,
     );
     assert_eq!(status_of(&state), SessionStatus::WaitingUser);
 
@@ -2083,6 +2184,7 @@ async fn a_prompt_for_an_unseen_call_ends_with_the_next_call() {
         &state,
         "s",
         &hook("PostToolUse", Some("t9"), "Bash", serde_json::json!({})),
+        None,
     );
     assert_eq!(status_of(&state), SessionStatus::Working);
 }
@@ -2109,11 +2211,152 @@ async fn another_agents_prompt_is_lowered_by_the_end_of_any_call() {
         .to_string()
         .into_bytes()
     };
-    apply_hook(&state, "s", &hook("PermissionRequest", None));
+    apply_hook(&state, "s", &hook("PermissionRequest", None), None);
     assert_eq!(status_of(&state), SessionStatus::WaitingUser);
 
-    apply_hook(&state, "s", &hook("PostToolUse", Some("other")));
+    apply_hook(&state, "s", &hook("PostToolUse", Some("other")), None);
     assert_eq!(status_of(&state), SessionStatus::Working);
+}
+
+/// A session of `agent` with a live stand-in whose trust watch reads the parsed screen, which is
+/// what a `SessionStart` hook sets going for an agent that waits for bracketed paste.
+fn session_awaiting_its_start(
+    name: &str,
+    agent: AgentId,
+) -> (
+    Arc<AppState>,
+    crate::test_support::ScratchDir,
+    crate::test_support::StandIn,
+) {
+    let (state, dir) = app_state(name);
+    state
+        .store
+        .insert_console(&crate::test_support::console(&dir))
+        .unwrap();
+    let mut session = crate::test_support::console_session("s", SessionStatus::Idle);
+    session.agent = agent;
+    state.store.insert_session(&session).unwrap();
+    let live = crate::test_support::watched_live_session("s", agent, 80, 24, "sleep 30", None);
+    live.trust.read_the_screen();
+    state.register_live(live.clone());
+    (state, dir, live)
+}
+
+/// A provider whose interpreter does not say what a session start looks like never starts the
+/// trust hold's release on an event named `SessionStart`, however the name reaches it (in the
+/// payload or beside it) and whatever its screen waits for; Claude Code's, which does, still does,
+/// and not for a subagent's event.
+#[tokio::test]
+async fn only_an_interpreter_that_announces_the_session_start_starts_the_trust_hold_s_release() {
+    let announced = br#"{"hook_event_name": "SessionStart", "source": "startup"}"#;
+    let subagent = br#"{"hook_event_name": "SessionStart", "agent_type": "helper"}"#;
+
+    // The control: Claude Code's interpreter answers, so the watch starts looking for the box.
+    let (state, _dir, live) = session_awaiting_its_start("server-start-announced", AgentId::CLAUDE);
+    assert!(!live.trust.watches_input_box());
+    apply_hook(&state, "s", subagent, None);
+    assert!(
+        !live.trust.watches_input_box(),
+        "a subagent's start is not the session's"
+    );
+    apply_hook(&state, "s", br#"{"hook_event_name": "Stop"}"#, None);
+    assert!(
+        !live.trust.watches_input_box(),
+        "another event is not a start"
+    );
+    apply_hook(&state, "s", announced, None);
+    assert!(live.trust.watches_input_box());
+    let (state, _dir, live) =
+        session_awaiting_its_start("server-start-named-by-route", AgentId::CLAUDE);
+    apply_hook(&state, "s", b"{}", Some("SessionStart"));
+    assert!(live.trust.watches_input_box(), "named beside the payload");
+
+    // The test-only provider claims nothing, on a screen that waits for bracketed paste as
+    // Claude Code's does: the only difference from the control is its interpreter.
+    let _waiting = crate::test_support::test_provider::declaring_trust_screen(
+        &crate::adapter::test_provider::PASTE_WAITING_SCREEN,
+    );
+    let provider = crate::adapter::provider(AgentId::TEST);
+    assert!(!provider
+        .hooks()
+        .announces_session_start("SessionStart", &serde_json::Value::Null));
+    assert!(provider.screen().trust_screen().waits_for_paste_mode);
+    let (state, _dir, live) = session_awaiting_its_start("server-start-unannounced", AgentId::TEST);
+    apply_hook(&state, "s", announced, None);
+    apply_hook(&state, "s", b"{}", Some("SessionStart"));
+    assert!(!live.trust.watches_input_box());
+}
+
+/// The session id the agent writes in its hook payloads is recorded for a session of a provider
+/// whose interpreter reads it, in either spelling, and for no other; and not from a subagent's
+/// payload, which is the agent's internal business.
+#[tokio::test]
+async fn an_agent_session_id_is_recorded_only_where_the_interpreter_reads_it() {
+    let recorded = |agent: AgentId, payload: &str| {
+        let (state, dir) = app_state("server-agent-session-id");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        let mut session = crate::test_support::console_session("s", SessionStatus::Idle);
+        session.agent = agent;
+        state.store.insert_session(&session).unwrap();
+        apply_hook(&state, "s", payload.as_bytes(), None);
+        state
+            .store
+            .get_session("s")
+            .unwrap()
+            .unwrap()
+            .agent_session_id
+    };
+    for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
+        for payload in [
+            r#"{"hook_event_name": "Notification", "session_id": "agent-1"}"#,
+            r#"{"hook_event_name": "Notification", "sessionId": "agent-1"}"#,
+        ] {
+            assert_eq!(
+                recorded(agent, payload).as_deref(),
+                Some("agent-1"),
+                "{agent:?} {payload}"
+            );
+        }
+        for subagent in [
+            r#"{"hook_event_name": "Notification", "session_id": "agent-1", "agent_type": "helper"}"#,
+            r#"{"hook_event_name": "Notification", "session_id": "agent-1", "subagent_type": "helper"}"#,
+        ] {
+            assert_eq!(recorded(agent, subagent), None, "{agent:?} {subagent}");
+        }
+    }
+    // Claude Code's internal helper agent has an `agent_id` and no `agent_type`.
+    let helper =
+        r#"{"hook_event_name": "Notification", "session_id": "agent-1", "agent_id": "a1"}"#;
+    assert_eq!(recorded(AgentId::CLAUDE, helper), None);
+    assert_eq!(recorded(AgentId::CODEX, helper).as_deref(), Some("agent-1"));
+    // The test-only provider's interpreter reads nothing, whatever the payload carries.
+    for payload in [
+        r#"{"hook_event_name": "Notification", "session_id": "agent-1"}"#,
+        r#"{"hook_event_name": "Notification", "sessionId": "agent-1"}"#,
+        r#"{"hook_event_name": "Notification", "session_id": "agent-1", "agent_type": "helper"}"#,
+    ] {
+        assert_eq!(recorded(AgentId::TEST, payload), None, "{payload}");
+    }
+}
+
+/// A hook for a session nothing is known of has no interpreter to read it: it is applied to
+/// nothing, records no session, and does not fail.
+#[tokio::test]
+async fn a_hook_for_an_unknown_session_reads_nothing_and_records_nothing() {
+    let (state, _dir) = app_state("server-unknown-session-hook");
+    for payload in [
+        r#"{"hook_event_name": "SessionStart", "session_id": "agent-1"}"#,
+        r#"{"hook_event_name": "SessionStart", "session_id": "agent-1", "agent_type": "helper"}"#,
+        r#"{"session_id": "agent-1"}"#,
+    ] {
+        apply_hook(&state, "ghost", payload.as_bytes(), None);
+        apply_hook(&state, "ghost", payload.as_bytes(), Some("SessionStart"));
+    }
+    assert!(state.store.get_session("ghost").unwrap().is_none());
+    assert!(state.live_session("ghost").is_none());
 }
 
 /// A Claude Code `PreToolUse` for the call `id` of the tool `Bash` running `command`.
@@ -2136,8 +2379,8 @@ async fn the_calls_of_a_turn_are_kept_from_its_hooks_and_a_prompt_submission_cle
     use crate::session::interaction::CALLS_KEPT;
     let (state, _dir, live, path) =
         claude_session_with_transcript("server-calls-kept", SessionStatus::Idle);
-    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
-    apply_hook(&state, "s", &claude_call(&path, "t0", "ls"));
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path), None);
+    apply_hook(&state, "s", &claude_call(&path, "t0", "ls"), None);
     let kept = live.interaction.calls();
     assert_eq!(kept.len(), 1);
     assert_eq!(kept[0].id.as_deref(), Some("t0"));
@@ -2147,11 +2390,16 @@ async fn the_calls_of_a_turn_are_kept_from_its_hooks_and_a_prompt_submission_cle
     let mut subagent: serde_json::Value =
         serde_json::from_slice(&claude_call(&path, "sub", "rm")).unwrap();
     subagent["agent_id"] = serde_json::json!("agent-1");
-    apply_hook(&state, "s", subagent.to_string().as_bytes());
+    apply_hook(&state, "s", subagent.to_string().as_bytes(), None);
     assert_eq!(live.interaction.calls().len(), 1, "a subagent's call");
 
     for index in 1..=CALLS_KEPT {
-        apply_hook(&state, "s", &claude_call(&path, &format!("t{index}"), "ls"));
+        apply_hook(
+            &state,
+            "s",
+            &claude_call(&path, &format!("t{index}"), "ls"),
+            None,
+        );
     }
     let kept = live.interaction.calls();
     assert_eq!(kept.len(), CALLS_KEPT);
@@ -2161,7 +2409,7 @@ async fn the_calls_of_a_turn_are_kept_from_its_hooks_and_a_prompt_submission_cle
         Some(format!("t{CALLS_KEPT}").as_str())
     );
 
-    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path), None);
     assert!(live.interaction.calls().is_empty());
 }
 
@@ -2171,13 +2419,13 @@ async fn the_calls_of_a_turn_are_kept_from_its_hooks_and_a_prompt_submission_cle
 async fn a_hook_that_raises_the_hand_starts_the_watch_of_the_screen() {
     let (state, _dir, live, path) =
         claude_session_with_transcript("server-watch-starts", SessionStatus::Idle);
-    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
-    apply_hook(&state, "s", &claude_call(&path, "t0", "ls"));
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path), None);
+    apply_hook(&state, "s", &claude_call(&path, "t0", "ls"), None);
     assert!(!live
         .interaction
         .watching
         .load(std::sync::atomic::Ordering::Acquire));
-    apply_hook(&state, "s", &claude_hook("PermissionRequest", &path));
+    apply_hook(&state, "s", &claude_hook("PermissionRequest", &path), None);
     assert_eq!(
         state.session_record("s").unwrap().status,
         SessionStatus::WaitingUser
@@ -2186,6 +2434,735 @@ async fn a_hook_that_raises_the_hand_starts_the_watch_of_the_screen() {
         .interaction
         .watching
         .load(std::sync::atomic::Ordering::Acquire));
+}
+
+/// What a provider that runs a hook before its startup screens are answered says of its events:
+/// `Early` is the hook of its process starting, and any event whose payload says `"early": true` is
+/// no later; `Ready` puts the session at its prompt; a `Prompt` is a prompt submission only when
+/// its payload says it was typed.
+struct StartingHooks;
+
+impl crate::hooks::HookInterpreter for StartingHooks {
+    fn status(&self, event: &str, _payload: &serde_json::Value) -> Option<SessionStatus> {
+        match event {
+            "Early" => Some(SessionStatus::Working),
+            "Ready" => Some(SessionStatus::Idle),
+            _ => None,
+        }
+    }
+
+    fn agent_session_id(&self, payload: &serde_json::Value) -> Option<String> {
+        payload["session_id"].as_str().map(str::to_string)
+    }
+
+    fn past_startup(&self, event: &str, payload: &serde_json::Value) -> bool {
+        event != "Early" && payload["early"] != true
+    }
+
+    fn starts_conversation(&self, event: &str, payload: &serde_json::Value) -> bool {
+        event == "Prompt" && payload["typed"] == true
+    }
+}
+
+static STARTING_HOOKS: StartingHooks = StartingHooks;
+
+/// A hook the interpreter says does not show the agent past its startup neither ends the watch for
+/// its trust screen nor lets the messages held for it through, while everything else of the event
+/// still applies; the next hook that does show it, whatever it says of the session, ends the watch
+/// and releases them.
+#[tokio::test]
+async fn a_hook_that_is_not_past_startup_ends_no_watch_and_releases_nothing() {
+    let _declared = crate::test_support::test_provider::declaring_hooks(&STARTING_HOOKS);
+    let (state, _dir, live) = session_awaiting_its_start("server-not-past-startup", AgentId::TEST);
+    state.queue_message("s", "held until the agent is up");
+    assert!(live.trust.holds_writes());
+
+    apply_hook(
+        &state,
+        "s",
+        br#"{"hook_event_name": "Early", "session_id": "agent-1"}"#,
+        None,
+    );
+    assert!(
+        live.trust.holds_writes(),
+        "the hold must outlast it, as the watch for the screen goes on"
+    );
+    assert_eq!(state.outbox.len("s"), 1, "nothing may be released");
+    let record = state.store.get_session("s").unwrap().unwrap();
+    assert_eq!(record.agent_session_id.as_deref(), Some("agent-1"));
+    assert_eq!(status_of(&state), SessionStatus::Working);
+
+    apply_hook(&state, "s", br#"{"hook_event_name": "Ready"}"#, None);
+    assert!(!live.trust.holds_writes());
+    assert_eq!(status_of(&state), SessionStatus::Idle);
+    let held = state.clone();
+    assert!(
+        crate::test_support::within(PATIENCE, move || held.outbox.len("s") == 0).await,
+        "the hook that shows the agent past its startup did not release what was held"
+    );
+}
+
+/// A hook the interpreter says does not show the agent past its startup carries no trust record
+/// either: with a screen sighted and a carrier to carry from, the record is carried by the hook
+/// that does show the agent past it, and only then. A carry runs on a blocking thread, so "not
+/// carried" is read from what the hook decided: the watch still has the screen waiting.
+#[tokio::test]
+async fn a_hook_that_is_not_past_startup_carries_no_trust_record() {
+    use crate::session::trust::{CarryFailure, Press, Screen, StartSignal, TrustCarrier};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct Counted(AtomicUsize);
+    impl TrustCarrier for Counted {
+        fn carry(&self) -> Result<(), CarryFailure> {
+            self.0.fetch_add(1, Ordering::AcqRel);
+            Ok(())
+        }
+        fn longest(&self) -> std::time::Duration {
+            PATIENCE
+        }
+        fn user_store(&self) -> &std::path::Path {
+            std::path::Path::new("/nowhere")
+        }
+    }
+    static SCREEN: Screen = Screen {
+        first_draw: &[&["Trustthisfolder?", "1.Yes,trustit"]],
+        accept: Some("1.Yes,trustit"),
+        others: &["2.No,exit"],
+        cursor: None,
+        press: Press::Yes,
+        next_screen: None,
+        input_ends_wait: true,
+        start_signal: StartSignal::Hook,
+        hook_fallback: None,
+        waits_for_paste_mode: false,
+    };
+
+    let _hooks = crate::test_support::test_provider::declaring_hooks(&STARTING_HOOKS);
+    let _screen = crate::test_support::test_provider::declaring_trust_screen(&SCREEN);
+    let _trust = crate::providers::test_provider::with_per_session_trust();
+    let (state, dir) = app_state("server-not-past-startup-carry");
+    state
+        .store
+        .insert_console(&crate::test_support::console(&dir))
+        .unwrap();
+    let mut session = crate::test_support::console_session("s", SessionStatus::Idle);
+    session.agent = AgentId::TEST;
+    state.store.insert_session(&session).unwrap();
+    let carrier = Arc::new(Counted(AtomicUsize::new(0)));
+    let live = crate::test_support::watched_live_session(
+        "s",
+        AgentId::TEST,
+        80,
+        24,
+        "sleep 30",
+        Some(carrier.clone()),
+    );
+    state.register_live(live.clone());
+    live.on_output(b"Trust this folder?\r\n1. Yes, trust it\r\n2. No, exit\r\n");
+    assert!(live.trust.waiting(), "the screen is sighted");
+
+    apply_hook(&state, "s", br#"{"hook_event_name": "Early"}"#, None);
+    assert!(
+        live.trust.waiting(),
+        "the screen still waits: the hook was not taken for its end"
+    );
+    assert_eq!(carrier.0.load(Ordering::Acquire), 0);
+
+    apply_hook(&state, "s", br#"{"hook_event_name": "Ready"}"#, None);
+    assert!(!live.trust.waiting());
+    let carried = carrier.clone();
+    assert!(
+        crate::test_support::within(PATIENCE, move || carried.0.load(Ordering::Acquire) == 1).await,
+        "the hook that shows the agent past its startup carries the record"
+    );
+}
+
+/// Whether a hook shows the agent past its startup is the interpreter's to say of the payload too:
+/// the same event ends the watch with one payload and not with another. A payload that names no
+/// event is past startup, as every hook was before the interpreter was asked.
+#[tokio::test]
+async fn whether_a_hook_is_past_startup_is_read_from_its_payload_and_a_nameless_one_is() {
+    let _declared = crate::test_support::test_provider::declaring_hooks(&STARTING_HOOKS);
+    // The test-only provider holds its messages for a hook and for nothing else, so the hold being
+    // over is a hook having ended the watch.
+    let seen = |live: &crate::test_support::StandIn| !live.trust.holds_writes();
+
+    let (state, _dir, live) =
+        session_awaiting_its_start("server-startup-by-payload", AgentId::TEST);
+    apply_hook(
+        &state,
+        "s",
+        br#"{"hook_event_name": "Other", "early": true}"#,
+        None,
+    );
+    assert!(!seen(&live), "an event the payload marks early");
+    apply_hook(&state, "s", br#"{"hook_event_name": "Other"}"#, None);
+    assert!(seen(&live), "the same event without the mark");
+
+    let (state, _dir, live) = session_awaiting_its_start("server-startup-nameless", AgentId::TEST);
+    apply_hook(&state, "s", br#"{"early": true}"#, None);
+    assert!(
+        seen(&live),
+        "a payload that names no event, nor does the route"
+    );
+    let (state, _dir, live) = session_awaiting_its_start("server-startup-route", AgentId::TEST);
+    apply_hook(&state, "s", br#"{"early": true}"#, Some("Early"));
+    assert!(
+        !seen(&live),
+        "an event named beside the payload is read as named"
+    );
+}
+
+/// An interpreter is given the payload to say whether an event starts the conversation: two
+/// payloads of one event answer differently, and only the one that does marks the session as
+/// having a conversation to resume.
+#[tokio::test]
+async fn whether_an_event_starts_the_conversation_is_read_from_its_payload() {
+    let _declared = crate::test_support::test_provider::declaring_hooks(&STARTING_HOOKS);
+    let (state, _dir, _live) =
+        session_awaiting_its_start("server-conversation-payload", AgentId::TEST);
+    let started = |state: &Arc<AppState>| {
+        state
+            .store
+            .get_session("s")
+            .unwrap()
+            .unwrap()
+            .has_conversation
+    };
+    assert!(!started(&state));
+
+    apply_hook(&state, "s", br#"{"hook_event_name": "Prompt"}"#, None);
+    assert!(!started(&state), "a Prompt that was not typed");
+    apply_hook(
+        &state,
+        "s",
+        br#"{"hook_event_name": "Prompt", "typed": true}"#,
+        None,
+    );
+    assert!(started(&state), "a Prompt that was");
+}
+
+/// An interpreter of a provider whose status its program's reports give, which supplies its
+/// turns' messages: `Said` carries one in its payload, `Transcript` has it read from elsewhere.
+struct MessageHooks;
+
+/// The thread the `Transcript` message was read on.
+static READ_ON: std::sync::Mutex<Option<std::thread::ThreadId>> = std::sync::Mutex::new(None);
+
+impl HookInterpreter for MessageHooks {
+    fn past_startup(&self, _event: &str, _payload: &serde_json::Value) -> bool {
+        true
+    }
+
+    fn supplies_turn_message(&self) -> bool {
+        true
+    }
+
+    fn turn_message(&self, event: &str, payload: &serde_json::Value) -> Option<hooks::TurnMessage> {
+        match event {
+            "Said" => Some(hooks::TurnMessage::Said(hooks::text_field(
+                payload, "message",
+            ))),
+            "Transcript" => Some(hooks::TurnMessage::Read(Box::new(|| {
+                *READ_ON.lock().unwrap() = Some(std::thread::current().id());
+                Some("the reply read from the transcript".to_string())
+            }))),
+            _ => None,
+        }
+    }
+}
+
+static MESSAGE_HOOKS: MessageHooks = MessageHooks;
+
+/// A session of the test-only provider bound to the owner `hub`, with a process whose reports give
+/// it its status.
+fn reporting_session(
+    label: &str,
+) -> (
+    Arc<AppState>,
+    crate::test_support::ScratchDir,
+    crate::test_support::StandIn,
+    crate::test_support::StandIn,
+) {
+    let (state, dir, hub) = crate::test_support::owner_team::team_state(
+        label,
+        &[("s", "hub", false, SessionStatus::Idle)],
+    );
+    let mut record = state.session_record("s").unwrap();
+    record.agent = AgentId::TEST;
+    state.store.update_session(&record).unwrap();
+    let live = crate::test_support::fake_live_session("s", AgentId::TEST, 80, 24, "sleep 30");
+    state.register_live(live.clone());
+    (state, dir, hub, live)
+}
+
+/// The message an interpreter gives for the turn on a hook event is what the owner gets when the
+/// program's report then ends the turn, in place of the report's own `msg`; the event itself
+/// closes no turn.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_turn_message_an_event_carries_reaches_the_turn_end_the_report_closes() {
+    let _declared = crate::test_support::test_provider::declaring_hooks(&MESSAGE_HOOKS);
+    let (state, _dir, hub, live) = reporting_session("server-turn-message-said");
+    live.on_output(b"\x1b]7501;state=working\x07");
+    live.settle_program_status().await;
+
+    apply_hook(
+        &state,
+        "s",
+        br#"{"hook_event_name": "Said", "message": "the whole reply"}"#,
+        None,
+    );
+    assert!(state.turn_is_open("s"), "the event closes no turn");
+    // "cut short", as the report's own message.
+    live.on_output(b"\x1b]7501;state=done:msg=Y3V0IHNob3J0\x07");
+    let heard = crate::test_support::owner_team::hub_heard_of(&hub, "the whole reply").await;
+    assert!(!heard.contains("cut short"), "{heard}");
+}
+
+/// A message that has to be read from somewhere is read off the hook queue, on another thread,
+/// and still reaches the turn end.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_turn_message_that_has_to_be_read_is_read_off_the_hook_queue() {
+    let _declared = crate::test_support::test_provider::declaring_hooks(&MESSAGE_HOOKS);
+    let (state, _dir, hub, live) = reporting_session("server-turn-message-read");
+    live.on_output(b"\x1b]7501;state=working\x07");
+    live.settle_program_status().await;
+
+    apply_hook(&state, "s", br#"{"hook_event_name": "Transcript"}"#, None);
+    live.on_output(b"\x1b]7501;state=done:msg=Y3V0IHNob3J0\x07");
+    let heard =
+        crate::test_support::owner_team::hub_heard_of(&hub, "the reply read from the transcript")
+            .await;
+    assert!(!heard.contains("cut short"), "{heard}");
+    let read_on = READ_ON.lock().unwrap().expect("the message was read");
+    assert_ne!(read_on, std::thread::current().id());
+}
+
+/// Where the provider's hooks give the status, a message an interpreter gives this way is not
+/// taken: the hook's own turn end carries the turn's message there.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_turn_message_is_not_taken_where_the_hooks_give_the_status() {
+    let _hooks = crate::test_support::test_provider::declaring_hooks(&MESSAGE_HOOKS);
+    let _integration = crate::test_support::test_provider::declaring_reported_signals(
+        crate::session::ReportedSignals::NONE,
+    );
+    let (_state, _dir, _hub, live) = reporting_session("server-turn-message-hooked");
+    let held = Arc::new(());
+    let held_by_the_read = held.clone();
+    // A read started by mistake would wait here, on a channel the test keeps open, with its
+    // clone alive.
+    let (release, wait) = std::sync::mpsc::channel::<()>();
+    live.supply_turn_message(hooks::TurnMessage::Read(Box::new(move || {
+        let _held = held_by_the_read;
+        let _ = wait.recv();
+        None
+    })));
+    // Decided before it returns: the read was dropped unrun.
+    assert_eq!(Arc::strong_count(&held), 1);
+    drop(release);
+}
+
+/// An interpreter of a provider whose agent has no event that lists its background work and
+/// reports nothing of a prompt answered late: it reads the record its `Stop` names, from where it
+/// read to last, for the turn's message and for the tasks the new lines started and ended, and
+/// holds back a wait its agent posts once the turn is over.
+struct RecordHooks;
+
+/// What [`RecordHooks`] keeps for a session.
+#[derive(Default)]
+struct RecordCarry {
+    /// How far into the record it has read.
+    offset: u64,
+    /// How many times it has read the record.
+    reads: u32,
+    /// What the read `turn_end_in` made found of the background tasks, for
+    /// `background_tasks_changes_in` of the same event: the tasks started, then those ended.
+    found: Vec<BackgroundTasksChange>,
+    /// The turn has ended and no prompt has started another.
+    turn_over: bool,
+}
+
+/// How far back the first read of a record reaches: a record longer than this has its start out
+/// of that read's sight.
+const RECORD_WINDOW: u64 = 64;
+
+impl RecordHooks {
+    /// Reads what the record `payload` names has gained since the last read, where it lies in the
+    /// session's own directory: what the turn said last, and the change to the background tasks.
+    fn read(
+        session: &hooks::HookSession<'_>,
+        payload: &serde_json::Value,
+    ) -> Option<(Option<String>, Vec<BackgroundTasksChange>)> {
+        let record = std::path::Path::new(payload.get("record")?.as_str()?);
+        if !record.starts_with(session.scratch?) {
+            return None;
+        }
+        let text = std::fs::read(record).ok()?;
+        session.carry(|kept: &mut RecordCarry| {
+            let len = text.len() as u64;
+            let from = if kept.reads == 0 {
+                len.saturating_sub(RECORD_WINDOW)
+            } else {
+                kept.offset.min(len)
+            };
+            kept.offset = len;
+            kept.reads += 1;
+            let (mut said, mut started, mut ended) = (None, Vec::new(), Vec::new());
+            for line in String::from_utf8_lossy(&text[from as usize..]).lines() {
+                if let Some(id) = line.strip_prefix("start ") {
+                    started.push(shell_task(id));
+                } else if let Some(id) = line.strip_prefix("end ") {
+                    ended.push(id.to_string());
+                } else if let Some(text) = line.strip_prefix("say ") {
+                    said = Some(text.to_string());
+                }
+            }
+            let mut changes = Vec::new();
+            if !started.is_empty() {
+                changes.push(BackgroundTasksChange::Started(started));
+            }
+            if !ended.is_empty() {
+                changes.push(BackgroundTasksChange::Finished(ended));
+            }
+            Some((said, changes))
+        })
+    }
+}
+
+fn shell_task(id: &str) -> crate::protocol::BackgroundTask {
+    crate::protocol::BackgroundTask {
+        id: id.to_string(),
+        kind: Some("shell".to_string()),
+        description: None,
+    }
+}
+
+impl HookInterpreter for RecordHooks {
+    fn past_startup(&self, _event: &str, _payload: &serde_json::Value) -> bool {
+        true
+    }
+
+    fn starts_conversation(&self, event: &str, _payload: &serde_json::Value) -> bool {
+        event == "Start"
+    }
+
+    fn status(&self, event: &str, _payload: &serde_json::Value) -> Option<SessionStatus> {
+        match event {
+            "Start" => Some(SessionStatus::Working),
+            "Ask" => Some(SessionStatus::WaitingUser),
+            "Stop" => Some(SessionStatus::Idle),
+            _ => None,
+        }
+    }
+
+    fn status_in(
+        &self,
+        session: &hooks::HookSession<'_>,
+        event: &str,
+        payload: &serde_json::Value,
+    ) -> Option<SessionStatus> {
+        let turn_over = session.carry(|kept: &mut RecordCarry| {
+            if event == "Start" {
+                kept.turn_over = false;
+            }
+            kept.turn_over
+        });
+        // A wait posted once the turn is over is one that was answered before it.
+        if event == "Ask" && turn_over {
+            return None;
+        }
+        self.status(event, payload)
+    }
+
+    fn turn_end_in(
+        &self,
+        session: &hooks::HookSession<'_>,
+        event: &str,
+        payload: &serde_json::Value,
+    ) -> Option<hooks::TurnEnd> {
+        if event != "Stop" {
+            return None;
+        }
+        let (said, found) = Self::read(session, payload).unwrap_or_default();
+        session.carry(|kept: &mut RecordCarry| {
+            // Added to, not replaced: a find left from an event whose later answers were not
+            // asked waits for the next event that asks them.
+            kept.found.extend(found);
+            kept.turn_over = true;
+        });
+        Some(hooks::TurnEnd {
+            last_assistant_message: said,
+            failed: false,
+            backstop: false,
+        })
+    }
+
+    fn background_tasks_changes_in(
+        &self,
+        session: &hooks::HookSession<'_>,
+        _event: &str,
+        _payload: &serde_json::Value,
+    ) -> Vec<BackgroundTasksChange> {
+        session.carry(|kept: &mut RecordCarry| std::mem::take(&mut kept.found))
+    }
+}
+
+static RECORD_HOOKS: RecordHooks = RecordHooks;
+
+/// A session of the test-only provider bound to the owner `hub`, whose hooks give its status as
+/// [`RecordHooks`] reads them, with a process and a scratch directory of its own, `run-s` in the
+/// test's directory. The guards keep the provider declared for as long as the test applies events.
+fn recording_session(
+    label: &str,
+) -> (
+    Arc<AppState>,
+    crate::test_support::ScratchDir,
+    crate::test_support::StandIn,
+    crate::test_support::StandIn,
+    impl Sized,
+) {
+    let declared = (
+        crate::test_support::test_provider::declaring_hooks(&RECORD_HOOKS),
+        crate::test_support::test_provider::declaring_reported_signals(
+            crate::session::ReportedSignals::NONE,
+        ),
+    );
+    let (state, dir, hub) = crate::test_support::owner_team::team_state(
+        label,
+        &[("s", "hub", false, SessionStatus::Idle)],
+    );
+    let mut record = state.session_record("s").unwrap();
+    record.agent = AgentId::TEST;
+    state.store.update_session(&record).unwrap();
+    let scratch = dir.join("run-s");
+    std::fs::create_dir_all(&scratch).unwrap();
+    let live = crate::test_support::fake_live_session_in("s", AgentId::TEST, "sleep 30", scratch);
+    state.register_live(live.clone());
+    (state, dir, hub, live, declared)
+}
+
+/// One turn of the session: a prompt, then the `Stop` that names `record`.
+fn turn_over(state: &Arc<AppState>, record: &std::path::Path) {
+    apply_hook(state, "s", br#"{"hook_event_name": "Start"}"#, None);
+    let stop = serde_json::json!({"hook_event_name": "Stop", "record": record});
+    apply_hook(state, "s", stop.to_string().as_bytes(), None);
+}
+
+fn listed(state: &Arc<AppState>) -> Vec<String> {
+    state
+        .background_tasks_of("s")
+        .into_iter()
+        .map(|task| task.id)
+        .collect()
+}
+
+/// A list kept from what each read of the record's new lines started and ended does not depend on
+/// how far back one read reaches: a task started early stays listed once the record has grown far
+/// past the window, beside one started since, and leaves the list when a later line ends it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_list_read_from_a_records_new_lines_survives_a_record_longer_than_the_window() {
+    use std::io::Write;
+    let (state, dir, _hub, _live, _declared) = recording_session("server-record-carry-window");
+    let record = dir.join("run-s").join("events");
+    let append = |lines: &str| {
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&record)
+            .unwrap();
+        file.write_all(lines.as_bytes()).unwrap();
+    };
+
+    append("start early\n");
+    turn_over(&state, &record);
+    assert_eq!(listed(&state), ["early"]);
+
+    append(&"say something long enough to push the start out of the window\n".repeat(8));
+    append("start late\n");
+    assert!(std::fs::metadata(&record).unwrap().len() > RECORD_WINDOW * 4);
+    turn_over(&state, &record);
+    assert_eq!(listed(&state), ["early", "late"]);
+
+    append("end early\n");
+    turn_over(&state, &record);
+    assert_eq!(listed(&state), ["late"]);
+}
+
+/// One read of the record serves both answers of the event that ends a turn: its message, which
+/// the owner is told, and the background tasks its new lines started.
+#[tokio::test(flavor = "multi_thread")]
+async fn one_read_of_the_record_gives_the_turns_message_and_its_background_tasks() {
+    let (state, dir, hub, live, _declared) = recording_session("server-record-carry-one-read");
+    let record = dir.join("run-s").join("events");
+    std::fs::write(&record, "start job\nsay the reply of the turn\n").unwrap();
+    turn_over(&state, &record);
+
+    let heard = crate::test_support::owner_team::hub_heard_of(&hub, "the reply of the turn").await;
+    assert!(heard.contains("the reply of the turn"), "{heard}");
+    assert_eq!(listed(&state), ["job"]);
+    assert_eq!(live.hook_carry.with(|kept: &mut RecordCarry| kept.reads), 1);
+}
+
+/// One read of the record that finds tasks started and tasks finished applies both, in the order
+/// given: a task the read finds started and ended is not left listed, one started before and
+/// ended now leaves the list, and one started now stays.
+#[tokio::test(flavor = "multi_thread")]
+async fn one_read_that_finds_tasks_started_and_finished_applies_both_in_order() {
+    let (state, dir, _hub, _live, _declared) = recording_session("server-record-carry-both");
+    let record = dir.join("run-s").join("events");
+    std::fs::write(
+        &record,
+        "start early
+",
+    )
+    .unwrap();
+    turn_over(&state, &record);
+    assert_eq!(listed(&state), ["early"]);
+
+    let mut text = std::fs::read_to_string(&record).unwrap();
+    text.push_str(
+        "start brief
+start late
+end early
+end brief
+",
+    );
+    std::fs::write(&record, text).unwrap();
+    turn_over(&state, &record);
+    assert_eq!(listed(&state), ["late"]);
+}
+
+/// The default of the answer the daemon asks carries the one change of the payload's answer, or
+/// none: a provider that gives one change per event is asked as before.
+#[test]
+fn the_default_of_several_changes_is_the_one_change_or_none() {
+    struct OneChange;
+    impl HookInterpreter for OneChange {
+        fn past_startup(&self, _event: &str, _payload: &serde_json::Value) -> bool {
+            true
+        }
+
+        fn background_tasks_change(
+            &self,
+            event: &str,
+            _payload: &serde_json::Value,
+        ) -> Option<BackgroundTasksChange> {
+            (event == "Done").then(|| BackgroundTasksChange::Finished(vec!["job".to_string()]))
+        }
+    }
+    let carry = hooks::HookCarry::default();
+    let session = hooks::HookSession::new("s", None, None, &carry);
+    let payload = serde_json::json!({});
+    assert_eq!(
+        OneChange.background_tasks_changes_in(&session, "Done", &payload),
+        [BackgroundTasksChange::Finished(vec!["job".to_string()])]
+    );
+    assert!(OneChange
+        .background_tasks_changes_in(&session, "Other", &payload)
+        .is_empty());
+}
+
+/// A file a payload names outside the session's own directory is not opened: the interpreter is
+/// told that directory, as the daemon made it, and checks the path against it.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_interpreter_told_the_sessions_directory_opens_no_record_outside_it() {
+    let (state, dir, _hub, live, _declared) = recording_session("server-record-carry-outside");
+    let planted = dir.join("events");
+    std::fs::write(&planted, "start planted\n").unwrap();
+    turn_over(&state, &planted);
+    assert!(listed(&state).is_empty());
+    assert_eq!(live.hook_carry.with(|kept: &mut RecordCarry| kept.reads), 0);
+}
+
+/// What an interpreter keeps for a session is kept with its process: the process a relaunch
+/// starts reads its record afresh, from the window, as a first read, and an event that reaches a
+/// session with no process is read with nothing kept and no directory, and leaves nothing behind.
+#[tokio::test(flavor = "multi_thread")]
+async fn what_an_interpreter_keeps_for_a_session_goes_with_its_process() {
+    let (state, dir, _hub, live, _declared) = recording_session("server-record-carry-dropped");
+    let record = dir.join("run-s").join("events");
+    std::fs::write(&record, "start job\n").unwrap();
+    assert!(live.hook_carry.is_empty());
+    turn_over(&state, &record);
+    assert!(!live.hook_carry.is_empty());
+
+    // The relaunch's process takes the session's place; its record's start lies out of the
+    // window's reach.
+    let again = dir.join("run-s-again");
+    std::fs::create_dir_all(&again).unwrap();
+    let relaunched =
+        crate::test_support::fake_live_session_in("s", AgentId::TEST, "sleep 30", again.clone());
+    assert!(state.remove_live(&live));
+    state.register_live(relaunched.clone());
+    let record_again = again.join("events");
+    let padding = "say something long enough to push the start out of the window\n".repeat(8);
+    std::fs::write(&record_again, format!("start early\n{padding}start late\n")).unwrap();
+    turn_over(&state, &record_again);
+    assert_eq!(
+        relaunched
+            .hook_carry
+            .with(|kept: &mut RecordCarry| kept.reads),
+        1,
+        "the relaunch's first read is its own"
+    );
+    assert_eq!(listed(&state), ["job", "late"]);
+    assert_eq!(live.hook_carry.with(|kept: &mut RecordCarry| kept.reads), 1);
+
+    // A session on record alone: its event is applied, with nothing to check a path against.
+    let mut other = state.session_record("s").unwrap();
+    other.id = "gone".to_string();
+    other.status = SessionStatus::Interrupted;
+    state.store.insert_session(&other).unwrap();
+    let stop = serde_json::json!({"hook_event_name": "Stop", "record": record});
+    apply_hook(&state, "gone", stop.to_string().as_bytes(), None);
+    assert!(state.background_tasks_of("gone").is_empty());
+}
+
+/// A status the interpreter holds back, knowing the session, is none: the wait its agent posts
+/// once the turn is over is not published and the session stays at its prompt, where the same
+/// event inside a turn raises the hand.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_status_the_interpreter_holds_back_is_not_published_and_moves_nothing() {
+    let (state, dir, hub, _live, _declared) = recording_session("server-status-held-back");
+    let record = dir.join("run-s").join("events");
+    std::fs::write(&record, "say done\n").unwrap();
+    let ask = br#"{"hook_event_name": "Ask"}"#;
+
+    apply_hook(&state, "s", br#"{"hook_event_name": "Start"}"#, None);
+    apply_hook(&state, "s", ask, None);
+    assert_eq!(
+        state.session_record("s").unwrap().status,
+        SessionStatus::WaitingUser,
+        "a wait inside the turn counts"
+    );
+    turn_over(&state, &record);
+    assert_eq!(
+        state.session_record("s").unwrap().status,
+        SessionStatus::Idle
+    );
+    let told_before = crate::test_support::owner_team::hub_heard(&state, &hub)
+        .await
+        .matches("only they can clear it")
+        .count();
+
+    let mut events = state.subscribe();
+    apply_hook(&state, "s", ask, None);
+    assert_eq!(
+        state.session_record("s").unwrap().status,
+        SessionStatus::Idle
+    );
+    // The status write publishes on this thread, so a hand raised would be here by now.
+    while let Ok(event) = events.try_recv() {
+        if let Event::SessionUpserted { session } = event {
+            assert_ne!(session.status, SessionStatus::WaitingUser, "published");
+        }
+    }
+    let heard = crate::test_support::owner_team::hub_heard(&state, &hub).await;
+    assert_eq!(
+        heard.matches("only they can clear it").count(),
+        told_before,
+        "{heard}"
+    );
 }
 
 /// While a launch holds a session and none of its processes is registered, a report of a prompt
@@ -2215,7 +3192,7 @@ async fn a_report_under_a_launch_marks_only_when_it_names_the_launched_conversat
         // Every provider whose hook reports a submitted prompt under this event's name.
         if !crate::adapter::provider(agent)
             .hooks()
-            .starts_conversation("UserPromptSubmit")
+            .starts_conversation("UserPromptSubmit", &serde_json::Value::Null)
         {
             continue;
         }
@@ -2228,11 +3205,11 @@ async fn a_report_under_a_launch_marks_only_when_it_names_the_launched_conversat
         state.store.insert_session(&session).unwrap();
 
         let claim = state.begin_launch(id).unwrap();
-        apply_hook(&state, id, &prompt(Some(OLD)));
+        apply_hook(&state, id, &prompt(Some(OLD)), None);
         assert!(!used(id), "{agent:?}: the ended process's late report");
-        apply_hook(&state, id, &prompt(None));
+        apply_hook(&state, id, &prompt(None), None);
         assert!(!used(id), "{agent:?}: a report that names no conversation");
-        apply_hook(&state, id, &prompt(Some(NEW)));
+        apply_hook(&state, id, &prompt(Some(NEW)), None);
         assert!(used(id), "{agent:?}: the launched process's early report");
         assert_eq!(
             state
@@ -2251,7 +3228,7 @@ async fn a_report_under_a_launch_marks_only_when_it_names_the_launched_conversat
     session.agent_session_id = Some(OLD.to_owned());
     session.has_conversation = false;
     state.store.insert_session(&session).unwrap();
-    apply_hook(&state, "idle", &prompt(Some(OLD)));
+    apply_hook(&state, "idle", &prompt(Some(OLD)), None);
     assert!(used("idle"));
 }
 
@@ -2287,7 +3264,7 @@ async fn a_report_from_an_ended_launch_is_ignored_once_the_relaunch_is_over() {
     let ended = first.launch_id.clone();
     assert!(state.remove_live(&first));
     // Its end seen and nothing running: its late report is ignored.
-    super::apply_hook(&state, "s", Some(&ended), &prompt(Some(OLD)));
+    super::apply_hook(&state, "s", Some(&ended), &prompt(Some(OLD)), None);
     assert!(!record().has_conversation, "with nothing running");
 
     // Launched again, on a fresh conversation, and running.
@@ -2295,7 +3272,7 @@ async fn a_report_from_an_ended_launch_is_ignored_once_the_relaunch_is_over() {
     state.register_live(second.clone());
     assert_ne!(second.launch_id, ended);
     for conversation in [Some(OLD), Some(NEW), None] {
-        super::apply_hook(&state, "s", Some(&ended), &prompt(conversation));
+        super::apply_hook(&state, "s", Some(&ended), &prompt(conversation), None);
         let now = record();
         assert!(!now.has_conversation, "{conversation:?}");
         assert_eq!(
@@ -2306,7 +3283,13 @@ async fn a_report_from_an_ended_launch_is_ignored_once_the_relaunch_is_over() {
         assert_eq!(now.status, SessionStatus::Idle, "{conversation:?}");
     }
     // The running launch's own report is applied.
-    super::apply_hook(&state, "s", Some(&second.launch_id), &prompt(Some(NEW)));
+    super::apply_hook(
+        &state,
+        "s",
+        Some(&second.launch_id),
+        &prompt(Some(NEW)),
+        None,
+    );
     let now = record();
     assert!(now.has_conversation);
     assert_eq!(now.agent_session_id.as_deref(), Some(NEW));
@@ -2324,7 +3307,7 @@ async fn a_report_from_an_ended_launch_is_ignored_once_the_relaunch_is_over() {
     let claim = state.begin_launch("t").unwrap();
     let earlier_run = "launch-of-an-earlier-run";
     for conversation in [Some(OLD), None] {
-        super::apply_hook(&state, "t", Some(earlier_run), &prompt(conversation));
+        super::apply_hook(&state, "t", Some(earlier_run), &prompt(conversation), None);
         assert!(
             !state.session_record("t").unwrap().has_conversation,
             "{conversation:?}"
@@ -2336,6 +3319,7 @@ async fn a_report_from_an_ended_launch_is_ignored_once_the_relaunch_is_over() {
         "t",
         Some(reserved.tag().launch_id()),
         &prompt(Some(OLD)),
+        None,
     );
     assert!(state.session_record("t").unwrap().has_conversation);
     drop(claim);

@@ -243,7 +243,15 @@ mod tests {
         let missing = connect(&path, timeout).expect_err("no file");
         assert_eq!(missing.kind(), std::io::ErrorKind::NotFound);
 
-        drop(std::os::unix::net::UnixListener::bind(&path).unwrap());
+        // The socket file is made by a socket that is bound and never listens, not by a listener
+        // that is dropped: a child process another test is spawning holds a copy of every
+        // descriptor this process has open until its `exec` (on macOS, one spawned between a
+        // socket's creation and its close-on-exec flag being set keeps it for its whole life), so a
+        // dropped listener can go on listening for a while and take the connection. A copy of a
+        // socket that never listens refuses all the same.
+        let bound = tokio::net::UnixSocket::new_stream().unwrap();
+        bound.bind(&path).unwrap();
+        drop(bound);
         let refused = connect(&path, timeout).expect_err("no listener");
         assert_eq!(refused.kind(), std::io::ErrorKind::ConnectionRefused);
     }

@@ -7,6 +7,7 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { CodedError } from "../errors/codedError";
+import { daemonError } from "../test/daemonError";
 import { MIXED_RESULT, REVIEW } from "../fixtures/configurationReview";
 import { errorDetails, press as pressElement, withoutErrorDetails } from "../components/alerts/detailsTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
@@ -572,6 +573,37 @@ it("waits afresh before announcing a repeated refresh failure while Try again st
   expect(document.body.querySelector('[role="alert"]')).not.toBe(firstAnnouncement);
   expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("Could not read the file again");
   expect(document.activeElement).toBe(retry);
+});
+
+it("hands focus to Choose file when a retry replaces the failure with an unsupported format", async () => {
+  fakeTimers();
+  const fail: Array<(error: CodedError) => void> = [];
+  let inspections = 0;
+  const mounted = await reviewing({
+    reply: (body) => {
+      if (body.type !== "inspect_configuration" || ++inspections === 1) return reply(body);
+      return new Promise((_, reject) => fail.push(reject));
+    },
+  });
+  await checkSettings();
+  runOutTimers();
+  moveTo(mounted.store, 2);
+  await act(async () => fail[0]!(daemonError("connection_closed", {})));
+  await refreshFailureDelay();
+
+  const retry = tryAgain();
+  act(() => retry.focus());
+  pressWithKey(retry);
+  await act(async () => fail[1]!(daemonError("configuration_version_unsupported", { version: "999", oldest: "1", supported: "3" })));
+
+  expect(retry.isConnected).toBe(false);
+  const choose = Array.from(document.body.querySelectorAll("button")).find((button) => button.textContent === "Choose file");
+  expect(choose).toBeDefined();
+  expect(document.activeElement).toBe(choose);
+  expect(document.body.querySelector('[role="alert"]')).toBeNull();
+  await refreshFailureDelay();
+  expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("999");
+  expect(document.activeElement).toBe(choose);
 });
 
 it("does not read the preview again for a setting the import does not write", async () => {

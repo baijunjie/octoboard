@@ -106,25 +106,7 @@ pub(crate) async fn relaunch_session_with(
         return Err(session_archived(id));
     }
 
-    // A provider that declares `resume_instruction_as_launch_prompt` shows a resume dialog at a
-    // launch that resumes with no prompt on the command line — Claude Code asks "Resume this
-    // conversation?" — and a message pasted into that dialog is discarded while its Enter picks a
-    // row. With the instruction as the launch prompt the dialog is not shown, so it goes there;
-    // every other launch has it queued instead.
-    let (prompt, queued) = match instruction {
-        Some(instruction)
-            if resume_id.is_some()
-                && session
-                    .agent
-                    .descriptor()
-                    .capabilities
-                    .delivery
-                    .resume_instruction_as_launch_prompt =>
-        {
-            (term::launch_prompt(instruction), None)
-        }
-        queued => (None, queued),
-    };
+    let (prompt, queued) = route_instruction(session.agent, resume_id.is_some(), instruction);
     // The information is queued in the order it arrived. For a Claude Code resume the instruction
     // goes as the launch prompt, so the information is written after it; for the other agents it
     // is queued behind the information, except under a restart's hold, where it is put ahead of
@@ -227,6 +209,36 @@ pub(crate) async fn relaunch_session_with(
             }
             Err(err)
         }
+    }
+}
+
+/// How the instruction of a launch that is not a new session's reaches the agent: as the prompt
+/// the launch starts with (the first of the pair), or queued to be written as a message (the
+/// second). `resumes` says whether the launch resumes a conversation.
+///
+/// A provider that declares `resume_instruction_as_launch_prompt` shows a resume dialog at a
+/// launch that resumes with no prompt on the command line — Claude Code asks "Resume this
+/// conversation?" — and a message pasted into that dialog is discarded while its Enter picks a
+/// row. With the instruction as the launch prompt the dialog is not shown, so it goes there,
+/// shaped as [`term::launch_prompt`] shapes it; every other launch has it queued instead, since a
+/// provider's plan gives a resume no prompt unless it declares this.
+pub(super) fn route_instruction(
+    agent: AgentId,
+    resumes: bool,
+    instruction: Option<&str>,
+) -> (Option<String>, Option<&str>) {
+    match instruction {
+        Some(instruction)
+            if resumes
+                && agent
+                    .descriptor()
+                    .capabilities
+                    .delivery
+                    .resume_instruction_as_launch_prompt =>
+        {
+            (term::launch_prompt(instruction), None)
+        }
+        queued => (None, queued),
     }
 }
 
@@ -728,8 +740,22 @@ fn register_launched(
             return Err(err);
         }
     }
-    if let Some(notice) = launched.notice {
+    for notice in launched.notices {
         state.broadcast(notice.about(session_id));
+    }
+    // Held like any message for a session still starting, until the hold for its startup screens
+    // lets it through (`trust::supervise`). That hold may have ended between the registration
+    // above and here, with nothing queued to write, so a drain is asked for now: nothing else is
+    // coming to ask for one in a session nobody writes to.
+    if let Some(task) = launched.first_message {
+        launched.session.note_first_task_queued();
+        if let Err(err) = state.queue_first_task(session_id, &task) {
+            state.release_launch_watch(session_id);
+            return Err(err);
+        }
+        if let Ok(session) = state.session_record(session_id) {
+            state.spawn_flush_outbox(session_id, state.agent_status(&session));
+        }
     }
     Ok(())
 }
@@ -849,16 +875,10 @@ pub(super) async fn came_up(live: &Arc<LiveSession>, settle: Duration) -> bool {
 }
 
 pub(super) fn session_cwd(state: &Arc<AppState>, session: &Session) -> Result<PathBuf> {
-    match &session.project_id {
-        Some(project_id) => {
-            let project = state.store.require_project(project_id)?;
-            Ok(PathBuf::from(project.path))
-        }
-        None => {
-            let console = state.store.require_console(&session.console_id)?;
-            Ok(PathBuf::from(console.workdir))
-        }
-    }
+    state
+        .store
+        .session_working_directory(session)
+        .map_err(Into::into)
 }
 
 #[cfg(test)]

@@ -20,7 +20,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-use crate::adapter::account_cli::{account_command_of, run_query};
+use crate::adapter::account_cli::{account_command_of, run_query, Unstartable};
 use crate::adapter::AgentVersion;
 use crate::platform::shell::ResolvedBinary;
 use crate::protocol::AgentId;
@@ -81,9 +81,11 @@ pub(super) fn stop_holders(
 ) {
     // The environment already names the account's directory: the plan put it there. The launch's
     // claim on the account keeps its sharing from changing under these calls.
-    let run = |args: &[&str]| {
-        let mut command = account_command_of(binary, AgentId::CLAUDE, environment, None, args);
+    let run = |args: &[&str]| -> anyhow::Result<std::process::Output> {
+        let mut command = account_command_of(binary, AgentId::CLAUDE, environment, None, args)
+            .map_err(Unstartable::into_error)?;
         run_query(&mut command, CLI_TIMEOUT, OUTPUT_LIMIT, None)
+            .map_err(|err| anyhow::anyhow!("{err}"))
     };
     let listing = match run(&["agents", "--json"]) {
         Ok(output) if output.status.success() => output.stdout,

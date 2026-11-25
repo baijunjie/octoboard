@@ -602,6 +602,18 @@ async fn handle_inner(
             Ok(None)
         }
 
+        RequestBody::AnswerAccountLoginQuestion {
+            agent,
+            account,
+            question,
+            answer,
+        } => {
+            state
+                .account_logins
+                .answer(state, agent, account, &question, answer)?;
+            Ok(None)
+        }
+
         RequestBody::ExportConfiguration {
             console,
             consoles,

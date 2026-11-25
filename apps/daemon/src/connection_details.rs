@@ -53,11 +53,11 @@ impl Details {
         let host = if self.host.contains(':') {
             format!("[{}]", self.host.replace('%', "%25"))
         } else {
-            encoded(&self.host, "")
+            crate::text::percent_encode(&self.host, "")
         };
         let mut text = format!(
             "{SCHEME}://{}@{host}:{}",
-            encoded(&self.user, ""),
+            crate::text::percent_encode(&self.user, ""),
             self.port
         );
         let fields = [
@@ -71,28 +71,12 @@ impl Details {
                 text.push(separator);
                 text.push_str(field);
                 text.push('=');
-                text.push_str(&encoded(value, ":/@"));
+                text.push_str(&crate::text::percent_encode(value, ":/@"));
                 separator = '&';
             }
         }
         text
     }
-}
-
-/// `text` percent-encoded as UTF-8, leaving as they are the characters a URI never reserves and
-/// those in `keep`.
-fn encoded(text: &str, keep: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for byte in text.bytes() {
-        let c = byte as char;
-        if c.is_ascii_alphanumeric() || "-._~".contains(c) || (byte.is_ascii() && keep.contains(c))
-        {
-            out.push(c);
-        } else {
-            out.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    out
 }
 
 /// The fingerprint of the host key in a public key file's `line` (`<type> <base64> [comment]`),
@@ -293,6 +277,22 @@ mod tests {
             "octoboard+ssh://me%40corp@host.example:22\
              ?octoboardd=C:%5CProgram%20Files%5COctoboard%5Coctoboardd.exe\
              &name=a%3Db%26c%23d%3Fe%20f"
+        );
+    }
+
+    /// `@`, like `:` and `/`, stays readable in a value, while the user's own `@` is encoded.
+    #[test]
+    fn an_at_sign_stays_readable_in_a_value_and_not_in_the_user() {
+        let details = Details {
+            user: "me@corp".into(),
+            fingerprint: None,
+            octoboardd: None,
+            name: Some("me@box".into()),
+            ..details()
+        };
+        assert_eq!(
+            details.to_text(),
+            "octoboard+ssh://me%40corp@server.example:22?name=me@box"
         );
     }
 

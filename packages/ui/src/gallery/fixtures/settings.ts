@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "../../fixtures/fixtureProviders";
+import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, NO_QUOTA_PROVIDER, UNPRESENTED_PROVIDER } from "../../fixtures/fixtureProviders";
 import { providerLabel } from "../../agents/providers";
 import { describing, type Matcher, type Ui, type Step } from "../../fixtures/interact";
 import { type AccountLogin, type AccountSharing, type Agent, type AgentAvailability, type LocalMcpServer, type McpInventoryFailure, type PlatformConnector } from "../../protocol";
@@ -14,6 +14,7 @@ import { MAC_HOST, WINDOWS_HOST } from "../../test/hosts";
 import { noneAddedState } from "./empty";
 import { entryOf, placeScope } from "../../fixtures/memoryBuilders";
 import { accountLoginSucceeded, accountQuotaUpdated, agentAvailability } from "./liveChanges";
+import { NO_QUOTA_AGENT, withNoQuotaProvider } from "./noQuotaProvider";
 import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow, PERSONAL_RESET_CREDITS, resetCreditOf, resetCreditsOf } from "../../fixtures/quotas";
 
 const GROUP = "Settings";
@@ -67,7 +68,7 @@ const leftBehind = [
 const memoryOnState: Scenario["state"] = {
   ...browserState,
   hosts: new Map([...browserState.hosts!, [REMOTE_HOST.id, REMOTE_HOST]]),
-  settings: { ...browserState.settings!, memory_enabled: true },
+  settings: { ...browserState.settings!, memory_enabled: true, added_agents: [...FIXTURE_AGENTS] },
 };
 
 /** The desktop app with "Resume sessions on start" on, so the description it gives the macOS app shows, and Prevent sleep
@@ -105,7 +106,7 @@ const approvalState: Scenario["state"] = {
   agentAvailability: new Map(browserState.agentAvailability).set("codex", { agent: "codex", availability: "available", default_account_dir: "/Users/dev/.codex" }),
 };
 
-/** Every agent installed and its readings in, one tab each: Claude Code's default account and Work have their plan
+/** Every released agent added, with the original three agents installed and their readings in: Claude Code's default account and Work have their plan
  * and windows (Work's spent), Client has no reading yet while its agent is available, Codex's accounts have a plan
  * and two windows each but Automation's, which has no plan and whose 5h window, spent when it was read, has
  * since reset, and Grok has one credit pool. The readings are of different ages (Work's seven minutes, Personal's
@@ -134,7 +135,7 @@ const quotaState: Scenario["state"] = {
   ],
 };
 
-/** `quotaState` with a fourth provider served that this build has no presentation module for, added and installed, holding
+/** `quotaState` with an additional provider served that this build has no presentation module for, added and installed, holding
  * its default account and one account of its own with readings: the agent tabs and the accounts below them name it by
  * the label the daemon serves, with the generic mark. */
 const unpresentedState: Scenario["state"] = {
@@ -153,6 +154,15 @@ const unpresentedState: Scenario["state"] = {
     quotaOf(UNPRESENTED_PROVIDER.id, "a-acme", "Team", [quotaWindow("session", 8, 250), quotaWindow("weekly", 12, 5 * 24 * 60)]),
   ],
 };
+
+/** OpenCode's default account on a machine where the agent is installed. */
+const defaultAccountOnlyState: Scenario["state"] = {
+  ...quotaState,
+  agentAvailability: new Map(quotaState.agentAvailability).set("opencode", { agent: "opencode", availability: "available", default_account_dir: "/Users/dev/.local/share/opencode" }),
+};
+
+/** The stand-in's default account is signed in, Work's sign-in cannot be told, and Client is signed out. */
+const noQuotaState = withNoQuotaProvider(quotaState);
 
 /** Every agent added, the three of them carrying tags: what an agent's Tags row shows, and the others' tags it offers. */
 const taggedState: Scenario["state"] = {
@@ -503,7 +513,7 @@ const mcpUnavailable = (reason: McpInventoryFailure, detail: string | null = nul
 /** The `item` (Details, Settings or Connectors and MCP) of the actions menu of the account `name` of `agent` on the tab in view (the
  * default account's name is the language's own); a menu item, since the rail has a Settings button of its name. */
 const openAccountDialog = (item: "settings.accounts.detailsItem" | "settings.accounts.settingsItem" | "settings.accounts.mcp.title", name: string | ((ui: Ui) => string), agent: Agent): Step => async (ui) => {
-  await ui.press(ui.t("settings.accounts.actionsLabel", { name: typeof name === "string" ? name : name(ui), agent: providerLabel(ui.t, FIXTURE_PROVIDERS, agent) }));
+  await ui.press(ui.t("settings.accounts.actionsLabel", { name: typeof name === "string" ? name : name(ui), agent: providerLabel(ui.t, [...FIXTURE_PROVIDERS, NO_QUOTA_PROVIDER], agent) }));
   await ui.pressMenuItem(ui.t(item));
 };
 const openDetails = (name: string | ((ui: Ui) => string), agent: Agent = "claude"): Step => openAccountDialog("settings.accounts.detailsItem", name, agent);
@@ -1334,7 +1344,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Memory, off and nothing left behind",
-    description: "The section after Agent accounts: two rows with no group heading, one divider between them and none above the first or under the last. The switch, \"Let sessions share Octoboard's memory\", is off, as it is by default, its description starting with \"Once this is on\": sessions launched afterwards share the memory and their agent's own memory is turned off. Under it, \"Memory of removed projects\" says a removed project's memory is kept and adding a project at the same folder picks it up again; with nothing left behind no folder count is shown and its Manage button is faded, its tooltip saying \"No memory left behind\". Switch it on to read the other description.",
+    description: "The section after Agent accounts: two rows with no group heading, one divider between them and none above the first or under the last. The switch, \"Let sessions share Octoboard's memory\", is off, as it is by default, its description starting with \"Once this is on\": sessions launched afterwards read and save Octoboard's memory, which every agent shares. On a line of its own under that sentence, \"These sessions turn off the memory built into\" names the two added agents, Claude Code and Codex, each as a reference; no line about memory left as it is set, since no added agent keeps one no launch can turn off. Under the row, \"Memory of removed projects\" says a removed project's memory is kept and adding a project at the same folder picks it up again; with nothing left behind no folder count is shown and its Manage button is faded, its tooltip saying \"No memory left behind\". Switch it on to read the other description.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1346,7 +1356,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Memory, on, with memory left behind",
-    description: "The switch is on. The second row, \"Memory of removed projects\", shows \"4 folders\" in muted text before its Manage button, which is available; the two rows are parted by one divider. The row is the same with the switch off. Manage opens the list (Memory of removed projects dialog).",
+    description: "The switch is on. The first row identifies the agents whose own memory is turned off for new sessions and GitHub Copilot CLI, whose memory setting still applies. The second row, \"Memory of removed projects\", shows \"4 folders\" in muted text before its Manage button, which is available; the two rows are parted by one divider. The row is the same with the switch off. Manage opens the list (Memory of removed projects dialog).",
     state: memoryOnState,
     memory: { entries: leftBehind },
     steps: [
@@ -1549,6 +1559,15 @@ export const settingsScenarios: Scenario[] = [
     steps: accountDetails("Work"),
   },
   {
+    id: "settings-account-details-without-plan-quota",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, an account of a provider with no plan quota that is not logged in",
+    description: "Client's details on Terminal Agent's tab: the first line is the name Client with the soft warning \"Not logged in\" badge, with no plan, the config directory is under it, and a muted line under that says the app cannot log in this agent's accounts and to log in with the agent's own CLI in the environment where sessions run, using the config directory shown above as a reference. The dialog has no Usage section at all, not even a dash, and no Log in button.",
+    state: noQuotaState,
+    steps: [...openAccounts, (ui) => ui.press(NO_QUOTA_PROVIDER.label), openDetails("Client", NO_QUOTA_AGENT)],
+  },
+  {
     id: "settings-account-details-agent-not-installed",
     group: GROUP,
     category: "exceptional",
@@ -1716,16 +1735,6 @@ export const settingsScenarios: Scenario[] = [
     state: detailsWorkState,
     accountMcpInventory: mcpUnavailable("failed", "error: unknown option '--json'\nUsage: claude mcp list [options]\nTry 'claude mcp list --help' for more information."),
     steps: [...accountMcp("Work"), (ui) => ui.press(ui.t("error.details"))],
-  },
-  {
-    id: "settings-account-mcp-unsupported",
-    group: GROUP,
-    category: "exceptional",
-    title: "Connectors and MCP, an agent that cannot list them",
-    description: "Work's reading came back unsupported although the agent is meant to offer it: a danger alert titled \"Not supported\" saying Claude Code cannot list its MCP servers or connectors, with no remedy line and no Try again, as no retry can change it.",
-    state: detailsWorkState,
-    accountMcpInventory: mcpUnavailable("unsupported_agent"),
-    steps: accountMcp("Work"),
   },
   {
     id: "settings-account-mcp-refused",
@@ -1921,7 +1930,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, a provider this build has no presentation for",
-    description: "The daemon serves a fourth provider the UI knows nothing of. Its tab, the last, is named Acme Agent as the daemon calls it, and carries the generic mark in the neutral colour where the others carry their provider marks. Its tab is open and holds only the table of its default account and Studio, whose usage bars are in the neutral foreground, not a provider's blue or orange.",
+    description: "The daemon serves an additional provider the UI knows nothing of. Its tab, the last, is named Acme Agent as the daemon calls it, and carries the generic mark in the neutral colour where the others carry their provider marks. Its tab is open and holds only the table of its default account and Studio, whose usage bars are in the neutral foreground, not a provider's blue or orange.",
     state: unpresentedState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1930,11 +1939,46 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
+    id: "settings-accounts-default-account-only",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, a provider that has the default account only",
+    description: "OpenCode has only its default account. Its tab is open and holds only its default account's row. The strip's icon buttons beside the tabs are just Add agent: there is no Add account button, and the strip's right-hand padding follows the single button, with no gap left where the second one would be. Choosing another tab brings Add account back.",
+    state: defaultAccountOnlyState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.accounts")),
+      (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "opencode")),
+    ],
+  },
+  {
+    id: "settings-accounts-without-plan-quota",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, a provider with no plan quota and no login flow",
+    description: "The daemon serves Terminal Agent beside the built-in agents. It reports no plan quota and cannot sign an account in from the app. Its tab, the last, is open and holds three rows under the headers Account, Status and Disable with no Usage column at all: no bar, no dash and no \"Reading usage…\". The default account is \"Logged in\", with its email under its name and no plan badge; Work, whose sign-in cannot be told, has no login badge at all; Client reads the soft warning \"Not logged in\", followed by a small help button in place of the Log in icon. The help button of Client is open, its popover (drawn over Work's empty Status cell) saying that the app cannot log in this agent's accounts and to log in with the agent's own CLI in the environment where sessions run, with Client's configuration directory as a reference. The help button's name reads \"About logging in to Client\". The other two rows have no help button and no Log in.",
+    state: noQuotaState,
+    steps: [
+      ...openAccounts,
+      (ui) => ui.press(NO_QUOTA_PROVIDER.label),
+      (ui) => ui.touchPress(ui.t("settings.accounts.signInHint.label", { name: "Client" })),
+    ],
+  },
+  {
+    id: "settings-accounts-antigravity-session-note",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: Antigravity CLI session note",
+    description: "The session note sits under the scope line and wraps over several lines, with the CLI command shown as a reference.",
+    state: quotaState,
+    steps: agentSettings("antigravity"),
+  },
+  {
     id: "settings-accounts-agent-settings-without-presentation",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, agent settings of a provider this build has no presentation for",
-    description: "The Agent settings of the fourth provider the UI knows nothing of: the first line of the body is the generic mark in the neutral colour and the name Acme Agent as the daemon calls it. The provider declares one setting this build has no words for, which has no row, so the dialog holds only the Tags row, with no Permission approval or Claude compatibility row.",
+    description: "The Agent settings of the additional provider the UI knows nothing of: the first line of the body is the generic mark in the neutral colour and the name Acme Agent as the daemon calls it. The provider declares one setting this build has no words for, which has no row, so the dialog holds only the Tags row, with no Permission approval or Claude compatibility row.",
     state: unpresentedState,
     steps: [...openAccounts, (ui) => ui.press(UNPRESENTED_PROVIDER.label), openAgentSettings(UNPRESENTED_PROVIDER.id)],
   },
@@ -2286,6 +2330,41 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")),
       (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: "Personal", agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "codex") })),
       (ui) => ui.press(ui.t("settings.accounts.login")),
+    ],
+  },
+  {
+    id: "settings-account-login-question-worded",
+    group: GROUP,
+    category: "normal",
+    title: "Account login, answer a GitHub Copilot CLI question",
+    description: "The confirmation asks whether to store credentials in plain text, with the file path shown as a reference and a button for each answer.",
+    state: withLogins(signedInState, loginOf("copilot", null, {
+      question: {
+        id: "keep_token_in_plain_text",
+        params: { file: "/Users/dev/.copilot/config.json" },
+        message: "System keychain unavailable. Store token in plaintext config file?",
+      },
+    })),
+    loginQuestionDeclined: {
+      code: "provider.copilot.token_not_kept",
+      params: { agent: "GitHub Copilot CLI" },
+      message: "GitHub Copilot CLI kept no token: storing it in plain text was declined",
+    },
+    steps: openAccounts,
+  },
+  {
+    id: "settings-account-login-question-unworded",
+    group: GROUP,
+    category: "exceptional",
+    title: "Account login, a question the app has no words for",
+    description: "Work's login is waiting on a yes/no question of the agent's own that this build has no wording for, so the login's modal has given way to a failure alert that offers nothing to answer: the danger icon and the title \"Could not show the login question\", then three body lines: the login to Claude Code account Work is waiting for an answer; the agent asked a question that cannot be shown here, so this login cannot continue; and to cancel the login and log in with the agent's own CLI in the environment where sessions run, using the account's configuration directory, written as a monospace reference. There is no spinner, no code and no Open the page again. Cancel login, the primary button, is alone in the footer and has the focus; it and the close button cancel the login.",
+    state: withLogins(signedInState, loginOf("claude", "a-work", {
+      authorization_url: CLAUDE_PAGE,
+      question: { id: "store_token_in_file", params: { path: "/Users/dev/.claude-work/token" }, message: "Store the token in the file /Users/dev/.claude-work/token?" },
+    })),
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.accounts")),
     ],
   },
   {

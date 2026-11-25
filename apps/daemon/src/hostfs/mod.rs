@@ -39,10 +39,7 @@ pub fn expand(path: &str) -> PathBuf {
         return crate::paths::home_dir();
     }
     let windows = crate::platform::names::PATH_STYLE == crate::platform::names::PathStyle::Windows;
-    if let Some(rest) = trimmed.strip_prefix("~/") {
-        return under_home(rest, windows);
-    }
-    if let Some(rest) = trimmed.strip_prefix("~\\").filter(|_| windows) {
+    if let Some(rest) = crate::platform::names::home_relative(trimmed) {
         return under_home(rest, windows);
     }
     PathBuf::from(trimmed)

@@ -1,72 +1,25 @@
 // The providers the fixture daemon serves in its `snapshot`: what the real daemon's registry describes, so the install
 // links, config-directory placeholders and default agent a scenario shows are the real app's.
-import type { Agent, AgentAvailability, Capabilities, DeliveryQuirks, ModelDisplay, ProviderInfo, QuotaWindowNaming, SettingDescriptor } from "../protocol";
+import type { Agent, AgentAvailability, DeliveryQuirks, ModelDisplay, ProviderInfo } from "../protocol";
+import { BUILT_IN_SERVED } from "../providers/servedFixtures";
 
 const NO_QUIRKS: DeliveryQuirks = { confirms_by_reported_prompt: false, holds_report_for_completion_notice: false, resume_instruction_as_launch_prompt: false };
 
-const CAPABILITIES: Record<Agent, Capabilities> = {
-  claude: {
-    preallocates_session_id: true,
-    hook_script: false,
-    status_line: true,
-    reset_credits: false,
-    native_app_scheme: "claude",
-    per_session_trust: false,
-    config_sharing: true,
-    mcp_inventory: true,
-    ends_command_groups_on_exit: true,
-    interactions: { permission: true, question: true },
-    message_images: true,
-    slash_commands: true,
-    delivery: { confirms_by_reported_prompt: true, holds_report_for_completion_notice: true, resume_instruction_as_launch_prompt: true },
-  },
-  codex: { preallocates_session_id: false, hook_script: true, status_line: false, reset_credits: true, native_app_scheme: "codex", per_session_trust: false, config_sharing: true, mcp_inventory: true, ends_command_groups_on_exit: true, interactions: { permission: true, question: true }, message_images: true, slash_commands: true, delivery: NO_QUIRKS },
-  grok: { preallocates_session_id: true, hook_script: true, status_line: false, reset_credits: false, native_app_scheme: null, per_session_trust: true, config_sharing: true, mcp_inventory: true, ends_command_groups_on_exit: true, interactions: { permission: true, question: true }, message_images: true, slash_commands: true, delivery: NO_QUIRKS },
-};
-
 const PLAIN_MODELS: ModelDisplay = { family_version: false, id_prefix: null, aliases: [], retired: [] };
 
-const QUOTA_WINDOWS: Record<Agent, QuotaWindowNaming> = {
-  claude: { kinds: ["session", "weekly", "weekly_model"], session_window: "session", weekly_all_models: true },
-  codex: { kinds: ["session", "weekly"], session_window: "five_hour", weekly_all_models: false },
-  grok: { kinds: ["credit_period"], session_window: "five_hour", weekly_all_models: false },
-};
+/** The providers released with the application, in the registry's order: what the fixture daemon, the gallery and the
+ * website preview serve. A provider's module may be registered before it is released (`BUILT_IN`); releasing it appends
+ * its id here. */
+const RELEASED = ["claude", "codex", "grok", "antigravity", "copilot", "opencode", "qwen", "pi"];
 
-const MODEL_DISPLAY: Record<Agent, ModelDisplay> = {
-  claude: { family_version: true, id_prefix: "claude-", aliases: ["fable", "opus", "sonnet", "haiku"], retired: ["best"] },
-  codex: PLAIN_MODELS,
-  grok: PLAIN_MODELS,
-};
-
-const compatibilitySwitch = (id: string, source: Agent, kind: Extract<SettingDescriptor["kind"], { type: "switch" }>): SettingDescriptor => ({ id, kind, exported: true, shown_to_agents: true, compatibility_with: source });
-
-/** The settings each provider declares, as the daemon's registry does: the permission approval of every agent
- * (a choice an export carries, and no agent reads) and the compatibility switches, all off until chosen: Claude
- * compatibility of Codex and Grok Build, Codex compatibility of Claude Code and Grok Build. */
-const SETTINGS: Record<Agent, SettingDescriptor[]> = {
-  claude: [
-    { id: "approval_mode", kind: { type: "choice", choices: [{ value: "auto", confirm: false }, { value: "manual", confirm: false }, { value: "accept_edits", confirm: false }, { value: "plan", confirm: false }, { value: "bypass", confirm: true }] }, exported: true, shown_to_agents: false, compatibility_with: null },
-    compatibilitySwitch("codex_compatibility", "codex", { type: "switch", default: "off" }),
-    { id: "simple_shell_commands", kind: { type: "switch", default: "off" }, exported: true, shown_to_agents: true, compatibility_with: null },
-  ],
-  codex: [
-    { id: "approval_reviewer", kind: { type: "choice", choices: [{ value: "user", confirm: false }, { value: "auto_review", confirm: false }, { value: "full_access", confirm: true }] }, exported: true, shown_to_agents: false, compatibility_with: null },
-    compatibilitySwitch("claude_compatibility", "claude", { type: "switch", default: "off" }),
-  ],
-  grok: [
-    { id: "approval_mode", kind: { type: "choice", choices: [{ value: "ask", confirm: false }, { value: "auto", confirm: false }, { value: "always_approve", confirm: true }] }, exported: true, shown_to_agents: false, compatibility_with: null },
-    compatibilitySwitch("claude_compatibility", "claude", { type: "switch", default: "off" }),
-    compatibilitySwitch("codex_compatibility", "codex", { type: "switch", default: "off" }),
-  ],
-};
-
-/** Every registered provider's descriptor data, in the registry's order (claude, codex, grok), constant like the real
- * daemon's while it runs. */
-export const FIXTURE_PROVIDERS: ProviderInfo[] = [
-  { id: "claude", label: "Claude Code", short_name: "Claude", install_url: "https://code.claude.com/docs/en/setup", default_config_dir: ".claude", detection_markers: ["CLAUDE.md", ".claude"], capabilities: CAPABILITIES.claude, quota_windows: QUOTA_WINDOWS.claude, model_display: MODEL_DISPLAY.claude, settings: SETTINGS.claude },
-  { id: "codex", label: "Codex", short_name: "Codex", install_url: "https://github.com/openai/codex", default_config_dir: ".codex", detection_markers: [".codex", "AGENTS.md", ".agents"], capabilities: CAPABILITIES.codex, quota_windows: QUOTA_WINDOWS.codex, model_display: MODEL_DISPLAY.codex, settings: SETTINGS.codex },
-  { id: "grok", label: "Grok Build", short_name: "Grok", install_url: "https://docs.x.ai/build/overview", default_config_dir: ".grok", detection_markers: [".grok", "AGENTS.md", ".agents"], capabilities: CAPABILITIES.grok, quota_windows: QUOTA_WINDOWS.grok, model_display: MODEL_DISPLAY.grok, settings: SETTINGS.grok },
-];
+/** Every released provider's descriptor data, in the registry's order, constant like the real daemon's while it runs:
+ * the served-info fixture beside each module (`providers/<id>.fixture.ts`) for the ids in `RELEASED`. The tests' list,
+ * which holds every registered module, is `TEST_PROVIDERS`. */
+export const FIXTURE_PROVIDERS: ProviderInfo[] = RELEASED.map((id) => {
+  const served = BUILT_IN_SERVED.find((provider) => provider.id === id);
+  if (!served) throw new Error(`The released provider ${id} has no registered served-info fixture`);
+  return served;
+});
 
 /** A provider a newer daemon could serve that this build has no presentation module for (it is not among
  * `FIXTURE_PROVIDERS`, which only the registered ones are, so a scenario serves it beside them): the UI names it by this
@@ -80,10 +33,41 @@ export const UNPRESENTED_PROVIDER: ProviderInfo = {
   install_url: "https://example.com/acme-agent/install",
   default_config_dir: ".acme",
   detection_markers: [".acme"],
-  capabilities: { preallocates_session_id: true, hook_script: false, status_line: false, reset_credits: false, native_app_scheme: null, per_session_trust: false, config_sharing: false, mcp_inventory: false, ends_command_groups_on_exit: false, interactions: { permission: false, question: false }, message_images: false, slash_commands: false, delivery: NO_QUIRKS },
+  capabilities: { preallocates_session_id: true, hook_script: false, status_line: false, reset_credits: false, native_app_scheme: null, per_session_trust: false, config_sharing: false, owned_accounts: true, login_flow: true, mcp_inventory: false, ends_command_groups_on_exit: false, interactions: { permission: false, question: false }, message_images: false, slash_commands: false, delivery: NO_QUIRKS },
   quota_windows: { kinds: ["session", "weekly"], session_window: "session", weekly_all_models: false },
   model_display: PLAIN_MODELS,
+  native_memory: "absent",
   settings: [{ id: "review_mode", kind: { type: "choice", choices: [{ value: "careful", confirm: false }, { value: "fast", confirm: false }] }, exported: true, shown_to_agents: false, compatibility_with: null }],
+};
+
+/** A provider a newer daemon could serve whose capabilities say it has the default account only
+ * (`capabilities.owned_accounts: false`). Tests use it to verify that the capability works for an unknown provider. */
+export const DEFAULT_ACCOUNT_ONLY_PROVIDER: ProviderInfo = {
+  ...UNPRESENTED_PROVIDER,
+  id: "solo_agent",
+  label: "Solo Agent",
+  short_name: "Solo",
+  install_url: "https://example.com/solo-agent/install",
+  default_config_dir: ".solo",
+  detection_markers: [".solo"],
+  capabilities: { ...UNPRESENTED_PROVIDER.capabilities, owned_accounts: false },
+  settings: [],
+};
+
+/** A provider a newer daemon could serve that Octoboard reads no plan quota for (`quota_windows.kinds` is empty) and
+ * cannot sign an account in without a terminal (`capabilities.login_flow: false`). It also supports owned accounts,
+ * so scenarios can show several sign-in readings and the generic sign-in guidance for a provider with no presentation. */
+export const NO_QUOTA_PROVIDER: ProviderInfo = {
+  ...UNPRESENTED_PROVIDER,
+  id: "terminal_agent",
+  label: "Terminal Agent",
+  short_name: "Terminal",
+  install_url: "https://example.com/terminal-agent/install",
+  default_config_dir: ".terminal-agent",
+  detection_markers: [".terminal-agent"],
+  capabilities: { ...UNPRESENTED_PROVIDER.capabilities, login_flow: false },
+  quota_windows: { kinds: [], session_window: "session", weekly_all_models: false },
+  settings: [],
 };
 
 /** The ids of `FIXTURE_PROVIDERS`: every agent the fixture daemon serves, in its order. */

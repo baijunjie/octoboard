@@ -77,6 +77,9 @@ impl Watch {
         };
         let waiting = state.shown_status(&session) == SessionStatus::WaitingUser;
         let calls = live.interaction.calls();
+        // The count of writes is read before the screen, so that a write landing in between
+        // counts as one made into the prompt read, rather than as one made before it opened.
+        let writes = live.input_writes();
         let reading = reader.read(&super::screen_of(live, reader), &calls);
         self.gone = if reading == Reading::Gone {
             self.gone + 1
@@ -89,7 +92,26 @@ impl Watch {
             0
         };
         let published = live.interaction.published();
+        let opened = match &reading {
+            Reading::Shown { call, .. } => {
+                Some(live.interaction.opened_writes(calls.get(*call), writes))
+            }
+            Reading::Up => Some(live.interaction.opened_writes(None, writes)),
+            Reading::Gone if self.gone >= SEEN_TWICE => {
+                live.interaction.closed();
+                None
+            }
+            Reading::Gone | Reading::Unknown => None,
+        };
+        // For a reader that cannot tell what a prompt has selected once a key went into it, a
+        // prompt that anything was written into since it opened is the terminal's to answer: it
+        // is withdrawn, and never published again. A press's own keys hold what it answers until
+        // it is done.
+        let typed_into = reader.prompt_unreadable_after_input()
+            && !live.interaction.pressing()
+            && opened.is_some_and(|opened| opened != writes);
         match reading {
+            Reading::Shown { .. } | Reading::Up if typed_into => withdraw(state, live),
             Reading::Shown { call, prompt } if waiting && declared(live, &prompt) => {
                 let Some(call) = calls.get(call) else {
                     return true;
@@ -105,7 +127,7 @@ impl Watch {
                 // again under a new id, which an answer from then on names.
                 let same = published.as_ref().is_some_and(|published| {
                     published.call == *call
-                        && (live.interaction.pressing() || published.writes == live.input_writes())
+                        && (live.interaction.pressing() || published.writes == writes)
                         && candidate.as_ref().is_some_and(|candidate| {
                             published.interaction.prompt == candidate.prompt
                         })
@@ -116,7 +138,7 @@ impl Watch {
                         Published {
                             interaction,
                             call: call.clone(),
-                            writes: live.input_writes(),
+                            writes,
                         }
                     });
                     if live.interaction.publish(published) {

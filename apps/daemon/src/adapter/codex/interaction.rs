@@ -1188,4 +1188,15 @@ mod tests {
             NextKey::Stuck(_)
         ));
     }
+
+    /// Codex's prompts are read off the screen as drawn, as the captures here are replayed: with
+    /// faint cells blanked, whatever a prompt draws faint of its own text would be read as
+    /// missing.
+    #[test]
+    fn a_prompt_is_read_off_the_screen_as_drawn() {
+        assert_eq!(
+            CodexInteractions.prompt_screen(),
+            crate::session::screen::ScreenText::AsDrawn
+        );
+    }
 }

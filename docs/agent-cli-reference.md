@@ -1,6 +1,6 @@
 # Agent CLI reference
 
-Per-agent facts about the three agent CLIs Octoboard launches: the hook events, what their payloads carry, what the
+Per-agent facts about the eight agent CLIs Octoboard launches: the hook events, what their payloads carry, what the
 payloads can and cannot be correlated on, what a failing hook costs, how a project's own configuration layers around an
 injected one, the mechanism and conditions for injecting Octoboard into each, what it takes to move a session's
 conversation into another config directory, how each signs in a config directory without a terminal and what it answers
@@ -46,8 +46,11 @@ What the three hook sections say about a `PreToolUse` deny blocking a file write
 2026-11-13 on macOS on **Claude Code 2.1.322** (`claude -p`), **Codex 0.167.1** (`codex exec`) and **Grok Build 1.0.77**
 (`grok -p`), against scratch directories, by a probe whose `PreToolUse` hook printed a `deny` decision with a reason.
 What the Grok Build section's "When Grok writes its conversation" says was measured on **Grok Build 1.0.89**.
-All three rewrite their hook surface, their payload fields, their configuration layering and their on-disk layout on
-upgrade, so check a detail here against the installed version before relying on it.
+What the three sections say about a prompt that starts with `-`, or that names a subcommand, was measured on 2026-11-22 on **Claude Code 2.1.330**,
+**Codex 0.167.1** and **Grok Build 1.0.92**, and what the Pi section says about a subcommand's name on **Pi 1.5.2**.
+CLI upgrades can change the hook surface, payload fields, configuration layering and on-disk layout. Check a detail here
+against the installed version before relying on it. The Antigravity CLI, GitHub Copilot CLI, OpenCode, Qwen Code and Pi
+measurements name their versions in each agent’s section.
 
 The permission-resume note below distinguishes the native implementations in **Claude Code 2.1.274** and **2.1.319**.
 Grok's permission-mode startup and resume behavior was measured on **Grok Build 1.0.77** with isolated configuration,
@@ -220,7 +223,7 @@ Claude Code puts the prompt's text back in the input box, and submitting it agai
 sibling of the first (the same `parentUuid`); a bracketed paste and Enter written then submit the restored text with the
 pasted text joined straight onto it, no separator between them. On 2.1.296–2.1.303 an interrupt in the thinking phase
 still wrote `[Request interrupted by user]`. The one trace left is the terminal title's status glyph (see "Terminal
-titles and the titles in an agent's own records" under "## Across the three agents"): `◐`/`◑` alternate about once a
+titles and the titles in an agent's own records" under "## Across the agents"): `◐`/`◑` alternate about once a
 second while the turn runs, through tool calls and while the request waits, and the glyph turns to `✳` 70 ms after the
 Esc. The same `✳` follows every `Stop` (14 ms after the hook was posted) and every `PermissionRequest` whose dialog is
 shown (20–45 ms after), and stays through the dialog; after the dialog is answered the glyph turns again with no hook
@@ -346,7 +349,61 @@ on 2.1.310 too.
 **`--mcp-config` takes a list of values, not one.** Every non-flag argument after it is read as a
 further config path, resolved against the cwd: `claude --mcp-config '<json>' mcp list` fails with
 `MCP config file not found: <cwd>/mcp`. Anything positional — the task prompt in particular — has
-to come before it rather than after.
+to come before it, or after a bare `--`, which closes the list.
+
+**A prompt that starts with `-` is taken only after a bare `--`** (2.1.330, measured on macOS on 2026-11-22). As a
+bare argument, in any position, it is refused before anything starts, with exit code 1: `claude '--help me with this'
+--session-id <id>` prints `error: unknown option '--help me with this'`, `'- a list'` gives `unknown option '- a
+list'`, and `'-p x'` gives `unknown option '- x'`. After `--` the next argument is the prompt whatever it starts with,
+and the `--` also ends `--mcp-config`'s list: `claude -p --session-id <id> --mcp-config '<json>' --append-system-prompt
+<text> --permission-mode default --model <id> --effort medium -- '--help me with this'` recorded the user message
+`--help me with this` in its transcript, and `- a list` and `-p x` were recorded the same way (print mode, a scratch
+`HOME`, a fake API key and `ANTHROPIC_BASE_URL` on a closed local port, so no request left the machine). Without the
+`--`, `--mcp-config '<json>' 'plain task'` fails with `MCP config file not found: <cwd>/plain task`, and Claude Code's
+own message says "put a prompt before --mcp-config or after --". Everything after the `--` is positional, a flag
+included, so the `--` and the prompt come last: in `claude -- <prompt> --session-id <id>` the flag is not read.
+
+The interactive launch takes it the same way (2.1.330, on a pseudoterminal under a scratch `HOME` with onboarding, the
+API key and the folder's trust pre-answered in its `.claude.json`, the same fake key and closed port): `claude
+--settings <file> --mcp-config '<json>' --session-id <id> -- '--help me with this'` drew `❯ --help me with this`, ran
+the `UserPromptSubmit` hook with `prompt` `--help me with this` and went on to retry the refused connection. A resume
+does too, with no "Resume this conversation?" dialog: `claude … --resume <id> -- '- carry on'` submitted `- carry on`
+at once.
+
+**A command-line prompt that holds invisible characters is cleaned and sent, not held** (2.1.330, same pseudoterminal
+and scratch `HOME`). Unlike a prompt pasted into the input box, which Claude Code cleans and leaves there unsent
+("Writing into a running session"), `claude … --session-id <id> -- $'## Goal\n\n⁨x⁩ do it'` started the turn
+at once, with the notice "Removed 2 invisible characters from the launch prompt before sending it"; the
+`UserPromptSubmit` hook's `prompt` was the cleaned text, `## Goal\n\nx do it`. A zero-width space (U+200B) and a
+right-to-left override (U+202E) were removed the same way. So the prompt the hook reports differs from the argument
+by those characters. The set is the one the input box's check has ("Writing into a running session"): of 62
+characters sampled in one prompt, the ends and middle of every range Octoboard removes and twenty blank-looking
+neighbours outside them (U+00A0, U+2000, U+202F, U+3000, U+2800, U+FFFC among them), each was removed or kept as
+Octoboard's own strip does, U+2028 and U+2029 becoming newlines. The joiner of `🧑‍💻` and the selectors of `⚠️` and
+`1️⃣` were kept; a joiner between Devanagari letters was kept too, which Octoboard removes, and a right-to-left mark
+between two Hebrew letters was removed. A subcommand's name wrapped in them is still a prompt: `-- $'⁨mcp⁩'`
+started a turn whose hook `prompt` was `mcp`, and so did `-- $'\u200bdoctor'`, a single zero-width space ahead of the
+word, with the notice "Removed 1 invisible character from the launch prompt before sending it" and the hook `prompt`
+`doctor`: the characters are removed where the prompt is sent, after the arguments are read. Octoboard passes a task
+as it was written, these characters included, since some are part of a script's spelling (the zero-width non-joiner of
+Persian, a joiner that picks a Devanagari conjunct's form) and Claude Code keeps those; it matches the prompt the hook
+reports against the task with the invisible characters ignored on both sides.
+
+**An argument that names a subcommand runs it, after `--` too, unless `-p` is given** (2.1.330, same scratch `HOME`).
+`claude --session-id <id> --settings <file> -- mcp` printed `Usage: claude mcp [options] [command]` and exited 1, with
+and without the `--`; `claude --session-id <id> --settings <file> --mcp-config '<json>' -- doctor` ran `claude doctor`;
+on the pseudoterminal `claude … --session-id <id> -- mcp` printed the same usage and exited, with no
+`UserPromptSubmit`. Ahead of the flags the subcommand gets them: `claude mcp --session-id <id>` and `claude mcp
+--resume <id>` fail with `error: unknown option`. So a prompt that is exactly `update` or `install` would run that
+subcommand (not run here: both change the installation). Only the whole argument is matched: `-- 'mcp list'` and `--
+'mcp '` (a trailing space) are prompts, and so is `-- ' mcp'`, with a leading space. That space is kept, not trimmed:
+the transcript's user message and the `UserPromptSubmit` hook's `prompt` are both ` mcp`, in print mode and on the
+pseudoterminal (`❯ mcp` on screen), and on a resume (`--resume <id> -- ' doctor'` gave the hook ` doctor`). With `-p`
+ahead of it nothing is dispatched: `claude -p --session-id <id> -- mcp`, and the same without the `--`, recorded the
+prompt `mcp`. The subcommands 2.1.330 lists are `agents`, `attach`, `auth`, `auto-mode`, `doctor`, `gateway`, `import`,
+`install`, `logs`, `mcp`, `plugin` (`plugins`), `purge`, `respawn`, `rm`, `setup-token`, `stop` (`kill`),
+`ultrareview` and `update` (`upgrade`). Octoboard passes a prompt that is one word of ASCII letters, digits, `-` and
+`_` with a leading space, whichever subcommands the installed version has.
 
 **A long MCP tool call is moved to the background.** Claude Code moves an MCP tool call still running after 120 seconds
 to the background (it reports that the MCP tool is still running after 120s and was moved to the background as a task).
@@ -837,11 +894,30 @@ session can take them" in `docs/product/message-delivery.md`.
 **Two visible side effects of passing any `-c` override**: it forces embedded mode, so the TUI carries a permanent
 `⚠ 1 warning` badge explaining that command-line overrides require it, and the session is invisible to `codex agents`.
 
+**A prompt that starts with `-` is taken only after a bare `--`, which comes after every option** (0.167.1, measured on
+macOS on 2026-11-22 with a scratch `CODEX_HOME`). As a bare argument it is refused at argument parsing, with exit code
+2: `codex '--help me with this'` and `codex '--definitely-not-an-option'` print `error: unexpected argument '…' found`
+(the second with the tip "to pass '--definitely-not-an-option' as a value, use '-- --definitely-not-an-option'"),
+`codex '- a list'` prints `unexpected argument '- ' found`, and `codex '-p x'` reads `-p` as `--profile` and refuses
+its value ` x`. After `--` the prompt passes the parser, on a plain launch (`codex -c x=1 -- '--help me with this'`)
+and on a remote terminal (`codex --remote ws://127.0.0.1:<port> -- '--help me with this'`): without a terminal both get
+as far as `Error: stdin is not a terminal`, where the same remote launch without the `--` is refused as an unexpected
+argument. On a pseudoterminal, `codex --no-daemon -c … -- '--help me with this'` with a dummy API key and a model
+provider on a closed local port wrote a rollout whose user message is `--help me with this`. An option after the prompt
+is not read as one: `codex -- '--help me with this' -c x=1` fails with `unrecognized subcommand '-c'`.
+
+**After the `--`, the name of a subcommand is a prompt** (0.167.1, same scratch `CODEX_HOME`). As a bare argument it
+runs the subcommand: `codex -c x=1 completion` printed the completion script and `codex -c x=1 features --help` the
+help of `features`, so a first task that was exactly `logout` or `update` would have run it. After `--` it does not:
+`codex -c x=1 -- completion`, `codex -c x=1 -- features` and `codex --remote ws://127.0.0.1:<port> -- logout` all get
+as far as `Error: stdin is not a terminal` without a terminal, and on a pseudoterminal `codex --no-daemon -c … --
+completion` wrote a rollout whose user message is `completion`.
+
 ### Model and reasoning effort
 
 The model has a flag, `-m <model>`; the effort has **none** and is reachable only as the config override
 `-c model_reasoning_effort=<level>`. Octoboard passes both as `-c` overrides (`-c model="<id>"`) so the two are set the
-same way, ahead of the positional task, which Codex takes last. Codex **rejects an effort the chosen model does not
+same way, ahead of the positional task, which Codex takes last, after a bare `--`. Codex **rejects an effort the chosen model does not
 advertise**, with an error specific to that model, rather than lowering it.
 
 ### Discovering models
@@ -966,7 +1042,7 @@ Measured on 0.167, macOS. A plain `nohup … &` from a command the model runs is
 meant to outlive it has to be started in a session of its own (`setsid`).
 
 Every agent also ends, as it exits, the process group of each command still running (see "Exiting ends the process
-groups of running commands" under "Across the three agents").
+groups of running commands" under "Across the agents").
 
 ### What a rollout records of a turn's items
 
@@ -1133,7 +1209,24 @@ routed on its own through a `[model.<name>]` entry carrying its own `base_url` (
 ### Model and reasoning effort
 
 The model is passed as `--model <id>` and the effort as `--reasoning-effort <level>`, placed after the `--rules` pair
-and before the positional task. In a fullscreen TUI (1.0.62), startup alone persists these as `[models] default` and
+and before the positional task, which comes last, after a bare `--`.
+
+**A prompt that starts with `-` is taken only after a bare `--`** (1.0.92, measured on macOS on 2026-11-22 without a
+terminal, with a scratch `GROK_HOME`, a fake `GROK_CODE_XAI_API_KEY` and a `[model.probe]` entry on a closed local
+port). As a bare argument it is refused at argument parsing, with exit code 2: `grok --no-leader --model probe '--help
+me with this'` and `'--definitely-not-an-option'` print `error: unexpected argument '…' found`, and `'- a list'` prints
+`unexpected argument '- ' found` with the tip "to pass '- ' as a value, use '-- - '"; `'-p x'` is not refused but read
+as the option `-p` (`--single`), a headless single turn. After `--` the prompt is taken as written: `grok --no-leader
+--model probe -- '--definitely-not-an-option'` recorded `--definitely-not-an-option` as the prompt in the scratch
+home's `prompt_history.jsonl` and as the user message of the session's `chat_history.jsonl`. `[PROMPT]...` takes every
+argument after the `--`, joined with spaces, so the `--` and the prompt come last: `grok --no-leader --
+'--definitely-not-an-option' --model probe` recorded the prompt `--definitely-not-an-option --model probe` and ran on
+the default model instead of the one named. After the `--`, the name of a subcommand is a prompt as well: `grok
+--no-leader --model probe version` printed the version and exited, where `grok --no-leader --model probe -- version`
+and `-- logout` recorded the prompts `version` and `logout` and ran nothing else. Not measured: the same launches on a
+terminal, in the fullscreen TUI.
+
+In a fullscreen TUI (1.0.62), startup alone persists these as `[models] default` and
 `default_reasoning_effort`; a headless `-p` run did not. An explicit `/model other-local high` changed both keys in the
 TUI. A launch's own model chosen again cannot be told from its startup save. The per-session `GROK_HOME` keeps
 `config.toml` as a real copy; what Octoboard carries from it, and why the model passed at launch and the effort are left
@@ -1346,18 +1439,3794 @@ for the turn's end:
 The probe left nothing outside its scratch directory and the scratch `GROK_HOME`: no login was touched, the stand-in
 listened on 127.0.0.1 only and was stopped afterwards.
 
-## Across the three agents
+## Antigravity CLI
+
+Measured on Antigravity CLI 1.5.14 (the native
+binary `agy`, installed by Google's script at `~/.local/bin/agy`) on macOS. Unless a line says otherwise, a fact was
+measured in a scratch home and a scratch working directory with a local stand-in answering its inference requests
+(`"modelProvider": "gemini"` given through `--settings`, a fake `GEMINI_API_KEY` and `GOOGLE_GEMINI_BASE_URL`); "docs"
+marks a fact read from antigravity.google/docs and not measured, "binary" one read from the strings of the executable.
+One turn ran through a real model with the user's own sign-in, a personal Google account on the free plan.
+
+**Windows 11 ARM64 (23H2, build 22631.6199).** The vendor's PowerShell installer uses the ARM64
+release manifest and installs under `%LOCALAPPDATA%\agy\bin`. The manifest's SHA-512 matched the
+executable extracted into the probe's own equivalent layout. `agy.exe --version` returned **1.5.16**.
+The provider recognises `agy/bin/agy.exe` as a native install for `agy update`. In the desktop
+logon, Google OAuth created the `gemini:antigravity` Credential Manager entry. The native
+presence reader reported signed in from the same desktop logon without a dialog. The daemon's
+isolated `/usage` probe reported weekly windows for Gemini Models and Claude and GPT models.
+The daemon's login status timed out after its authorization-code question closed, even though
+the signed-in quota probe succeeded. The CLI wrote `OAuth: authenticated successfully as …`
+to a dated file under the private login home's `antigravity-cli/log`. The login flow now checks that marker
+after it submits the code on every host. The daemon refused a scratch home with an earlier-layout hook and no
+migration marker. The hook remained in place and there was
+still no marker. One native CLI model turn returned the verification word in its session record.
+On interactive startup with a fresh scratch profile, both the injected and unmodified CLI
+opened a colour scheme wizard. Its theme preview includes sample tool, error and warning lines.
+After the theme choice both launches opened the CLI's own Terms of Service & Data Use screen.
+Octoboard reported `waiting_user` and held messages while that screen was up. The Windows
+interactive session lifecycle was left unverified by the user's decision at that screen.
+The Windows sandbox probe also reported
+a missing module on this 23H2 guest. [Google lists Windows 11 24H2 with the August 2026 update as
+the minimum for that sandbox](https://antigravity.google/docs/sandbox/).
+
+It is not a later Gemini CLI: a different program (its tools, prompts and state names are those of the Windsurf
+line), which shares only the `~/.gemini` directory, the `GEMINI.md` and `AGENTS.md` instruction files and the
+`GEMINI_API_KEY` variable with it. The user's first launch showed no prompt to migrate Gemini CLI's configuration
+(Gemini CLI's directory existed, with an API-key sign-in selected and no Google credential on file), and a first
+launch imports none of it: in a scratch home holding Gemini CLI's `settings.json` (an MCP server, a hook, a theme), a
+`GEMINI.md`, an extension under `extensions/` with a server and a command, `trustedFolders.json` and an
+`antigravity/mcp_config.json`, the CLI wrote what it writes in an empty home and nothing else (its log has
+`Detecting Gemini extensions in …/.gemini/extensions`, `Found 1 extensions: [myext]`, and no more of it; the
+executable holds a "Migrating %d extensions to plugin format" that this launch did not reach).
+
+**Linux daemon** (1.5.16, Debian 13 arm64, glibc 2.41). A local Gemini stand-in authenticated with a
+disposable API key through the launch's `modelProvider` setting. A console and a trusted project session ran
+turns and called the injected Octoboard MCP server. The project received a parent instruction and the console
+received its report. Both interrupted a turn and both relaunched after archive. A Linux process trace captured Antigravity CLI
+starting the injected hook through `sh -c`. The signed-out daemon quota
+probe ran `agy -p /usage --output-format json` in its own home and reported `quota_command_failed` with no
+window. The CLI reported authentication required. A later quota refresh held that reading and the source
+`~/.gemini` file contents were unchanged. Real Google OAuth probes reached the authorization page on Linux.
+The first probe stopped at its own deadline. The second waited without a deadline and was stopped
+before the clipboard handoff reached the CLI. The real Linux sign-in item and hosted quota went unmeasured.
+
+### Install and update
+
+- `curl -fsSL https://antigravity.google/cli/install.sh | bash` downloads one sha512-checked binary to
+  `~/.local/bin/agy` and runs `agy install`, which appended a PATH line to `~/.zshrc` and `~/.profile` here. Not an
+  npm package. It updates itself in the background; `AGY_CLI_DISABLE_AUTO_UPDATE=true` turns that off (docs), and
+  every probe set it. `agy --version` prints the bare version.
+- `agy update` (it takes no flag) updates the binary in place and prints `Update successful! Please restart agy.`,
+  or `You are already on the latest version.`; the background updater records its last check in
+  `antigravity-cli/updater/update_status.json` (`{"success":true,"message":"Already on the latest version."}`). No
+  command prints the latest version without updating. The installer reads it from
+  `https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/<platform>.json`
+  (`{"version", "url", "sha512"}`), which named 1.5.15 on 2026-11-23 while this machine's binary, its own updates off,
+  was 1.5.14. A plain GET on 2026-11-23 answered for `darwin_arm64`, `darwin_amd64`, `linux_amd64`, `linux_arm64`,
+  `linux_amd64_musl`, `linux_arm64_musl`, `windows_amd64` and `windows_arm64` (all 1.5.15), and 404 for the `x64`,
+  `win32` and hyphenated spellings; `install.sh` names the platform `<os>_<arch>` with `arch` `amd64` or `arm64`, adding
+  `_musl` where it finds musl's loader. So Octoboard tells an install at `~/.local/bin/agy` as the CLI's own, updates it
+  with `agy update`, and reads its latest version from the manifest of the daemon's platform, the glibc one on Linux
+  (`CliPackaging::native_manifest`).
+- **The installed version cannot be read without running the binary.** The install is the one 229 MB executable,
+  in no versioned directory and with no file beside it naming the version; the executable binds no Info.plist and its
+  Go build information is 144 bytes with no version in them. `1.5.14` occurs in it once, at byte 183,621,963, with no
+  marker around it, and finding it took 48 s. So `installed_version` gives none and the version is asked with
+  `agy --version`.
+
+### Directories, and there is no variable for them
+
+- Everything is under the home directory: `~/.gemini/antigravity-cli/` (`settings.json`, `brain/<conversation id>/`,
+  `conversations/`, `history.jsonl`, `log/` with `cli.log` linking the latest, `cache/`, `presence/<conversation
+  id>.lock`, `updater/`) and `~/.gemini/config/` (`config.json`, `mcp_config.json`, `hooks.json`, `projects/`), which
+  the Antigravity app and IDE share (docs).
+- No environment variable moves either directory. None is documented; of the names in the binary,
+  `ANTIGRAVITY_CONFIG_REL_DIR` and `ANTIGRAVITY_EXECUTABLE_DATA_DIR` (a sidecar's data directory) changed nothing
+  when set. `HOME` does: with another `HOME` the CLI creates and uses `.gemini` there.
+- **An undocumented flag does: `--gemini_dir=<absolute path>`** makes that directory stand for `~/.gemini` for the
+  launch. `agy --help` does not list it; `agy acp --help` lists it for the ACP mode (`--gemini-dir`, `--gemini_dir`,
+  "Path where Gemini files are stored (default .gemini)", beside `--app-data-dir` and `--cli_dir_name`). Only the
+  underscore spelling joined with `=` was taken by the interactive CLI: `--gemini-dir <path>` printed the usage and
+  exited. The login is not in that directory: `agy --gemini_dir=<a fresh directory> models` with the real `HOME`
+  listed the signed-in account's models.
+- First launch in a new home runs a wizard (colour scheme, then "Terms of Service & Data Use" with `[Done]`) before
+  anything else. `cache/onboarding.json` with `consumerOnboardingComplete`, `enterpriseOnboardingComplete` and
+  `onboardingComplete` true skips it (how the probes started).
+
+### Sign-in
+
+**Linux credential presence** (Debian 13 arm64, GNOME Keyring 48.0, 2026-11-24). With a disposable item carrying
+`service=gemini` and `username=antigravity`, Secret Service's D-Bus `SearchItems` returned its object path in
+the unlocked list before locking the collection and in the locked list after locking it. The absent lookup
+returned two empty lists. Search raised no prompt in either state and requested no secret. With no session bus,
+the query failed. A signed-out Antigravity CLI 1.5.16 `agy models` run exited 1 and did not show those attributes
+in the observed Secret Service searches. The Linux 1.5.16 binary passes that service and username to
+go-keyring for its login lookup. Octoboard's Linux Rust reader returned Present for that fixture both unlocked
+and locked, Absent for a fresh empty collection, and CannotTell for a disconnected session bus. Monitoring
+recorded no prompt or secret read. The fixture verified the reader independently of the real Linux sign-in.
+
+- A personal Google account signs in from the TUI through the browser ("Google OAuth"); an organisation through "Use
+  a Google Cloud project"; an API key through `"modelProvider": "gemini"` in settings plus `GEMINI_API_KEY` (docs for
+  the last two; the key route is what the stand-in used, and the banner then reads `Gemini API key` where a signed-in
+  session shows the address).
+- **Google OAuth in the TUI** (1.5.14 on macOS, 2026-11-24). Selecting Google OAuth in an isolated home
+  reported `blocked/auth` and opened a browser authorization request with PKCE. Its redirect was an HTTPS page
+  on `antigravity.google`. The browser showed an authorization code after the same account was approved, and
+  the CLI asked to paste it back into the terminal. There was no loopback redirect in this route. The clipboard
+  was sent directly to the PTY, followed by Enter. The CLI stayed blocked and no files appeared in the isolated
+  home, so the probe did not establish that the clipboard handoff reached the prompt or that login completed.
+  Both probe homes were deleted, and no authorization code or credential was captured. Octoboard drives this
+  route in a private configuration directory with the user's system sign-in store available. It presents the
+  authorization page and asks for the code in a masked field. The code goes directly to the CLI's terminal as
+  a bracketed paste followed by Enter. In the macOS development-daemon smoke run on 1.5.14, the private
+  login reused completed onboarding flags and trusted its disposable workspace. After the owner submitted a real
+  code, the daemon detected the CLI's success marker in the private login log, reported `succeeded`, and read
+  the free plan's two weekly quota windows.
+- The login is one item of the system keychain, service `gemini`, account `antigravity` (its attributes were read,
+  never its secret), shared by the CLI, the app and the IDE (docs). No file under `~/.gemini` holds the signed-in
+  address; only the log does (`consumerOAuth: authenticated successfully as …`). So there is one account for a user of
+  the machine, and no record on disk says whether it is signed in. On macOS Octoboard reads the sign-in state from
+  whether that item exists, never from its content ("Limits settled on 1.5.14" below). An account row with a
+  directory of its own is refused wherever it would be used (a launch and the model listing answer
+  `provider_unsupported` for `owned_accounts`; its sign-in state cannot be told).
+- With the login keychain manually locked on macOS 26.2, the same presence-only lookup used by Octoboard
+  returned status 0 in 0.020 seconds. There was no wait or observed prompt. This confirms item presence
+  while locked and gives no information about whether the saved credential can be used. Both output streams
+  were discarded.
+- A launch with no login reports `state=blocked:kind=auth` with the message "Sign in required" over OSC 7501 (below).
+  A signed-in launch sends the same report for a few hundredths of a second before `idle`.
+- `agy models` prints `Fetching available models...` and then one `<id><TAB><label>` line per model. On the free
+  plan: `gemini-3.8-flash-high|medium|low`, `claude-sonnet-4-6`, `claude-opus-4-6-thinking`, `gpt-oss-120b-medium`.
+  `--model` and `--effort low|medium|high|xhigh|max` choose per session.
+
+### Launch, resume and the session id
+
+- Flags: `--conversation <id>` resumes, `-c` continues the latest of the directory, `-i <prompt>` starts with a first
+  prompt and stays interactive, `-p` runs headless, `--mode accept-edits|auto|plan`,
+  `--dangerously-skip-permissions`, `--add-dir <dir>` (repeatable), `--settings <json or file>` ("for this session
+  only, never saved: a JSON object of settings.json keys"), `--log-file`. A file's path is taken, after a space or
+  joined with `=`: a file naming a trusted folder and `modelProvider` gave a launch with no trust screen and the key's
+  banner, and the file was left as written. A file with an unknown key ends the command as the JSON does (`Error:
+  --settings: unknown setting "hooks"`), a missing one with `Error: reading --settings file: open <path>: no such file
+  or directory`, both with status 1.
+- No flag gives a new conversation an id. The id (a UUID) is first seen in the hooks of the first turn; on exit the
+  CLI prints `Resume with -c (or command below):` and `agy --conversation=<id>`.
+- A resumed conversation redraws its earlier turns, fires no `SessionStart`, and keeps its id in every later hook.
+- What a conversation keeps (1.5.14, headless against a stand-in, 2026-11-22): the directory
+  `antigravity-cli/brain/<id>/` (the transcripts `.system_generated/logs/transcript.jsonl` and
+  `transcript_full.jsonl`, each a list by `step_index`, with their chunk files; the user's text is wrapped in
+  `<USER_REQUEST>` with metadata blocks), the database `antigravity-cli/conversations/<id>.db`, and
+  `antigravity-cli/presence/<id>.lock`. Shared, naming every conversation: `antigravity-cli/conversation_summaries.db`
+  and `cache/last_conversations.json`. A headless run wrote no `history.jsonl`.
+- **The database decides resumability** (1.5.14, macOS, stand-in, 2026-11-24). Individually removing the brain
+  directory, the presence lock, or both shared indexes left resume on the original id with the old prompt in the
+  next model request. Removing only `conversations/<id>.db` yielded `warning: conversation "<id>" not found` and a
+  different id. The interactive launch with a missing id also printed that warning, opened a fresh composer and
+  recorded its next prompt as a new conversation. Octoboard checks the database's presence before launching a resume.
+- A running interactive conversation has `<id>.db-wal` and `<id>.db-shm` next to its database. After a TUI turn,
+  `antigravity-cli/history.jsonl` contained prompt recall with `display`, `timestamp` and `workspace`, with no
+  conversation id. Removal takes the database and its companions, the brain directory, the presence lock and the
+  conversation's `annotations/<id>.pbtxt` title when present. The shared database, last-conversations index and
+  workspace prompt recall stay in place.
+- Octoboard reads the full transcript for history and the live feed. `input_tokens` on the latest
+  `PLANNER_RESPONSE` is the request's input size: a stand-in request with 321 prompt tokens and 7 output tokens
+  recorded `input_tokens: 321`. The transcript has no window size. History and the live feed date messages from
+  `created_at`. The feed also shows tool calls. A single call's following `GENERIC` result can be matched to it,
+  while results have no call id for pairing multiple calls.
+- **Rewind** (1.5.14, stand-in): choosing the third prompt in `/rewind` removed its reply from the display and put
+  the prompt back in the composer without changing the seven transcript lines. Replacing the prompt and sending
+  it appended two lines with step indexes 5 and 6, reusing the indexes of the abandoned prompt and reply. Archive
+  history and the live feed both replace the suffix from the reused index. Before a new turn materializes, the
+  transcript itself gives no indication of the rewind.
+- `Ctrl+D` on an empty prompt, twice, exits with status 0; `SIGTERM` at the prompt exits with status 0 too.
+
+### Injection: a directory of the launch's own
+
+- With `--gemini_dir=<dir>` the CLI reads `<dir>/config/hooks.json`, `<dir>/config/mcp_config.json` and
+  `<dir>/GEMINI.md` as the global ones and keeps its own data in `<dir>/antigravity-cli`. Measured with a directory
+  holding those three files written for the launch, `antigravity-cli` as a link to the home's own and the other
+  entries of `config/` as links: the hooks fired, the MCP server started and was called, the text of `GEMINI.md`
+  reached the model once (as a rule), and the session's only workspace folder was its working directory
+  (`workspacePaths`, the model's "Active Workspaces", and the directory a command ran in). Through the link the trust
+  the user gave went to the home's `settings.json` and the conversation to the home's `brain/`; a resume through a
+  second such directory (the first deleted) found the conversation and fired its hooks. The CLI rewrote none of the
+  links in that run. A hook's `transcriptPath` names the conversation through the launch's directory.
+- What this costs: the flag is undocumented; the three files replace the user's global ones for the launch, so
+  whatever the user has there has to be carried into them, and a server or hook the user adds from inside the session
+  lands in the launch's copy (`agy --gemini_dir=<dir> mcp add …` wrote the launch's `mcp_config.json` and left the
+  home's alone), so it is gone when the session ends.
+- What the CLI writes by itself: nothing in those three files. A session that was trusted, ran a turn, changed its
+  model with `/model` and its effort with `/effort` left the three copies byte for byte and replaced none of the
+  links (those of the directory and those of `config/`): the trust and the model went through the `antigravity-cli`
+  link into the home's `settings.json`. A user's own hook and MCP server carried into the copies ran beside
+  Octoboard's.
+- Telling a CLI that takes the flag from one that does not: an undefined flag ends any `agy` command at once with
+  status 2 and `flags provided but not defined: -<name>` before the usage, while `agy --gemini_dir=<dir> mcp list`
+  reads `<dir>/config/mcp_config.json`, prints its servers and exits with status 0, with no sign-in and no network.
+  Status 2 is what every error of usage gives, so only the line tells the flag's.
+  `--version` answers whatever flags come with it, so it tells nothing.
+- How strictly the CLI reads `mcp_config.json` (`mcp list`): an empty file, one of white space only, `{}` and
+  `{"mcpServers": null}` are no servers; a byte order mark, a `//` or `/* */` comment, a trailing comma, an array and
+  anything else that is not strict JSON end it with status 1 and `Error: failed to parse <path>`.
+- A session reads more than `mcp list` does (print mode in a scratch home, each case told by whether the file's
+  server was started and its hooks fired, 2026-11-23). `mcp_config.json`: a byte order mark, `//` and `/* */`
+  comments above or inside the object, and a comma before a closing brace, alone or together, were all read (the
+  server started). A `#` comment, a file that is an array and `mcpServers` that is a list were not: the session ran
+  with no server of the file and said so only in its log (`Failed to load MCP config: … failed to parse JSON config`).
+  `hooks.json`: a byte order mark was read; a comment of either kind, a trailing comma or a `#` comment made the
+  session load no hook of the file (`failed to parse hooks.json`, `loaded 0 named hooks`) and run on. Octoboard reads
+  each file with exactly those options and refuses a launch on a file the session would not read
+  (`provider.antigravity.user_config_unusable`), since the session would otherwise run without the user's servers or
+  hooks and say nothing.
+- A settings key given with `--settings` stands in place of the user's own of that name, and inside `permissions`
+  each list does: with `permissions.allow` given, a command the user's own `allow` list covered asked for
+  permission again, while a command of their `deny` list was still refused (`Permission denied for command(…).
+  Matches user-configured d…`). `--dangerously-skip-permissions` keeps the `deny` list too: the denied command was
+  refused, everything else ran with no prompt.
+- What the CLI makes in a launch's directory built from a home that has no `config/` (or an empty one):
+  `config/.migrated`, `config/config.json` (`{"plugins": {"swarm": {"enabled": true}}}`) and `config/projects/`
+  (with `default-cli-project.json`). Given links to the home's own in their place, it made `.migrated` and the
+  project file through the links, in the home; `config.json` it wrote by replacing the file, so the link became a
+  file of the launch's and the home got none. A launch with no `--gemini_dir` also leaves an empty
+  `config/mcp_config.json` in such a home.
+- **`config/.migrated` marks a migration out of an earlier layout, and it must not run through a launch's
+  directory.** With no marker in the configuration directory, the CLI moves `rules/`, `workflows/`, `skills/`,
+  `plugins/`, `hooks.json` and `mcp_config.json` from its data directory (`antigravity-cli/`) into `config/`, leaves a
+  link at each old place, and writes the empty marker (`migrate.go`: `Migration marker … does not exist. Attempting
+  migration from AppDataDir …`, `Migrating … to …`, `Created symlink from … to …`); `config.json` and `projects/`
+  there are not moved. In a home's own run that is all in the home. Through a launch's directory (its
+  `antigravity-cli` a link to the home's, its `config/` its own) the same run moved the user's four directories and
+  two files **out of the home into the launch's `config/`**, the two files over the ones written for the launch (so
+  the launch's hooks and MCP server were the user's old ones, with none of the launch's own), and left the home's
+  `antigravity-cli/` entries as links into the launch's directory, which lead nowhere once it is deleted. It did so
+  whether `config/.migrated` was a link to the home's missing marker (the marker then lands in the home, so the
+  user's own run never migrates) or absent (the marker lands in the launch's directory). With an empty
+  `config/.migrated` file of the launch's own, nothing was moved and no marker was written to the home, the launch's
+  hooks fired, and neither the old `hooks.json` nor the old server was loaded; the home's own next run, with no
+  `--gemini_dir`, then migrated everything in place and loaded both.
+- Which commands run that migration, in a home with the earlier layout and no marker: the interactive CLI and `agy
+  models` do (after `agy models` the home had its marker, `skills` was a link and `config/hooks.json` was there);
+  `agy --version`, `agy --help` and `agy mcp list` do not (`mcp list` printed `No MCP servers configured.`, reading
+  `config/` alone). So Octoboard's probe of the directory flag (`mcp list`) never migrates, and a listing of the
+  models run against the user's own home migrates it in place, as the user's own run would.
+- **Where the destination is already there, the migration overwrites a file and leaves a directory.** In a home
+  with no marker holding each entry in both places, a run of the interactive CLI and a run of `agy models` did the
+  same: `config/hooks.json` and `config/mcp_config.json` were **replaced by the ones of `antigravity-cli/`** (the
+  newer files' content was gone, with no copy kept), a link left at each old place; `skills/` and `workflows/`, whose
+  destinations existed (one holding a file, one empty), were not moved, not merged and not linked (`Migration: failed
+  to rename … file exists`), and stayed directories of `antigravity-cli/`; `rules/` and `plugins/`, which had no
+  destination, were moved. The marker was written all the same (`Migration complete`), and a second run did nothing.
+  So a run of the CLI always ends the state Octoboard refuses, but for a user who has both an earlier layout's
+  `mcp_config.json` or `hooks.json` and a newer one in `config/` (which the Antigravity app also writes), that run,
+  Octoboard's own listing of the models included, loses the newer file.
+- What Octoboard does with it: a launch whose home has no marker the CLI would find (a link that leads nowhere is
+  none) and still holds one of the six entries in `antigravity-cli/`, as anything but the link the migration leaves
+  (one that leads to the entry of that name in `config/`), is refused
+  before the launch's directory is made and before the flag is probed, with a remedy to run `agy` once
+  (`provider.antigravity.earlier_layout_not_migrated`): behind the launch's own marker the session would run without
+  the user's earlier rules, hooks and servers and say nothing, and a hook among them may be one that denies. The
+  migration's own links refuse nothing; a link of the user's to anywhere else is an entry not yet moved.
+- Where that home also has `hooks.json` or `mcp_config.json` in both places, the one in `config/` a file that holds
+  something, the refusal is another, checked first (`provider.antigravity.earlier_layout_file_in_both_places`, naming
+  both files): the run the first refusal asks for would replace the file in `config/` with the earlier one, so the
+  user is told to keep the one they want and move or remove the other before making it. An empty file in `config/`,
+  which a run of the CLI leaves in a home that had none, is not that case. Directories in both places are not: the
+  CLI leaves both as they are.
+- The listing of the models asks the same two questions before it runs `agy models`, and where a launch would be
+  refused it runs nothing and gives the refusal as the reason it has no list. So nothing Octoboard runs by itself
+  starts the migration in the user's home: of its runs of `agy` against that home, the version probe (`agy
+  --version`) and the probe of the directory flag (`agy --gemini_dir=<launch directory> mcp list`) do not migrate,
+  `agy models` is run only in a home that has its marker or nothing to move, and a session runs behind the marker of
+  its launch directory. In a home with no marker and nothing of the six to move, `agy models` still writes the marker
+  and an empty `config/mcp_config.json`, as any first run does. A listing that could not migrate at all would be `agy
+  --gemini_dir=<a directory with its own marker> models`, which is recorded above as listing the signed-in account's
+  models: since 2026-11-23 that is what Octoboard runs, in a directory of its own that it removes after, so its
+  listing writes nothing into the home ("Limits settled on 1.5.14" below).
+- What is left in `antigravity-cli/` after a run that could not move a directory: with the marker there and `skills/`
+  a directory in both places, a session listed the skills of both (`/skills`: `Global skills · From
+  ~/.gemini/antigravity-cli/skills` beside `From ~/.gemini/config`, and the screen names
+  `~/.gemini/antigravity-cli/skills/{skill_name}/SKILL.md` as where to create a global skill) and named both to the
+  model. So a `skills/` left there is still loaded. `rules/` and `plugins/` left there are not (2026-11-23, the
+  marker present, an entry of each kind in both places): a rule file with the front matter `trigger: always_on`
+  reached the model's request from `config/rules/` and not from `antigravity-cli/rules/`; a plugin installed with
+  `agy plugin install <directory>` lands in `config/plugins/<name>/` and is listed and loaded (its skill named in
+  the request), while a copy of it under `antigravity-cli/plugins/` is neither listed by `agy plugin list` nor
+  loaded. A Markdown file in `workflows/` gave no slash command from either place (`Unknown command`), so nothing
+  can be said of a `workflows/` left behind. Octoboard tells the user at a launch whose home has `rules/` or
+  `plugins/` left there with something in them (`provider.antigravity.earlier_layout_leftovers_not_read`, naming
+  both directories and, as `left`, which of the two is left: `rules`, `plugins` or `both`), and starts the session.
+  It is a notice of its own beside the one of a settings file the CLI does not read
+  (`provider.antigravity.settings_not_read`): a launch with both tells both, the settings one first, and the window
+  keeps each until the user dismisses it.
+- Other migrations run at every start and keep their state in the data directory (`manager.go`: `Migration
+  [MIGRATION_ID_PLUGIN_ENABLEMENT] …`, which seeds `config.json`). After a first run through a launch's directory the
+  home's own run found them `already … COMPLETED` and made no `config/config.json` in the home.
+- `--settings` takes settings keys only, for the launch, and saves nothing: `permissions` (`{"allow":
+  ["mcp(octoboard/*)"]}` let the server's tools run with no prompt), `trustedWorkspaces` (a folder named there got no
+  trust screen), `modelProvider`, `toolPermission`, `agentMode`. An unknown key ends the launch: `Error: --settings:
+  unknown setting "hooks"`. Hooks and MCP servers are not settings.
+- How the CLI writes and reads its own `antigravity-cli/settings.json`: it writes a file beside it
+  (`settings.json.<uuid>.tmp`) and renames that over it, at mode 0600 (a trusted folder and an `/effort` change each
+  gave the file a new inode, and a hard link to the old one kept the old text), so a reader finds one whole version
+  or the other. It reads strict JSON, with a byte order mark taken off (and then writes the file back without it): a
+  `//` or `/* */` comment, a trailing comma or anything else that does not parse makes the session run on its
+  defaults (no trusted folder, no `modelProvider`), leaves the file as it was, and says so only in its log (`failed
+  to unmarshal cli settings (file may be corrupt, using defaults)`). A value of the wrong kind does the same for the
+  whole file: `permissions` that is a list, `permissions.allow` that is a text and `trustedWorkspaces` that is a text
+  each gave `failed to load cli settings, using defaults: invalid settings: <key>: invalid value …`. A key it does not
+  know is passed over and the rest is read. Octoboard's launch does what the CLI does with such a file: it starts the
+  session on the defaults, repeating none of the file's allow rules in the launch's settings, and tells the user the
+  file is not read (`provider.antigravity.settings_not_read`). Only a settings file that cannot be read at all (a
+  directory in its place, no permission), for which the CLI was not measured, still refuses the launch.
+- **The CLI rejects the whole settings file for any key it knows whose value it does not take, and it knows 39**
+  (2026-11-23; every JSON field name in the executable asked through `--settings`): `agentMode`,
+  `allowNonWorkspaceAccess`, `altScreenMode`, `artifactReviewPolicy`, `clearScrollbackOnResize`, `colorScheme`,
+  `contextWindow`, `copyOnSelect`, `customModelsConfig`, `disableSlashCommands`, `editor`, `editorMode`,
+  `enableTerminalSandbox`, `gcp`, `hideActiveItems`, `historySize`, `model`, `modelProvider`, `notifications`,
+  `orchestrator`, `permissions`, `pickerGrouping`, `queuedMessages`, `runningLightSpeed`, `sandboxProxy`,
+  `seasonalThemesOff`, `seasonalThemesOptIn`, `showFeedbackSurvey`, `showThinking`, `showTips`, `statusLine`, `title`,
+  `toolPermission`, `trustedWorkspaces`, `useG1Credits`, `useTerminalCursor`, `verbosity`, `vimInsertFirst`, `voice`.
+  Several take only a few words (`toolPermission`, `agentMode`, `verbosity`: `unrecognized value "…"`), and inside
+  `permissions` each of `allow`, `deny` and `ask` has to be a list of texts (`deny` that is a text, `ask` that is an
+  object and `allow` holding a number each rejected the file; an unknown key inside `permissions` did not). An
+  element that is `null` is taken: `["Bash(ls:*)",null]` and `[null]` in `allow`, `[null]` in `deny` and
+  `["x",null]` in `ask` were read by the file's own load (no log line) and taken by `--settings` (status 0), while
+  `[true]` was rejected by both, as `[1]` is (2026-11-23, a scratch home and directory, no sign-in, no turn). With
+  such a file the user's `deny` rules are not in force either. The rule is the CLI's own, so Octoboard asks the CLI:
+  `agy --gemini_dir=<the launch's directory> --settings <a copy of the file's keys> mcp list` validates what
+  `--settings` names the same way, ends in about 0.1 s with status 1 and `Error: --settings: invalid value for
+  setting "<key>": …` on its standard error (status 0 where it takes them), needs no sign-in and no network, and
+  wrote nothing into the directory or the home. Measured against the file's own load (the log of `agy
+  --gemini_dir=<dir> models` with the same text as `antigravity-cli/settings.json`) for each of the 39 keys with
+  eight kinds of value (`null`, a text, a number, `true`, an empty list, a list of numbers, an empty object, an object
+  of a number) and nine cases inside `permissions` and beside it, 321 in all: the two agreed on every one but two
+  kinds, which the question leaves out. A key that is `null` is unset in the file, while `--settings` refuses `null`
+  for nine keys (`altScreenMode`, `artifactReviewPolicy`, `colorScheme`, `editorMode`, `pickerGrouping`,
+  `queuedMessages`, `runningLightSpeed`, `toolPermission`, `verbosity`): `null` keys are not asked about. A key the
+  CLI does not know is passed over in the file, while `--settings` refuses it first, before any value, one key a run
+  (`Error: --settings: unknown setting "<key>"`, the key quoted as a JSON text is): it is taken out and the question
+  asked again. A file the CLI rejects so is taken as not read, with the same notice. The launch asks only once the
+  CLI has not refused `--gemini_dir`, and each answer is kept for the binary, its version and the text asked, so a
+  launch whose settings were asked about starts no process for them; a run that said nothing (timed out, could not
+  start) is kept for five minutes only, then asked again, since it counts as the file read. Not covered: a CLI that cannot be asked (not
+  found, a run that times out or ends some other way) leaves what Octoboard tells by itself, the kinds named above
+  and each of `allow`, `deny` and `ask` a list of texts; values nested deeper than the kinds tried (inside `statusLine`, `gcp`, `voice` and the like)
+  were compared only through the eight kinds; and the comparison is of 1.5.14.
+- A rule kept from a permission prompt ("… (Persist to settings.json)") is added to the `permissions.allow` list
+  **on disk**, not to the list the session runs with: with `allow` given through `--settings` as the user's own rule
+  and `mcp(octoboard/*)`, choosing it for `echo` wrote `command(echo)` after the user's rule in the home's
+  `settings.json` (rewritten indented, the `deny` and `ask` lists kept), wrote no `mcp(octoboard/*)` there and left
+  the `--settings` file alone. The row above it ("always allow in this conversation") writes no rule.
+- `--add-dir <dir>` loads the added directory's `.agents/hooks.json`, `.agents/mcp_config.json` and `AGENTS.md` with
+  no trust question, but makes it a workspace folder, **and the folder whose path sorts first is the session's
+  default directory**: commands run there, every hook's `cwd` names it and the model's list starts with it. The
+  folders of a new conversation are sorted by path as given, `..` resolved and symbolic links not (`aa-inject` before
+  the project put the commands in the injected directory; `zz-inject` did not; a link named `zz-link` to a directory
+  sorting first kept the project first; `<project>/../../aa-sib` sorted as `aa-sib`). `--new-project` changes none of
+  it. A resumed conversation keeps the folders it was created with, in that order, and appends a new `--add-dir`
+  after them: a deleted directory stays listed. So an added directory is not a way in.
+- The other places are the user's: `~/.gemini/config/hooks.json` and `mcp_config.json` (global, shared with the app),
+  the project's own `.agents/`, and installed plugins (`agy plugin install <directory>`, which installs for every
+  session; no flag or settings key loads one for a launch).
+- A first prompt joined to its flag is taken whole, whatever it starts with: `--prompt-interactive=--model looks like
+  a flag` and `-i=-x task with a dash` each reached the model as written. `-i -- <text>` is refused (the usage is
+  printed).
+
+### Hooks
+
+- `hooks.json` maps a name to events: `SessionStart`, `PreInvocation`, `PostInvocation`, `Stop` take a list of
+  handlers (`{"type": "command", "command": …, "timeout": <seconds>}`); `PreToolUse` and `PostToolUse` take
+  `[{"matcher": "*", "hooks": [handler…]}]`. The payload is JSON on stdin, camelCase, and names its event as
+  `hookEventName`. Common fields: `conversationId`, `cwd`, `workspacePaths`, `transcriptPath`
+  (`…/brain/<id>/.system_generated/logs/transcript_full.jsonl`; the docs page says `transcript.jsonl`), `artifactDirectoryPath`, `modelName`, `lastUserInput`.
+- A hook process inherits the CLI's environment, an API key in it included.
+- Nothing fires at launch. A turn is `SessionStart` (the first turn of a new conversation only), then
+  `PreInvocation` / `PostInvocation` once per model call (`invocationNum`, `initialNumSteps`), then `Stop` with
+  `terminationReason` (`NO_TOOL_CALL` for a finished turn, `ERROR` for a failed one), `error` (the text, or empty),
+  `fullyIdle`, `continuationActive` and `executionNum`.
+- A tool call is `PreToolUse` and `PostToolUse` with `toolCall` `{id, name, args}` and `stepIdx`; `PostToolUse` adds
+  `error`. `PreToolUse` fires before the permission prompt is drawn; `PostToolUse` only once the call ran.
+- `PreToolUse` answers `{"decision": "allow"|"deny"|…, "reason": …}` on stdout. `deny` stops the call and the model
+  is told `Encountered error in tool execution: tool call denied by pre-tool hook: <reason>`; the screen still lists
+  the call as done ("Edited 1 file"). `allow` does not skip a permission prompt. A handler that fails (a syntax error
+  here) blocks the call as well, and the log has its stderr.
+- The tools that write a file are `write_file` and `edit_file`, each naming it as `Path`, through the stand-in and
+  through a real model alike (one real turn that created a file, edited it and created two more called exactly
+  these). A path that is not absolute is refused by the tool itself (`must be an absolute path`).
+- A command declined at its permission prompt fires its `PreToolUse` and nothing after: no `PostToolUse`, no `Stop`.
+- A tool event runs only an entry with a `matcher`: a plain handler under `PreToolUse` or `PostToolUse` never ran,
+  for any tool, while `{"matcher": "*", "hooks": […]}` ran for every one. Every entry of an event's list whose matcher
+  takes the call runs: a `*` entry and a `write_file|edit_file` entry in one `PreToolUse` list both ran for a
+  `write_file`, and the second's `deny` stopped it (the file was not written) whatever the first gave. A handler that
+  writes nothing and exits 0 neither allows nor denies: the call still drew its permission prompt (measured
+  2026-11-24 against the stand-in, through a `hooks.json` shaped as a launch writes it).
+- **What a launch registers** (`apps/daemon/src/adapter/antigravity/home.rs`): Octoboard's hook as a plain handler
+  for `SessionStart` and `Stop`, and as a `*` entry for `PreToolUse` and `PostToolUse`, each event's command told its
+  name; the cross-project guard, where the launch has one, as an entry of its own after it in `PreToolUse`'s list,
+  for `write_file|edit_file`. Octoboard's hook writes nothing on stdout. Those are the events the provider reads (the
+  conversation's id and the turn's reply, the background work, the pending interactions), which a test holds the
+  registration to.
+- Tool names differ from the docs page: `read_file`, `write_file` (`Path`, `Content`, `Overwrite`, `Append`),
+  `edit_file` (`Path`, `Target`, `Replacement`), `run_command` (`CommandLine`, `toolSummary`, `WaitMsBeforeAsync`),
+  `ask_question` (`questions[]` of `question`, `options`, `is_multi_select`), `call_mcp_tool`, and the subagent,
+  schedule and search tools.
+- A turn cancelled with Esc fires no `Stop`: the last event is its `PreInvocation`.
+
+### MCP
+
+- `mcp_config.json`: `{"mcpServers": {"<name>": {"command", "args", "env", "timeoutSeconds"}}}` (default 180 s a
+  call, docs). The CLI starts the server at launch (`server/discover`, which a server may refuse, then `initialize`
+  with protocol `2025-11-25` and `tools/list`).
+- Tools are not declared to the model one by one: it gets `call_mcp_tool` `{ServerName, ToolName, Arguments}` and
+  reads a schema file. **`call_mcp_tool`, `list_resources` and `read_resource` are offered only once a server has
+  answered `tools/list`, and the CLI does not wait for that** (2026-11-23, the tools of each request read at the
+  stand-in). A prompt given at launch (`--prompt-interactive=<task>`, in a trusted folder) went out 0.1 s after the
+  first `idle`, its request held none of the three, and they were there from the second request on. A first message
+  pasted half a second after the first `idle` had them in its first request. With a server that takes 4 s to start, a
+  message sent 0.5 s after `idle` had none, and one sent after the server was up had them. So Octoboard never gives
+  the task with `--prompt-interactive`: it is the session's first message, and neither it nor anything else is
+  written into the session until Octoboard's own server has answered the CLI's `tools/list`, or 15 s have passed
+  since the launch (`AgentProvider::awaits_tool_listing`). The CLI gives no sign of a server being ready, so the
+  server itself tells the daemon. Measured on 2026-11-23 with a recording stdio server, no prompt sent and no turn
+  run, 27 launches, the machine's load average 11 from other work: the CLI starts the server as its input box
+  comes up (the server's process began between 0.02 s before and 0.07 s after the box was drawn, and 0.2 to 0.3 s
+  before it in the two slow launches below), and `initialize` and `tools/list` followed within 0.01 s. From the
+  launch, `tools/list` came after 0.17 to 0.24 s with the machine idle (8 launches; 1.0 s for the
+  first of them and 3.1 s for a single launch before the series, each the first after a pause), 0.21 to 0.47 s with
+  8 busy loops and 0.24 to 0.42 s with 16 (8 and 6 launches, more loops than cores). A server that slept 4 s before
+  reading was asked `tools/list` 4.2 to 4.4 s after the launch, 4 s after the box (2 launches). In a folder that is
+  not trusted the server is started and asked while the trust screen is up (0.22 s, 2 launches). So a message
+  written the moment the box is up can precede the listing by a few hundredths of a second with a fast server, and
+  by as long as a slow one takes; the bound is several times the slowest listing seen.
+- A call asks first (`MCP`, `<server>/<tool>`, "Allow calling this tool?", six numbered rows from "Yes, allow tool
+  call" to "No, and always deny … (Persist to settings.json)") unless a `permissions.allow` rule `mcp(<server>/*)`
+  covers it. `tools/call` carries `_meta` with `antigravity.google/conversation_id` and the artifacts directory. The
+  result reaches the model as `Created At: … Completed At: … <text>`.
+
+### Account MCP inventory and compatibility
+
+Measured on 1.5.14 (macOS, 2026-11-24, isolated homes and a local stand-in).
+
+- `mcp list` printed a name, transport, enabled state and command or URL for the global
+  `config/mcp_config.json`. The remote example was listed with either `url` or `serverUrl`. `mcp disable` wrote
+  `disabled: true` to the named entry. The command listed no plugin server.
+- A native plugin with `mcp_config.json` started the probe's stdio command from `config/plugins/<name>/`. The
+  same configuration at `.mcp.json` did not start it. `plugin list --json` gave the plugin name, enabled state
+  and absolute path, with no change to the populated home or to a scratch home seeded with an earlier-layout
+  plugin. Octoboard uses that listing and the session's JSON reader for the global and enabled plugin MCP files.
+  It lists configured active servers with runtime and remote sign-in unknown. A remote entry publishes only its
+  scheme and authority, omitting userinfo, path and query.
+- Project `AGENTS.md` and `GEMINI.md` both reached the same model request. The adjacent `CLAUDE.md`,
+  `.claude/rules/`, `.cursor/rules/` and GitHub Copilot instructions did not. A native global MCP server
+  started, while Gemini CLI's `settings.json` server and the Claude Code global and project MCP servers did not.
+  Gemini CLI extensions are detected as in the initial probe above, and the probe's extension remained
+  uninstalled and did not start its server. `--settings` rejected `contextFileName`, `loadGeminiExtensions`
+  and `loadClaudeConfig`; the launch help names no such compatibility switch. The CLI exposes an explicit
+  `plugin import` command for Gemini and Claude plugins, which is a configuration operation. Octoboard offers
+  no additional per-launch compatibility switch. Its normal launch keeps the CLI's native instruction loading.
+
+### Status over OSC 7501
+
+- With `AGY_CLI_OSC7501=on` the CLI writes `ESC ] 7501 ; state=<state>[:kind=<kind>]:app=antigravity[:msg=<base64>]`
+  on every change (without the variable it first asks the terminal whether it supports the reports; `off` disables
+  them; `AGY_CLI_OSC7501_MESSAGES=brief` drops the details; binary and changelog). It sets no terminal title unless a
+  `title` command is configured ("Capabilities measured on 1.5.14" below).
+- Measured sequence: `idle` once the prompt is ready (after the trust screen is answered, or at launch in a trusted
+  folder); `working` when a message is submitted; `done` with the reply's text when the turn finishes; `error` with
+  the error text when it fails; `idle` when a turn is cancelled with Esc, with no `done`.
+- **The `msg` of a `done` report is the reply cut to its first 199 characters and `…`** (202 bytes decoded, for a
+  reply of 5,010 characters), by the CLI itself, well inside the 2,048 bytes a report may carry. So a parent that is
+  told a turn's last message from the report gets its opening only. The whole reply is in no hook payload (`Stop`
+  carries the termination reason and the error, not the text). Octoboard reads it from the conversation's
+  transcript, which `Stop` names as `transcriptPath` through the launch's directory, and hands it to the turn end the
+  report closes ("Limits settled on 1.5.14" below, "The transcript" to "The path `Stop` gives").
+- A wait on the user is `blocked` with a kind: `permission` (`Trust this folder?`, `Approve Bash: <command>`,
+  `Approve Edit: Write: <path>`, `Approve McpTool: <server>/<tool>`), `question` (the question's text; also `Finish
+  setup` during the first-launch wizard) and `auth` (`Sign in required`). Answering returns to `working`.
+
+### Screens and keys
+
+- Trust, in a folder not in `trustedWorkspaces`: `Accessing workspace:`, the path, `Do you trust the contents of this
+  project?`, `Antigravity CLI requires permission to read, edit, and execute files here.`, rows `> Yes, I trust this
+  folder` and `No, exit`, footer `↑/↓ Navigate · enter Confirm`. Enter accepts: the CLI goes on in place, appends the
+  folder to `trustedWorkspaces` in its settings and draws the prompt (no restart, no hook). "No, exit" ends the
+  process with status 0 and saves nothing. Nothing of the prompt is drawn before the answer.
+- **A first prompt given with `-i` runs before the trust screen is answered**: in an untrusted folder its whole turn
+  (`SessionStart` to `Stop`, two model requests) completed in the first second, behind the trust screen, and showed on
+  the screen after the answer. It ran once.
+- The prompt: a banner (`Antigravity CLI <version>`, the signed-in address or `Gemini API key`, the model, the
+  directory), a `>` composer between two rules and a footer `? for shortcuts` with the model at the right; `esc to
+  cancel` replaces the footer during a turn and a prompt.
+- Permission prompts are numbered lists answered with Enter (first row "Yes"): "Run this command?" (four rows,
+  six once the highlight moves), "Allow creation of this file?" (two rows), the MCP one above. A digit answers its
+  row at once ("Capabilities measured on 1.5.14" below). A letter typed at one is not an answer; a paste followed by
+  Enter answered the highlighted row. `ask_question` draws `Question 1/1: <text>`, the options numbered,
+  `Write-in...` last, footer `↑/↓ Navigate · enter Select · esc Skip`.
+- In its default mode a file write inside the workspace and a command both asked first. Commands run in a terminal
+  sandbox by default (docs). `--mode accept-edits` let the file write through with no prompt and still asked about the
+  command; `--dangerously-skip-permissions` asked about neither. `--mode plan` and `--mode auto` behaved as the
+  default against the stand-in (what they change is the model's own conduct, and `auto` needs an account and the
+  sandbox); each was measured with the user's account ("Capabilities measured on 1.5.14" below).
+- The input box is the rows between the last two full-width rules, the first starting with `>` and a row added with
+  Ctrl-J indented under it; a shorter rule parts two turns of the conversation above. It stays drawn during a turn,
+  under the turn's `Generating...` row. Ctrl-U empties the row the cursor is on and no more.
+- After a failed turn, and at other times, the CLI draws a survey (`How's the CLI experience so far?` and `[1] Good
+  [2] Fine  [3] Bad  [0] Skip`) in place of the input box. With `"showFeedbackSurvey": false` in the launch's
+  settings the box stays.
+- Esc during a turn cancels it: `⎿  Interrupted · What should Antigravity CLI do instead?`. A failed turn draws `⚠
+  agent executor error: …` with an `Error ID:` line, and may be followed by a survey line (`[1] Good  [2] Fine  [3]
+  Bad  [0] Skip`).
+- A bracketed paste followed by Enter submits a message.
+
+### The real turn
+
+Two turns in all, both on the free plan. The second, through a launch directory as described above, asked a real
+model to create a file, edit it and create two more: `write_file` and `edit_file` as recorded under "Hooks", 17 s,
+`gemini-3.8-flash-low`. The first: one message ("Reply with the single word: pong") through the added-directory injection with the user's sign-in, the
+real `HOME`, a scratch working directory and trust given by `--settings`: the same four hooks and the same reports
+(`idle`, `working`, `done` with `pong`), model `gemini-3.8-flash-high`, 5 s. It drew on the free plan's quota. It left
+one conversation in the user's `~/.gemini/antigravity-cli` (its `brain/` directory, a `presence/` lock, a history
+line and a log); the user's settings were unchanged.
+
+### Through a development daemon
+
+Sessions run by a development daemon of the provider as first built (its data under a throwaway home, its sessions'
+shell environment pointing at a scratch agent home and the stand-in, then at the real home for five real turns on the
+free plan, `gemini-3.8-flash-low`). Two things these runs show have changed since: the task is no longer given with
+`--prompt-interactive` but always as the first message, written once Octoboard's server has answered the CLI's
+listing of its tools; and a turn's whole reply, not the report's cut `msg`, reaches the parent ("Limits settled on
+1.5.14" below).
+
+- A console session in a folder the CLI did not trust, with a first task: `starting`, `idle` (the task waiting as its
+  first message), `waiting_user` while the trust screen was up, `idle` once Octoboard had pressed it, then `working`
+  and `idle`, the task having run once and the conversation's id learnt from its first hook.
+- A project session in a trusted folder, with a first task: launched with `--prompt-interactive=<task>` (since
+  changed: the first message), `working` then `idle`. In a folder neither the CLI nor Octoboard trusts, the trust screen waits for the user
+  (`waiting_user`), and the parent is told so.
+- A command's permission prompt and a question each read `waiting_user` and went back to `working` on the answer; a
+  failed turn left the session `idle` and paused; the input box stayed after it (the launch turns the survey off).
+- A tool of Octoboard's (`list_consoles`, `report`, `instruct_session`, `interrupt_session`) ran with no prompt. With
+  a real model the tool was called in the first turn of a cold session and answered: that session's first message went in a few
+  seconds after the launch, by when the CLI offered `call_mcp_tool` (a first message now waits for the listing, "MCP"
+  above).
+- A report reached the parent as a message, and a turn that ended with no report reached it with the turn's reply as
+  its text (then the `done` report's cut `msg`; now the whole reply).
+- An instruction written while the session was idle started a turn. Written during a turn, the CLI held it above the
+  input box (`▸ <text>… (alt+m to send immediately)`, footer `Press up to edit queued messages`) and sent it when the
+  turn ended. **A cancel puts the messages still held back into the input box, unsent**: one row a message, in the
+  order they were written, joined as rows added with Ctrl-J are, and nothing of the interrupted prompt beside them
+  (two held messages and one, 2026-11-23, `antigravity_screen_cancel_gave_two_back.bin` and `…_gave_one_back.bin`).
+  Nothing on the screen tells such a box from a draft of the user's with the same rows, but Octoboard knows the
+  messages it wrote while the turn ran: a box that begins with the latest of them, whole and in the order written,
+  holds those messages given back, and they are written again after its next message, only what follows them being
+  told as a draft (`antigravity_screen_two_messages_held.bin` for the held state, in which the box reads empty). No
+  one key clears a box of
+  several rows (Esc does nothing at the prompt, Ctrl-C only arms the exit), but Ctrl-U pressed again does: a press
+  empties the row the cursor is on, the next takes the empty row away, so two rows were gone after three presses.
+  The provider declares both (`cancel_restores_held_messages`, `clears_input_box_with_ctrl_u`), so Octoboard clears
+  the box before its next message instead of waiting behind it.
+- An interrupt by the parent (Esc) stopped the turn: `idle`, `Interrupted · What should Antigravity CLI do instead?`.
+- With the setting that keeps a session to its own project on, `write_file` and `edit_file` into another registered
+  project were refused by the guard, the model reading Octoboard's reason; a write in the session's own project went
+  on to the CLI's own prompt.
+- A session resumed after being archived, and after the daemon was stopped and started, with `--conversation <id>`.
+- **Every launch reports `blocked` / `auth` for a moment before `idle`** (0.1 s to 1.7 s measured), signed in or not,
+  and with or without `AGY_CLI_OSC7501=on` (without it the CLI asks the terminal first, which a session's terminal
+  answers). Octoboard first read it as `waiting_user` for that moment, and a parent was told its child was waiting
+  for the user, which cost the parent a turn. It now counts such a report only once it has stood for 3 seconds, and
+  with that: a signed-in child launched, archived and resumed under a signed-in parent went `starting` to `idle` each
+  time and never read `waiting_user`, and the parent stayed `idle` with an empty input box, told nothing (no turn was
+  spent). A launch with no login (a scratch home) read `idle` first and `waiting_user` 3.3 s later, at its `Select
+  login method:` screen, for the parent and for the child alike, and one message was queued for the parent.
+- A signed-in account's empty input box shows a hint for its mode, `Auto mode: edits & safe commands auto-approved
+  (shift+tab to cycle)`, in grey (SGR 90, as the rules are), not faint. The executable holds the same hint for
+  `Accept-edits mode`, `Plan mode` and `Best-of-N mode`. The banner names the plan after the address (`(Antigravity
+  Starter Quota)` on the free plan), and the first launch after an update of the default mode shows a notice above
+  the box (`Auto is now the default agent mode`, `esc to dismiss`).
+
+- A trust screen behind the launch's sign-in moment, with the real sign-in (three real turns): a parent in a console
+  directory the CLI had not seen went `starting`, `idle`, `waiting_user` for 0.4 s while its trust screen was up, and
+  `idle` once Octoboard had pressed it. A child with a first task in a folder that neither the CLI nor Octoboard
+  trusts went `starting`, `idle`, and `waiting_user` 0.2 s later, and the parent was told once that it waits for the
+  user. When the screen was answered in the terminal the child went `idle`, then `working` as its first task went in,
+  once, and `idle`; nothing was reported for the answered screen, and the parent received one report, with the turn's
+  reply as its text.
+
+Also measured apart from the daemon: a trusted folder does not cover the folders inside it (a child of a trusted
+parent got the trust screen); a launch with no login draws `Welcome to the Antigravity CLI. You are currently not
+signed in.` with `Select login method:` (`1. Google OAuth`, `2. Use a Google Cloud project`) and stays at `blocked` /
+`auth`, and `agy models` then ends with status 1 and `Error: Please sign in to view available models. Launch the CLI
+without arguments to sign in.`
+
+### Limits settled on 1.5.14 (2026-11-23)
+
+Measured with the stand-in in scratch homes unless a line says otherwise; no real turn was spent. 1.5.14 was still
+the version `agy --version` printed.
+
+- **The transcript.** `brain/<id>/.system_generated/logs/transcript_full.jsonl` holds an entry a line: `step_index`,
+  `source`, `type`, `status`, `created_at`, and `content` or `tool_calls`. The user's message is `source`
+  `USER_EXPLICIT`, `type` `USER_INPUT`, its text wrapped in `<USER_REQUEST>` with metadata blocks after it. Each
+  answer of the model is `source` `MODEL`, `type` `PLANNER_RESPONSE`, with `model` and token counts, and `content`
+  (the text it wrote, whole: 5,010 characters for the long reply) or `tool_calls` (`[{name, args}]`) for an answer
+  that only calls tools. A tool's result is `type` `GENERIC` with the result as `content`. `transcript.jsonl` beside
+  it has the same entries with long fields cut (`truncated_fields`, 4,119 characters of that reply). Each is
+  mirrored under `chunks/<name>/00000000.jsonl`; a second chunk was never seen. When `Stop` fires the turn's last
+  answer is already in the file (read by the hook itself); a cancelled turn and a failed one leave nothing after the
+  user's message, and `Stop` of a failed turn (`terminationReason` `ERROR`) carries the error and no reply. A
+  real model's conversations (seven on this machine, their shape read and none of their text) hold two more kinds
+  of entry, both `source` `SYSTEM`: `type` `SYSTEM_MESSAGE` with `content`, seen after a `USER_INPUT`, between two
+  answers and after the last answer, and `type` `ERROR_MESSAGE` with `error` and no `content`, seen between a
+  `USER_INPUT` and the `PLANNER_RESPONSE` that answered it all the same. Neither is an answer or ends a turn
+  (`testdata/antigravity_transcript_system_lines.jsonl`, the same shapes with made-up text).
+- **Which turn a `Stop` is of.** `Stop` names no step, but its `lastUserInput` is the turn's message, and the
+  transcript's `USER_INPUT` holds exactly that text between `<USER_REQUEST>\n` and `\n</USER_REQUEST>` at the start
+  of its `content` (a message of two rows included). The turn cannot be taken to be the last in the file: a message
+  written during a turn is held and sent by the CLI itself when the turn ends, and its `USER_INPUT` was appended
+  0.17 s after the turn's `Stop` hook ended and its answer 0.32 s after (one held message; 0.50 s and 0.59 s with
+  two, which went out as one message of two rows, `lastUserInput` `held message one\nheld message two`;
+  `testdata/antigravity_transcript_held_messages.jsonl`). `fullyIdle` was `true` and `continuationActive` `false`
+  in every `Stop`, the one with a message held behind it too, so neither says a turn follows. So the reply of a turn
+  is the `content` of the last `PLANNER_RESPONSE` between the last `USER_INPUT` that is the `Stop`'s message and the
+  `USER_INPUT` after it. Where the held message has the very text of the turn's own, the two cannot be told apart
+  and the later one is taken. A `Stop` whose message no entry of what was read holds gives no reply, and the
+  report's cut `msg` stands.
+- **The path `Stop` gives** is spelled as the launch gave its directory: `--gemini_dir=/tmp/…/launch/../launch`
+  (`/tmp` a link) gave `transcriptPath` `/tmp/…/launch/antigravity-cli/brain/<id>/…`, the `..` folded and no link
+  resolved; resolved, it is `<home>/.gemini/antigravity-cli/brain/<id>/…`. Octoboard takes the path only where it is
+  written as the launch directory of the session the payload was posted for spells that conversation's transcript
+  (`<the session's scratch directory>/antigravity/antigravity-cli/brain/<id>/.system_generated/logs/transcript_full.jsonl`,
+  the scratch directory being the one the daemon made for that session's process), compared as the host reads one
+  path before anything is resolved, then resolves it and requires it to be that transcript right under what the
+  launch's own link to the data directory resolves to, so that link is the one followed: a file of the same shape
+  anywhere else, another session's launch directory included, is not opened, nor one a link below the data
+  directory leads to, and a `Stop` that reaches a session with no process gives no reply. It reads the last 4 MiB of the file at most (`testdata/antigravity_transcript_full.jsonl`), and the
+  report's cut `msg` stands where nothing is read.
+- **A cancelled turn** reports `working` and then `idle` with no `done` and fires no `Stop` (above), which the
+  program status path reads as a cancel: the session is at its prompt, paused, and no report goes to its owner.
+- **What a session changes in the launch's own files is lost with the session.** The launch's directory holds its own
+  `config/hooks.json`, `config/mcp_config.json` and `GEMINI.md`, and `config/config.json` becomes a file of the
+  launch's once the CLI writes it (above). So a server added with `agy mcp add` from inside a session (measured), a
+  plugin switched on or off (measured for a user who had no `config.json`), and whatever is written to the launch's
+  copy of `hooks.json` or of the global rule file `GEMINI.md` are gone when the session ends, and nothing is carried
+  back into `~/.gemini`. Not so a rule file in `config/rules/`: every other entry of the home's `config/` is a link
+  in the launch's, so a file written into a `config/rules/` the home already has lands in the home and stays (by the
+  layout; what a session does for a home with no `config/rules/` was not measured). The window therefore names
+  hooks, MCP servers, plugin choices and `GEMINI.md`, and not "rules" (`provider.antigravity.sessionNote`, shown under
+  the agent's name in its settings). To keep such a change, make it in `agy` run directly, outside Octoboard: every
+  later session reads it from the home.
+- **A link to a directory that is missing is not followed to make it.** With the launch's `antigravity-cli` a link
+  to a `~/.gemini/antigravity-cli` that does not exist (the home with no `.gemini`, and with an empty one), the CLI
+  ended with status 1 (`creating log directory: mkdir <launch>/antigravity-cli: file exists`) and made nothing in
+  the home. With `antigravity-cli` there and `config/projects` such a link, it failed the same way at its first
+  conversation (`create projects dir …: file exists`). With no `projects` entry at all it made
+  `config/projects/default-cli-project.json` in the launch's directory and ran. So a launch can only reach a home's
+  directories that exist: where they do not, Octoboard makes those two (`antigravity-cli` and `config/projects`)
+  before it links them. The user ruled this allowed on 2026-11-23, and no exception to the rule that Octoboard
+  leaves the user's own system as it was: "Those directories are things `~/.gemini` has anyway; they are not created specially for our application. I consider this allowed. You are over-controlling; it is not an exception, it is expected behaviour."
+- **The listing through a directory of its own.** `agy --gemini_dir=<a fresh directory holding an empty
+  config/.migrated> models`, with the user's own `HOME` and sign-in, printed the same six models as `agy models`
+  (`Fetching available models...` goes to its standard error) with status 0. Nothing under `~/.gemini` changed
+  (`find -newer` a file made before the run); in its own directory it left what a first start leaves
+  (`antigravity-cli/` with its database, log and cache, `config/config.json`, `mcp_config.json`, `projects/`).
+  Octoboard lists the models this way: the directory is made under its own run directory, private to the user,
+  given its marker, and removed after the run however it ended. The earlier-layout refusals are still asked first,
+  so a home a launch would be refused for lists nothing and says why.
+- **Trust given by the launch's settings.** With `trustedWorkspaces` naming the working directory in the file
+  given with `--settings`, a launch in a home that had never trusted the folder showed no trust screen, ran a turn,
+  and left the home with no `settings.json` at all: nothing was recorded.
+- **Whether the keychain item exists can be asked without a prompt** (macOS 26.2, the user's own keychain).
+  `/usr/bin/security find-generic-password -s gemini -a antigravity`, with no `-w` and no `-g` so that it asks for
+  the item and never its secret (its output was discarded), ended with status 0 in 0.02 s for the item that is
+  there; the same for an account name that has no item ended with status 44 (`The specified item could not be found
+  in the keychain`) in 0.04 s. Neither waited on anything, so no authorisation prompt was raised. Octoboard asks
+  exactly this for the default account on macOS, through its generic question of an item's presence
+  (`crate::accounts::credential_presence`, the provider naming only the item), bounded to 5 s, its output dropped
+  unread: status 0 reads signed
+  in (with no address: nothing on disk gives one), 44 signed out, anything else "cannot tell". Where the shell
+  environment holds a `GEMINI_API_KEY`, a missing item reads "cannot tell" instead: the key route needs no item and
+  that route does not establish a Google sign-in. On Windows Octoboard asks for the generic target
+  `gemini:antigravity` in the daemon's logon session. On Linux it uses Secret Service's `SearchItems`,
+  as described under "Sign-in". A locked match counts as present. A store that cannot be reached or
+  does not answer in 5 s leaves presence unknown.
+- **Instruction files that are links to one file give the model the text once.** In a working directory with
+  `AGENTS.md` and, as links to it, `GEMINI.md`, `CLAUDE.md`, `QWEN.md` and `.github/copilot-instructions.md`, the
+  text was in the model's request once, named as `GEMINI.md`.
+- **`--gemini_dir`** is still taken by 1.5.14, the newest version this machine has. The CLI updates itself in the
+  background, so an update that drops the flag stops every Antigravity CLI session with
+  `provider.antigravity.launch_directory_flag_not_taken` until the provider is changed.
+
+### Capabilities measured on 1.5.14 (2026-11-23)
+
+Against the stand-in in scratch homes unless a line says otherwise. Two turns ran through a real model with the
+user's sign-in, each with `--gemini_dir=<a scratch directory>` under the user's own `HOME`, `gemini-3.8-flash-low`,
+a scratch working directory trusted through `--settings`, and the first-launch wizard skipped by
+`cache/onboarding.json`; neither touched `~/.gemini`.
+
+- **The task title.** The terminal title is set only to what a `title` command prints: `"title": {"type":
+  "command", "command": …}` is a key of the settings (`windowTitle` and `terminalTitle` are refused as unknown),
+  run through the shell (quotes and `$HOME` in it are the shell's) at each change of the agent's state, with a JSON
+  payload on its standard input: `cwd`, `session_id` and `conversation_id` (both empty until the first turn),
+  `transcript_path`, `model` (`id`, `display_name`, `effort`), `workspace`, `version`, `context_window`,
+  `product`, `agent_state` (`authenticating`, `idle`, `working`), `sandbox`, `terminal_width`. The release notes say
+  a `conversation_title` field was added in 1.1.27; it was absent from every payload, before and after the title was
+  generated. The CLI writes the printed text as an OSC 2 title when it changes, and an empty title as it exits. The
+  title it generates in the first turn (a request of its own to a lighter model, "You are a conversation title
+  generator") is kept in `antigravity-cli/annotations/<conversation id>.pbtxt` as one line `title:"<text>"`, `"` and
+  `\` escaped and CJK kept as UTF-8 (`title:"苹果 \"quoted\" title"`; the real turns' were `title:"Create Hello File
+  And Ls"` and `title:"Create And Remove File"`), and in `conversation_summaries.db` (`conversation_summaries.title`).
+  A command reading the annotation set the title 0.3 s into the first turn. So each launch gives a title command of its
+  own in its `--settings`: Octoboard's title helper (`octoboardd agent-helper --provider antigravity --helper title --
+  <annotations>`), which prints the annotation's title and `task_title` unescapes. It needs no script or tool of the
+  host's; its command line is a POSIX shell's, as the hook commands are, so how it reaches the CLI on Windows, not
+  measured, is the hooks' too. The launch's `title` stands in place of a title command of the user's own for the session.
+- **Effort.** `--effort` is the level a model id carries: with the base id (`--model gemini-3.8-flash --effort
+  medium`) the request went to `gemini-3.8-flash` with `thinkingConfig.thinkingLevel` `MEDIUM`, the same as
+  `--model gemini-3.8-flash-medium`; the base alone runs its default level (`MEDIUM` for Flash). A level the base has
+  no id for is refused (`error: invalid model selection (--model "" --effort "medium"): gemini-3.1-pro has no "medium"
+  effort (available: low, high)`), so is another level beside a leveled id (`--model gemini-3.8-flash-high conflicts
+  with --effort=low`), each with status 1 before any turn. With the user's account `--effort` for
+  `claude-sonnet-4-6` and `claude-opus-4-6` was refused (`--effort is not supported for model …`), and
+  `--model gpt-oss-120b --effort medium` and `--model gemini-3.8-flash --effort high` were taken (`-p "/usage"`, no
+  turn). So the catalogue lists the ids of one base as one model under the base id with its levels as efforts, and a
+  model whose id and label name no level keeps its id and takes none. With no `--model`, `--effort` applies to the
+  CLI's default model (2026-11-24, scratch home against the stand-in, `-p`): `--effort high` sent `gemini-3.1-pro` a
+  `thinkingBudget` of -1 where `--effort low` and no flag sent 1024, and `--effort medium` was refused as above. The
+  interactive CLI does not refuse it (2026-11-24, the same home, a PTY at 120x40): `--effort medium` alone drew a
+  warning under the start banner, `gemini-3.1-pro has no "medium" effort (available: low, high). Using "Gemini 3.1 Pro
+  (Low)" instead.`, then the empty input box with `Gemini 3.1 Pro · low` in the footer, and the session went on. A
+  launch with an effort and no model passes `--effort` alone; which model is the default is the CLI's, so Octoboard
+  cannot refuse a level beforehand, and the CLI's warning is what says that another level is used.
+- **`--mode plan`** (one real turn, asked to create a file and run `ls`): its first model call was a `write_file`,
+  which reached the permission prompt ("Allow creation of this file?") as in the default mode; nothing was answered
+  and no file was written. The executable's prompt says "Editing tools are refused while plan mode is on"; they were
+  not. It does not behave as its name says on 1.5.14, so it is not offered.
+- **`--mode auto`** (one real turn, asked to create a file, run `ls` and run `rm -rf ./hello.txt`): all three ran with
+  no prompt, `PreToolUse` and `PostToolUse` around each, then `Stop` `NO_TOOL_CALL`; the box's hint is `Auto mode:
+  edits & safe commands auto-approved (shift+tab to cycle)`. Offered as `auto`. `/config` in print mode lists
+  `agentMode` `auto` as the default, and a signed-in launch with no `--mode` shows that hint.
+- **Images.** An image file's path pasted on its own is taken as an attachment: the row above the box reads
+  `▸ 📎 1 media attached (file, 168 B, image/png)  (ctrl+o to expand)`, then `▸ 📎 2 media attached  (ctrl+o to
+  expand)`, and the next message carries each as `inlineData` (`image/png`) with `The user has uploaded 2 image(s):`
+  in its metadata. An Enter right behind such a paste is lost; a path with other text in the paste stays text. Ctrl-U
+  does not take an attachment away, Esc on an empty box does. A sent message shows `📎 2 image(s) (336 B)`.
+- **Slash commands.** `/` opens a completion under the box (`> /add-dir  Add a directory to the workspace`, five
+  rows and `↓ 39 more`, then `↑/↓ Navigate · enter Select · tab Complete`). A pasted prefix highlights the first match
+  (`/cha`: `> /changelog`) and an Enter completes the box to it without running it; an exact name runs on Enter
+  (`/changelog` opened the changelog); an unknown one shows `No matches`, and an Enter puts `Unknown command:
+  /nosuchcmd` in the box. With arguments the completion offers the argument's values (`/model gemini-3.1-pro-high`:
+  `> Gemini 3.1 Pro (High)  gemini-3.1-pro-high`) and an Enter ran it (`Model set to Gemini 3.1 Pro (High)`). A
+  message pasted with a space before its slash was sent as text, the space dropped.
+- **Background commands.** A `run_command` that outlasts its `WaitMsBeforeAsync` goes on as a task: its result to the
+  model is `Tool is running as a background task with task id: <conversation id>/task-2`, with the description and a
+  log under `brain/<id>/.system_generated/tasks/`; the turn ends with `Stop` `fullyIdle: false`, and no `done` report
+  comes (the status stays `working`). The panel `● [22:50:05] sleep 6; echo finished-bg running` sits between the
+  box and a rule of its own above the footer, which reads `1 task(s) · /tasks`. When the task ends, its
+  `PostToolUse` fires (same call id), the CLI hands the model a `SYSTEM_MESSAGE` (`sender=<task id>`, `Task id "…"
+  finished with result: …`, a `SYSTEM` entry of the transcript) and runs a turn of its own on it, firing
+  `PreInvocation` / `PostInvocation` and a `Stop` with `fullyIdle: true`, and only then reports `done`. The model is
+  also offered `manage_task`, `invoke_subagent` (it "runs in the background … and sends you a message when it
+  completes"), `send_message`, `schedule`, `define_subagent`, `manage_subagents`, `run_workflow` and `swarm`.
+- **Subagents.** `define_subagent` then `invoke_subagent` (`TypeName`, `Role`, `Prompt`) in one answer: the call
+  returns at once (`Created the following subagent:` and its `conversationId`; an unknown type name fails with
+  `subagent "general" not found or not allowed to be invoked`), the screen shows `Spawned 1 subagent` and a panel row
+  `● Agent(sleeper: Probe Sleeper) · Gemini 3.1 Pro  Working · 1s` with `1 subagent(s)` in the footer, and the
+  session's turn ends with `Stop` `fullyIdle: false` and no `done`. The subagent's conversation runs through the same
+  hooks: `SessionStart`, its model calls' pairs and its own `Stop` (`fullyIdle: true`), each under its own
+  `conversationId`, with `lastUserInput` empty (its task reaches it as a `SYSTEM_MESSAGE` from the session's
+  conversation), where every event of the session's own conversation names the message its turn answers; a message
+  of attached images alone is not sent (an Enter on a box holding only an attachment sent nothing). When it ends, the
+  session's conversation gets a `SYSTEM_MESSAGE` (`Subagent <id> has gone idle. This was the subagent's most recent
+  response: …`), runs a turn of its own on it, and its `Stop` says `fullyIdle: true`; then comes `done`. The
+  conversation's `.system_generated/subagents/<id>.json` holds its type name, role and state. The subagent's row sits
+  in the panel under the box as a command's does (`● Agent(sleeper: Probe Sleeper) · Gemini 3.1 Pro  Working · 1s`),
+  and a permission prompt drawn while it runs hides the panel with the box.
+- **Which conversation a turn is of.** Every turn of the session's own conversation the CLI was seen to start by
+  itself names the user's last message as `lastUserInput`, as the turns the user starts do (measured 2026-11-24
+  against the stand-in): the turn on a background command's result and the one on a subagent's hand-back (above),
+  the turn on a `schedule` timer that fired (`DurationSeconds` 3: `PreToolUse`, `Stop` `fullyIdle: false`, the
+  timer's `PostToolUse` 3 s later, then a turn and `Stop` `fullyIdle: true`), and `/compact` (a `Stop` naming
+  `/compact`, `terminationReason` `TERMINAL_CUSTOM_HOOK`). A subagent's turns name it empty: its first, and the one a
+  `send_message` from the session starts once it has gone idle (a `Stop` alone, `fullyIdle: true`, under the
+  subagent's conversation id). After a resume (`--conversation <id>`) the CLI started no turn of its own: a subagent
+  and a timer left running when the previous process ended (`SIGTERM`; the timer's `PostToolUse` fired as it ended)
+  were not taken up again, and the first event was the `Stop` of the user's next message.
+- **How Octoboard reads the background work** (`apps/daemon/src/adapter/antigravity/background.rs`): a command whose
+  `PreToolUse` came and whose `PostToolUse` had not at a `Stop` with `fullyIdle: false` is listed by its call id, its
+  command line as the description, and its `PostToolUse` takes it off; a subagent's events (told by their empty
+  `lastUserInput`) list it under its conversation id from its first event, described by the role it was invoked with
+  where it was the only one waiting, and its own `Stop` with `fullyIdle: true` takes it off; the session's `Stop` with
+  `fullyIdle: true` empties the list. A subagent's events are read for nothing else, so its conversation id is never
+  taken for the session's. A command whose prompt was declined fires its `PreToolUse` alone, and is dropped once a
+  turn on another message begins. A turn is told by its message alone: no event Octoboard registers names the turn
+  (`Stop`'s `executionNum` was 0 for every turn; `stepIdx` counts the conversation's steps), so a command declined
+  before a turn on the same text is listed with a command that turn leaves running, until the `Stop` with
+  `fullyIdle: true` that follows the running one's end. A `schedule` timer or cron job is listed and taken off as a
+  command is, under the kind `schedule` (the tool's name; the CLI names no kind for it), described as the CLI draws
+  the call: `4s: check the build`, `* * * * *: cron fired`.
+- **Timers and cron jobs** (measured 2026-11-24 against the stand-in, with the hooks registered as the launch registers
+  them; `apps/daemon/testdata/antigravity_hooks_schedule_timer.jsonl` and `…_schedule_cron.jsonl`). `schedule`
+  takes `Prompt` and either `DurationSeconds` (a one-shot timer) or `CronExpression` (with `MaxIterations`,
+  `IsDaemon`, `ExactTiming`), and also `TimerCondition`; the CLI's description says it "runs as a background task and
+  returns immediately" and that `manage_task` cancels it. A timer (`DurationSeconds` 4, `Prompt` `check the build`)
+  fired `PreToolUse`, then the turn's `Stop` with `fullyIdle: false`; the screen showed `Scheduling 1 timer (4s: check
+  the build)`, the panel row `● [02:07:53] 4s timer running` and `1 task(s)` in the footer. When it fired, its
+  `PostToolUse` (the same call id) came, then the CLI's turn on the prompt (a `SYSTEM_MESSAGE`) and a `Stop` with
+  `fullyIdle: true`, and the panel was gone. A cron job (`* * * * *`, `MaxIterations` 2) drew `Scheduling 1 cron (* *
+  * * *: cron fired)` and the row `cron (every minute) running`; its first run was a turn of its own ending in a `Stop`
+  with `fullyIdle: false` and no `PostToolUse`, and its second and last run fired its `PostToolUse` before its turn,
+  whose `Stop` said `fullyIdle: true`. A timer cancelled through `manage_task` (`Action` `kill`, `TaskId` as its
+  call's result names it, `<conversation id>/task-2`; `apps/daemon/testdata/antigravity_hooks_schedule_cancelled.jsonl`)
+  fired its own `PostToolUse` (its call id) right after the `manage_task` call's, then that turn's `Stop`; the screen
+  drew `Killed 1 task (task-2)` and the panel dropped its row (`15m timer running`), keeping a cron job's
+  (`cron (daily at 03:00) running`) scheduled beside it.
+- **Interactions.** Measured against the stand-in in the default mode. On a permission prompt a digit answers its row at
+  once (`2` on the command prompt allowed it for the conversation, `4` declined it, `1` allowed an MCP call), Down moves
+  the highlight and shows the rows not drawn at first, and Tab ("Amend") on a "No" row did nothing visible and a paste
+  after it was not taken. The command and MCP prompts offer six rows: allow, allow such calls in this conversation,
+  allow them "(Persist to settings.json)", deny, deny them in this conversation, deny them "(Persist to settings.json)";
+  the file prompts two. A rule kept "(Persist to settings.json)" goes into the user's own settings file. On
+  `ask_question` a digit on a question of one choice picks its option and goes on to the next question, or sends the
+  answers after the last; on a question of several choices (`[ ]` / `[x]` before each option) a digit ticks or unticks
+  its option and moves the highlight there, space toggles the highlighted one, and Enter takes the ticked ones and goes
+  on; the digit of `Write-in...` opens `Your answer:` under the rows, a paste goes into it and Enter takes it and goes
+  on (on the first question of two as on the last); Esc skips the question on the screen, the model being told `User
+  Skipped`, and on the last sends the answers. The model got `A1: Beta`, `A2: Red, Blue`, `A3: custom answer`. Octoboard
+  publishes both kinds (`apps/daemon/src/adapter/antigravity/interaction.rs`): a permission prompt with every row it
+  draws, none taking text, answered by the row's digit, each row that keeps a rule (in this conversation or "(Persist to
+  settings.json)") as remembering the answer under the CLI's own label, so the user chooses where it is kept as in the
+  terminal; the form only as the CLI drew it (its first question, nothing ticked, the highlight on the first option), a
+  written answer offered on questions of one choice only (one on a question of several choices was not measured),
+  skipped with Esc question by question.
+- **Command groups at exit.** A command's shell (`zsh -c …`) is a child of `agy` and leads a process group of its
+  own. A hang-up of the terminal and an exit by Ctrl-D twice each ended the command, but a subshell of it that ignored
+  SIGHUP, SIGTERM and SIGINT outlived both, still running in that group. So `ends_command_groups_on_exit` stays off.
+- **Native memory.** None of its own: the model is offered fourteen tools (`read_file`, `run_command`,
+  `manage_task`, `send_message`, `schedule`, `invoke_subagent`, `define_subagent`, `manage_subagents`, `write_file`,
+  `edit_file`, `search_web`, `run_workflow`, `swarm`, `ask_question`), none for a memory, the system prompt names no
+  memory, `/config` lists 38 settings and none for one, and the real conversations left no memory or knowledge
+  entry in their directory. The executable holds memory and knowledge fields (`disable_memory`,
+  `knowledge_base_items`, …) of the protocol it shares with the Antigravity app; nothing in the CLI was seen to use
+  them. `GEMINI.md` is the user's own rule file, not a memory. Declared `NativeMemory::Absent`.
+
+### Plan quota
+
+Measured on 1.5.14 on 2026-11-22 with the user's own sign-in, a personal Google account on the free plan (the banner's
+"Antigravity Starter Quota"), every run with `--gemini_dir=<a scratch directory>` under the user's own `HOME` and
+`AGY_CLI_DISABLE_AUTO_UPDATE=true`. No prompt was sent, so no turn ran.
+
+- **Print mode answers `/usage` without a turn.** `agy -p "/usage"` prints one tab-separated record per bucket
+  (`<group>`, `<bucket name>`, `<remaining>%`, `<reset time, UTC, RFC 3339>`) and exits with status 0 after five to
+  nine seconds, with its stdin left open or closed alike. With `--output-format json` it prints one JSON line:
+  `{"conversation_id": "", "status": "SUCCESS", "response": <the text>, "num_turns": 0, "usage": {… all 0},
+  "command": {"name": "usage", "data": {"description": …, "groups": [{"name", "description", "buckets": [{"id",
+  "name", "description"?, "window", "remaining_fraction", "reset_time"}]}]}}}`. On the free plan there were two groups
+  of one bucket each: "Gemini Models" ("Models within this group: Gemini 3.8 Flash") with `id: "gemini-weekly"`, `name:
+  "Weekly Limit Remaining"`, `window: "weekly"`, `remaining_fraction: 0.9565528035163879`, `reset_time:
+  "2026-11-28T16:35:55Z"`; and "Claude and GPT models" (Claude Sonnet 4.6, Claude Opus 4.6, GPT-OSS 120B) with `id:
+  "3p-weekly"`, `remaining_fraction: 1` and a `reset_time` a week from the reading that moved by a few seconds between
+  readings: a window nothing has been spent in has not begun to count. `remaining_fraction` is what is left, not what
+  is used. `/quota` is the same command; `-p "/help"` lists the commands print mode answers (`/agents`, `/changelog`,
+  `/config`, `/credits`, `/effort`, `/help`, `/hooks`, `/model`, `/permissions`, `/plugin`, `/skills`, `/usage`).
+- `-p "/credits"` failed on this account: status 1, `"status": "ERROR"`, `"error": "/credits failed: retrieving credits:
+  no credits info found"`. By the CLI's own release notes (in the executable), an API-key connection has no account
+  quota and these commands exit with status 2 there; that was not run.
+- **The `/usage` panel in the TUI** ("Models & Quota") shows the account's address, then per group its models, "Weekly
+  Limit Remaining", a bar with the percentage to two decimals, and "Refreshes in 151h 0m", or "Quota available" for
+  the window nothing was spent in.
+- **What a reading writes, and where.** Into the directory `--gemini_dir` names it wrote what any first start writes
+  (`antigravity-cli/builtin/`, `cache/`, `log/cli-<time>.log` with `cli.log` linking the latest, `implicit/<uuid>.pb`,
+  `installation_id`, `jetski_state.pbtxt`, `conversation_summaries.db`; `config/config.json`, an empty
+  `config/mcp_config.json`, `config/.migrated`, `config/projects/`), about 1 MB, plus a log and an `implicit/` file
+  per run. A fresh, empty directory needs nothing prepared: print mode shows no first-launch wizard. The user's
+  `~/.gemini` (340 files and directories hashed before and after) was unchanged by every run of this section, and so
+  were the keychain item's modification date and `~/Library/Application Support/antigravity/credential-user-scope`
+  across a reading. Run without `--gemini_dir` the same command would write those files into the user's `~/.gemini`
+  (not run there).
+- **Octoboard's reading** (1.5.14, 2026-11-24): two fresh signed-in probes on the free account returned the
+  two weekly groups in 5.5 and 5.8 seconds, with zero model turns. The JSON names both groups and gives no plan
+  name. The provider uses `weekly_model` with the group label, giving “Gemini Models weekly” and “Claude and GPT
+  models weekly” in the English window labels. The probe preserves the shell's home for the keychain, disables
+  automatic update and supplies a private directory via `--gemini_dir`. It clears that directory when the run
+  ends, including the log and `implicit/` residue. It sends no input and offers no command to start a quota
+  window. Development-window rendering still needs a smoke check.
+- **Signed out** (1.5.14, 2026-11-24): with an isolated home and no Google sign-in, the command wrote authentication
+  and waiting messages to stderr and no JSON reply within 60 seconds. A timeout does not establish the account's
+  sign-in state. After a failed quota read, the poll uses Antigravity's independent credential presence check.
+  A signed-out result reports that the account is not logged in. A signed-in or unknown result keeps the quota failure.
+- **Sources that gave nothing more**: the ACP mode (`agy acp`): `session/new` names the plan
+  (`result._meta.antigravity.tier`: `{"name": "Antigravity Starter Quota", "id": "free-tier", "upgradeUri": …}`) and no
+  quota, its `usage_update` is the context window (`used`, `size`), and `usage` and `_usage` are refused with -32601;
+  the log, which holds no quota figure; and the files under the directory. The status line can show quota too (a
+  custom `statusLine` command is given a JSON payload with quota buckets, by the release notes), but only inside a
+  running TUI; not measured.
+
+### Not measured
+
+Successful completion of Google OAuth and hosted quota on Linux. On Windows, the user waived the interactive
+session lifecycle beyond the first-run Terms of Service & Data Use screen.
+Whether `transcript_full.jsonl` is ever cut into several chunk files; an organisation account through **Use a Google
+Cloud project** or an account with a real Gemini API key; quota and AI credits on Google AI Pro or Ultra (the free
+plan showed two weekly windows and `/credits` reported "no credits info found"); the status line's payload; a
+subagent resumed by `send_message`, and the role of each of several subagents invoked at once; a written answer to a
+question of several choices; the ACP mode beyond `initialize` and `session/new`; how the title command runs on
+Windows.
+
+### ACP mode
+
+Measured on 1.5.14 on 2026-11-22 with `agy acp --gemini_dir=<a scratch directory>`, signed in on the free plan
+through the keychain item. The probe wrote `initialize` (protocol version 1, no client capability) and then `session/new` (a
+scratch working directory, no MCP server) as JSON-RPC lines on stdin, read the answers, sent no prompt, and ended the
+input.
+
+- `initialize` was answered after 5.7 s: `agentInfo` (`Antigravity ACP Server`, the CLI's version), four
+  `authMethods` (`oauth-personal`, `oauth-business`, `gemini-api-key`, `agent-platform`) and capabilities for loading,
+  resuming, closing and listing sessions.
+- `session/new` was answered 4 s later with `sessionId`, `models`, `modes`, `configOptions` and `_meta`:
+  - `models.availableModels` is the six ids `agy models` prints, with the same labels, and `currentModelId`
+    (`gemini-3.8-flash-high`).
+  - `configOptions` splits model and effort, which `agy models` does not: `model` lists four base models
+    (`gemini-3.8-flash`, `claude-sonnet-4-6`, `claude-opus-4-6-thinking`, `gpt-oss-120b-medium`), and `thought_level`
+    (`low`, `medium`, `high`) is the effort of the current one. Whether the levels differ per model was not measured:
+    that takes setting the session's model.
+  - `modes`: `default`, `accept-edits`, `auto`, `plan`, each with a description.
+  - `_meta.antigravity.tier` names the account's plan: `{"name": "Antigravity Starter Quota", "id": "free-tier",
+    "upgradeUri": …}`.
+- Two notifications followed: `available_commands_update` (eleven slash commands with descriptions) and
+  `usage_update` (`used: 0`, `size: 1048576`, the session's context).
+- The session left a conversation database in the directory (`antigravity-cli/conversations/<session id>.db`), beside
+  what any first run creates there. The process exited by itself 0.4 s after its input ended.
+- Nothing was spent: no prompt was sent, and the session's usage read 0.
+
+No provider code uses it yet.
+
+## GitHub Copilot CLI
+
+Unless stated otherwise, measurements used 1.0.114 (macOS,
+the npm package `@github/copilot`) in a scratch home and working directory, with no sign-in: Copilot was pointed at a
+local stand-in for the model (`COPILOT_OFFLINE=true`, `COPILOT_PROVIDER_BASE_URL`, `COPILOT_MODEL`; `copilot help
+providers-env`), which answered with scripted text and tool calls. The native executable holds no readable code, but
+on first use it unpacks its JavaScript into the cache directory (`pkg/<platform>-<arch>/<version>/`, `cli-main.js` among
+it), which can be read; a fact taken from there says so. What is still open is listed under "Not measured" at the end.
+
+**Windows 11 ARM64 (23H2, build 22631.6199).** npm's global install in a scratch prefix wrote
+`copilot.cmd`. It ran on ARM64 Node 26.13.0 and reported **1.0.114**. The first invocation in a fresh
+profile spent 26.5 s extracting its package. The install's manifest lets Octoboard read its
+version without waiting for that extraction. In an interactive scheduled task, Octoboard's
+inbox-ConPTY login flow reported success after the browser device authorization. There was no
+plaintext-storage question. The bundled-host attempt ended before displaying a device page.
+The desktop Credential Manager listing showed two Copilot-labelled GitHub entries. The native
+reader in that desktop logon reported signed in for the existing account and signed out for
+a scratch home naming an absent login. No credential dialog appeared. The daemon's
+signed-in SDK probe reported a credit-period window, and one native CLI turn returned the
+verification word. The sandboxed project test detected the folder-trust prompt and pressed it.
+Afterwards the Windows composer drew `╻▄▄`, `┃`, and `╹▀▀` for its border, with one space
+between `┃` and a typed draft. It drew no `❯` input marker. The provider now recognises this
+complete frame. The rebuilt daemon sent a prompt after project trust. The stand-in used
+the session read, report and instruction tools, and the expected sessions received the
+report and instruction. The daemon interrupted an active local request and archived the
+project. The resumed project sent again without a new folder trust prompt.
+
+**Linux daemon** (1.0.114, Debian 13 arm64, glibc 2.41). A disposable account used the login flow below and
+a local model stand-in. The console and trusted project session ran a turn, reached the injected Octoboard
+MCP server, exchanged an instruction and a report, interrupted a turn and relaunched after archive. The
+daemon's SDK quota probe returned `quota_not_signed_in` and no window with the simulated login. A hosted
+device login using the container's Secret Service then let a private CLI SDK probe verify the saved login
+and read the Free plan's `chat` AI credits with a remaining percentage and reset epoch. The probe used
+`auth.getStatus`, `session.create` and `session.quota.refresh`. Its first 60-second attempt received no
+authentication reply. The successful retry precreated its log directory and allowed up to 120 seconds
+for that reply. The source `COPILOT_HOME` file contents were unchanged in both attempts. A follow-up trace
+captured Copilot directly executing the SessionStart, UserPromptSubmitted and AgentStop scripts, each with a
+`/bin/sh` shebang.
+
+**Launch and resume.**
+
+- `--session-id=<uuid>` starts a new session under that id. The id has to be a valid UUID (version and variant
+  included): any other value is refused with "The value is not a valid UUID, so a new session cannot be created" and
+  exit status 1. Given the id of an existing session it resumes that session instead.
+- `--resume=<id>` resumes; for an id that matches nothing it prints "Error: No session, task, or name matched '<id>'."
+  and exits with status 1, where `--session-id=` would have started a new session.
+- A resume changes to the directory recorded for the session unless `COPILOT_DISABLE_RESUME_AUTO_CD` is `1` or `true`;
+  with it set, the resumed session ran in the directory it was started in.
+- `-i <prompt>` starts interactive mode on a prompt; `--model <id>` and `--reasoning-effort <level>` are plain flags.
+  A prompt that starts with `-` is refused as an option when it is an argument of its own (`error: unexpected argument
+  '--resume is how this task starts' found`); joined to the long flag, `--interactive=<prompt>`, it is taken whole.
+- The `copilot` npm installs is a Node loader (`npm-loader.js`) that starts the platform package's native executable
+  (`node_modules/@github/copilot-<platform>-<arch>/copilot`) as its child with inherited stdio. It forwards `SIGINT`,
+  `SIGTERM`, `SIGHUP` and `SIGQUIT` to the child, and once the child has ended by a forwarded signal it ends itself by
+  the same signal. A `SIGTERM` to the loader ended the session cleanly: the `sessionEnd` hook ran with `reason:
+  "user_exit"`, the session's `events.jsonl` got its `session.shutdown`, no process was left behind, and the loader
+  wrote the escape sequences that leave the alternate screen and turn mouse reporting and bracketed paste off.
+
+**The record.** `$COPILOT_HOME/session-state/<session id>/events.jsonl` is append-only JSON lines, each `{type, data,
+…}`. Among them: `user.message`, `assistant.turn_start` and `assistant.turn_end` (with a `turnId` that counts the model requests of
+one prompt from `"0"`), `assistant.message` (`content`, `toolRequests`), `hook.start` and `hook.end` for every hook,
+`permission.requested` and `permission.completed` (`result.kind`: `approved`, `cancelled`,
+`denied-interactively-by-user`), `abort` when the user cancels a turn (`reason` `user_abort` for Esc twice,
+`user_initiated` for Ctrl-C and for Esc at a permission prompt), and `session.error` (`message`, `statusCode`) when a turn ends in an error. A subagent's lines carry its `agentId`
+beside `type`; the session's own carry none.
+
+What a session keeps (1.0.114): the directory `session-state/<id>/` (`events.jsonl`, `workspace.yaml`,
+`checkpoints/`, `rewind-file-snapshots/`, `files/`, `research/`), the lock
+`session-state/.session-operation-locks/<id>.lock`, and the index database `session-store.db` beside the records
+directory. The session directory is the record Octoboard locates and follows through `events.jsonl`. Removing the
+conversation removes its directory and its operation lock. Copilot's index retains the row until Copilot updates it.
+A resume of an id with no directory is refused even if the index still has its row.
+
+- **A carried directory is sufficient.** In two Copilot homes of the same macOS keychain login, the destination
+  opened the original prompt and response after receiving just the session directory. Copilot registered the
+  carried id in its own index after a rename in the resumed session. Octoboard carries the session directory.
+- **History and the live feed.** `user.message.data.content` and `assistant.message.data.content` hold the prompt and
+  reply. A subagent's events have `agentId`; completion notices have their own event type, and a
+  `<system_notification>` prompt is synthetic. The live feed also reads `tool.execution_start` and
+  `tool.execution_complete`, paired by `toolCallId`, with completion status and output. In the measured runs
+  Copilot flushed complete events in batches. The feed updates as those batches arrive.
+- **Rewind rewrites the file.** After two stand-in turns, selecting the second turn and then **Conversation only**
+  removed its events from `events.jsonl` and appended a `session.info` with `infoType: "rewind"`. The file now had
+  only the first turn. The readers rebuild from the rewritten file. The `id` and `parentId` fields alone are
+  insufficient for ancestry-based filtering, since a `session.usage_record` and its `assistant.message` can both
+  name the same parent.
+- **Context.** The latest main `session.usage_record` with `interactionType: "conversation-agent"` gives
+  `usage.inputTokens` and `usage.maxPromptTokens`. With an input of 320 tokens and 200 cache hits, the record had
+  `inputTokens: 320` and `cacheReadTokens: 200`. The real turn recorded 18,293 input tokens with a 922,000-token
+  limit. The terminal's subsequent `/context` showed `19k/922k tokens (2%)`, its rounded estimate after the
+  reply. Octoboard shows the latest recorded request, with the share rounded to a whole percent.
+- **Title.** After the first stand-in prompt `workspace.yaml` had `name: First milestone probe` and
+  `user_named: false`. The hosted model later supplied a generated name for its turn. `/rename Milestone: reader's
+  title` wrote a single-quoted YAML name with a doubled apostrophe and changed `user_named` to `true`. Both
+  automatic and explicit titles are shown in Copilot's terminal, and Octoboard reads both. The captures are
+  `apps/daemon/testdata/copilot_rewound_events_1.0.114.jsonl` and
+  `apps/daemon/testdata/copilot_workspace_title_1.0.114.yaml`.
+
+**Hooks.** A hooks file is `{"version": 1, "hooks": {"<event>": [entry, …]}}`. An entry of `type: "command"` runs
+`bash`, `powershell`, or a shell-free `exec` with `args`; `timeoutSec` defaults to 30; `matcher` is a regular
+expression over the tool's name (for `preToolUse`, `postToolUse`, `permissionRequest`) that has to match it whole.
+
+- **A native payload does not name its event.** Every payload carries `sessionId`, `timestamp` (epoch milliseconds)
+  and `cwd`, and nothing that says which event it is, except `notification`, which carries `hook_event_name:
+  "Notification"`, and `permissionRequest`, which carries `hookName`. So each entry has to be told its event.
+- **`sessionStart` runs with the session's first prompt, not at start-up**: a session started with no prompt ran no
+  hook at all for as long as it sat at its prompt, and ran `sessionStart` (`source: "new"`, `initialPrompt`) just
+  before `userPromptSubmitted` once a prompt was sent. A resume is the same, with `source: "resume"`. No hook runs
+  while the folder-trust prompt is up, with or without `-i`.
+- `userPromptSubmitted` carries `prompt`, verbatim for a bracketed paste of two lines followed by Enter.
+- `preToolUse`, `postToolUse` and `postToolUseFailure` carry `toolCallId`, `toolName` and `toolArgs`; the post events
+  add `toolResult` (`resultType`, `textResultForLlm`) or `error` (a string). There is no turn id in any payload.
+- **The file-writing tools differ by model family, and so does the shape of `toolArgs`.** Asked through a stand-in
+  under each offered model's id, Copilot gives every family but GPT (`claude-*`, `gemini-*`, `grok-*`, `kimi-*`,
+  `mai-*`, and a model it does not know) the tools `create` and `edit`, whose `toolArgs` is an object naming the file as
+  `path` (`{"path", "file_text"}`, `{"path", "old_str", "new_str"}`). The GPT models (`gpt-5.x`, `gpt-6.x`, the codex
+  ones) get neither: they get `apply_patch`, a free-form tool, whose `toolArgs` is **the patch itself as a string**
+  (`*** Begin Patch`, then `*** Add File: <path>`, `*** Update File: <path>`, `*** Delete File: <path>` or `*** Move
+  to: <path>` headers, `*** End Patch`). Which of the two sets a hosted model gets is not told by its name alone: on a Copilot Free account Copilot Fusion
+  chose MAI Code 2 Flash, which called `apply_patch`, where the stand-in under the id `mai-code-1.1-flash` was given
+  `create` and `edit`. So all three are taken as file-writing tools whatever the model. Octoboard's cross-project
+  guard, registered for `(create|edit|apply_patch)`, denied each of the three for a file in another project (the
+  hosted `apply_patch` among them: "Denied by preToolUse hook: Blocked: this file is in project …", no file made) and
+  let a `create` inside the project through. For any of the three the permission prompt's `permissionRequest` names the tool
+  `edit` and carries `toolInput` `{"file_path", "diff"}`, and the notification reads "Edit file: <path>". A `matcher`
+  is, by GitHub's hooks reference, anchored at both ends as a whole (`^(?:…)$`); Octoboard groups its alternatives
+  so that it holds either way.
+- A permission prompt answered "3. No, and tell Copilot what to do differently" runs no post event for the call: the
+  record gets `permission.completed` with `result.kind: "denied-interactively-by-user"`, and the turn carries on to its
+  `agentStop`.
+- One model message that calls a tool needing a prompt and one that does not (`bash` with a `touch`, and `view`) ran
+  both `preToolUse`, then `view`'s `postToolUse`, and only then the prompt's `permissionRequest` and notification: the
+  other call had ended before the prompt went up.
+- **A call can end while another call's permission prompt is up** (2026-11-23). One model message that calls `bash` (a
+  `touch`) and an MCP tool that takes 6 s ran both `preToolUse`, the prompt's `permissionRequest` and notification, the
+  MCP call's `postToolUse` 6 s later with the prompt still on screen, and the `bash` call's `postToolUse` only once the
+  prompt was answered. The notification names no call, but the record does: `permission.requested` carries
+  `permissionRequest.toolCallId` and a `requestId`, which the `permission.completed` repeats, and is made before the
+  notification hook is run. Octoboard holds that call as the one waiting, so the other call's end leaves the hand up.
+- **The record is written to its file in batches, later than its lines' own times** (2026-11-23, a watcher reading
+  the file every 2 ms beside hooks that listed the file when they started). `events.jsonl` does not exist until the
+  session's first prompt; from then on a burst of events reaches the file about 0.1 s after its last event, each new
+  event putting the write off again: the line of a `permission.requested` was in the file 0.16 s after its own time, the
+  first line of a burst up to 0.4 s after, and `permission.completed` and `session.shutdown` within 5 ms. So a hook
+  that reads the record when it starts finds it behind: the notification hook of a prompt did not find the prompt's
+  `permission.requested`, and an `agentStop` hook found neither the turn's last message nor the result of the turn's
+  last call (with the stand-in, whose answers come at once, the whole first turn: the file was not there). Octoboard
+  therefore reads the record for the prompt behind a raised hand half a second after the hand went up, so a call that
+  ends within that time of another call's prompt still lowers the hand. What `agentStop` reads is corrected the same
+  way: the record's own `hook.start` line of that `agentStop` is written with the turn's last lines, so Octoboard's
+  read at a turn's end looks again every 0.1 s, for half a second at most, until that line is in, and only then takes
+  the turn's final message and the work its last call started. A record still behind after half a second gives what it
+  holds, and the rest is read at the next `agentStop`.
+- `permission.completed` is in the file before the call's `postToolUse` hook starts (one run: written 22 ms before the
+  hook, which found it there).
+- **An MCP elicitation raises no notification and leaves no line of its own** (2026-11-23, a stub MCP server whose
+  tool sends `elicitation/create`; Copilot declares `elicitation: {form, url}` to the server). The form was drawn and
+  answered, the server got `action: "accept"` with the content, and the only hooks were the call's `preToolUse`,
+  `permissionRequest` and, 11 s later, `postToolUse`: no `notification` of type `elicitation_dialog` (that type came
+  only with `ask_user`) and nothing in the record between the call's start and its end. The form is drawn on the
+  screen as `ask_user`'s is: `<server> needs information.` above the message and the fields, and a footer ending
+  `ctrl+d decline · esc cancel` whichever field has the focus; a pasted message is dropped there and the Enter answers
+  the focused field (2026-11-23, the stand-in, captures in `apps/daemon/testdata/copilot-captures.md`, "The form").
+  Octoboard reads that screen as a dialog that puts something to the user (`copilot_form`), so the session reads as
+  waiting for the user and holds its writes while the form is up. Copilot also reports `state=blocked:kind=question`
+  over OSC 7501 while it is up.
+- **Copilot does not wait for a `notification` hook.** With the hook's delivery held back 4 s, the prompt was drawn and
+  answered, `postToolUse` and `agentStop` ran, and the `permission_prompt` notification arrived 3.8 s after the turn's
+  end. The record then holds the request completed and a `hook.start` of `agentStop` after it; Octoboard reads that
+  when a notification raises the hand and lowers it again, to working or, the turn over, to idle. In the record a
+  call's `tool.execution_start` comes before its `preToolUse` hook, its `tool.execution_complete` after its
+  `postToolUse` hook has ended.
+- **`permissionRequest` runs for a call that is then allowed without a prompt too** (an MCP tool under an `--allow-tool`
+  rule, a shell command under `--allow-all`), so it does not say that a prompt is up. Its payload is `hookName`,
+  `toolName` (an MCP tool as `<server>/<tool>` here, `<server>-<tool>` everywhere else), `toolInput` and
+  `permissionSuggestions`.
+- `notification` carries `notification_type`, `title` and `message`: `permission_prompt` ("Permission needed") when a
+  permission prompt is drawn, `elicitation_dialog` ("Information requested") when `ask_user` asks.
+- `agentStop` carries `transcriptPath` (the session's `events.jsonl`), `stopReason: "end_turn"` and
+  `stop_hook_active`; it carries no final message. The turn's last `assistant.message` is in the record by then.
+- A subagent's own events (`userPromptSubmitted`, `preToolUse`, `permissionRequest`, `errorOccurred`, `agentStop`) and
+  `subagentStart` and `subagentStop` carry `agentId`, `agentType` and `parentAgentId`; the session's own events carry
+  none of them. `subagentStop` adds `response`. A subagent's `postToolUse` carries them too. One event about a
+  subagent's tool call carries none: the `permission_prompt` notification of its permission prompt, which so reads as
+  the session's own. The answer to that prompt is in the record as a `permission.completed` line with the subagent's
+  `agentId`, and no event of the session's own follows it until the subagent is done. A subagent has no `ask_user`
+  tool: its model's call of it ends with `postToolUseFailure` ("Tool 'ask_user' does not exist."), with no form. A
+  subagent whose model request fails ends the session's `task` call with `postToolUseFailure`.
+- `errorOccurred` carries `error` (`message`, `name`, `stack`), `errorContext` and `recoverable`. **It runs once for
+  every failed model request, retried or final, always with `recoverable: true`**: a request answered with status 500
+  ran it six times over 16 s while Copilot retried, and a request answered with status 400 once. Neither turn ran
+  `agentStop`. So `errorOccurred` does not say that a turn has ended; the record's `session.error` does.
+- `sessionEnd` carries `reason` (`user_exit` after a `SIGTERM`).
+- **A turn the user cancels runs no hook.** Esc twice and Ctrl-C while the model wrote both left `userPromptSubmitted`
+  as the turn's last hook; the record got `abort`. Esc at a permission prompt is the same: `notification` is the last
+  hook, and the record gets `permission.completed` with `result.kind: "cancelled"` and then `abort`.
+- `ask_user` runs `preToolUse`, `notification` (`elicitation_dialog`) and, once answered, `postToolUse`; Esc at its
+  form also runs `postToolUse` ("User cancelled the request.") and the turn carries on.
+- A `preToolUse` command that prints `{"permissionDecision": "deny", "permissionDecisionReason": "…"}` and exits 0
+  denies the call: the model is told "Denied by preToolUse hook: <reason>", and no post event runs for that call.
+- Hooks get `COPILOT_CLI=1` and `COPILOT_HOOK_DEPTH`. A shell command the agent runs gets `COPILOT_CLI=1`,
+  `COPILOT_AGENT_SESSION_ID` (the session's id), `COPILOT_LOADER_PID`, `COPILOT_CLI_PATH`,
+  `COPILOT_CLI_BINARY_VERSION` and `COPILOT_CLI_RESOLVED_DIST_DIR`, beside what Copilot itself was started with.
+- A message typed and sent while a turn runs is shown under the timeline as pending ("pending · ↑ recall") and is
+  not sent to the model while the model is writing; Ctrl-C then drops every pending one with the turn: no
+  `userPromptSubmitted` runs for them and the record gets no `user.message`. One sent while a shell command runs
+  moves that command to the background at once (its call ends with "moved to background by the user"), and the
+  message is in the next model request, after the call's result: it joins the running turn. No `userPromptSubmitted`
+  runs for it either, though the record gets its `user.message`. The command's completion then arrives as a prompt
+  wrapped in `<system_notification>` (`Shell command "<description>" (shellId: N) has completed successfully.`)
+  with a `shell_completed` notification.
+- A model answer with no text ends the turn with `agentStop` and then a `session.error` ("No response was returned…")
+  in the record.
+
+**OSC 7501.** Copilot reports its own state through the Program Status Protocol without being asked, as
+`state=<state>:app=copilot`: `idle` at start-up (before the folder-trust prompt is answered), `working` when a turn
+starts, `blocked` with `kind=permission` at a permission prompt and `kind=question` at an `ask_user` form or an MCP
+server's form, `done` when a
+turn ends normally, `idle` when the user cancels it, and `error` when it ends in an error (after the last retry).
+
+**Terminal title** (OSC 0). `GitHub Copilot` until the first prompt, then `<the session's name> - GitHub Copilot`,
+where the name was the first prompt's text with its line breaks dropped. It did not change while a turn ran, at a
+permission prompt, or for a later prompt, and a resume shows the same title from the start. It carries no activity
+glyph.
+
+**Injection.**
+
+- `--plugin-dir <directory>` loads a plugin for the run with no install step and no trust decision: a directory
+  holding `plugin.json` (`{"name": …}`) and `hooks.json` had its hooks run in a folder that was never trusted.
+- `--additional-mcp-config @<file>` takes `{"mcpServers": {"<name>": {"type": "local", "command": …, "args": […]}}}`.
+  A server's tool reaches the model as `<server>-<tool>` (`octoboard-report`). `--allow-tool=<server>` lets every tool
+  of that server run without a prompt. **A server entry's `timeout`, in milliseconds, is the limit on one call**: with
+  `5000`, a call that took 10 s ended after 5 s, the model was told "MCP server '<name>': McpError: MCP error -32001:
+  Request timed out", and `postToolUseFailure` ran with that text as its `error`.
+- `COPILOT_CUSTOM_INSTRUCTIONS_DIRS` is a comma-separated list of directories. Of the files tried in such a directory,
+  **only `instructions/<name>.instructions.md` was put into the system prompt**, whole and with no `applyTo` front
+  matter; an `AGENTS.md` there was only listed for the model to read as a "nested AGENTS.md", and
+  `copilot-instructions.md` and `.github/copilot-instructions.md` there were not read. The system prompt is built
+  again on every launch: a resume carried the file's current text, not the text of the first launch.
+- A working directory holding `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` and `QWEN.md` as links to one file put that file's
+  text into the system prompt once, in one `<custom_instruction>` block.
+
+**Folder trust for one run** (2026-11-23, each in a new home). Enter on the first option, `1. Yes`, trusts the folder for
+the session and writes nothing: `config.json` got no `trustedFolders`. No flag does the same for an interactive
+session started as Octoboard starts one: `--trust-folder` is refused beside `--session-id` ("the argument
+'--session-id <id>' cannot be used with '--trust-folder'", and by its help it is for one prompt-mode session);
+`--add-dir=<the folder>` and `--allow-all-paths` still drew the confirmation; `COPILOT_ALLOW_ALL=true`, spelled
+exactly so, drew none and recorded nothing, but it also lets every tool run without asking.
+
+**Folder trust.** In a folder that is not trusted Copilot draws "Confirm folder trust", the folder's path, "Do you
+trust the files in this folder?" and three options with `❯` in front of the one the cursor is on, which starts on the
+first: `1. Yes` (for this session), `2. Yes, and remember this folder for future sessions` and `3. No (Esc)`. Down
+moves the cursor to the second, and Enter there adds the folder to `trustedFolders` in `$COPILOT_HOME/config.json`
+(JSON with two `//` comment lines above it) and prints "Folder <path> has been added to trusted folders." A subfolder
+of a trusted folder is trusted. A first prompt given with `-i` runs only once the prompt is answered.
+
+**The composer.** Copilot's input box is the rows between two horizontal rules of `─` across the window, the first
+starting with `❯`. Both rules are drawn faint (SGR 2), the mark and the draft plain, so a reading of the screen that
+blanks faint cells sees two empty rows where the rules are. Copilot fills the window: the footer (`← open sidebar · …`
+at the prompt, `◉ Working · …` during a turn) is always the last row, the bottom rule the row above it, and the
+composer's rows end right above that. The footer is cut short and never wrapped, at 120, 80, 60 and 40 columns
+alike. With the sidebar open (Left at an empty prompt) the whole view is drawn to the right of the sidebar's border,
+`│❯ <draft>`, so the mark is no longer in the first column; the rules start at the border too, the border is drawn in
+a colour (SGR 90) and not faint, and the sidebar's own column holds the sessions' names. Octoboard reads the composer
+there as what is right of each row's first border (captured at 120 and 80 columns, 2026-11-23). The sidebar is not
+kept across launches: a session started after one that ended with it open came up with it closed. A draft's wrapped
+rows and further lines are indented two columns. A draft
+with an empty line in it shows that line as an empty row of the box; an empty composer shows `❯` alone, with no
+placeholder. The composer is drawn only once the folder-trust prompt has been answered, and at once in a folder already trusted: in three captures of an untrusted folder, with and without
+`-i`, no `❯` but the trust prompt's cursor was written before the answer. A prompt already sent is shown in the
+timeline as ` ❯ <text>` too, indented one column, below text and not below a rule. A permission prompt and an
+`ask_user` form take the composer's place while they are up: the form sits between two rules as the composer does,
+its cursor row ` ❯ <choice>` indented and below the form's own lines; a menu's cursor row is inside a box (`│ ❯ 1.
+Yes`). The model picker (`/model`) has a search row ` ❯  Search models…` right below a rule, indented too. So the
+composer's `❯` is the only one in the window's first column. A draft longer than the window wraps onto rows indented
+two columns, as a second line of the draft is. The captures are `apps/daemon/testdata/copilot-captures.md`.
+
+**Permissions.** A session starts in "Manual Approval" (the footer says so). `--allow-all` starts it in "Allow All",
+where a shell command ran with no prompt. `--assisted-approval` is refused in an interactive session
+("--assisted-approval is only supported in non-interactive prompt mode or direct workflow mode.", exit status 1), so
+`--allow-all` and its parts are the only permission mode a flag sets for one. A permission prompt reads "Do you want to
+run this command?" with `1. Yes`, `2. Yes, and don't ask again for …` and `3. No, and tell Copilot what to do
+differently (Esc to stop)`.
+
+**Keys that interrupt a turn.** Ctrl-C while a turn runs stops it at once, and leaves a draft in the input box as it
+was; Esc twice within half a second does the same. Neither puts the interrupted prompt back in the input box. A single
+Esc only shows what a second would do. Ctrl-U empties the input box's line. At an empty idle prompt Ctrl-C only warns,
+and a second quits.
+
+**Octoboard's sign-in.** Copilot's login flow declares a wait of sixteen minutes, a minute more than a device code
+lasts, so a code nobody enters ends with Copilot's own "Device code expired before authorization completed" as the
+reason.
+
+**Signing in.** With no terminal (stdin `/dev/null`), `copilot login --device-code` prints on stdout, after up to
+ten seconds, `To authenticate, visit https://github.com/login/device and enter code XXXX-XXXX` and then `Waiting for
+authorization...`, and waits. Once the code is authorized in a browser it prints `Signed in successfully as <login>.`
+and exits with status 0 (measured with the user's account, 1 min 49 s after it started). A code nobody enters expires
+after 15 minutes: the CLI then prints `Login failed: Error: Device code expired before authorization completed` on
+stderr and exits with status 1. A session with no sign-in and no model provider says "Please use /login to sign in to
+use Copilot" above its prompt.
+
+- **The token is kept in the system credential store, under the host and the login, not under the Copilot home.** On
+  macOS it is a generic-password item of the login keychain whose service is `copilot-cli` and whose account is
+  `https://github.com:<login>:github`. The home's `config.json` gets
+  only `loggedInUsers` (`[{host, login, kind: "githubDotCom"}]`) and `lastLoggedInUser` (`{host, login}`): the login
+  and no email. A home that was never signed in has neither key.
+- **A home that was never signed in is signed in all the same when the credential store can be reached.** With the
+  user's own `HOME` and `COPILOT_HOME` naming a new, empty directory, Copilot came up signed in (its GitHub MCP server
+  connected, a model offered), and wrote no login to that directory's `config.json`. The machine's GitHub CLI was
+  signed in as the same login, and Copilot accepts that CLI's tokens: it was the GitHub CLI's token such a home used
+  (`auth.getStatus` of the SDK server, under "Plan quota" below, says `gh-cli` there and `user` in a home that names
+  the login); either way a home's own record does not decide whether Copilot is signed in there. Homes signed in as one
+  login share one token.
+- **Asking whether the item exists raises no system prompt** (macOS 26.2, 2026-11-23). `security
+  find-generic-password -s copilot-cli -a https://github.com:<login>:github`, which asks for the item's attributes and
+  never its secret (no `-w`, no `-g`), answered in 0.1 to 0.3 s with exit status 0 for the login that is signed in and
+  44 ("The specified item could not be found in the keychain") for a login that is not, with no authorisation dialog,
+  run from a process that is not Copilot. A locked keychain was not measured.
+- **The item signs in only a home that names its login.** With the GitHub CLI kept off `PATH` (its token is in the
+  keychain too, so an empty `GH_CONFIG_DIR` does not hide it), `auth.getStatus` of the SDK server answered `Not
+  authenticated` in a new, empty home, `authType: "user"` in a home whose `config.json` names the signed-in login, and
+  `Not authenticated` in a home naming a login that has no item. So a home that names a login is signed in exactly
+  when that login's item exists (or the file holds its token in plain text), and a home that names none is signed in
+  only through the GitHub CLI or an environment token.
+- **Octoboard's sign-in reading follows that item's presence**: a home that names a login reads signed in
+  while the credential store holds the item of service `copilot-cli` and account `<host>:<login>:github`, the host as
+  `config.json` names it, and signed out while it holds none; a home whose `config.json` holds the login's token
+  (`authTokens`) reads signed in without the store being asked. An empty `loggedInUsers` array with no
+  `lastLoggedInUser` reads signed out, the state left by `/logout`. A fresh home with neither key gives no local
+  reading. The lookup supplies the sign-in reading after an inconclusive quota failure. On Windows the CLI's
+  ARM64 1.0.114 binary forms the generic credential target as `<account>.<service>`. Octoboard checks for
+  `<host>:<login>:github.copilot-cli` in the daemon's logon session. On Linux it searches by service and username.
+  Each native lookup has 5 s to answer and reports presence alone.
+- **Linux credential presence** (1.0.114, Debian 13 arm64, GNOME Keyring 48.0, 2026-11-24). The CLI used
+  Secret Service with an unlocked disposable collection during an OAuth stand-in login. Its `SearchItems`
+  calls matched `service=copilot-cli` and `username=https://github.com:<login>:github`, and also looked up the
+  older username without the `:github` suffix. A hosted device flow also completed using this Linux Secret
+  Service. An attribute-only lookup found the item for the saved login, and the account's `config.json` held
+  no `authTokens`. The method returns separate arrays of unlocked and locked item
+  paths, with two empty arrays for absence, and did not prompt during the presence probe. `gdbus call` exits 0
+  for both a present item and an absent one. Octoboard reads the structured D-Bus reply and counts
+  a locked or unlocked match as present. The Linux Rust reader returned Present for the fixture
+  with `username=https://github.com:octoboard-presence:github` in both collection states, Absent for a fresh
+  empty collection, and CannotTell for a disconnected bus. Monitoring recorded no prompt or secret read.
+- **Linux without a credential store** (1.0.114, Debian 13 arm64, local OAuth stand-in). The actual CLI with
+  stdin and stdout on a PTY issued the whole plaintext question in one 73-byte `write`. It needed no `TERM`
+  and emitted no terminal query in the capture. A yes exited 0 and stored the disposable credential in
+  `config.json`; a no exited 1 and stored none. With stdin from `/dev/null` and stdout redirected, it displayed
+  the device instructions, omitted the question, reported that the credential was not saved and exited 1.
+  With the Linux daemon, its control socket exposed `keep_token_in_plain_text`, accepted the dialog answers,
+  and returned success on yes and `provider.copilot.token_not_kept` on no (222 ms after the answer).
+  Chromium on Debian rendered the account login alert dialog against the native daemon and local OAuth server.
+  The dialog opened with focus on itself. Its decline button showed the failure alert and saved no credential.
+  Its accept button finished the login and wrote the disposable credential.
+  Copilot invoked `xdg-open` outside the CLI's foreground process group, as measured with a disposable browser
+  helper. The helper received no SIGHUP on CLI exit or PTY closure.
+- **Signing out (1.0.114, macOS).** In two scratch Copilot homes naming the same macOS keychain login,
+  `/logout` in one wrote `loggedInUsers: []` and removed `lastLoggedInUser` from that home's `config.json`.
+  The other home's file kept its login keys. The shared keychain item was absent afterwards, so the saved Copilot
+  login was gone in both. A GitHub CLI login or environment token can still authenticate a CLI query where the
+  home names no login. The quota probe reads that CLI authentication; the local sign-in reading follows the
+  saved Copilot login.
+- **`config.json` is read as JSON with comments.** Copilot took a `//` line inside the object, a `//` comment after a
+  value, a `/* */` comment, a comma before the closing brace and a byte order mark, each read as signed in and the
+  file then rewritten in its own layout; a file that is not JSON even so read as not signed in and was left as it was.
+- **Without a credential store Copilot asks, but only on a terminal** (read from `cli-main.js`): the login's result is
+  then `needs-plaintext-consent`, and the question is put with `readline` only when both stdin and stdout are a
+  terminal. Otherwise no question is asked, the answer counts as no, and the CLI writes `Login succeeded, but the
+  token was not saved. Install a system keychain or rerun login and accept plaintext storage.` to stderr and exits
+  with status 1. The answer is read as one line, `y` or `yes` in any case meaning yes. So a login that is to put the
+  question to the user has to run under a pseudo-terminal, and Octoboard's does: it runs `copilot login
+  --device-code` on a terminal of its own, tells the prompt by `Store token in plaintext config file?`, puts the
+  question to the user and writes their `y` or `n` back; on a no the login fails with Octoboard's own reason for it
+  (`provider.copilot.token_not_kept`). On a terminal the login writes the same two plain lines as on pipes (no
+  interface is drawn), and the question's whole prompt is written in one piece by `readline`. After the two lines the
+  device-code login calls `presentDeviceCode`, which copies the code to the clipboard and opens the browser, whether
+  or not it has a terminal (the call is not behind a terminal check; a failure prints `Failed to copy code or open
+  browser: …` to stderr). Not run on a host without a credential store: on macOS the "Keychain Not Found" dialog
+  comes first, as below; whether the login queries its terminal, needs `TERM`, or leaves the browser it opened running
+  after it exits on a terminal is not measured either.
+- **Without a credential store, on a terminal.** With `HOME` naming a directory that has no keychain,
+  macOS showed "Keychain Not Found" for the item, and once that was dismissed the CLI asked `System keychain
+  unavailable. Store token in plaintext config file? (y/N)`; on `y` the token went into `config.json` as `authTokens`,
+  keyed by `<host>:<login>` and `<host>:<login>:github`, beside the same two login keys. With no terminal the
+  question is not asked at all (above), yet two logins in such a home did not end with "the token was not saved":
+  they sat at "Waiting for authorization..." after their codes were authorized and ended only when the codes
+  expired. The likely cause is the "Keychain Not Found" dialog, which macOS puts up for the item and which nothing
+  dismisses when there is no terminal session to answer it, so the CLI never gets as far as its result; this cause was
+  not measured. Octoboard's declared wait ends such a login at the code's expiry. `/logout` in such a home fails
+  ("Failed to remove token: Keychain error").
+- **An environment token.** With `GH_TOKEN` set to a token GitHub rejects, a home with no login of its own said
+  "Authentication token found but could not be validated. GitHub returned: Bad credentials" and was not signed in,
+  where without the variable it was: the variable is used before the credential store. A home that names a login in
+  its `config.json` stayed signed in with the same variable set. The same rejected value in `COPILOT_GITHUB_TOKEN`
+  left the home with no login signed in (one run). `config.json` is not changed by any of them.
+
+**MCP inventory (1.0.114).** `copilot mcp list --json` reports a map at `mcpServers`, with each entry's
+`type`, `enabled`, `source` and optionally `sourcePlugin` and `url`. A signed-in Free home listed the hosted
+read-only `github-mcp-server` and the built-in `computer-use`; the offline stand-in listed `computer-use` and a
+local marketplace plugin. A configured HTTP server disabled in `settings.json` remained in the native list
+with `enabled: false`. The native command lists configuration and supplies no runtime state or OAuth status.
+Octoboard runs it in a disposable Copilot home because a listing rewrote a hand-formatted `config.json`. It
+uses the account's `mcp-config.json` through `--additional-mcp-config @<file>`, passes the enabled and disabled
+server settings, and gives enabled plugin directories to `--plugin-dir`. The reading skips disabled servers.
+Remote URLs are reduced to scheme and authority because configurations can carry credentials. The projected
+measurement is `apps/daemon/testdata/copilot_mcp_list_1.0.114.json`.
+
+**Default configuration sharing (1.0.114).** A separate Copilot home read linked `settings.json`,
+`mcp-config.json` and `instructions/`. `copilot config footer.showQuota on` and `copilot mcp remove` wrote
+through their respective links. A Git-installed plugin went under `installed-plugins/_direct/<slug>` and
+registered an entry in `config.json` at `installedPlugins[].cache_path`, an absolute path into that home. A
+local directory marketplace used the plugin in place with `settings.json` entries `extraKnownMarketplaces` and
+`enabledPlugins`. In a scratch run of `copilot plugin marketplace add <directory>`, Copilot wrote the absolute
+source path through the link into the default `settings.json`. It used the account's spelling even when the
+marketplace itself was reached through a link to the default directory. When the source is private to the account,
+that registration breaks if the account directory is deleted. Octoboard shares `settings.json`,
+`mcp-config.json`, `instructions/` and `session-state/`. The sharing registry rule repoints
+`extraKnownMarketplaces.*.source.path` only when the same directory has an independent spelling,
+such as the target of a shared directory link. A private source that cannot be repointed is reported as a
+sharing or repair failure. A scratch resume through linked `session-state/` sent the original prompt
+and linked instructions to the local model stand-in. The plugin cache and `config.json` (account
+sign-in and cache paths) stay private with the session index database.
+
+**Claude configuration compatibility (1.0.114).** In a trusted scratch project the control loaded
+`CLAUDE.md`, `.claude/rules/`, `AGENTS.md` and the injected role directory into the model request. It also
+listed the project's Claude skill, agent and command in `/env`. In a second run `--no-custom-instructions`
+removed all four instruction sources including the injected role while the Claude skill, agent and command
+remained. The CLI's flags and configuration reference expose no per-launch switch for the Claude layer.
+Octoboard offers no Claude compatibility setting for Copilot.
+
+**Plan quota.** Measured on 1.0.114 on 2026-11-22 with the user's account on the free plan, in scratch Copilot homes
+under the user's own `HOME` (so the sign-in was the real one), with no prompt sent and so no model turn.
+
+- **What `/usage` shows on the free plan**: "Local CLI activity · this device" (a 180-day grid of prompts), "Active
+  account (credentials & quota) <login> (GitHub)", "Current session · all accounts used" (`Changes`, `AI Credits`), and
+  under "Active account/provider usage" one row, `Plan` with a bar, `0% used • resets in 8 days` and `1 / 200 AIC`.
+  There was no `Session` and no `Weekly` row: the usage limits `copilot help limits` describes were not shown for this
+  account, with 1 of 200 credits used.
+- **The source that answers: the CLI's SDK server.** `copilot --headless --no-auto-update --stdio` is what GitHub's
+  Copilot SDK starts the CLI with (read from the SDK's `client.ts`; `--headless` and `--stdio` are not in `copilot
+  --help`). It speaks JSON-RPC 2.0 with **each message under a `Content-Length: <n>` header and a blank line, both
+  ways**; the same requests written one per line got no answer at all. `ping` answers `protocolVersion: 4`,
+  `status.get` the version, and `auth.getStatus` `{isAuthenticated, authType, host, statusMessage, login}`.
+  - `account.getQuota` (no session) answers `{"quotaSnapshots": {"chat": {…}, "completions": {…},
+    "premium_interactions": {…}}}`, each `{isUnlimitedEntitlement, entitlementRequests, usedRequests,
+    usageAllowedWithExhaustedQuota, overage, overageAllowedWithExhaustedQuota, remainingPercentage, resetDate, hasQuota,
+    tokenBasedBilling}`. On the free plan `chat` was `entitlementRequests: 200`, `usedRequests: 1`,
+    `remainingPercentage: 99.6`, `hasQuota: true`, `tokenBasedBilling: true` (the `Plan` row of `/usage`), `completions`
+    2000 with 2 used, and `premium_interactions` 0 with `hasQuota: false`. **Its `resetDate` is not the reset**: it was
+    the moment of the reading, a different value in every process.
+  - `session.create` (`{"sessionId": <a UUID of the client's choosing, or none>, "workingDirectory": …}`) answers the
+    session's id, and `session.quota.refresh` (`{"sessionId"}`) then answers `{"snapshots": {"chat": {… the fields above
+    without `resetDate`, plus `resetDateEpochMs`}}, "planTier": "free", "isFreeUser": true, "isTbbUser": true,
+    "providerQuotas": [{"quotaId": "chat", "unit": "ai_credits", "capacityState": "available", "budgetMetadata":
+    {"entitlement": 200, "consumed": 1, "remainingPercentage": 99.6, "resetAtEpochMs": …, "unlimited": false, …},
+    "entitledQuantity": 200, "availableQuantity": 199}], "upgradeUrl": …}`. `resetDateEpochMs` was `1796083200000`,
+    2026-12-01T00:00:00Z, which is the "resets in 8 days" of `/usage`. `session.quota.get` answers the same shape from
+    what the session already holds: before a refresh it had no reset time. `session.delete` (`{"sessionId"}`) answers
+    `{"success": true}` and removes the session's directory, leaving a zero-byte
+    `session-state/.session-operation-locks/<id>.lock`. `session.usage.getMetrics` is the session's own usage, all
+    zeros with no prompt sent. Nothing in either reply is a Session or Weekly limit.
+  - **The server answers requests in no fixed order.** With `session.create`, `session.quota.refresh` and
+    `session.delete` all written before the first answer, the refresh was refused ("Session not found for sessionId"),
+    the delete too, and the create then failed. Each has to be written after the answer before it.
+- **Which login a reading is of.** In a home whose `config.json` names no login, `auth.getStatus` answered `authType:
+  "gh-cli"`, `statusMessage: "<login> (via gh)"`: the token of the machine's GitHub CLI. In a home whose
+  `loggedInUsers` and `lastLoggedInUser` name the login, it answered `authType: "user"`: the keychain item of that
+  login. In a home naming a login that has no keychain item it answered `gh-cli` with the GitHub CLI's login, and
+  `account.getQuota` answered that account's quota with nothing saying so: the `login` of `auth.getStatus` is the only
+  thing that tells whose quota was read.
+- **What a reading writes.** With the home's `config.json` as Copilot itself last left it, an `account.getQuota`
+  reading added `logs/process-<time>-<pid>.log`, `logs/.copilot-log.lock` and a zero-byte `settings.json.lock` and
+  changed no file (`settings.json`, `mcp-config.json` and `config.json` identical byte for byte); with `--log-dir
+  <directory>` the log went there and a second reading changed nothing in the home at all. The session route adds
+  `installed-plugins/` and `session-state/` with the lock named above. **But a start rewrites `config.json` whenever
+  it is not as this version writes it**: an empty home got a `config.json` with `firstLaunchAt`; one holding only
+  `trustedFolders` was rewritten with `firstLaunchAt` added (a fixed date, 2026-03-11) and its array reflowed; one
+  holding every key but written by hand in another layout (no comment lines, its array on one line) was rewritten in
+  Copilot's own. A home that does not exist is created. Outside the home, a reading rewrites `copilot-user-cache.json` and `managed-settings*` under the
+  cache directory (`~/Library/Caches/copilot` on macOS), which `COPILOT_CACHE_HOME` moves; a cache directory of its own
+  got a 255 MB copy of the CLI package under `pkg/` on first use.
+- **A reading that touches none of the user's files.** With `COPILOT_HOME` naming a directory outside the user's
+  Copilot home whose `config.json` holds `firstLaunchAt`, `loggedInUsers` and `lastLoggedInUser` for the account's
+  login (the login is found by host and login in the credential store, not by home), `COPILOT_CACHE_HOME` a directory
+  of its own and `--log-dir` a third, `auth.getStatus` answered `authType: "user"` with that login and
+  `account.getQuota` its quota, and neither the user's cache directory nor anything else of the user's changed
+  (measured by hashing every file before and after; the user had no `~/.copilot` and none was created).
+- **Octoboard's Free quota reading (1.0.114).** It prepares a private Copilot home with the account's login
+  metadata, gives the server a working directory and logs there, and keeps the CLI's normal cache. The account's
+  configured plaintext token, where present, reaches the server through its environment as it does for the model
+  listing. It sends `auth.getStatus`, then `session.create`, then `session.quota.refresh`. If the status is
+  signed out or names someone other than the account's configured login, the run stops before creating the session.
+  A home without a named login uses the authentication its launch would use. The private home, including the
+  temporary session and its lock, is removed after the server exits. The free plan's monthly credit budget and its
+  actual reset time come from the `chat` budget in `providerQuotas`. It measured about 4.2 KB in 2.3 seconds with
+  a named keychain login, with no model turn. Without the keychain login, the GitHub CLI and environment credentials,
+  `auth.getStatus` reported `isAuthenticated: false`. A direct refresh in that run returned JSON-RPC error
+  `-32603`; Octoboard stops at the status. The quota reply capture is
+  `apps/daemon/testdata/copilot_quota_free_1.0.114.json`. Copilot calls this window **Plan**. Octoboard
+  uses that name for the `credit_period` according to Copilot's descriptor.
+- **Sources that gave nothing**: the ACP mode (`copilot --acp`): `initialize` and `session/new` carry no quota, the
+  methods `account/getQuota`, `account.getQuota`, `github.com/copilot/usage` and `_github.com/copilot/usage` are refused
+  with -32601, and `usage` is only one of the `availableCommands`, which a client can send no other way than as a
+  `session/prompt` (not sent: nothing says a prompt of that text stays away from the model); the home's files after
+  these runs (`config.json`, the log, `session-state/`), none of which holds a quota; `--usage-output-file`, which by
+  `copilot help billing` writes one session's own usage after a prompt, not the plan's (not run: it needs a prompt);
+  and the help topics `billing` and `limits`, which name no command but `/usage`.
+
+**Against the hosted model** (one session of each kind, the user's plan): the hook payloads were the stand-in's, field
+for field, with the model's own `toolCallId`s; the allow rule let `octoboard-report` run with no prompt; `sleep 6` ran
+with no prompt. The model renames the session within seconds of the first prompt, so the title goes from the prompt's
+text to a summary ("Respond with OK - GitHub Copilot") and then stays. A shell command started detached (`mode:
+"async"`, `detach: true`) ends its call at once; when it finishes, the session gets a turn of its own whose
+`userPromptSubmitted` prompt is `<system_notification>`, `Detached shell "<description>" (shellId: N) has
+completed.`, `</system_notification>`, with a `notification` of type `shell_detached_completed` beside it.
+
+**Background work** (2026-11-23, against the stand-in; the captures are `apps/daemon/testdata/copilot-captures.md`,
+"Background work").
+
+- A shell command started with `mode: "async"` ends its call at once with `<command started in background with
+  shellId: N>`, or `<command started in detached background with shellId: N>` with `detach: true`; a running command
+  the user's message moves to the background ends with `<command with shellId: N moved to background by the user. …>`.
+  The record's `tool.execution_complete` carries the id as `result.structuredContent.shellId`; a command that ran to
+  its end carries one too, with `<shellId: N completed with exit code …>`. The ids count from 0 in every session.
+  The tag closes `result.content`, after the command's own output (`\n<shellId: 0 completed with exit code 0>` for a
+  command that printed nothing), so only the closing tag says where a command went: its output can hold the same
+  words.
+- A `read_bash` call for a command that has ended answers `<shellId: N completed with exit code …>`, or `<detached
+  command with shellId: N completed with exit code …>` for a detached one, with the same `structuredContent.shellId`.
+  **When the model reads the end first, no notification follows**: a command started in the background, and one
+  started detached, each read to its end by a `read_bash` call of the turn that started it (`delay: 7` over a `sleep
+  3`), got no `system.notification`, no notice prompt and no `notification` hook in the 27 s the session stayed open.
+  That result is then the only thing that says the command ended, and Octoboard takes it off the list there.
+- The turn ends with the command running. Its completion is a `system.notification` line in the record (`kind`:
+  `{type, shellId, description}`, `exitCode` too for one not detached) and a turn of the session's own: a
+  `userPromptSubmitted` whose prompt is `<system_notification>`, `Shell command "<description>" (shellId: N) has
+  completed successfully.` or `Detached shell "<description>" (shellId: N) has completed.`, `</system_notification>`,
+  a `notification` of type `shell_completed` or `shell_detached_completed`, and an `agentStop`. Two commands gave two
+  such turns, each when its own command ended.
+- A detached command the model stops with `stop_bash` (`<command with id: N stopped>`) gets no notification.
+- A background agent (`task` with `mode: "background"`) ends its call at once ("Agent started in background with
+  agent_id: …"), with `subagentStart` run before the session's `agentStop` and `subagent.started` (`executionMode:
+  "background"`, `agentDescription`) in the record. When it is done its `subagentStop` runs, the record gets
+  `subagent.completed`, and the session gets a turn whose prompt is `Agent "<name>" (<type>) has finished processing
+  and is now idle.` with a `notification` of type `agent_idle`: the notice names the agent's display name and no id.
+  A notification of type `agent_completed` was not seen.
+- **An idle background agent written to again works with no start** (`write_agent` with its `agent_id`): no
+  `subagentStart` and no `subagent.started`, and when it is done no `subagent.completed`. What does run and is
+  written: the agent's own `userPromptSubmitted` (carrying its `agentId`) and a `user.message` of its own in the
+  record, then its `agentStop`, a `subagentStop`, and the same `agent_idle` notification and notice as the first time,
+  whose record line names its `agentId`. Octoboard lists it again from that prompt until that stop.
+- **A session resumed after its process was killed** (`kill -9` of the CLI's own process, then `--session-id` with the
+  same id): the record has no `session.shutdown` for the killed process and gets a `session.resume` line (`resumeTime`,
+  `eventCount`, `sessionWasActive: false`) when the session is resumed, with `sessionStart` run with `source:
+  "resume"`. Both of the killed process's commands, the detached one and the one only in the background, were still
+  running, orphaned, and the resumed process knows neither (shell ids start again at 0). Octoboard counts nothing from
+  before a `session.resume`, as before a `session.shutdown`. Killing only the `copilot` launcher script let the CLI
+  shut down in order (`sessionEnd` with `user_exit`, `session.shutdown`), which ended the background command and left
+  the detached one running.
+- No hook says what is running. Octoboard lists it from the record at each `agentStop` of the session's (commands
+  whose call's closing tag said they went to the background, background agents started and not completed, each agent
+  under Copilot's name for its kind, `agentName`), takes a command off at its completion notice, at a `read_bash` or
+  `write_bash` result that says it completed or at a `stop_bash`, and an agent off at its `subagentStop`, and counts
+  nothing from before a `session.shutdown`. It is listed from the end of the turn that started it, as every agent's
+  background work is, not from the call.
+- **The record is read on from where the last `agentStop` got to,** an offset kept with the session's process: each
+  read gives the work the new lines started and the work they ended, so a detached server started early in a session
+  stays listed however much the record has grown since. Only the first read of a process (a launch, a resume, a
+  daemon that adopted the session after a restart) reaches back a fixed 4 MiB from the record's end: work started
+  before that and not listed already is missed by it. A turn that both starts and ends work is two changes of one
+  event; where the record was read from its first byte the list it leaves replaces what is listed, and where the first
+  read started inside a longer record the start is listed at the turn's end and the end is taken off with the
+  session's next event. The record read is the one under the account's directory the launch runs on, placed by the
+  session id, never the `transcriptPath` a payload names.
+- **A `permission_prompt` notification that lands after its turn's end raises no hand.** Copilot does not wait for
+  the notification hook; when the record shows every prompt of the turn answered and the session's `agentStop` run,
+  and still shows it half a second later (a prompt put up since, a background agent's say, has its request in the
+  file by then), the notification is not applied at all. Where the record is behind, the hand goes up and is lowered
+  half a second later as before, beneath a session request's hand where one is held.
+
+**Model and reasoning effort** (2026-11-23, 1.0.114, the latest on npm that day, the user's free-plan account through
+the GitHub CLI's token, a scratch `COPILOT_HOME` and `COPILOT_CACHE_HOME`, no prompt sent).
+
+- The ACP mode still lists no models on 1.0.114 ("ACP mode" below); no later version was published to measure.
+- **The SDK server lists them** (`copilot --headless --no-auto-update --stdio`, the framing under "Plan quota"):
+  `models.list` (no session; `selectionId`, `gitHubToken` and `streamerMode` optional) answers `{models, auto,
+  imageModels}`, each model `{id, name, capabilities, vendor, policy, billing, supportedReasoningEfforts,
+  defaultReasoningEffort}` by the SDK's own types (`copilot-sdk/generated/rpc.d.ts` in the unpacked package), the
+  efforts present only for a model that takes them. `session.model.list` (`{sessionId}`, after `session.create`)
+  answers `{list, providers, modelPriceCategories, quotaSnapshots, auto, resolvedAuthLogin}`, `list` being the models
+  the picker offers. **On the free plan both lists were empty**: `models: []` and `list: []`, with `auto` holding the
+  Auto tiers (`balance` "Standard" enabled and the default; `hydrafusion` "High" and `hydrafusion-max` "Max"
+  disabled, `user_not_eligible`; `fast` enabled but not shown in the picker) and `modelPriceCategories` naming sixteen
+  models Auto may choose, none of them selectable. The footer says `Copilot Fusion`, the name Auto is shown under. So
+  this account's model list is Auto alone, which takes no reasoning effort; `--model auto` (or `fusion`) is what
+  `--help` names for it, and `--auto-tier <id>` picks a tier. Answered in 2 to 3.5 s from the start; the session
+  route leaves `session-state/` in the home, as under "Plan quota". A paid plan's list, with its models' efforts, is
+  not measured.
+- **Octoboard's catalogue** (2026-11-23) asks `models.list` of the SDK server, run with `COPILOT_HOME` naming a
+  private directory of Octoboard's own under its run directory whose `config.json` holds `firstLaunchAt` and the
+  account's sign-in keys (`loggedInUsers`, `lastLoggedInUser`) and nothing else, `--log-dir` inside it, and the
+  directory removed after the run; the account's own directory is never written, and no credential is written
+  anywhere. Where the account keeps its token in its own `config.json` (`authTokens`, the user's plain-text choice),
+  the token is handed to the run through `COPILOT_GITHUB_TOKEN`, only where the environment gives none of
+  `COPILOT_GITHUB_TOKEN`, `GH_TOKEN` and `GITHUB_TOKEN` (2026-11-24, 1.0.114, a scratch `COPILOT_HOME` naming no
+  login under the real `HOME`: with the GitHub CLI's token in `COPILOT_GITHUB_TOKEN`, `auth.getStatus` answered
+  `authType: "env"`, `statusMessage` `<login> (via COPILOT_GITHUB_TOKEN)`, and `models.list` the same list as the
+  `gh-cli` fallback without it, Auto alone on the free plan; a malformed `GH_TOKEN` gave `Not authenticated` and
+  `models.list` refused, so a token variable is taken before any stored login and the fallback; a value in no token's
+  shape in `COPILOT_GITHUB_TOKEN` was passed over for the fallback). The list is asked for only once
+  `auth.getStatus` names the login the account's `config.json` names (compared without case); otherwise the listing
+  is unavailable, since a home naming a login whose credential is gone signs in as the GitHub CLI's login without
+  saying so (under "Plan quota"). A home that names no login lists whatever the run signs in as, as a session there
+  would. Measured that way with the
+  user's account: answered in 3.0 s, exit 1.4 s after the input ended, and the run left `config.json`, a zero-byte
+  `settings.json.lock` and the log in that directory. None of them holds the token handed through
+  `COPILOT_GITHUB_TOKEN` (2026-11-24, 1.0.114, the GitHub CLI's token handed that way to a private directory shaped as
+  the listing's: `auth.getStatus` answered `authType: "env"`, `models.list` answered, and the directory's four files,
+  `config.json`, `settings.json.lock`, `logs/.copilot-log.lock` and the process log, searched before removal, held
+  neither the token nor its first 20 characters). The cache directory is the CLI's own and not moved (a cache of
+  its own would copy the 255 MB package on every listing): the run rewrote `copilot-user-cache.json` and
+  `managed-settings/` under `~/Library/Caches/copilot`, as every start does. Auto is offered first as `auto`
+  (`--model auto`, shown with its default tier's name, `Auto (Standard)`) while that tier is enabled, then every listed
+  model with its `supportedReasoningEfforts` (none where it lists none) and its `policy.state` as whether the account
+  may use it. The free-plan answer is `apps/daemon/testdata/copilot_models_list_free_1.0.114.json`.
+
+**The draft stash** (2026-11-23, at an idle composer, no sign-in needed; captures in
+`apps/daemon/testdata/copilot-captures.md`, "The draft stash"). Ctrl-S with a draft in the composer empties it and
+adds `stashed ·` to the footer, right before the model's name (`… tab next tab   stashed · Copilot Fusion`), kept at
+80 columns where the footer's other items are cut short; Ctrl-S at the empty composer puts the draft back and the item
+goes. `copilot help config` names no setting that rebinds the key; the composer's `editorMode` `vim` was not measured.
+Octoboard uses the stash from 1.0.114 on, reading the footer's `stashed` item under the composer.
+
+**Image messages** (2026-11-23, at an idle composer; against the stand-in). A bracketed paste of an image file's path
+alone is attached: the composer shows `[image: <file name>]` in its place, a second image's placeholder right after
+the first with nothing between (`[image: red-one.png][image: blue-two.png]`), and text pasted after them follows on the
+same row; Ctrl-U empties all of it. Enter after the text sent the message, the Enter not lost: the model's request
+carried the prompt with the placeholders as text, then for each image a text part `Image file at path <path>` and an
+`image_url` part holding the file as a `data:image/png;base64,…` URL. Octoboard writes an image message so (each path
+pasted alone, then the text) and counts the placeholders. Captures: `copilot_images_120_*`.
+
+**Slash commands** (2026-11-23, against the stand-in). `/` opens a completion list right above the composer's top
+rule, each row `/<name>` with its description after a column of spaces, behind a margin of `┃` or of two spaces, the
+highlighted one led by `❯`; the composer itself shows the highlighted entry's name in place of what was typed (`/`
+shows `/add-dir`, `/he` typed or pasted shows `/help`), and Enter runs that entry (`/he` and Enter opened `/help`'s
+view). With an argument being written (`/model `) the list shows the command's forms, `❯ /model` highlighted, and the
+composer an argument hint. A prompt already sent and the working directory's row above the rule are indented one
+column. Octoboard reads the highlighted entry's name as the command an Enter would run. **Ctrl-U does not clear a
+draft of several lines**: on `first` / `second` it emptied the second line, and further presses left `first` and the
+line break as they were, so Copilot's reader does not declare it the box's clearing key, and a lone command (a
+`/name` with no argument, which a completion may change) is refused by the generic layer; a command with an argument
+is sent. Ctrl-C at the idle prompt emptied the same two-line draft at once. The ACP mode lists 34 commands with
+descriptions ("ACP mode"). Captures: `copilot_commands_120_*`.
+
+**Interactions** (2026-11-23, against the stand-in, at 120 columns; captures `copilot_permission_120_*` and
+`copilot_question_120_*`). The permission prompt's box holds the call's description, the command in a box of its own,
+`Do you want to run this command?`, `1. Yes`, `2. Yes, and don't ask again for` the command `in this directory (<path>)`
+and `3. No, and tell Copilot what to do differently (Esc to stop)`, the cursor `❯` on the first, and the hint `↑/↓ to
+navigate · enter to select · esc to cancel`. Down moves the cursor and stops at the last row (no wrap). On the third
+row, text typed or pasted takes the label's place (`3. use echo (Esc to stop)`) and Enter refuses the call with it
+as the user's feedback ("The user rejected this tool call. User feedback: use echo"), the turn going on; Enter there
+with no text does nothing; Esc refuses the call and stops the turn ("Operation cancelled by user"). The `ask_user`
+form (`message` and a `requestedSchema` of fields) shows `Copilot needs information.`, the message, a row of the field
+names with the current one in brackets when there are several, and the current field: a string with `enum` is
+`<name>:` and its values, ` ❯ ` on one, and `Other (type your answer)`, on which a text field `❯ Type your answer...`
+opens below the form and takes what is typed; a string without `enum` is the name, its description and a text field
+` ❯ ` between rules. Down stops at the last value; Enter accepts the field and moves to the next, the last sending the
+form (`choice: zeta`, `note: hello`); Ctrl-D declines; Esc cancels and ends the turn. Octoboard publishes the
+permission prompt for a shell command whose text the inner box shows (allow, allow and remember, refuse with optional
+feedback, refusing with none being Esc), and the form when every field is a string, answering by Down, typing and
+Enter; a cursor above which the answer lies is stuck, since no key that moves up is among the inputs a press writes.
+A form's footer ends `esc cancel`, or `esc clear` once a text field holds text; while it does, Ctrl-D does nothing and
+Esc empties the field, after which Ctrl-D declines (2026-11-24), so Octoboard declines with Esc first there. Its
+message and a text field's text wrap onto further rows, the fields' row coming after the message and a blank row.
+
+The other prompts (2026-11-24, the same way; captures `copilot_permission_{create,edit,view,mcp,long,huge}_120_*`,
+`copilot_feedback_wrap_120_*`, `copilot_question_wrap_120_*`, listed in `apps/daemon/testdata/copilot-captures.md`):
+
+- **A file created or edited** (`create`, `edit`): the box's title `Create file` (or the edit's), the file's name and
+  directory, the diff, `Do you want to create <path>?` (`edit` for an edit), and the same three rows as a command's,
+  the second reading `Yes, and don't ask again for file operations when in this directory (<dir>)`. Esc cancels the
+  call and the turn.
+- **A read outside the allowed paths** (`view` of `/etc/hosts`): `Allow path access`, the path in a box of its own,
+  `Read access covers this directory and its descendants:`, the directory in a second box, `Do you want to allow
+  this?`, and four rows: `1. Yes`, `2. Yes, and remember this path for this session`, `3. Yes, allow Copilot to read
+  files in the listed directory for this session` and `4. No (Esc)`. Enter on the fourth, like Esc, refuses the call
+  and ends the turn ("Operation cancelled by user"); there is no feedback row.
+- **An MCP tool** (`<server>-<tool>`): the tool's name as the box's title, the arguments as indented JSON in a box of
+  their own (in the call's key order), `Do you want to use this tool?`, and three rows, the second reading `Yes, and
+  don't ask again for tool "<tool>" from "<server>" in this directory (<dir>)`.
+- **A long command** wraps in its box at spaces; one too tall for the screen (4,200 characters) is drawn with only the
+  start of its box, no bottom side, and the hint becomes `↑/↓ to navigate · pgup/pgdn to scroll · enter to select ·
+  esc to cancel`.
+- **Feedback that wraps**: the third row reads `3. <text>`, the text wrapping onto rows indented under it, and
+  `(Esc to stop)` on a row of its own; Enter sends the whole text.
+
+Octoboard publishes each of these, matched to its call by what it shows (a command or a read's path in its box,
+whitespace left out and a text over 300 characters by its start; a created or edited file by the question's path; an
+MCP tool by its name and its arguments' box), the rows that keep a rule (`don't ask again`, `remember this path`,
+`allow Copilot to read files in the listed directory`) as allow and remember, and `No (Esc)` as refuse with no text.
+Each key of an answer is written only while the prompt on the screen is still the answered call's, so a prompt queued
+behind it is never answered with its keys; feedback is pasted only onto the bare label, and sent once the row shows
+the answer's text. Not measured: `apply_patch`'s prompt and a URL's (not published); fields of other types; a form
+whose `Other` takes a paste.
+
+**Command groups at exit** (2026-11-23, against the stand-in, `--allow-all`, started through the npm loader as
+Octoboard starts it). A shell call ran as `/bin/bash --norc --noprofile -c <command>` leading a process group of its
+own, a child of the native program. `SIGTERM` to the loader during `(sleep 303 &) ; sleep 304 & sleep 301` ended
+Copilot within a second, and with it every process of the group, the orphan `sleep 303` (parent 1, same group)
+included. So Copilot ends the process groups of the commands it still runs as it exits, as the released agents do.
+
+**Memory** (2026-11-23). Copilot keeps a memory of its own, Copilot Memory: `/memory` (or `/memory show`) at a new
+session of the free-plan account said `Status: enabled`, "Copilot stores and recalls facts across sessions", and that
+repository memories, kept on GitHub for everyone using Copilot Memory in the repository, are available only for
+GitHub-hosted repositories; a user's own are managed at `github.com/settings/copilot/memory`. It is on by default and
+turned off by the `memory` setting (`copilot help config`), which `/memory off` writes into the account's own
+settings. **No launch can turn it off for one session**: `--enable-memory` only turns it on in prompt mode (`-p`, where
+it starts off), `--help` and `copilot help environment` name no flag or variable that turns it off for an interactive
+session, and the interactive session applies the setting as read from the account's settings, defaulting to on (read
+from `cli-main.js`). Writing the setting is changing the user's own configuration, so Octoboard declares the memory
+one that cannot be switched off. Whether `--excluded-tools` of the memory tool stops it from storing was not measured.
+
+**Installed version** (2026-11-23). The npm install is `lib/node_modules/@github/copilot/` (`package.json` with
+`name` `@github/copilot`, its `npm-loader.js` the `copilot` the `bin` directory links to) and the platform package
+under its own `node_modules/@github/copilot-<platform>-<arch>/` (`package.json` and the native `copilot`), both at
+1.0.114; `optionalDependencies` pin every platform package to the package's own version. The loader starts the
+platform package's program. A copy of the unpacked package under a higher version in the cache directory
+(`pkg/darwin-arm64/1.0.200/`) did not change what ran (`status.get` answered 1.0.114). Octoboard reads the version
+from the platform package beside the launcher, else from `@github/copilot`, never by running the CLI.
+
+**Not measured**: which login a home signed in to two GitHub accounts uses, whether configuration directories
+with different logins stay isolated, and carrying a conversation between those logins. These need a second GitHub
+account with Copilot. Also unmeasured: what
+`/logout` leaves in `config.json` and whether it signs out the other homes of the same login (it removes the token
+from the credential store, so it needs the user's consent);
+whether asking for the token item prompts while the macOS keychain is locked; a subagent's own background commands;
+how late the record is written while a hosted model streams its answer (the write-out times above are the
+stand-in's, whose answers come at once); the
+quota of a paid plan and when the Session and Weekly usage limits apply. On 1.0.114 with 1 of 200 free-plan
+credits used, `/usage`, `account.getQuota` and `session.quota.refresh` showed the monthly Plan budget alone.
+The quota requests for an account with no Copilot plan also remain unmeasured.
+
+### ACP mode
+
+Measured on 1.0.114 on 2026-11-22 with `copilot --acp`, the user's own `HOME` (the token is in the keychain) and
+`COPILOT_HOME` naming a scratch directory, signed in on the free plan. The probe wrote `initialize` (protocol version 1, no client capability) and then `session/new` (a
+scratch working directory, no MCP server) as JSON-RPC lines on stdin, read the answers, sent no prompt, and ended the
+input.
+
+- **It does not list the models.** `session/new` was answered with `sessionId`, `modes` and `configOptions`, and no
+  `models`; the options are `mode` (agent, plan, autopilot) and `allow_all` (`on`, `off`), with no option of the
+  `model` category. No `config_option_update` followed in the two seconds after. `models/list` is "Method not found".
+  `session/set_model` and `session/set_config_option` with `configId: "model"` both answered success for a model id
+  that does not exist, so neither tells which ids are valid. `copilot help acp` names no way either. So ACP is not a
+  means to Copilot's model list on this version.
+- `initialize` was answered after 5 to 14 s: `agentInfo` (`Copilot`, the CLI's version), one `authMethods` entry
+  (`copilot-login`, whose `_meta` carries the path of the native executable and `["login"]`) and capabilities for
+  loading, closing and listing sessions and for logging out. `session/new` took 1 to 4 s more. Both requests written
+  at once, before any answer, were answered in order.
+- `available_commands_update` came with the session, up to three times: 34 slash commands with descriptions and
+  input hints.
+- **Signed out** (`GH_TOKEN` set to a token GitHub rejects, a new `COPILOT_HOME`), `initialize` answered the same
+  and `session/new` was refused: `{"code": -32000, "message": "Authentication required"}`.
+- **Every `session/new` leaves a directory** `$COPILOT_HOME/session-state/<session id>/` (`workspace.yaml` with the
+  id, the working directory and the client's name, `checkpoints/index.md`, a lock file) and a lock under
+  `session-state/.session-operation-locks/`. They stay after the process ends. `session/list` in a later run did not
+  list them, and they hold no `events.jsonl`. The first run in a home also writes `config.json` (`firstLaunchAt`).
+- The process exited by itself about 2 s after its input ended, having closed the session it opened.
+- Nothing was spent: no prompt was sent and the session's directory holds no model request.
+
+No provider code uses it.
+
+## OpenCode
+
+The baseline below was measured on 1.19.6 on macOS,
+in a scratch home and working directory, with a local stand-in answering the model's requests, and then with the
+default account signed in (an Anthropic API key) through a development daemon with a data directory of its own,
+`anthropic/claude-haiku-4-5` answering: a console session and a project session it opened, a permission prompt, a
+question, an Octoboard tool call, a report to the parent, an instruction, an interrupt, a stop of the daemon and a
+resume, and a resume after an archive. Octoboard accepts 1.19.6, 2.3.2, 2.4.0 and 2.4.1. The differences measured on 2.x
+are in "OpenCode 2" below.
+
+**Windows 11 ARM64 (23H2, build 22631.6199).** npm 11.20.0 installed `opencode-ai` **1.19.6**
+into a scratch prefix. Its `opencode.cmd` uses `%~dp0` and runs
+`node_modules\opencode-ai\bin\opencode.exe %*`. The launcher reported 1.19.6 on that host.
+Octoboard resolves the shim to this executable when the package is beside it, which gives
+version and install detection the same executable as the terminal launch. The first desktop
+bootstrap timed out while OpenCode was downloading ripgrep. The provider keeps the same
+workspace request open for up to four minutes on Windows, with the ordinary request timeout
+unchanged. A run with a fresh cache delivered the first console and project messages and the
+first after `/new`. A rendered terminal now recognises the composer even for providers that
+have no folder confirmation. The resumed Windows project delivered its prompt to the stand-in.
+
+**Linux daemon** (1.19.6, Debian 13 arm64, glibc 2.41). A fresh native private server advertised its
+listen port before initializing the workspace for `POST /session`. With the launch's injected configuration
+and fresh XDG directories, that first request returned HTTP 200 after 34.06 seconds. With fresh
+directories and no injected configuration it returned in 1.60 seconds, and with the injected configuration
+and a warm cache it returned in 0.32 seconds. This exceeded the daemon's 10-second steady-state request
+budget and caused a fallback to a standalone terminal. The first session creation or lookup has a separate
+45-second budget. Warm starts reached the Octoboard MCP server and the pinned Anthropic model completed
+turns in a console and project session. The pair archived and relaunched. In a follow-up with fresh runtime
+state and staged npm dependencies, a loopback forwarder delayed each native server's first session creation by
+13 seconds. The patched daemon attached in 16.8 seconds for the console and 14.5 seconds for the project.
+On the attached pair, the local model received the project's report in the console and the console's
+instruction in the project. The interrupt command cancelled the active project model stream and returned
+the session to idle. A process trace showed the OpenCode plugin directly executing the launch's hook
+script with a `/bin/sh` shebang. With an unstaged npm dependency directory the follow-up crossed the 45-second deadline
+during workspace initialization and fell back to a standalone terminal.
+
+### Launch and resume
+
+- `opencode` starts the TUI; `--prompt <text>` gives the first prompt, `--model <provider/model>` the model,
+  `--auto` approves every permission its rules do not deny, for that process. There is no reasoning-effort flag.
+- The first prompt has to be in the flag's own argument, `--prompt=<text>`: given as the next argument, a prompt that
+  starts with a dash (`- fix the build`, a markdown list) is taken for an option, and the TUI starts with no prompt
+  and no session. Octoboard keeps the first task in its outbox until the TUI is ready.
+- Under `--auto` a rule that says `ask` still fires `permission.asked`, answered at once by OpenCode itself
+  (`permission.replied` 6 to 24 ms later, measured again for `bash`, `external_directory` and two calls at once; a
+  rule that says `deny` fires neither). The flag is not kept by the session: resumed without it, the same
+  call opens a prompt that waits. Octoboard's plugin therefore tells of a prompt only once it has stayed open 300 ms,
+  and forwards its answer whether or not it told of the prompt.
+- No flag takes an id for a new session. A session is created only when its first prompt is submitted, not when
+  the TUI starts, and its id (`ses_…`) is first seen in the `session.created` event.
+- `--session <id>` continues a session. An id that has gone prints `Error: Session not found: <id>` and exits with
+  status 1 at once.
+- It sets `AGENT=1`, `OPENCODE=1` and `OPENCODE_PID=<its pid>` on its own process as it starts, so every program it
+  runs inherits them.
+
+### Configuration, and how Octoboard injects
+
+Configurations are merged in this order, a later one over an earlier: the global file (`~/.config/opencode`), the
+file `OPENCODE_CONFIG` names, the project's `opencode.json`, the configuration directories (the project's
+`.opencode`, `~/.opencode`, then the one `OPENCODE_CONFIG_DIR` names), the inline JSON of `OPENCODE_CONFIG_CONTENT`,
+an organization's and a managed configuration, and last `OPENCODE_PERMISSION`. Objects merge key by key; the
+`instructions` and `plugin` lists are added to; any other list is replaced.
+
+- **`OPENCODE_CONFIG_CONTENT` is what Octoboard sets.** It wins over the user's global and project configuration and
+  leaves the rest of theirs in force. Where the user's shell already sets it, Octoboard merges its own over theirs.
+  OpenCode reads the variable with the reader of its configuration files: comments and trailing commas are taken
+  (a value with a line comment, a block comment and a comma before the closing brace loaded), and Octoboard reads the
+  user's value the same way, with the shared reader of a user's JSON. Measured with `opencode debug config`: a comma
+  that follows no value is refused (`[,]`, `{,}`, `["a",,]`: `ValueExpected`), a byte order mark is refused
+  (`InvalidSymbol`), and a line comment ends at a carriage return as at a line feed. A value OpenCode refuses makes it
+  exit with status 1 and `Config file at OPENCODE_CONFIG_CONTENT is not valid JSON(C)`, whatever the command.
+- **`{env:NAME}` and `{file:path}` are put in place in the text before it is parsed**, in the inline value as in a
+  file: inside a string or outside one (`{"username":{env:T}}` with `T` holding a quoted string loaded, and a whole
+  value of `{env:WHOLE}`), once (a variable whose value is `{env:B}` stays that text), nothing for a variable that is
+  not set, the name taken as written (`{env: T }` is not `T`), a token with no name (`{env:}`, `{file:}`) left as
+  text, and inside a block comment too. A file's content is
+  trimmed and escaped as a string's (so `{file:…}` outside a string is JSON only for a file holding a number or
+  `true`/`false`), a relative path is taken from the working directory, a missing file is refused, and a `{file:…}` on
+  a `//` line is skipped. The variables go in first and the files after, in the text with the variables in place:
+  `{file:{env:P}}` reads the file `P` names, a variable whose value is `{file:…}` has the file put in, and a file's
+  content is not read for tokens again (a file holding `{env:X}` gave that text). The path is taken as written up to
+  the closing brace (`{file: x}` names a file whose name starts with a space), `~/` at its start stands for the home
+  directory (`{file:~/vals/flag.txt}` loaded from a scratch `HOME`) and no other use of `~` does
+  (`{file:~name/…}` was looked for below the working directory), and the trim takes a byte order mark. A directory
+  is refused as a missing file is. Octoboard keeps a user's value that reads as written as it is, its tokens left to
+  OpenCode; one that is JSON only with them in place is read with the variables of the launch's environment in
+  place, and with the files named outside a string in place, read as OpenCode reads them, and merged. A
+  `{file:…}` inside a string is left for OpenCode in that case too, so the content of a file named there stays out
+  of the launch's environment. OpenCode substitutes again in what it is handed, so in that second case a variable
+  whose value itself holds `{env:…}` has it put in, which OpenCode alone leaves as text. A file named outside a
+  string is read within 64 KiB, as a regular file; where it cannot be read the user's value is not merged and
+  Octoboard's own configuration goes alone.
+- **`OPENCODE_CONFIG_DIR` is not used.** A plugin in its `plugin` directory does load, but OpenCode installs
+  `@opencode-ai/plugin` (62 MB of `node_modules`, with a `package.json`, a lock file and a `.gitignore`) into every
+  configuration directory on every launch, and the variable holds one directory, so a user's own would be lost.
+- With any of the three variables set, OpenCode does not write its `$schema` stub into a missing global config file.
+- The `plugin` list takes an absolute path of a JavaScript file as well as a `file://` URL, and nothing is installed
+  for it. The plugin is loaded once, into the TUI's own process, before the input box is ready, and initialised once
+  more as the process shuts down.
+- `instructions` is a list of files; each reaches the model once per request, in the system prompt, on a new session
+  and on a resume alike. A working directory whose `AGENTS.md` and `CLAUDE.md` are links to one file gives the model
+  that text once.
+- An MCP server is `mcp.<name>` with `type: "local"`, `command` (a list) and `timeout`, in milliseconds, per server,
+  five seconds by default. A call that outlasts it ends as the tool error `MCP error -32001: Request timed out`, and
+  the turn goes on.
+- A server's tool reaches the model as `<server>_<tool>` (`octoboard_get_session`), and that name is the permission
+  OpenCode asks for. Tools of an MCP server are not asked about by default; under a user configuration of
+  `permission: {"*": "ask"}` they are, unless the inline configuration holds `permission: {"octoboard_*": "allow"}`,
+  which wins.
+- Of the rules that match a tool, the one written last in `permission` holds: `{"octoboard_*": "allow", "*": "ask"}`
+  asks for an Octoboard tool, `{"*": "ask", "octoboard_*": "allow"}` does not. `permission` may also be one action
+  for every tool (`"ask"`), which merges as the rule for `*`. A key keeps the place it first had when one
+  configuration is merged over another (`opencode debug config` prints the merged order): a global file of
+  `{"octoboard_*": "deny", "*": "ask"}` under an inline `{"octoboard_*": "allow"}` merged to
+  `{"octoboard_*": "allow", "*": "ask"}`, and the Octoboard tool was asked for, the user's `*` holding. A pattern
+  matches by wildcard, so `octoboard_**` matches what `octoboard_*` does under a key of its own: the same file under
+  an inline `{"octoboard_**": "allow"}` merged to `{"octoboard_*": "deny", "*": "ask", "octoboard_**": "allow"}`,
+  and the tool ran unasked (the call reached a stand-in MCP server). A rule written inline is still the user's to
+  overrule: a file of theirs that writes that very key ahead of a `*` keeps it there.
+- **A plugin's `config` hook is handed the merged configuration, and what it changes there holds** (1.19.6). It is
+  called once the files, the inline value and `OPENCODE_PERMISSION` are merged (a hook saw the rules of a global
+  file, of the inline value and of `OPENCODE_PERMISSION` in one `permission`, nested rules as written), and before
+  the agents' rules are built: a hook that replaced `config.permission` with the same rules under a `*` written
+  first gave, over a global file of `{"bash": "allow", "edit": "deny"}`, the rules `* ask`, `bash allow`,
+  `edit deny` in that order, in `opencode debug agent build` and in the running TUI alike (its server's
+  `app.agents()`, asked from a plugin). The hooks run in the order of the merged `plugin` list, after those of the
+  plugin directories: a plugin of a configuration file's list and one in the project's `.opencode/plugin` both ran
+  ahead of the inline value's and were handed the rules as merged, and a plugin listed after Octoboard's in the
+  inline value ran after it and was handed the rules Octoboard had written. Octoboard's plugin is the last entry of
+  the list the launch hands over, so its hook runs after every plugin of the user's; a rule one of theirs adds in
+  its own hook is there for it to order.
+- **Octoboard writes the launch's permission rules there, not inline**: its plugin's `config` hook rewrites
+  `config.permission` in memory, and nothing is written to a file. A rule written inline cannot be placed: a key
+  keeps its first place in the merge and a new one goes last, so an inline `"*": "ask"` lands after the rules of a
+  file that writes no `*` ahead of them (`{"bash": "allow", "edit": "deny"}` merged to
+  `{"bash": "allow", "edit": "deny", "*": "ask"}`, and the deny became a prompt), and a file's own `octoboard_**`
+  ahead of a `*` stays ahead of it. Two rules are written, measured with `opencode debug agent build` and the
+  plugin as a launch writes it:
+  - **Under the `ask` approval mode, `"*": "ask"` as a default beneath the user's own rules.** Where the merged
+    rules write no `*` it goes first, so what the user allowed is not asked for and what they denied stays denied:
+    a global `{"bash": "allow", "edit": "deny"}` gave `* ask`, `octoboard_** allow`, `bash allow`, `edit deny`.
+    Where they write a `*` of their own, `ask` takes its place where it stands, so the rules written after it hold
+    and those before it stay overruled, as the user's own default overruled them
+    (`{"edit": "deny", "octoboard_report": "ask", "*": "allow", "bash": "deny"}` gave `edit deny`,
+    `octoboard_report ask`, `* ask`, `octoboard_** allow`, `bash deny`). A `permission` that is one action
+    (`"allow"`) is that `*`. OpenCode takes a `*` that holds rules by pattern (`"*": {"rm *": "deny"}`, followed as
+    `* rm * deny`); the default goes among those the same way (`* * ask`, `* rm * deny`). `OPENCODE_PERMISSION` is
+    merged in before the hook sees the rules, a `*` of its own included. **An agent's own `permission` is left as
+    the user wrote it, its `*` included**: it is followed after all of these, so a rule the user gave one agent
+    holds over the default, an allow or a deny alike, which is the user's rule staying in force. With the default
+    an edit inside the working directory is asked for (permission `edit`), which is not by default. Under `--auto`
+    such a prompt is answered by OpenCode itself. With no approval mode chosen, and under `auto`, the hook writes
+    no default: OpenCode's own configuration decides.
+  - **The rule that allows Octoboard's tools, `octoboard_**`, right after the rules' `*`, or first where they write
+    none, under every approval mode and with none.** There the default does not ask for Octoboard's tools, and a
+    rule of the user's that names one of them and is written after their default still wins, a deny or an ask
+    alike, as with the other agents (`docs/product/per-agent-launch-specifics.md`). Measured: no `*`
+    (`{"bash": "allow", "edit": "deny"}`): `octoboard_** allow`, `bash allow`, `edit deny`; the user's `*` first
+    with a rule naming a tool after it (`{"*": "ask", "edit": "deny", "octoboard_archive_session": "deny"}`):
+    `* ask`, `octoboard_** allow`, `edit deny`, `octoboard_archive_session deny`; the user's `*` in the middle (the
+    example under `ask` above); the user's `*` last with a rule naming a tool before it
+    (`{"edit": "deny", "octoboard_archive_session": "deny", "*": "ask"}`): `edit deny`,
+    `octoboard_archive_session deny`, `* ask`, `octoboard_** allow`, where the user's own `*` had already overruled
+    their deny. A rule of the user's under the very key `octoboard_**` stands as written where it follows their `*`
+    (`{"*": "ask", "edit": "deny", "octoboard_**": "deny"}` stayed as it was, the tools denied) or where they
+    write no `*` (`{"octoboard_**": "ask", "edit": "deny"}` under `ask`: `* ask`, `octoboard_** ask`, `edit deny`),
+    and gives way where their `*` overruled it (`{"octoboard_**": "deny", "*": "ask", "edit": "deny"}`: `* ask`,
+    `octoboard_** allow`, `edit deny`). An agent's own `permission` is followed after the configuration's, so where
+    it writes a `*` of its own the hook writes the rule after that one too
+    (`agent.build.permission` of `{"*": "ask", "webfetch": "deny", "octoboard_instruct_session": "ask"}` gave
+    `* ask`, `octoboard_** allow`, `webfetch deny`, `octoboard_instruct_session ask`); an agent's rules with no `*`
+    are left alone (`{"webfetch": "deny"}` stayed one rule, and a top-level `octoboard_archive_session deny` ahead
+    of it held). Where an agent's own `*` follows a top-level rule that names a tool, that `*` has overruled the
+    rule, by the user's own writing, and Octoboard's rule after it allows the tool.
+  - **The legacy keys are folded in before the hook.** A top-level `tools: {"todowrite": false}` was in the
+    `permission` the hook was handed (`todowrite deny`, after the default), `mode.build.permission` was
+    `agent.build.permission` there, and `agent.plan.tools: {"bash": false}` was that agent's `bash deny`: a deny
+    written with them stays after the default like any other.
+  - **The default follows OpenCode's built-in rules, the agents' own included, so under `ask` a built-in deny
+    becomes a prompt, as it does where the user writes `"*": "ask"` themselves.** An agent's rules are OpenCode's
+    defaults, then the built-in rules of that agent, then the merged `permission`, then the agent's own from the
+    configuration (`opencode debug agent plan`, `general`, `explore`). So with the default the plan agent's
+    `edit deny` and `task general deny`, the `plan_enter`/`plan_exit`/`question` denies of the agents that do not
+    have them, the general agent's `todowrite deny` and the explore agent's `* deny` are all asked for; a user's
+    own file of `{"permission": {"*": "ask"}}` with no plugin gave the plan agent the same order. The hook is
+    handed no built-in rule and the configuration has no place ahead of them, so it cannot keep them; it is left
+    as OpenCode's own meaning of an `ask` default. In every mode `octoboard_** allow` follows the explore agent's
+    `* deny` too, so a built-in subagent is not denied Octoboard's tools.
+  The hook swallows a failure of its own, assigns nothing unless every rule was worked out, and puts back what it
+  assigned where a later assignment fails, so a failure leaves the configuration as OpenCode merged it: `ask` then
+  asks for nothing more than the user's own rules do, and Octoboard's tools are asked for where those rules ask.
+- **`opencode debug agent build` prints the agent's rules in the order they are followed**, as JSON on standard
+  output: `permission` is a list of `{"permission", "pattern", "action"}`, OpenCode's built-in rules first (the last
+  of them `plan_enter`), then the merged `permission` in its order, a nested rule as one entry per pattern, then the
+  agent's own, then one built-in `external_directory` rule. It took 1.3 s in a home with no plugin to install. It is
+  not a read: like the TUI's own start it writes `"$schema"` into every configuration file it loads that lacks one
+  (the global and the project's `opencode.json` both, unconditionally in the loader, whatever variable is set),
+  writes a `.gitignore` into the global configuration directory, creates the database, the log and
+  `~/.cache/opencode/models.json` where there is none, and with a `plugin` entry installs `@opencode-ai/plugin` into
+  the global configuration directory. Measured side by side in fresh scratch homes, the TUI's start wrote the same
+  set, so the command writes nothing a launch from the same directory would not; run ahead of a launch that is then
+  not made, it has written all of it for nothing.
+- A shell the agent starts gets `{...process.env, ...env}` where `env` is what a plugin's `shell.env` hook filled
+  in: a variable cannot be removed there, but an empty `OPENCODE_CONFIG_CONTENT` (or `OPENCODE_CONFIG_DIR`) reads as
+  unset. Octoboard's plugin hands the user's own value back this way, so an OpenCode started from the session's
+  shell does not load the session's plugin, tools or role; it hands back the user's
+  `OPENCODE_DISABLE_TERMINAL_TITLE` the same way, which the launch overrules for OpenCode's own process.
+- The command of an MCP server, with its arguments, did not reach OpenCode's log (`<data directory>/log`) or its
+  screen: not when the command does not exist, not when it exits at once, not when it runs, at the default log level
+  and with `--log-level DEBUG`.
+
+### Events a plugin sees
+
+A plugin's `event` hook receives every bus event as `{type, properties}`. Those Octoboard's plugin reads:
+
+| Event | Properties | When |
+|---|---|---|
+| `session.created` | `sessionID`, `info` (`id`, `parentID` for a child, `title`) | At the first prompt of a session; for a subagent's child session; for a session started with `/new` |
+| `session.updated` | `sessionID`, `info` | Often; carries the generated title |
+| `message.updated` | `info` (`id`, `sessionID`, `role`, `finish`, `error`) | A message is created or changes |
+| `message.part.updated` | `part` (`type`, `text`, `messageID`, `sessionID`, `id`) | A user message's text, as typed; an assistant message's text, whole |
+| `session.status` | `sessionID`, `status.type` (`busy`, `idle`, `retry`) | `busy` at the start of a turn and again with every step of it |
+| `session.idle` | `sessionID` | The turn is over; fires twice after an error |
+| `session.error` | `sessionID`, `error` (`name`, `data.message`) | `MessageAbortedError` for an interrupt, before the idle |
+| `permission.asked` | `id`, `sessionID`, `permission`, `patterns`, `metadata`, `always`, `tool` | A permission prompt opens |
+| `permission.replied` | `sessionID`, `requestID`, `reply` | It is answered |
+| `question.asked` | `id`, `sessionID`, `questions`, `tool` | The `question` tool asks |
+| `question.replied`, `question.rejected` | `sessionID`, `requestID` | It is answered or dismissed |
+
+- A prompt submitted while a turn runs joins it: one `busy` span and one `session.idle` for both.
+- A prompt written the moment the answer's message is finished (four runs, the write 1 to 2 ms after the event)
+  did not join the turn ending: the idle came first, then the new user message and `busy`, a turn of its own, which
+  the plugin reports as one. The user message of the turn that ended is reported once more after the idle.
+- **Nothing tells a plugin which conversation the terminal shows.** `/new` fires no event; the new session's
+  `session.created` comes with its first prompt. Picking a session from the list (`/sessions`) fires none either;
+  the session picked is seen again only when a prompt is submitted in it. A turn left running in a conversation the
+  user has moved away from goes on reporting under its own id, and a permission prompt it raises is not drawn until
+  the user is back in it (the terminal showed the other conversation's empty box). Octoboard's plugin therefore
+  takes the conversation a prompt was last submitted in for the one shown, a prompt that joins a turn left running
+  included, and forwards only that conversation's events; the id Octoboard records moves with a turn's start and
+  nothing else. The conversation left stays in OpenCode's session list and is resumed by its id.
+- A subagent's permission prompt is drawn in the root session's terminal and reported under the child's
+  `sessionID` (`permission.asked`, `permission.replied`); Enter allows it and the child's and the root's turns go on.
+  Esc on it opens a second step (`Reject permission`, "Tell OpenCode what to do differently", `enter confirm  esc
+  cancel`) where Esc on the root session's own prompt rejects at once. A subagent that calls the `question` tool
+  raises no question: the call fails in the child and its turn ends.
+- Two tool calls of one step ask at once (two `permission.asked` 2 ms apart; a `question.asked` and a
+  `permission.asked` 22 ms apart). OpenCode draws one prompt at a time, a permission prompt ahead of a question
+  asked before it, and the next once the first is answered. Esc on the first of two permission prompts rejects
+  both, then the idle. Esc on a question dismisses it (`question.rejected`), then the idle.
+- The `task` tool runs a subagent in a child session, whose events carry the child's `sessionID`; only
+  `session.created` and `session.updated` name its `parentID`.
+- The `question` tool is on by default in the TUI (the client `cli`).
+- A model request that fails is retried (`session.status` of type `retry`); no `session.error` came within twelve
+  seconds of a stand-in answering 500. One answered 401 is not retried: one `session.error` carrying the answer's
+  message in `error.data.message`, then the idle.
+- A permission the user rejects ends the turn: `permission.replied`, then `session.idle`, with no request to the
+  model, no answer and no `session.error`.
+- By default a tool reaching outside the working directory asks (`permission` is `external_directory`), and editing
+  and running commands inside it do not.
+- `SIGTERM` while a permission prompt is open ends the turn as an interrupt does (`MessageAbortedError`), then
+  `session.status` idle and `session.idle`; no `permission.replied` comes for the prompt.
+- Esc while a permission prompt is open rejects it: `permission.replied` with `reply: "reject"`, then
+  `session.status` idle and `session.idle`, and no `session.error`. A second Esc a tenth of a second later finds
+  nothing to interrupt. So in both cases no answer to a prompt comes after the turn's end; the plugin still drops
+  one that would.
+
+Octoboard's plugin forwards, through the session's hook script, payloads of its own: `hook_event_name`, `format`,
+`session_id`, and by event `turn_id`, `prompt`, `last_assistant_message`, `error`, `request_id`, `tool` and
+`subagent`. The names are `session.created`, `turn.started` (the first `busy` of an idle session),
+`session.idle` (only for a turn that is open), `turn.cancelled` and `session.error` (an interrupt and a failure,
+told apart by the error's name), and the permission and question events. One hook script runs at a time, in the
+order the events came.
+
+The plugin also writes a program status report to the terminal (`OSC 7501 ; state=… ST`, one write to standard
+output): `working` at a turn's start and when a prompt is answered, `blocked` with `kind=permission` or
+`kind=question` while one is open, `idle` when the turn ends, is cancelled or fails. Octoboard presses an interrupt
+key only where the terminal shows the turn running as well as the events, and the title says nothing of it; without
+the reports an interrupt was refused with "its terminal does not show a turn running". Octoboard's terminal takes the
+reports out of the output. They did not disturb the TUI's drawing in these runs. The plugin reports `blocked`
+only for a prompt it has told of, with `kind=permission` while any permission prompt is open, which is the one
+drawn. With a terminal of 250 by 90 whose reader stopped reading for 6 and for 12 seconds while a turn ended in a
+400-line answer, every report came whole and in order once reading went on: OpenCode's own turn end waited on the
+terminal, and the idle report was written with it.
+
+### Terminal
+
+- The title is `OpenCode` outside a session and `OC | <title>` in one, and is cleared at exit. `OpenCode` is first
+  written when the input box takes input: a paste sent before it is lost, one sent right after is submitted.
+  `OPENCODE_DISABLE_TERMINAL_TITLE` turns the title off; an empty value reads as unset.
+- The title is the same while a turn runs as after it.
+- A bracketed paste followed by Enter submits the pasted text. One submitted while a turn runs is shown above the
+  box marked `QUEUED` and is taken into that turn at its next step. A paste enters neither the command list nor
+  shell mode, whatever it starts with: ` /models`, ` /nosuch thing` and ` /usr/bin is a path` (as Octoboard writes a
+  leading slash, after a space), `/nosuch thing` with nothing before it, and `!echo hi`, `! echo hi` and ` !echo hi`
+  each ran as a prompt to the model, its text as typed, and the plugin forwarded its `turn.started` (one launch with
+  the plugin and the stand-in model). Typed, a `/` as the first key opens the command list above the box.
+- The input box is a block of rows down a `┃` bar, closed by a rule that starts with `╹` and runs on in `▀`: an empty
+  row, the rows of text (indented two cells), an empty row, and the row naming the agent and the model. Outside a
+  session the block is indented to the middle of the screen and an empty box shows `Ask anything… "<an example>"`,
+  grey and not faint; in a session an empty box shows nothing. At 200 columns (not at 120) a sidebar is drawn to the right
+  on the same rows, so text of the sidebar follows the box's on a row; the rule ends where the box does.
+- A permission prompt or a question is drawn in place of the box, down the same bar, with no rule under it.
+- Ctrl-U deletes back to the start of the line, and at the start of a line the line break before it, at the idle
+  prompt and while a turn runs alike. Ctrl-J starts a new line.
+- The list opened by a `/` or an `@` typed in the box is drawn right above the box, down the same bar, its rows
+  indented one cell where the box's are indented two; the box under it is drawn whole, and Ctrl-U closes the list
+  with the text. Octoboard reads the box under it as what was typed.
+- A dialog is drawn over the conversation, the box whole under it, with its title and `esc` on its first row:
+  `Commands` (ctrl+p), `Sessions`, `Select model`, `Select agent`, `Themes`, `Help` (`esc/enter`), `Status`,
+  `Connect a provider`, `Export Options`, `Timeline`. While one is up it takes the keys: a pasted message went into
+  the search field of the command, session and model lists (`No results found`), the Enter picked nothing, and no
+  prompt was submitted. Octoboard holds its writes while one of the ten is on the screen. Other dialogs were not
+  looked for. The dialog covers the middle of the screen only: over a conversation that fills the screen (120 and
+  200 columns) the conversation's text stood on the title's row to the left of every dialog and, at 120 columns,
+  to its right too, so the title's row is never a row of its own. What stays on a dialog's screen whatever is typed
+  into it: under the session list `pin/unpin ctrl+f  delete ctrl+d  rename ctrl+r`, under the model list
+  `Connect provider ctrl+a  Favorite ctrl+f`, in the help `Press ctrl+p to see all available actions and commands`,
+  in the status `N MCP Servers` (`No MCP Servers` with none, `1 MCP Servers` with one), in the export options
+  `Filename:` and `Press return to confirm, tab for options`. At 40 columns the two lists' key hints are split into
+  columns that wrap (`pin/` over `unpin`, `Connect` over `provider`) and the two sentences wrap; Octoboard asks,
+  beside the title, only for what stays on one row there: `Press ctrl+p` in the help, `MCP Servers` in the status,
+  `Filename:` and `Press return to confirm` in the export options. The command, agent, theme, provider and timeline
+  lists keep nothing but the title row: the `Search` placeholder goes with the first key and the rows become what
+  the search matches (`No results found`). Octoboard recognises every one of the ten by its title row as drawn: the
+  title, a run of blanks, `esc` (`esc/enter` for the help). The run was the same at 100, 120 and 200 columns (31
+  cells under `Connect a provider`, the shortest, to 69 under `Sessions` and `Timeline`) and shrinks with the
+  terminal below that: 31 to 59 at 80 columns, 29 to 45 at 60, 9 (`Connect a provider`) to 25 (`Status`) at 40.
+  Octoboard asks for nine blanks at least, so a sentence that spells a title with `esc` after it
+  (`Timeline escape hatch`, `Status escalated`) is no dialog. Below 40 columns OpenCode still draws the dialogs with
+  fewer blanks (5 to 15 at 30 columns, 1 to 9 at 24), a longer title running into its `esc`
+  (`Connect a providersc` at 30) and, at 20, wrapped onto rows of its own; at 16 it fails as it starts (Bun reports
+  a segmentation fault). So 40 columns is the narrowest terminal at which Octoboard recognises all ten. In a
+  narrower one Octoboard does not hold its writes for a dialog it cannot see: a message written while one is up
+  lands in it (measured at 30 columns: the text in the command list's search field, the list still open, no prompt
+  submitted and no event), and since every prompt submitted at the idle prompt is reported (`turn.started`, 0.62 s
+  after the first Enter of a launch and 0.10 s after the next two, one launch with the stand-in model), a write no
+  report follows is not taken as sent. At 30 columns the input box is drawn whole and empty under seven of the ten
+  dialogs; the session list covers the whole box, and the model and provider lists cover its upper rows. So
+  OpenCode declares that a box reading empty off a whole frame after an unconfirmed write means the message went
+  elsewhere: its sender and the user are told `message_not_delivered` (it may be lost; send it again), and nothing
+  is pressed into the dialog again. Under a dialog that covers the box, the box is unknown and the message is left
+  unsent as any other (`message_not_sent`). A message written while a turn runs is not waited on (OpenCode queues it until the turn ends), so one
+  that lands in an unrecognised dialog then is lost without a word.
+  Each of the ten is opened by the person (ctrl+p, or its command), and
+  none is raised by OpenCode to ask something: a session showing one holds its writes and is not shown or reported
+  as waiting for the user.
+- No confirmation is shown at a first run in a folder, one holding an `AGENTS.md` included, and none is recorded:
+  a first run and a turn there wrote the database, `<state>/opencode` (`model.json`, `prompt-history.jsonl`,
+  `locks`) and an npm log under `~/.npm/_logs`, and nothing in a configuration directory or in the folder. So a
+  console session's directory needs no trust from Octoboard.
+- **Esc interrupts a turn only when pressed twice**: the first press shows `esc again to interrupt`, the second ends
+  the turn. Two presses a tenth of a second apart are taken as two keys. At the idle prompt one Esc, or two, does
+  nothing and leaves a draft in the input box as it was.
+- An interrupt does not put the interrupted prompt back in the input box. A prompt submitted while the turn ran is
+  kept in the conversation but does not run once the turn is cancelled.
+- Octoboard uses the plugin's terminal report (OSC 7501) where it reaches the terminal. With the TUI attached to
+  the private server, the server-side plugin reports the hook status and the attached terminal draws a spinner and
+  `esc interrupt` below the composer. The interrupt uses that footer alongside the hook status. On Windows an
+  active stand-in request closed early after two Esc keys and the terminal returned to the idle prompt. An Esc
+  pressed on a stale reading lands on the idle prompt,
+  where it does nothing and leaves a draft as it was, and an open permission prompt or question reads as waiting on
+  the user from the hook status, which keeps the key away. Both were measured again on 1.19.6 on 2026-11-23 (the
+  version had not moved): one Esc and then two more at the idle prompt changed nothing on the screen, kept the draft
+  and forwarded nothing; Esc on an open permission prompt rejected it and Esc on a question dismissed it, each ending
+  the turn with an idle and no interrupt. Both are to be measured again on a new OpenCode version.
+- On `SIGTERM` it ends its turn as an interrupt does, ends the command it is running (a `sleep` it had started was
+  gone) and exits with status 0.
+
+### Accounts and models
+
+- The data directory (`~/.local/share/opencode`, by `XDG_DATA_HOME`) holds the database `opencode.db` and, once a
+  credential is stored, `auth.json`, an object with an entry per model provider. No variable of OpenCode's own moves
+  it, so OpenCode has the default account only. A launch given an account's directory is refused
+  (`provider_unsupported`, operation `owned_accounts`): planned, it would run as the default account under the
+  other's name. On 1.19.6, `db path` still named the database under `XDG_DATA_HOME` with
+  `OPENCODE_DATA_HOME`, `OPENCODE_DATA_DIR` and `OPENCODE_TEST_HOME` all pointed elsewhere. The executable has
+  no OpenCode-specific data-directory override. Carrying a conversation and sharing the default configuration are
+  unavailable because there is no second account. OpenCode has no plan quota of its own.
+- `opencode auth list` prints the stored credentials and ends them with `N credentials`; when the environment
+  supplies a provider's key it adds an `Environment` block ending in `N environment variable(s)`. Signed out it prints
+  `0 credentials`. The output carries colour escapes when piped.
+- OpenCode works with no credential and no key in the environment: on the vendor's free models, on a provider whose
+  key is written in a configuration file, on a local or compatible provider. Octoboard therefore never reads its
+  account as signed out, which would refuse every new session: signed in where a credential or an environment key is
+  found, and otherwise not told.
+- `opencode models` prints one `provider/model` id per line. Signed out it still lists the vendor's free models
+  (`opencode/…-free`); a provider's key in the environment adds that provider's models.
+- With a provider's API key stored through `opencode auth login`, `auth.json` holds
+  `{"<provider>": {"type": …, "key": …}}`, `opencode auth list` prints the provider with `api` and `1 credentials` in
+  the shape of the capture taken with a made-up key, and `opencode models` lists the vendor's free models and then
+  that provider's, as with the key in the environment. The free list is the vendor's and changes between runs:
+  twelve in the captures, eleven a day later, when Octoboard read that account as signed in from the file and listed
+  the 31 models.
+- **OpenCode has no plan of its own, so there is no plan quota to read.** It signs in to model providers, each of
+  which counts usage against its own key or subscription. `opencode stats` (1.19.6, "show token usage and cost
+  statistics") reports what the local database recorded of past sessions, not a limit, a remaining share or a reset;
+  Octoboard reads no quota for OpenCode, and its descriptor declares no quota window.
+- It is installed by its own installer (under `~/.opencode/bin`), from npm (`opencode-ai`) or with Homebrew, and
+  `opencode upgrade` updates it.
+
+### MCP inventory and Claude compatibility
+
+Measured on 1.19.6 on macOS with scratch directories. `opencode mcp list` lists the merged account configuration.
+A disabled local entry was printed as `○ disabled_example disabled` and an executable that exited before connecting
+as `✗ failed_example failed`, with a diagnostic and command beneath it. The provider takes the names and statuses.
+The command and diagnostic can include credentials, so they stay out of the inventory. The account's lookup runs from
+its home, so it does not include a project's separate configuration.
+
+A local model stand-in received markers from both the scratch home's `.claude/CLAUDE.md` and the project's
+`CLAUDE.md`, and `opencode debug skill` found the scratch home's Claude skill. `OPENCODE_DISABLE_CLAUDE_CODE=true`
+suppressed both instructions and skills. `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=true` suppressed the instructions only,
+and `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS=true` suppressed the skill only. Octoboard sets these flags per launch with
+its Claude compatibility setting and restores the shell's values for commands the agent runs.
+
+**Log in in Octoboard is not offered.** In 1.19.6, `opencode auth login --help` exposes the provider and method
+selectors `--provider` and `--method`. Its API-key path asks for a credential in the CLI. The available account's
+measured login is by API key. The OAuth flow and credential state are shelved until the user signs in with OAuth.
+
+### Conversations in the database
+
+Measured on 1.19.6 on macOS on 2026-11-23, in a scratch home, scratch XDG directories and scratch working directories
+(one outside a git repository, one a fresh repository), with a local stand-in answering the model's requests: five
+sessions made with `opencode run` (a plain turn, a `bash` tool call, a `task` subagent, a request the stand-in answered
+401, a turn in the repository) and a TUI on one of them. No real model turn was spent. Times are wall-clock, each of
+one run.
+
+- **A conversation is rows of `opencode.db`** (SQLite in WAL mode, with `opencode.db-wal` and `-shm` beside it): a
+  `session` row (`id`, `parent_id`, `project_id`, `directory`, `title`, `tokens_input` and the other running totals,
+  `time_created`, `time_updated`, `time_archived`), its `message` rows (`id`, `session_id`, `time_created`,
+  `time_updated`, and `data`, the message's JSON) and their `part` rows (`message_id`, `session_id`, `data`). The ids are
+  `ses_…`, `msg_…` and `prt_…`, 26 letters and digits after the prefix; none is a UUID. There is no file per
+  conversation. A session in a git repository also has a snapshot directory, `snapshot/<project id>/<hash>`, named for
+  the project, not the session.
+- **`opencode export <id>`** prints one JSON object on standard output, `{info, messages}`, and
+  `Exporting session: <id>` on standard error. `info` is the session (`id`, `title`, `directory`, `model`, `tokens`,
+  `time`, `parentID` for a child). Each of `messages` is `{info, parts}`: a user message's `info` has `role: "user"`
+  and `time.created`; an assistant message's has `role: "assistant"`, `parentID` (the user message it answers),
+  `modelID`, `providerID`, `tokens` (`total`, `input`, `output`, `reasoning`, `cache.read`, `cache.write`), `finish`
+  (`stop`, `tool-calls`) and `time.completed` once it is over, or `error` (`name`, `data.message`) and no parts for a
+  request that failed. A turn with a tool call is two assistant messages. The parts are `text` (`text`, `time`),
+  `tool` (`tool`, `callID`, `state` with `status`, `input`, `output`, `metadata`, `title`, `time`), `step-start` and
+  `step-finish` (`tokens`). A subagent's call is a `tool` part of tool `task` whose `state.metadata.sessionId` names
+  the child session, which is exported by its own id and is not in the parent's export. It took 1.8 to 2.6 s for a
+  session of one or two turns, and 1.0 s with the files warm. An id the database does not hold prints
+  `Error: Session not found: <id>` on standard error, nothing on standard output, and exits with status 1.
+  `--sanitize` redacts the transcript.
+- **`opencode session list --format json`** prints an array of `{id, title, updated, created, projectId, directory}`,
+  newest first; `-n` limits it. It lists only the sessions of the project of the directory it is run in (run outside
+  the repository it did not list the repository's session, and the reverse), and never a subagent's child session. In a
+  data directory with no database it prints nothing at all, exits with status 0, and creates the database. 6.4 s on the
+  first run, 1 to 3 s after.
+- **`opencode db "<SQL>" --format json`** runs a query against the database and prints the rows as a JSON array
+  (`tsv` by default); `opencode db path` prints the database's path. It answers from any directory and for every
+  session, child sessions included: `select id, parent_id from session` listed all five. 0.7 to 0.8 s. It takes any
+  statement, so a caller that only reads sends only `select`.
+- **All three run while a TUI holds the database, and while its turn runs.** With a TUI open on a session and a turn
+  in progress (the stand-in holding its answer), `export`, `session list` and `db` each answered in about a second and
+  showed the turn so far: the user message and an assistant message with no parts and no `time.completed`.
+- **They are not read-only on the files.** `session list` and `export` change the modification time of `opencode.db`
+  (and of the `-wal` and `-shm` files) with no row changed; `db "select 1"` changes that of the `-wal` and `-shm`
+  files alone. Each appends to `log/opencode.log` in the data directory.
+- **`opencode session delete <id>`** removes a session: it prints `Session <id> deleted` and exits with status 0, in
+  1.1 s, from any directory, while a TUI was open on another session. The session's row, its child sessions' rows and
+  every `message`, `part` and `event` row of them were gone, and no file in the data or state directory named the id
+  afterwards. It leaves the `project` row and the project's snapshot directory. An id the database does not hold
+  prints `Error: Session not found: <id>` and exits with status 1. There is no Trash and no undo.
+- **The context figure OpenCode shows is the last assistant message's `tokens`**, not the session's totals: after a
+  turn of two requests of 1,234 input and 56 output tokens each, the TUI's sidebar read `Context 1,290 tokens 1% used`
+  and its footer `1.3K (1%)` (the model's `limit.context` was 100,000), while `session.tokens_input` and the export's
+  `info.tokens.input` read 2,468. The window is the model's `limit.context` from the provider's configuration; no row
+  holds it.
+- So each of what Octoboard reads of a conversation has a means in OpenCode's own commands, with no database library:
+  the history and the feed from `export <id>` or from `db` over `message` and `part` (ordered by `time_created`, and
+  by `time_updated` for what changed); whether an account holds a conversation from `db "select id from session"`
+  (`session list` cannot say: it leaves out other projects and child sessions); the context figure from the last
+  assistant message's `tokens`; removal through `session delete <id>`. Not measured: a session of thousands of
+  messages (how long `export` takes and how much it prints), a compacted or reverted session's rows, a session deleted
+  while a TUI is open on it, and `time_archived`.
+
+Octoboard uses bounded `db` SELECTs against an existing database for history, live feed, context tokens and
+resumability. A single session/message/part query distinguishes an empty session from one that is missing. An
+assistant message still streaming is withheld along with the rows after it. A completed message becomes one stable
+feed line, and its hook stirs the collector while the turn continues. The database does not give a model's context
+window, so the context reading reports tokens. Explicit cleanup runs `session delete`; an unused-session deletion
+or automatic archive cleanup keeps the database conversation. OpenCode still owns its log and database journals.
+In a 1.19.6 probe with three sessions busy against the stand-in, three CLI reads took 1.30 s serially and 0.58 s in
+parallel. Octoboard admits two OpenCode record commands at a time with a five-second command limit. The common
+collector schedules row queries independently and applies their completed results during its regular passes.
+
+### Capabilities the released agents have
+
+Measured on 1.19.6 on macOS on 2026-11-23, in a scratch home, scratch XDG directories and a scratch working directory
+(a fresh git repository), with the plugin as committed and a local stand-in answering the model's requests
+(`@ai-sdk/openai-compatible`, the model `stub/m`; for `apply_patch`, the same stand-in under the model id
+`gpt-5.1-codex`). No real model turn was spent.
+
+- **The cross-project guard: built, through the plugin.** OpenCode has no hook, but an error a plugin throws from
+  `tool.execute.before` (`(input: {tool, sessionID, callID}, output: {args})`) refuses the call: the tool does not
+  run, no permission prompt opens (the hook runs before the tool asks, so a `write` outside the working directory
+  raised no `external_directory` prompt), and the model is handed the error's message, verbatim, as the tool's
+  result (`Blocked: PROBE REASON for write` came back to the stand-in as the tool message); the turn goes on. The
+  tools that write a file are `write` (`filePath`, `content`) and `edit` (`filePath`, `oldString`, `newString`,
+  `replaceAll`), and for a GPT model `apply_patch` (`patchText`, a patch whose `*** Add File:`, `*** Update File:`,
+  `*** Delete File:` and `*** Move to:` headers name the files) in their place. These three are all: 1.19.6's own
+  rule set files the tools `edit`, `write` and `apply_patch` under the `edit` permission and no others, no
+  `multiedit` or other writing tool is in its program (searched on 2026-11-24), and the tools it offered the
+  stand-in were `bash`, `edit`, `glob`, `grep`, `question`, `read`, `skill`, `task`, `todowrite`, `webfetch` and
+  `write`. Octoboard's plugin runs the launch's
+  guard script for each call of those, with `{format, tool, args, cwd}` on its standard input, `cwd` being the
+  directory OpenCode hands the plugin, and throws the reason of a `{"decision": "deny", "reason": …}` it prints;
+  anything else, a failure, or a script that outlasts the guard's ten seconds lets the call through. Measured with the
+  plugin and a stand-in guard script: a `write` into a directory the script refused was not written and the model
+  was handed the refusal; one inside the working directory was written. `bash` is not asked about, as with the other
+  agents: the git layer catches what it writes.
+- **Native memory: none.** OpenCode 1.19.6 keeps no memory of its own across sessions: nothing in its configuration
+  schema, its commands or its program names one, and the turns of these probes wrote nothing but the database, the
+  log, the snapshot directory and `<state>/opencode` (`model.json`, `prompt-history.jsonl`, `locks`). What carries
+  from one session to the next is the instruction files the user keeps (`AGENTS.md` and the like), which OpenCode
+  writes only when the user runs its `/init` command. Declared `NativeMemory::Absent`; there is nothing to switch off.
+- **Image messages: built.** An image file's path pasted on its own becomes an attachment: the box shows
+  `[Image <n>]` for each, numbered from 1 and separated by a space (`[Image 1] [Image 2] look at these`), and the
+  request carries the image (`image_url`) for a model that takes images; a model that does not gets an error text in
+  its place. A path pasted with other text (`see /…/red.png`) stays text, and the Enter after it is not lost. The
+  plugin reports the prompt as the box held it, placeholders included (`[Image 1] ` for an image with no text).
+- **Slash commands: built.** A command pasted with its arguments (`/probecmd hello`) and submitted runs as the
+  command (`command.executed`; the plugin reports the template's expansion as the prompt, `PROBECMD says hello`), so a
+  paste does reach the command where the text names one. A lone `/name` opens the command list above the box, its
+  first row highlighted (rows down the box's bar, one cell in: `/probecmd     probe`; `No matching items` for a name
+  no command has); an Enter there takes the completion into the box (`/probecmd ` with a space after it) rather than
+  running it, and a second Enter runs it. A lone `/name ` with the space already after it opens no list and runs on
+  one Enter; a space typed after a pasted `/probecmd` closes the list, and the Enter after it runs the command, while a
+  space and an Enter written together left `/probecmd ` in the box and ran nothing. So OpenCode declares that a lone
+  command gets a space typed after it: Octoboard pastes `/name`, reads the list (another command offered is refused
+  as `command_not_recognised`), types the space as a key of its own, waits for the list to close and presses Enter. A
+  name no command has (`/nosuch`, then the space and Enter) goes to the model as the prompt `/nosuch `, as a command
+  with arguments that names none does; so a lone command whose list reads `No matching items` alone is refused as
+  `command_not_found` (`ScreenReader::list_offers_no_command`), its box cleared with Ctrl-U, and gets neither the space
+  nor the Enter. The list is read as up while a row of the bar, one cell in, stands
+  right above the box (a command, a mention for `@`, or `No matching items`), and as closed while the row above the box
+  is anything else; with no box drawn (a permission prompt, a question) it is not read at all, and the Enter is not pressed.
+  Measured again on 2026-11-24 against the stand-in (`testdata/opencode-captures.md`, "The command list and the
+  space"): at the start screen and in a session, the space closed the list after `/probecmd` and after `/zzz`
+  (`No matching items`) alike, the box still reading the command, and `/probecmd`, the space and one Enter ran it.
+  `No matching items` is drawn in a grey of the palette (`ESC [ 38;5;8 m`), not faint, so it stays on the screen the
+  input box is read from: the list reads as up, offering no command.
+- **Command groups at exit: declared.** Every command OpenCode runs leads a process group of its own, the shell being
+  a child of OpenCode's process. On `SIGTERM` it ended them all, within a second, a process the command had left
+  behind with its parent gone (`(sleep 304 &)`, parent pid 1, in the command's group) included, and the same with two
+  commands of one step running at once (two groups).
+- **Answering its prompts: built, both kinds.** Its permission prompt opens with `Allow once` selected among
+  `Allow once`, `Allow always` and `Reject`, the selection drawn by a background colour alone, the labels in the same
+  text whichever is selected. `h` and Left select the previous option and `l` and Right the next, wrapping round;
+  Enter picks; Esc rejects. `Allow always` opens a second step (`△ Always allow`, "This will allow the following
+  patterns until OpenCode is restarted", `Confirm` selected, `Cancel`), confirmed by Enter (`reply: "always"`).
+  `Reject` on a root session's prompt rejects at once, with no text (`reply: "reject"`); on a subagent's it opens
+  `Reject permission` with a text field. Since a key that moves the selection changes no text on the screen, the
+  answers are pressed from the prompt as it opens: Enter for `Allow once` (`reply: "once"`); `l` and Enter written
+  together for `Allow always` (measured: one write of both opened the second step, and its Enter replied `always`);
+  Esc for `Reject` (`reply: "reject"`). That is safe only for a prompt nobody has typed into, so OpenCode's reader
+  declares its prompts unreadable after input: Octoboard publishes a prompt only while nothing has been written into
+  the session since it first saw the prompt up, and never again once anything has; a key typed at the terminal
+  leaves the prompt to the terminal. The declaration is the reader's, so it holds for its questions too, whose
+  choices could be read after a key: a question typed into at the terminal is withdrawn for good as well. What the
+  prompt shows under its title: `# Shell command` and `$ <command>` for `bash`, `→ Edit <file>` for `edit` (the file
+  relative to the session's directory, `.` for the directory itself, else under `~`, else whole, as the TUI formats
+  a path against its directory and home; the permission's pattern is relative to the repository's root, or to `/`
+  outside a repository: `tmp/…/sub/dir/made.txt` for `→ Edit sub/dir/made.txt`), `← Access external directory
+  <dir>` and its patterns for a path outside the working directory; a command that does not fit one row wraps by
+  word onto the next rows (measured at 120 columns). The `Always allow` step lists the permission's `always` patterns
+  (`- echo *`), or says "This will allow <permission> until OpenCode is restarted." where they are `*` alone, as for
+  every `edit` call ("This will allow edit until OpenCode is restarted."). Its question shows the question, the
+  options numbered with their descriptions under them, then
+  `Type your own answer`, and the hint `↑↓ select  enter submit  esc dismiss`. With one question that takes one
+  answer, `1` to `9` pick an option and send it at once (`answers: [["B"]]`); the digit after the last option opens
+  the field for an answer of one's own (the placeholder `Type your own answer` under it), a paste fills it, and Enter
+  sends it (`[["my own answer"]]`); Esc dismisses it (`question.rejected`). Several questions, or one that takes
+  several answers (` (select all that apply)` after the question, `[ ]`/`[✓]` boxes), get a row of tabs (the headers,
+  then `Confirm`): a digit picks an option of a question that takes one and moves to the next tab, an own answer's
+  Enter does the same, a digit toggles an option of one that takes several (the own answer's field opens on its digit
+  and its Enter checks it), `l` moves on, and a last `Review` page (`First: A`, `Second: D`) is sent by Enter
+  (`[["A"], ["D"]]`, `[["mine"], ["D"]]`, `[["A", "mine"]]`). The question tool's `custom: false` changes nothing: an
+  answer of one's own is still offered. A question, an option's label and its description longer than a row wrap by
+  word onto the next rows, never truncated (measured at 120 columns, a question and a label of two rows, a description
+  of two). The plugin forwards, with `permission.asked` and `question.asked`, the call's id (`call_id`, the event's
+  `tool.callID`) and what is asked (`input`): a permission's `patterns`, its `always` and the strings of its
+  `metadata` (`command` for `bash`, `filepath` for `edit`) without its `diff`, for an `edit` its file as the prompt
+  draws it (`drawn_path`, formatted against the plugin's `directory` and the home directory as the TUI does), a
+  question's `questions` (`question`, `header`, `multiple`, `options` with `label` and `description`). Octoboard's
+  reader matches a permission prompt to the newest call whose whole detail it draws, over the rows it wraps to with
+  whitespace taken out (the `$ <command>` of a `bash` call, an `edit` call's `drawn_path` exactly, the listed
+  patterns of an `external_directory` call, every pattern of any other), never to a call with no patterns, and leaves
+  a prompt that calls asking different things all fit unpublished; a question it matches to the newest call whose
+  first question and options (labels with their descriptions) it draws whole, and publishes only on its first page,
+  untouched. It presses a key only into a prompt it reads as the call's, the `Always allow` step by the call's
+  `always`. The
+  `blocked` the plugin reports to the terminal right as it queues the prompt's event moves no status here: OpenCode's
+  status comes from the plugin's events, its reports stand only for the activity glyphs, and the watch of the screen
+  starts from the `permission.asked` event, which records the call first.
+- **Installed version: built for npm and Homebrew.** An npm install's program is `opencode-ai/bin/opencode.exe`, a
+  copy of the platform package's `node_modules/opencode-<os>-<arch>…/bin/opencode`, and the `package.json` two levels
+  up of either names the version (`opencode-ai` 1.19.6, `opencode-darwin-arm64` 1.19.6). Homebrew's formula
+  `opencode` installs into `Cellar/opencode/<version>/bin/opencode`. The scoped OpenCode 2 npm packages
+  also carry a manifest. The vendor's installer (`https://opencode.ai/install`, read on 2026-11-23) moves the downloaded program
+  into `~/.opencode/bin/opencode` and writes nothing beside it, so that install's version is asked of the program.
+
+### Not measured
+
+- A credential other than an API key (an OAuth sign-in), and its `auth list` row: the user's `auth.json` holds one
+  entry, of type `api` (2026-11-23). This needs an OAuth sign-in to a model provider through `opencode auth login`.
+- A dialog other than the ten above, and a dialog in a terminal too small to show the box under it.
+- A prompt answered in a conversation the user came back to through the session list without submitting a prompt
+  there: nothing says the terminal shows it, so its answer is not forwarded and the id recorded stays the other
+  conversation's until the next prompt.
+- What OpenCode does with a `{env:…}` in a variable's value on its second reading in every case.
+- A `{file:…}` whose file is not UTF-8, and one in a line comment that follows other text on its line.
+
+### ACP mode
+
+Measured on 1.19.6 on 2026-11-22 with `opencode acp --cwd <a scratch directory>`, a scratch `HOME` and scratch
+`XDG_DATA_HOME`, `XDG_CONFIG_HOME`, `XDG_STATE_HOME` and `XDG_CACHE_HOME`, with no credential. The probe wrote `initialize` (protocol version 1, no client capability) and then `session/new` (a
+scratch working directory, no MCP server) as JSON-RPC lines on stdin, read the answers, sent no prompt, and ended the
+input.
+
+- `initialize` was answered after 17 s in the new directories (it installs its packages first): `agentInfo`
+  (`OpenCode`, the CLI's version), one `authMethods` entry (`opencode-login`) and capabilities for loading, resuming,
+  forking, closing and listing sessions.
+- `session/new` was answered 3 s later with `sessionId` and `configOptions`, and no `models`: the option `model`
+  lists the ids `opencode models` prints (the vendor's eleven free models that day) with the current one
+  (`opencode/big-pickle`), and `mode` lists `build` and `plan`. There is no effort option. An
+  `available_commands_update` with three commands followed.
+- **The session is a row in the database**: `opencode.db`'s `session` table held one row after the run.
+- The process exited by itself 0.2 s after its input ended. Nothing was spent: no prompt was sent.
+
+It answers nothing the provider lacks but the model a new session starts on and the two modes, so no provider code
+uses it.
+
+### A server with the TUI attached to it
+
+Measured on 1.19.6 on macOS on 2026-11-23, in a scratch `HOME` and scratch `XDG_DATA_HOME`, `XDG_CONFIG_HOME`,
+`XDG_STATE_HOME` and `XDG_CACHE_HOME`, with no credential and a local stand-in answering the model's requests as a
+provider of the inline configuration; no real turn was spent. The server was started with
+`opencode serve --port <port>`, a session created with `POST /session`, and the TUI attached in a pseudoterminal with
+`opencode attach <url> --session <id> --dir <the working directory>`. Octoboard starts this server privately on a free loopback port and attaches the TUI with its password in the
+process environment.
+
+- **The server.** `opencode serve` listens on `127.0.0.1` by default and prints
+  `opencode server listening on http://127.0.0.1:<port>` on standard output, also with `--port 0`, which picks a free
+  port. It was ready two seconds after it started in directories it had already initialised.
+- **The password.** With `OPENCODE_SERVER_PASSWORD` set in the server's environment every route asks for HTTP basic
+  authentication, user `opencode` (`OPENCODE_SERVER_USERNAME` names another): a request with no credential, or a
+  wrong password, is answered `401` with `WWW-Authenticate: Basic`. `opencode attach` reads the same two variables,
+  or takes `--password` and `--username`; it attached with the variable alone.
+- **The route that sends a prompt.** `POST /session/<id>/prompt_async` with `{"parts": [{"type": "text", "text":
+  …}]}` answers `204` at once and starts a turn in an idle session. A session id that does not exist is answered
+  `404` with `{"name": "NotFoundError", …}`, a body that is not JSON `500`. A prompt with an empty `parts` list is
+  accepted (`204`) and starts a turn all the same. `POST /session/<id>/message` is the same request answered when the
+  turn is over, and `GET /session/status` lists the sessions that are busy (`{"<id>": {"type": "busy"}}`), an idle one
+  not at all. The server also serves the next generation's routes under `/api/…` (`POST /api/session/<id>/prompt`
+  with a `delivery` of `steer` or `queue`); they were not measured.
+- **What the attached TUI shows.** A prompt sent through the route appears in the TUI as the user's own message, with
+  the answer under it, exactly as one typed there. One sent while a turn runs is shown above the input box marked
+  `QUEUED` and is taken into that turn at its next step, as a pasted one is: the stand-in was asked for it right
+  after it had answered the running request, within the same busy span.
+- **An interrupt through the server.** `POST /session/<id>/abort` answers `200` with `true` and ends the turn (the
+  TUI shows it `interrupted`). A prompt that was waiting `QUEUED` is not run and is not handed back: it stays in the
+  conversation, and the model first sees it with the next prompt, before that prompt.
+- **The TUI ends first.** On `SIGTERM` the attached TUI exits with status 0 and the server runs on: the session took
+  a prompt through the route afterwards and answered it.
+- **The server ends first.** The server exits within a second of `SIGTERM`. The attached TUI does not exit and says
+  nothing by itself; a prompt submitted in it then shows `Failed to send prompt` and
+  `ECONNREFUSED: Unable to connect. Is the computer able to access the url?`, and the TUI stays up. So a launch that
+  attaches the TUI to a server of its own has to end the terminal when the server has gone.
+- **Octoboard's attachment.** On 1.19.6, a launch-scoped TUI plugin installed through `OPENCODE_TUI_CONFIG`
+  reported its active session id. The id matched the server plugin's turn events after an HTTP prompt, and changed
+  when `POST /tui/select-session` switched the attached terminal to another session. The transport reads that
+  selection for text delivery. Until it knows a selection, and when the user has a custom `OPENCODE_TUI_CONFIG`,
+  it uses terminal input. Commands and images use the terminal. A pre-existing user server password keeps the
+  standalone launch. In Auto mode the server plugin replies once to each permission the agent asks for. In the
+  1.19.6 stand-in run a `bash` tool configured to ask completed with that reply, and its shell confirmed the
+  launch password was absent from the command environment.
+- **Ownership after an interrupt.** On 1.19.6, a queued prompt could be removed with
+  `DELETE /session/<id>/message/<id>` after an abort (`200`, then its id was absent from the message list).
+  Octoboard leaves the accepted prompt with OpenCode, where it is visible in the queue and picked up with the next
+  prompt. It does not submit another copy.
+- Not measured: a command other than the agent's shell inheriting the server password, images through the HTTP
+  route, a login flow on an OAuth account, or Windows.
+
+### OpenCode 2
+
+Measured on macOS ARM64 on 2026-11-24, with separate scratch homes and XDG directories, a loopback inference stand-in,
+and a stand-in MCP server. The macOS ARM64 binaries came from the platform packages of pinned
+[`@opencode/cli@2.3.2`](https://registry.npmjs.org/@opencode%2fcli/2.3.2),
+[`@opencode/cli@2.4.0`](https://registry.npmjs.org/@opencode%2fcli/2.4.0) and
+[`@opencode/cli@2.4.1`](https://registry.npmjs.org/@opencode%2fcli/2.4.1). Homebrew Core published 2.4.0 that day,
+and the upstream [v2.3.2 tag and release](https://github.com/anomalyco/opencode/releases/tag/v2.3.2) publish
+source and platform binaries. The old `opencode-ai` package still carries the 1.x line. The measured probes used no
+account and spent no real model turns. The 2.4.1 npm manifest declares `bin/opencode.exe` as the launcher, and
+its postinstall script links or copies the selected platform binary there. Octoboard recognises both npm package
+layouts and uses the package of the detected install for its registry check and npm update.
+
+- **Version and launch.** Installed npm and Homebrew versions are read from their manifest or Cellar path. An
+  unpackaged binary is asked for `--version`, which 2.x prints as `opencode v2.x.y`. Octoboard refuses any version
+  outside the measured list before writing OpenCode's launch files. All three 2.x builds take
+  `opencode --server <url> --session <id>` to start the TUI on the private server. The server reads the launch's model
+  from the inline configuration. Octoboard checks a resumed id at `GET /api/session/<id>` before starting the TUI,
+  since `--session` by itself is also allowed to create a missing session in 2.x. When the host cannot run the
+  companion, the TUI uses `--standalone` and receives text through the terminal.
+- **Configuration and plugins.** `OPENCODE_CONFIG_CONTENT` still takes launch-scoped configuration. 2.x uses
+  `plugins` (a path to a directory with `index.js` and `tui.js`), `permissions` (ordered
+  `{action, resource, effect}` rules) and `mcp.servers.<name>`. The server plugin's `setup` registers
+  `ctx.event.subscribe()`, `ctx.tool.hook("execute.before", …)`, `ctx.shell.hook("create.before", …)` and
+  the permission and agent hooks. With the configured default `ask`, the model called the stand-in
+  `octoboard_m35_marker` and received its result on all three builds without a permission prompt. The tool hook
+  gets `input`. File tools take `path`, and `patch` takes `patchText`. A guarded 2.4.1 `write` returned the
+  refusal to the model and left the named file absent. The shell hook returns the original inline configuration
+  through the environment. The launch
+  leaves the user's configuration files alone. The TUI also loads the plugin directory and exposes the selection
+  through `ctx.ui.router.current()`; Octoboard reads that launch's route before sending text. The title still uses
+  `OpenCode` / `OC | <title>`. Its switch is `terminal.title` in `OPENCODE_CLI_CONFIG_CONTENT`.
+  On 2.4.1, `mcp list --standalone` reported zero servers before the configured MCP plugin loaded.
+  `debug config --standalone` returned the configured server under `info.mcp.servers`. Octoboard extracts
+  server names from this projection and reports runtime state as unknown.
+- **Server and delivery.** `serve --hostname 127.0.0.1 --port 0` reports
+  `server listening on http://127.0.0.1:<port>`. `OPENCODE_PASSWORD` authenticates both the server and TUI.
+  An unauthenticated API call returned 401. `POST /api/session` with `location.directory` returns 200 with
+  `data.id`. `POST /api/session/<id>/prompt` takes `text` and `delivery: "steer"` and returns 200 on
+  admission. The TUI displayed the prompt and its answer. The 1.x route and its 204 receipt remain in the
+  1.x transport. The adoption record carries the route version so a daemon restart preserves the transport.
+- **Events and interactions.** The 2.x bus envelopes put the fields under `data`. The inbox emits
+  `session.inbox.enqueued` and `session.inbox.delivered` with the same input id. A completed assistant step emits
+  `session.step.ended`, and the execution ends with `session.execution.succeeded`. The v2 bridge forwards those
+  as the existing prompt, record change and idle notifications. It translates native permission and question
+  events (`permission.asked` / `permission.replied` and `form.created` / `form.replied`). On 2.4.1 the shell
+  permission shows the command below the title and `Allow once`, `Always allow`, `Reject`. Enter accepts once.
+  `l` and Enter submit the remembered allow directly. In Auto mode the same shell request completed without
+  emitting a permission prompt. The single-question form still draws numbered choices
+  that submit on a digit. The raw terminal bytes and the launch plugin's hook messages are in
+  `apps/daemon/testdata/opencode_screen_*_2.4.1.bin` and `opencode_hook_payloads_*_2.4.1.jsonl`.
+- **Records.** Each version uses `opencode.db` for the release channel. 2.3.2 stores v2 conversation rows in
+  `session_v2` and `session_message`, with assistant content in the message's JSON. 2.4.1 projects assistant
+  content from `session_part`. Both return the same transcript shape through `session export --standalone <id>`,
+  with `info` and `messages` and message data keyed by `type`. Octoboard reads the projected export and folds
+  completed messages for history, the feed and context. An export issued on 2.4.1 while the inference stand-in
+  was paused returned the user message in 0.29 s. Resumability uses the paginated
+  `api --standalone GET "/api/session?limit=1000"` listing, with no directory or parent filter. On 2.4.1,
+  `session delete --standalone <id>` exited 0 and a concurrent server then returned 404 for that id. It is used
+  only for the explicit record cleanup action. The bounded record commands use a private server for the query
+  and preserve the user's own service. When a scratch 1.19.6 database was opened in 2.4.1, an export made
+  during the native migration reported `Session not found`. Polling `GET /api/experimental/migration/v1` returned
+  `running` twice and then `completed`. The next export returned the original id, prompt and answer.
+  Octoboard waits for that status before relying on a v2 list, lookup, export or deletion while legacy records
+  are being migrated.
+- **Migration.** The upstream v2 server can import legacy `auth.json` into its credential table on its first
+  start. The CLI can migrate legacy terminal settings into `cli.json`. Octoboard checks for pending migrations
+  before launching 2.x or starting a 2.x background command. The credential check reads the completed migration
+  marker, without opening a writable SQLite connection or reading a credential. If a migration is pending, the
+  user starts their OpenCode 2 directly and closes it before retrying.
+
+In the macOS development-daemon smoke run on 2.4.1, a stand-in turn reported 110 context tokens. Both entries were
+readable from the archive. Resume kept the Octoboard and native conversation IDs and accepted another message.
+Explicit cleanup removed a disposable conversation from the native database.
+
+## Qwen Code
+
+Everything below was measured on **Qwen Code
+0.28.0** on macOS on 2026-11-20 and 2026-11-21, in a PTY of 120 by 40 with a scratch `HOME` and working directory, a
+fake key and a local stand-in for an OpenAI-compatible inference API, unless it says it was read from the code. The
+captures are in `apps/daemon/testdata/` (`qwen-captures.md`). Qwen Code then updated itself to **0.28.3** (see "Models,
+install and update"), on which the hook payloads, the title and its glyphs, the input box, a permission prompt and a
+question were checked again on 2026-11-22 and read the same. The sign-in record and what "Through a real model and a
+development daemon" says were measured on 0.28.3 with a signed-in account of its own, signed in with an API key.
+What is dated 2026-11-23 was measured on **0.28.3** run straight from its own `cli.js`, in a scratch `HOME` with
+`general.enableAutoUpdate` off, against the same kind of stand-in.
+
+**Windows 11 ARM64 (23H2, build 22631.6199).** npm's global install put `qwen.cmd` in the
+scratch prefix. It ran on ARM64 Node 26.13.0 and reported **0.28.3**. The batch launcher
+could report its version but rejected the multiline role argument. Interactive launches
+resolve the same installed `cli-entry.js` and start it with Node. The x64 daemon opened
+both session kinds through that entry point. In an isolated run on the inbox pseudoconsole,
+the first messages sent through the daemon took about 36 seconds each to reach the local
+model, with no additional keypresses. The local model selected and invoked Octoboard's
+deferred tools. The console read its session, the child reported to the parent, and the
+parent instructed the child. The daemon interrupted an active local request and the
+terminal returned to idle. Archiving stopped the project session. The registered hooks
+explicitly select PowerShell on Windows. See "Settings layers, and how Octoboard is injected"
+below for the process-chain measurement.
+
+### Launching and resuming
+
+- `--session-id <id>` names a new session and must be a UUID: anything else is refused with `Invalid --session-id`
+  and the usage text. `--resume <id>` continues one. A session that never had a turn keeps no record
+  (`<id>.runtime.json` alone), and resuming it, like resuming an id that never existed, prints `No saved session found
+  with ID <id>` and exits.
+- `-i <prompt>` (`--prompt-interactive`) runs the prompt and stays interactive; a positional prompt is one-shot.
+  **Given as two arguments, a prompt that starts with a dash is read as options**: `-i '- list item one'` and
+  `-i '--help me with X'` each printed the usage text and exited (0.28.3). In one argument the prompt is taken
+  whole: `--prompt-interactive=- list item two`, `--prompt-interactive=--help me with Y` and `-i=--help me with Z`
+  each submitted exactly that text. So a launch passes `--prompt-interactive=<task>`. `--model <id>`; there is no
+  effort flag.
+- `--append-system-prompt <text>` reaches the system message of every model request. On a resume the text that launch
+  passes replaces the earlier one: the system message is built afresh on every launch.
+- `--approval-mode plan | default | auto-edit | auto | yolo`. With no flag and nothing configured a new session starts
+  in `auto` in a folder it trusts, and in `default` while the folder is not trusted. In `auto` a classifier, itself a
+  model request, passes each tool call or leaves it to a prompt ("Auto Mode couldn't classify this action …" where it
+  cannot be reached). In `default` a command that only reads (`ls`) ran with no prompt, and `mkdir` and `sleep` raised
+  one.
+- Records: `<Qwen home>/projects/<working directory with separators replaced by dashes>/chats/<id>.jsonl`.
+  A TUI start creates `<id>.runtime.json` immediately, including on a turnless start. Headless runs leave no runtime
+  file. A turn creates the chat and `<id>.title.json`. A turnless id fails `--resume` with
+  `No saved session found` (status 1), and a fresh `--session-id` with that same UUID starts and accepts a prompt.
+  Octoboard resumes a turnless session as a fresh native conversation, keeping its Octoboard session id. An archived
+  session whose chat has gone cannot be resumed, even if its title or runtime sidecar remains.
+- **The current branch.** After two prompts, a conversation-only `/rewind` to before the second appended a
+  `system/rewind` record whose `parentUuid` was the old leaf at the end of the first turn. The following
+  `system/file_history_snapshot` linked to the rewind, which made that snapshot the leaf and left the abandoned
+  messages in the file. Normal system lines, including telemetry and checkpoints, form part of the chain. Qwen
+  Code's own leaf selector excludes artifact, source-snapshot, generated-UI and managed-session metadata. The
+  history, token count and live feed follow the remaining `uuid` and `parentUuid` chain.
+- **History and feed.** A prompt is a `user` record with `real_user` provenance (older records may leave it out).
+  A reply is in an `assistant` record's `message.parts`; parts marked `thought` are private reasoning. Tool calls
+  use `functionCall` parts and a `tool_result` record updates the matching `toolCallResult.callId`. A captured
+  `write_file` carries the absolute path in `args.file_path` and reports its diff in `resultDisplay.fileDiff`.
+- **Context size.** A stub returning 23 input tokens and 7 output tokens gave
+  `usageMetadata.promptTokenCount: 23` and `totalTokenCount: 30`. The corresponding `Stop` reported
+  `input_tokens: 23`, `context_limit: 200000` and `context_usage: 0.000115`. On the key account, the record and hook
+  both gave 12272 input tokens, with the same window. Octoboard reads the prompt count on the current branch
+  and takes the window from the running launch's `Stop` hook. This lets the count follow a rewind in the chat
+  between hook reports.
+- **Titles.** The title sidecar's `displayName` came from the opening prompt with `source: "prompt"`, from
+  `/rename <name>` with `source: "manual"`, and from fast-model generation (including `/rename --auto`) with
+  `source: "auto"`. Octoboard uses manual and automatic titles as names, with the opening prompt as the fallback.
+- **Carrying and removal.** The chat, title and runtime sidecars belong to the session. A scratch account resumed
+  after all three were copied to the same relative location in its Qwen home, and the next stub request contained
+  the original prompt. One real key-account turn also produced a chat and title sidecar, which resumed with
+  `/usage` after relocation to a second scratch home. The missing-id control refused it. `usage_record.jsonl`,
+  `usage/token-usage-<month>.jsonl` and project `extract-cursor.json` are shared across sessions and stay behind.
+  These checks used 0.28.3 on 2026-11-24. The record's own `version` field has been seen as both `0.28.0` and
+  `0.28.3` on launches of the managed installation. The probe's explicit CLI version identifies the run.
+- It runs in the process it was started in; no child was started on this machine. The code can hand over to another
+  runtime (Bun) when one is installed, which `QWEN_CODE_NO_RELAUNCH` turns off; every launch sets it. After a folder
+  is trusted in the trust dialog it starts over inside the same process.
+- A console directory holding `QWEN.md` and `AGENTS.md` as links to one file gives the model that text once.
+- The commands its shell tool starts get (an MCP server and a hook get fewer, and no `QWEN_CODE`; see "Settings
+  layers, and how Octoboard is injected") `QWEN_CODE`, `QWEN_CODE_AGENT_ID`, `QWEN_CODE_CLI`,
+  `QWEN_CODE_MANAGED_NPM_PIN`, `QWEN_CODE_MANAGED_NPM_ROOT`, `QWEN_CODE_MESSAGING_SOCKET`,
+  `QWEN_CODE_MESSAGING_TOKEN`, `QWEN_CODE_MODEL`, `QWEN_CODE_MODEL_IDENTITY`,
+  `QWEN_CODE_PRIVATE_RELAUNCH_ENV_PROVENANCE`, `QWEN_CODE_PROJECT_DIR`, `QWEN_CODE_PROMPT_ID`,
+  `QWEN_CODE_SESSION_ID` and `QWEN_CODE_STARTUP_VERSION`.
+
+### Settings layers, and how Octoboard is injected
+
+**Linux system settings** (0.28.0, Debian 13 arm64, 2026-11-24). A headless run against a local model stand-in
+opened `/etc/qwen-code/settings.json` and completed its turn, traced with `strace -f -e trace=openat`.
+
+- The system settings file is the one `QWEN_CODE_SYSTEM_SETTINGS_PATH` names, else
+  `/Library/Application Support/QwenCode/settings.json` on macOS, `C:\ProgramData\qwen-code\settings.json` on
+  Windows and `/etc/qwen-code/settings.json` elsewhere. A launch on Windows build 22631.6199 without either
+  system path override attempted to read both `settings.json` and `system-defaults.json` in
+  `C:\ProgramData\qwen-code`, together with the scratch account's own settings. Octoboard picks among
+  them, and decides whether its hook command gets the guard below, by the operating system of the daemon's host
+  (`platform::HostOs`), which is the host its sessions run on.
+- Every settings file is read as `JSON.parse(stripJsonComments(stripUtf8Bom(content)))` (read from the code): `//`
+  and `/* */` comments and a byte order mark are allowed, and Qwen Code keeps the comments of a file it rewrites. A
+  file that is not a JSON object after that, or cannot be read, is recorded as a settings error and reported, not
+  passed over. Octoboard reads the files the same way, and **a system settings file that is there and cannot be used
+  refuses the launch** (`provider.qwen.system_settings_unusable`): written without it, the launch's file would drop
+  whatever an administrator set there (`permissions.deny`, the MCP servers allowed, the sandbox) and nothing would
+  say so.
+- The system defaults file, the lowest layer, is `system-defaults.json` **beside the system settings file**, unless
+  `QWEN_CODE_SYSTEM_DEFAULTS_PATH` names another (read from the code). Naming a system settings file elsewhere moves
+  where it is looked for, so a launch also sets that variable to the file Qwen Code would have read.
+- Hook lists are added across layers: with `UserPromptSubmit` hooks in both the system file and the user's
+  `settings.json`, both ran for every prompt, in no fixed order. A plain setting in the system file wins over the
+  user's (`ui.hideWindowTitle`, `ui.showStatusInTitle` and `ui.enableFollowupSuggestions` were tried).
+- Hooks of the system and the user layer need no approval before they run, and run in a folder that is not trusted,
+  before and after its trust dialog is declined.
+- A hook is `{"matcher": "", "hooks": [{"type": "command", "command": …, "timeout": …}]}` under its event's name, as
+  in Claude Code. The command gets the payload on stdin. A `timeout` of 5 did not cut a hook that took longer than
+  5 ms, so it is not in milliseconds: it is in seconds (`timeout * 1e3` in the code; a `sleep 30` hook with
+  `timeout: 2` was cut after 2 s, 2026-11-23).
+- **A failing hook is shown to the user** (2026-11-23). A `Stop` hook that exits 1 puts what it printed under the
+  turn's reply: `⎿ Stop says:` and `Warning: <its stdout, else its stderr>`; a command that does not exist reads
+  `Warning: bash: <path>: No such file or directory`, which is also how a hook is known to run in `bash`. A hook cut
+  by its timeout shows nothing and holds the turn for the timeout, at each event it is registered for. So each of
+  Octoboard's hook commands runs in a subshell with its output dropped and ends in `exit 0`: a daemon that is gone
+  or an executable that moved shows the user nothing. On Windows build 22631.6199, 0.28.3 used
+  `cmd.exe` by default and printed a failing Stop hook's stderr as a warning in headless mode.
+  The `shell: "powershell"` entry selected Windows PowerShell. Its parent was the Qwen Node
+  process. The parent's command line held the `--mcp-config` path for the outer Qwen only. Nested
+  Qwen processes started by the shell tool and by an MCP server read the outer settings and had
+  their own unmarked Node process above the hook shell. A probe using Octoboard's hook mode
+  forwarded outer events and discarded the nested MCP process's SessionStart. The registered
+  status hooks discard all output in PowerShell. The guard keeps its decision on stdout.
+- **A hook can be asynchronous**: with `"async": true` on a command hook that sleeps 6 s, the turn was not held (it
+  ended 1.4 s after the prompt, against 6.8 s for the same hook without it) and the hook still ran to its end.
+  Octoboard registers none of its hooks so: each event moves the session's status, Qwen Code waiting for a hook is
+  what keeps two events in the order they happened, and Octoboard's hook returns in milliseconds, so there is
+  nothing to gain and an order to lose.
+- `--mcp-config <path>` adds its servers to the user's own: both were started. A server with `"trust": true` has its
+  tools run with no permission prompt in `default` mode. `timeout` is in milliseconds by the code's own default
+  (`10 * 60 * 1000`), and it bounds one tool call: with `timeout: 5000` a call to a stub server's tool that took
+  12 s was ended after 6 s with `Request timed out` (2026-11-23). The launch sets 660 000, a minute over the 600 s
+  Octoboard's own forwarding allows a call.
+- MCP tools are named `mcp__<server>__<tool>` and are not declared to the model: it finds one with `tool_search`
+  (`select:<name>`) and calls it through `tool_call`, which is refused until the tool's schema has been reviewed that
+  way. Hooks name the tool itself, not `tool_call`.
+
+- **A Qwen Code started inside the session loads the launch's settings file too**: the variable that names it is in
+  the environment of everything Qwen Code starts. With the agent running `qwen -p 'nested hello'` through its shell
+  tool, the nested process fired the system file's `SessionStart`, `UserPromptSubmit` and `Stop` with its own session
+  id, between the session's `PreToolUse` and `PostToolUse`; a `qwen -p` started by an MCP server's tool did the same
+  (2026-11-23). Unguarded, those reach Octoboard as the session's own: a prompt, a turn's end with the nested reply,
+  and another conversation's id. **No variable tells the nested process apart in every case**: the shell tool sets
+  `QWEN_CODE=1` for what it runs, but an MCP server gets no `QWEN_CODE` (its environment is the process's own plus
+  `QWEN_CODE_SESSION_ID`, `QWEN_CODE_PROJECT_DIR`, `QWEN_CODE_MODEL`, `QWEN_CODE_MODEL_IDENTITY` and the two
+  `QWEN_CODE_MESSAGING_*`), and neither does a hook (those, `QWEN_CODE_AGENT_ID`, `QWEN_CODE_PROMPT_ID`,
+  `QWEN_PROJECT_DIR` and the hook's own `env`), so a `qwen` either of them starts has none. The session id is no
+  test: **`/clear` and `/new` each end the session and start one with a new id** (`SessionEnd`, `SessionStart`), which
+  every later payload and `QWEN_CODE_SESSION_ID` carry. What does tell them apart is the process that runs the hook:
+  a hook's parent (`$PPID`) is the Qwen Code that fired it, one process for every hook of a session, and only the
+  session's own was started with the launch's arguments. So Octoboard's hook is given the launch's MCP
+  configuration file as its mark (`octoboardd hook --fired-by <file>`): the hook program finds the process that
+  fired it, the first above the shells that wrap its command, in the process table, and posts only when that
+  process has the file on its command line; where that cannot be told, it posts. Nothing is started for it.
+  Measured on macOS (2026-11-23, a script following the mode's rule in the hook's place, the mode itself not being
+  built by the session that measured): Qwen Code runs a hook as `bash -c <command>`, a child of its own, and the
+  subshell the command runs in is replaced by the program, so the chain is the program, `bash -c …` (which carries
+  the hook's text, the key file's path in it), then the Qwen Code that fired it, whose command line holds
+  `--mcp-config <file>` and nothing of the hook's. The session's own five events (`UserPromptSubmit`, `PreToolUse`,
+  `PostToolUse`, the empty `UserPromptSubmit`, `Stop`) read "posts"; the two of a `qwen -p` its shell tool started
+  (`UserPromptSubmit`, `Stop`) read "dropped". Earlier the same day the shell text this replaces was measured for a
+  `qwen -p` started by an MCP server too, with the same parent. Registered so on macOS and Linux.
+  On Debian 13 arm64 with Qwen Code 0.28.0, `strace` saw Qwen launch the hook through `bash -c` and the
+  hook's firing Qwen carry the launch's MCP marker. Console and project sessions moved from working to idle
+  with a local model stand-in. Each nested headless run, from the shell tool and from an MCP server, executed
+  the inherited hook program twice and made no connection to the hook's loopback port. The outer
+  conversation id stayed the same. Windows registers the plain hook command.
+  - **A path outside ASCII** (2026-11-23, by hand with `/bin/sh` on macOS): `ps` writes a byte that is no
+    character of its locale as an octal escape, so with `LC_ALL=C` a launch file under `…/会话 é/run/…` was never
+    found in what `ps` printed. That was the shell text's trouble; the hook program reads the arguments from the
+    process table as they are.
+- **Hooks can be switched off wholesale**, and Octoboard does not switch them back on: `disableAllHooks: true` in
+  any settings layer, safe mode (`--safe-mode`, `QWEN_CODE_SAFE_MODE`) and bare mode (`--bare`, `QWEN_CODE_SIMPLE`,
+  which also loads no settings at all); `/hooks` then says `disabled (disableAllHooks)`, `(safe mode)` or
+  `(bare mode)` (read from the code). Run on 2026-11-23: with `disableAllHooks: true` in the account's settings, and
+  with `QWEN_CODE_SAFE_MODE=1` (the screen then shows `⚠ Safe Mode`), no hook of the system file ran through a whole
+  turn, and the OSC 7501 reports and the title's glyphs were made as ever. A variable counts as on when it is `1`,
+  `true`, `yes` or `on` (the code's `isTruthy`). With `QWEN_CODE_SIMPLE=1` no settings file is loaded, the account's
+  included: an account whose key is in its settings came up at "Connect a Provider", reporting
+  `state=blocked:kind=auth`. **Bare mode past that screen** (2026-11-23, the key and the endpoint given as
+  `OPENAI_API_KEY`, `OPENAI_BASE_URL` and `OPENAI_MODEL`): the input box came up, signed in, and a turn ran. The
+  launch's own settings are lost with every other, and of what they pin only one thing changes: the title kept its
+  glyph (`◐︎` while the turn ran) and the reports were made, both being the defaults; no next prompt was suggested
+  and no request made for one in the 10 s after the turn; the feedback question did come up (in the copy patched
+  to always show it, see "Screens and keys"), which takes nothing of a message written as a paste. So bare mode
+  costs the hooks and nothing else Octoboard reads.
+  **A `disableAllHooks` that is no boolean** (2026-11-23, one turn each): the highest layer that holds the setting
+  decides whatever the kind of its value, and the value counts as JavaScript takes it. `"no"` in the account's
+  settings switched the hooks off; `0` in the system file over `true` in the account's left them on, and so did
+  `null` there. Octoboard reads it the same way.
+  The setting is not pinned, since that would turn back on hooks the user turned off.
+  Instead a launch that finds one of the three tells the user: for one of the two variables in the session's
+  environment with the notice `provider.qwen.hooks_off`, naming the variable; for `disableAllHooks` with
+  `provider.qwen.hooks_off_by_setting`, naming the setting and the settings file whose value decides (the system
+  file, the project's, the account's or the system defaults). Each says in its own sentence what to do, a notice
+  drawing no remedy, and stays in the window until it is dismissed, under a short title of its own: it says that a
+  protection is not in force and names a step. The project's file is read as a project's file is: one that is a
+  link out of the project is not followed. Such a launch answers that it has no status integration
+  (`AgentProvider::launch_has_status_integration`), so its whole status, turns opened and closed included, comes
+  from the reports, and the notice says only that and how to turn the hooks back on. Such a launch also has
+  nothing queued again at a cancel (`AgentProvider::launch_cancel_drops_held_messages`): its reports carry no
+  prompt, so a held message the turn took cannot be told from one the cancel dropped. The reports give `done` in
+  the gap between two model calls of one turn ("Status reports" below), so the provider declares that a `done` may
+  be such a gap (`AgentProvider::reported_done_gap`, 1 s): a `done` that the next call's `working` follows within
+  it is passed over, and only the turn's last `done` ends it, at most a second late. **A message queued with
+  Ctrl+Q reads as part of the turn before it**: the turn it runs as reports its `working` in the same read as the
+  first turn's `done` (2026-11-23, 0.28.3, twice against the stand-in: the turn a shell tool of 8 s, the message
+  queued while the tool ran; the `Stop` of the first turn came 0.3 s to 0.4 s before the queued message's
+  `UserPromptSubmit`, the two reports 0.00 s apart). So such a launch reports the two turns as one, ended once at
+  the second's end: a known limit of holding a `done`, which cannot tell a new turn's `working` from the next model
+  call's.
+
+So a launch passes `--mcp-config` with a file in the session's scratch directory, `--append-system-prompt`, and
+`QWEN_CODE_SYSTEM_SETTINGS_PATH` naming a settings file there that holds the content of the system file it stands in
+for, Octoboard's hook added to each event's list, the three `ui` settings above, `ui.enableUserFeedback` off and
+`ui.showScrollbar` off (see "Screens and keys"). It also sets `QWEN_CODE_SYSTEM_DEFAULTS_PATH` to the system defaults
+file Qwen Code would have read. Each of its hook commands is the daemon's `hook` mode given `--fired-by` with the
+launch's MCP configuration file, which keeps it quiet in a nested Qwen Code, inside a wrapper that shows the user
+nothing.
+
+**A launch file is never taken for the system layer.** A daemon started from a Qwen Code session's shell tool (a
+development daemon run from a session) finds `QWEN_CODE_SYSTEM_SETTINGS_PATH` in its shell snapshot, naming that
+session's launch file. Carried over, the file would bring that session's hook with it, and every event of a new
+session would be posted to the old one too; and once that scratch directory is gone, the host's real system layer
+would be dropped without a word. So each hook Octoboard registers carries `OCTOBOARD_SESSION_HOOK` in its own `env`
+(a hook with an `env` entry runs as before, 0.28.3), a settings file holding such a hook is not the system file, nor
+is a missing `run/<session>/qwen-settings.json`, and the platform's path is read instead; and whatever is carried
+over has Octoboard's hooks taken out first. A relative `QWEN_CODE_SYSTEM_SETTINGS_PATH` is read against the daemon's
+working directory, where Qwen Code reads it against the session's. The MCP configuration is an argument, not a
+variable, and does not travel this way; `QWEN_HOME` does, as every agent's configuration variable does: a daemon
+started inside a session of a pinned account takes that account's directory for its default account.
+
+**To check again on an upgrade:** the guard rests on a hook's parent being the Qwen Code that fired it. A Qwen Code
+that ran its hooks through a process of its own in between (a supervisor, a worker) would make every hook exit
+unposted, and every session's status silent with no message. A test asks the installed Qwen Code
+(`adapter::qwen::settings::tests::the_installed_qwen_code_runs_a_hook_as_a_child_of_the_process_the_launch_started`,
+ignored unless asked for, since it needs `qwen` on `PATH`): a headless run (`qwen --mcp-config <file> -p hello`) in a
+scratch home whose model endpoint nothing listens on fires `UserPromptSubmit` before the request fails, and the hook
+writes down the command line of the process above its shell, which has to be that `qwen` with the file on it
+(2026-11-23, 0.28.3). It passed on macOS with 0.28.3 on 2026-11-23. Run it with `--ignored`
+after each upgrade. `QWEN_CODE` is no longer read by the guard, so a Qwen Code that set it for
+its hooks changes nothing.
+
+### Hook events
+
+Every payload has `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `timestamp` and `permission_mode`; an
+event inside a turn has `prompt_id`, `<session id>########<n>`, the same for the whole turn.
+
+- `SessionStart` (`source` `startup` or `resume`, `model`) runs as the process starts, **before the folder-trust
+  dialog is answered**, and again after the dialog is accepted, preceded by a `SessionEnd`. So Octoboard does not
+  register it, and takes the input box, not a hook, as the sign that the startup is behind the session.
+- `UserPromptSubmit` has `prompt` and `submitted_prompt`, a paste as its text with no wrapper. It **fires again
+  inside the turn with an empty `prompt`** and no `submitted_prompt`, each time the model is called back with a tool's
+  result.
+- `PreToolUse` (`tool_name`, `tool_input`, `tool_use_id`, `tool_call_id`) and `PostToolUse` (the same, with
+  `tool_response` and `duration_ms`). The `PostToolUse` of an answered `ask_user_question` had no `prompt_id`.
+  `PostToolUseFailure` was not seen: a `tool_call` the bridge refused fired no tool event at all.
+- `PermissionRequest` (`tool_name`, `tool_input`, no call id) fires for a permission prompt and for
+  `ask_user_question` alike, followed by a `Notification` of type `permission_prompt`. **Declining either with Esc
+  fires nothing but an `idle_prompt` notification**: no `PermissionDenied`, no tool event and no `Stop`.
+- `Notification` of type `idle_prompt` fires after every turn, and also right after a `PreToolUse` while the turn
+  runs; in both places it came with and without a `prompt_id`. It says nothing.
+- `Stop` has `last_assistant_message`, `stop_hook_active`, `background_tasks`, `crons`, `context_usage`,
+  `context_limit` and `input_tokens`. `background_tasks` lists each task with `id`, `status` (`running`,
+  `completed`), `agent_type`, `started_at` and `description`, finished ones included.
+- `StopFailure` has `error` (`server_error`), `error_details` and a `last_assistant_message` that is the error as
+  shown (`[API Error: 500 stub failure]`). It came about 90 s after the prompt, once Qwen Code's own retries had run
+  out; the title showed the turn running throughout. The screen then shows the error and the ordinary input box.
+- `SubagentStart` (`agent_id`, `agent_type`) and `SubagentStop` (those, `agent_transcript_path`,
+  `last_assistant_message`, and the session's `background_tasks`, which still list the stopping agent as running). An
+  agent runs in the background: its `PostToolUse` says so at once, the turn's `Stop` lists it, and its completion
+  starts a turn of Qwen Code's own that **fires no `UserPromptSubmit`**, only a `Stop` under the next `prompt_id`.
+- A turn cancelled with Esc or Ctrl-C fires no hook but the `idle_prompt` notification.
+- `SessionEnd` (`reason` `prompt_input_exit`) at exit.
+
+### Terminal title
+
+`Qwen - <folder>` unless the user names it otherwise (the `CLI_TITLE` variable replaces it, read from the code),
+padded with spaces to 80 columns, and no conversation was seen to change it; it starts with `◐` while a
+turn runs and `✳` while a permission prompt or a question waits on the user, each followed by U+FE0E. Inside a turn it
+goes back to the plain form between model calls, for 0.1 s to 0.6 s as measured. It is plain again within the second
+of a cancel and of a declined prompt, which is how Octoboard closes both. `ui.hideWindowTitle` and
+`ui.showStatusInTitle` switch the title and its glyph off, so the launch pins them.
+
+### Program status reports
+
+Qwen Code reports its state through OSC 7501 (`ESC ] 7501 ; state=<state>:app=qwen-code[:…] BEL`), with no support
+query answered first: the PTY of these probes answers none. Each report is written right before the title that shows
+the same thing, in 0.28.0 and 0.28.3 alike:
+
+| Report | When | Title |
+|---|---|---|
+| `state=idle` | at its first screen; when a turn is **cancelled** (Esc and Ctrl-C alike); after the trust dialog is declined | plain |
+| `state=working` | when a prompt is submitted, and again at each model call of the turn | `◐` |
+| `state=done` | when a turn ends, **between the model calls of one turn** (for as long as the title is plain), and when a permission prompt or a question is declined | plain |
+| `state=blocked:kind=permission:…:msg=<base64>` | at a permission prompt (`Permission needed: Shell`), and at the folder-trust dialog (`Approval needed`) | `✳` |
+| `state=blocked:kind=question:…:msg=<base64>` | at `ask_user_question` (`Waiting for your answer`) | `✳` |
+| `state=error:…:msg=<base64>` | when a turn fails (`Request failed`), once its retries have run out | plain |
+| `state=clear` | at exit, and when it starts over after the trust dialog is accepted | |
+
+No report names a turn, carries the final message or tells a subagent from the session. Octoboard's terminal takes the
+reports out of what clients receive and, from the first one, reads the running turn and the return to the prompt from
+them instead of from the title's glyphs (`crate::session::title_activity`): `working` is a turn running and every other
+state is back at the prompt. A user's own `UserPromptSubmit` hook that takes two seconds does not widen the plain window
+between two model calls: the hook runs while the report still says `working`, and the window stayed 0.1 s. Since Qwen
+Code reports at its first screen, that is what happens in every session, and the provider's reading of `◐` is only what
+stands behind it. The session's status is read from the hooks, and Qwen Code's provider declares what the reports
+say beside them (`docs/product/program-status-reports.md`, "What reports can say beside an agent's hooks"): a
+`blocked` report is its wait on the user, at a permission prompt, a question and the folder-trust dialog alike, and
+the report after it the wait's end; `idle` straight after `working` is a cancelled turn, closed at once. The `✳` of
+the title is read for the wait only where no report has been made. A declined prompt is reported `done`, which is
+also the gap between two model calls, so it is still closed by the watch that waits for the terminal to have stayed
+at the prompt for a second.
+
+In the macOS development-daemon smoke runs on 0.28.3 and 0.28.4, the hook and question screen agreed while OSC 7501
+reported the wait. The daemon published a structured question and the selected option reached the stand-in through
+the control interface.
+
+### Screens and keys
+
+- **Input box**: the rows between two full-width rules, the first after `>` (`*` in YOLO mode). Empty, it shows
+  `Type your message or @path/to/file` in grey, not faint, so the hint is still there on a screen with faint cells
+  blanked and Qwen Code's reader gives a box that shows only the hint as empty itself: read as a draft, it held every
+  message Octoboard wrote back for 30 s. A paste of 30 lines shows as `[Pasted Content 379 chars]`;
+  a two-line paste shows its lines. A bracketed paste followed by Enter submits the text as pasted.
+- **Follow-up suggestions** (`ui.enableFollowupSuggestions`, on by default) put a suggested next prompt in the empty
+  box in the placeholder's grey, which reads as text typed there, and cost a model request a turn; the launch turns
+  them off.
+- **Folder trust** is off by default (`security.folderTrust.enabled`). Turned on, a folder not yet trusted gets "Do
+  you trust this folder?" with `1. Trust folder (<name>)` under the cursor (`›`), `2. Trust parent folder (<name>)`
+  and `3. Don't trust (esc)`. Enter records `TRUST_FOLDER` for the folder in `<Qwen home>/trustedFolders.json` and
+  Qwen Code starts over in place; Esc records `DO_NOT_TRUST` and goes on. A `-i` prompt waits for the answer.
+  The input box is never drawn before the dialog, nor between its acceptance and the fresh start: the dialog goes
+  about 1.5 s after the Enter, "Initializing..." shows for 0.5 s to 1 s, and the box comes up after it; declined, the
+  box comes up at once. Once, with three sessions starting at the same moment, an Enter written 9 s after the launch
+  left the dialog up; alone, the same Enter was taken every time. That did not happen again on 2026-11-23: three
+  sessions started at the same moment, each given its Enter 0.3 s after the dialog was drawn, as Octoboard's press
+  does, all took it, in two rounds. With the machine busy the dialog stayed up 6 s to 7 s after the Enter before it
+  went (the trust already being recorded), and "Initializing..." then lasted over 15 s; an Enter is queued, not
+  lost, and a second one would be typed into whatever comes next. Octoboard's press waits 30 s for the dialog to
+  go and presses once.
+- **Trusting a folder for one launch, with nothing recorded** (2026-11-23, folder trust on in the account's
+  settings, a folder not trusted): with `QWEN_CODE_TRUSTED_FOLDERS_PATH` naming a file that holds
+  `{"<folder>": "TRUST_FOLDER"}`, no dialog came up and the account's `trustedFolders.json` was never created; and
+  with `security.folderTrust.enabled: false` in the system settings file, the same. The first trusts one folder and
+  replaces the user's trust file for the launch, the second turns the feature off for it.
+- **Interrupting**: Esc stops a turn only while the input box is empty, and with the model having shown nothing puts
+  the prompt back in the box; with text in the box Esc does nothing. Ctrl-C stops a turn and puts nothing back, and
+  with text in the box clears the text instead. Ctrl-C at the prompt asks to be pressed again and then exits. Ctrl-U
+  deletes back to the start of the line, and at its start the line break before it, idle and mid-turn alike.
+- While a turn runs the box takes text: Enter "steers" the running turn with it and Ctrl+Q queues it. Either way the
+  message is shown above the box, the status row reads `⏳ 1 queued`, and it is sent with the turn's next model
+  call. **Cancelled before that, a message still held is never sent** (2026-11-23, a model call left hanging): Esc
+  puts it back in the input box, as text followed by a space and a zero-width space (U+200B) where the cursor is,
+  and Ctrl-C drops it. **A held message the turn takes is reported as a prompt sent, with its text**
+  (2026-11-23, a tool call of 8 s, the message submitted while it ran; `qwen_hooks_steered.jsonl`,
+  `qwen_hooks_queued.jsonl`): steered with Enter, the model call after the tool takes it and fires
+  `UserPromptSubmit` with the message as `prompt`, under the running turn's `prompt_id`, in place of the empty one;
+  queued with Ctrl+Q, the turn goes on without it (the empty `UserPromptSubmit`, then `Stop`) and the message then
+  runs as a turn of its own, whose `UserPromptSubmit` carries it. So Qwen Code's screen reader declares that a
+  cancel can drop held messages, those no prompt hook reported taken being the ones written again: a cancel the
+  status reports declare (`idle` after `working`) has them queued again, held for after the next message. A launch
+  with its hooks switched off has none written again, having no prompt reports. The caller of `interrupt_session`
+  is told both, and to send again only what the session neither acted on nor shows queued (`get_session`'s
+  `queued_messages`). The input box is read without the cursor's mark. Qwen Code's
+  screen reader declares that a cancel gives held messages back, for the user's Esc: a box that then shows only the
+  message Octoboard wrote last is cleared out of the way of the next message, not sent with it. After a Ctrl-C the
+  box is empty and there is nothing to clear, so the interrupt, whose key is Ctrl-C, reads no box for text put back.
+- A feedback question ("How is Qwen doing this session? (optional)", "1: Good 2: Bad 3: Fine 0: Dismiss") can appear
+  above the box after a turn (`ui.enableUserFeedback`). **It takes a digit typed next as its answer**: a `1` typed
+  into the empty box answered it and left the box empty, so a message starting with a digit would lose it. The launch
+  turns the question off. The question is shown at random (one finished turn in four, read from the code), only
+  after five prompts or more than ten tool calls in the session, with usage statistics on, and not again for 24
+  hours, so it was forced: in a scratch copy of 0.28.3 with the random draw and the session minimum taken out of
+  `chunks/startInteractiveUI-*.js`, the installed one untouched (2026-11-23). There the question came up after the
+  first turn with `ui.enableUserFeedback` on and with it unset (bare mode), and **did not come up with it `false`**,
+  the same copy and the same turn. **A paste is not taken by it**: `0 pasted text` written as a bracketed paste
+  while the question was up went into the input box whole, digit included, and the question went away unanswered.
+  Octoboard writes its messages as pastes, so a message loses nothing to the question even where the setting does
+  not reach (bare mode); only a digit the user types is taken.
+
+### MCP inventory and compatibility
+
+- On 0.28.3, `qwen mcp list` reported defaults, account, workspace and system servers, and used the system entry
+  for a duplicate name across layers. It tests connections, including running stdio servers, and `--json` exits
+  1 as an unknown argument. In a scratch home the listing also migrated a legacy `hideWindowTitle` into `ui` on
+  disk. Octoboard reads account-level `mcpServers` from system defaults, account settings and system settings,
+  in that precedence order, with the highest definition winning by name. An account inventory has no workspace.
+  It lists configured servers from these settings and reports runtime state as unknown. It leaves extension
+  contributions to Qwen Code's own listing and publishes remote origins without user info, paths or queries.
+- With distinct marker files in a scratch project, the default request included `QWEN.md` and `AGENTS.md`.
+  A custom `context.fileName: "GUIDE.md"` selected that file. A per-launch system settings file with
+  `["GUIDE.md", "CLAUDE.md"]` included both markers, while another test adding `GEMINI.md` found its marker too.
+  The Claude Code instructions switch adds `CLAUDE.md` to the account's effective operator list for that launch,
+  defaulting to `QWEN.md` and `AGENTS.md`. The system layer takes precedence over a workspace filename list, which
+  Qwen applies only for a trusted workspace. No workspace configuration is moved into that layer.
+- On 0.28.3 a project skill in `.agents/skills` appeared in the model request. Controls in `.claude/skills`
+  and `.codex/skills` did not appear. The instruction switch controls filename discovery and uses Qwen Code's
+  ordinary directory traversal. Qwen Code has a separate MCP import command for other agents' configurations.
+
+### Default configuration sharing
+
+With 0.28.3, a scratch account linked to a second scratch home's `projects`, `skills` and `QWEN.md` used the
+linked user instructions and skill in its model request and made the new chat under the shared projects directory.
+A follow-up on the npm CLI reporting 0.28.0 resumed a chat created under the default scratch home from the
+sharing home. The local model stand-in received the original prompt, linked instructions and linked skill on
+resume. Octoboard shares those three entries. The account retains `settings.json`, `.env` and
+`subscription_credentials.json`. Settings can hold API keys in `env`, and extension directories can hold
+extension-local `.env` files.
+A local extension installation writes its source path into
+`extensions/<extension>/.qwen-extension-install.json` (`source`), and its enablement into
+`extension-store/state.json` (version 2, extension entry keyed by an installation identifier). Installing from a
+source under the sharing account's directory left that path in the default home's linked install metadata.
+**Extension sharing is not offered.** In a 0.28.0 scratch account with linked `extensions/`,
+`qwen extensions settings set` created the default directory's `extensions/<name>/.env` through the link.
+An extension can acquire this file after sharing begins, and the whole-entry sharing rule cannot exclude it.
+Octoboard keeps `extensions/` and `extension-store/` account-local. The user accepted this outcome on
+2026-11-25.
+
+### Sign-in
+
+`qwen auth` is removed; a method is chosen inside the TUI with `/auth` and kept as `security.auth.selectedType` in the
+account's `settings.json`.
+
+**A key, as `/auth` records it** (0.28.3, "Custom Provider" with a key): `security.auth.selectedType` is the
+provider's method (`anthropic` for an Anthropic key) and there is **no `security.auth.apiKey`**. The key is in the
+settings' `env` object under a name `/auth` makes up (`QWEN_CUSTOM_API_KEY_<the base URL in capitals>_<hash>`);
+`modelProviders.<method>` lists each model as `{id, name, baseUrl, envKey}` with that name as `envKey`; and `model` is
+`{name, baseUrl}`, the chosen model. The banner then reads `API Key | <model>`. No credentials file is written.
+
+**How a key is looked for** (read from the code): the entry under `modelProviders` with the chosen model's id, and its
+base URL where several have the id, names the variable (`envKey`), else the method's own does (`OPENAI_API_KEY` for
+`openai` and `openai-responses`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY` for `vertex-ai`). The variable
+is read from the process environment, into which the settings' `env` and the `.env` files of the Qwen home, the home
+directory and the project are loaded. `security.auth.apiKey` is looked at only when no entry names a variable.
+
+**The `.env` files** (2026-11-23; the order read from the code, each place run): walking up from the working
+directory, the first of `<directory>/.qwen/.env` and `<directory>/.env` that exists, in a folder that is trusted;
+then `<Qwen home>/.env`, `~/.qwen/.env` where the Qwen home is another directory, and `~/.env`. A variable the
+environment already has is kept unless it is empty, the files are read in that order, and the settings' `env` comes
+last. A file is parsed by `dotenv` 16 (its line pattern is in the bundle): `NAME=value`, or `NAME: value` with white
+space after the colon, after an optional `export`; the last line for a name wins within a file; a quoted value may
+run over line ends; an unquoted one stops at the first `#`. Octoboard reads the three files that belong to the
+account the same way, for the one variable the key is read from; it does not expand the escapes of a double-quoted
+value, which changes no value from empty to set. With the
+key taken out of the settings and put in the Qwen home's `.env`, in `~/.env`, in the project's `.env` or in the
+project's `.qwen/.env`, the session came up signed in (`API Key | <model>`) each time and ran a turn; with the key
+nowhere it came up at "Connect a Provider".
+
+So Octoboard reads an account as signed in when that variable is set in the settings' `env`, in the shell
+environment, or in one of the three `.env` files that belong to the account whatever the project (the account
+directory's, `~/.qwen`'s, the home directory's), or, with no entry naming one, when `security.auth.apiKey` is set;
+with a method chosen and none of these it says it cannot tell, since a project's `.env` file may hold the key and
+an account's reading has no project. No method chosen is signed out, and so is a
+`settings.json` that is not there; one that is there and cannot be read as settings cannot be told, and neither can
+a subscription whose credentials file is there and cannot be read.
+
+Qwen Code decides from the four layers merged (system defaults, the account's, the project's, system), so an
+administrator can choose the method and hold the key in the system or the system defaults file. Octoboard reads the
+account's file only and does not merge: where the account chose no method and one of those two files has a
+`security` section, or cannot be read, it says it cannot tell rather than signed out.
+
+Read from the code only: `qwen-oauth` is refused as discontinued, and `qwen-subscription` keeps its tokens in
+`<Qwen home>/subscription_credentials.json` (`tokens.access_token`, with `baseUrl` and `clientId`).
+
+**Without a terminal** (0.28.3, scratch accounts): `qwen auth login` exited 0 with the removal notice, and
+`qwen -p "/auth"` said configuration is interactive. Environment variables allow an externally provisioned
+API key to be used without a terminal. ACP advertised the `openai` method. Its `authenticate` request failed
+(`-32603`) without a provisioned key, and succeeded with a fake key already in the environment, writing
+`security.auth.selectedType` into account settings. The request supplies no key and Qwen Code's implementation
+clears the cached credential file during authentication.
+
+Qwen Code's own Web Shell also provides API-key onboarding. With `qwen serve --hostname 127.0.0.1 --port 0
+--web --require-auth --no-open --no-token-qr` in an unsigned scratch account, it announced the allocated port and
+served the Web Shell. The auth-provider catalogue returned 401 without the bearer authentication and 200 with it
+(15 providers), and its installation endpoint validated the request and rejected an empty one without saving
+credentials. The shell consumes the temporary listener credential through the URL fragment. Octoboard's login
+opens that native page and waits for Qwen Code to save a usable sign-in for the selected account. The key is entered
+in the Web Shell. In the 0.28.4 acceptance run, the owner opened the authenticated page and the provider
+catalogue was readable. The user waived the owner's key submission and the resulting sign-in reading. Tests
+cover reading a saved key.
+
+### Models, install and update
+
+No command lists models. The models an account can choose are the entries of `modelProviders` in its `settings.json`;
+`<Qwen home>/model-registry.json` is a copy of a public table of model limits, not the account's models. The npm
+package is `@qwen-code/qwen-code`; `qwen update` checks for an update and installs it.
+
+**It updates itself, per Qwen home, without touching the npm package.** About three seconds after its first screen
+it checks for a newer version and installs it under `<Qwen home>/updates/npm/<hash of the launcher's path>/versions/
+<version>`, recording it in `active.json` there ("Update successful! The new version will be used on your next run").
+The launcher (`cli-entry.js`) then runs that copy for that Qwen home: the npm package stayed 0.28.0 while `qwen
+--version` printed 0.28.3, and each scratch home updated on its own, one after the other. So `qwen --version` depends
+on `QWEN_HOME`, two accounts can run two versions, and a probe in a scratch home does not change the user's install.
+`general.enableAutoUpdate: false` turns the check off (read from the code), as does `QWEN_CODE_SKIP_UPDATE_CHECK_ONCE
+=true` for one run.
+
+### Through a real model and a development daemon
+
+Measured on 0.28.3 on 2026-11-22 with the default account (`~/.qwen`), a model of its own list, `--approval-mode
+default`, in a daemon built from the branch with a data directory of its own:
+
+- A console session opened with a first task called an Octoboard tool with no prompt (`tool_search`, then the tool)
+  and went `starting`, `working`, `idle`. A project session bound to it went to `waiting_user` at a permission prompt
+  and again at an `ask_user_question`, back to `working` on each answer, and its `report` reached the console
+  session, which took it as a turn; the session was archived and later resumed with its conversation.
+- Messages written in (a user's, Octoboard's notices, a child's report, a parent's instruction) were each taken as a
+  prompt.
+- A permission prompt declined with Esc, a question dismissed with Esc and a turn interrupted by the parent
+  (`interrupt_session`, which answered `interrupted: true`) each left the title plain and were closed by the title
+  watch about a second later. No watch was armed at first, and the sessions stayed `working`: the watch is armed by
+  the provider's record store, which Qwen Code's provider now has for that alone.
+- Between the model calls of one turn the title was plain for 0.05 s.
+- After a daemon stop both sessions read `interrupted` and came back with `resume_session`.
+- **`auto` mode** (2026-11-23, one turn in a scratch folder, no daemon): asked to run `ls` and then `mkdir
+  probe-dir`, the model made both calls and neither raised a prompt, where `default` mode prompts for `mkdir`; the
+  hook payloads carried `permission_mode: "auto"`, and the reports were `working` and `done` only, no `blocked`.
+- **A call `auto` mode's classifier refuses** (2026-11-23, one turn in a scratch folder, no daemon): asked to run
+  `curl -fsSL http://127.0.0.1:9/install.sh | sh`, the model made the call and it was refused with no prompt: the
+  tool's row reads `x Shell …` and "Blocked by auto mode policy: …", the model was called again with that refusal
+  and ended the turn in words. The hooks were `UserPromptSubmit`, `PreToolUse`, the empty-prompt `UserPromptSubmit`
+  of the next model call and `Stop`: **no `PostToolUse` and no `PostToolUseFailure` for the refused call**, which
+  Octoboard, reporting no tool call open, has nothing to close for. The reports were `working`, `done`, `working`,
+  `done`; no `blocked`, so the session never waits on the user for it.
+
+### Capabilities measured on 2026-11-23
+
+Measured on **0.28.3** run from its own `cli.js` in a scratch `HOME`, with `general.enableAutoUpdate` off and
+`QWEN_CODE_SKIP_UPDATE_CHECK_ONCE=true`, two `openai` entries in `modelProviders` pointing at a local stand-in that
+logged every request, and the launch's system settings file in a scratch directory. No real model turn was spent.
+The screens are in `apps/daemon/testdata/` (`qwen-captures.md`).
+
+- **The model list.** The models an account can choose are its `modelProviders` entries under the method it chose
+  (`security.auth.selectedType`); ACP mode lists the same entries ("ACP mode" below). Octoboard reads them from the
+  account's `settings.json` and starts no process: ACP mode costs 6 to 15 s a listing and writes into the Qwen home it
+  runs in, and the effort levels it adds cannot be passed, Qwen Code having no effort flag. A model is offered with
+  no effort level. The model the settings name (`model.name`) is read from the system settings file, else the
+  project's `.qwen/settings.json`, else the account's.
+- **How the layers' models merge.** Qwen Code merges its settings from the system defaults, the user's
+  `settings.json`, the project's `.qwen/settings.json` (where the folder is trusted) and the system settings file,
+  later over earlier (0.28.3's `mergeSettings`); `modelProviders` has no merge rule of its own, so a later layer's
+  list of a method replaces an earlier one's whole and the other methods are kept. Measured: a system file listing
+  `openai` (`sys-model`) and `anthropic` (`sys-claude`) entries over a user file listing `openai` (`stub-model`) and
+  `gemini` (`user-gemini`) ones, `/model` offered `sys-model`, `sys-claude` and `user-gemini`. **The picker lists
+  every method's entries, but `--model` takes only the chosen method's**: with `openai` chosen, `--model sys-claude`
+  ran the first `openai` entry. So Octoboard lists the chosen method's entries of the system defaults, the account
+  and the system file merged so; the project's layer is not read, the catalogue not being given the session's
+  folder, so models a project lists in its own `.qwen/settings.json` are missing from the list.
+- **A signed-in account** (2026-11-23, read only, no model turn): its `settings.json`, read through the catalogue's
+  rules, gave the entries listed under its chosen method, and Qwen Code's own `/model`, run in a scratch home holding a
+  copy of that file (deleted after), offered the same entries (`[<method>] <id>`).
+- **A model per session.** With `model.name` `stub-a` in the settings, `--model stub-b` made every request of the
+  session name `stub-b`.
+- **The cross-project guard.** A `PreToolUse` command hook that prints `{"hookSpecificOutput": {"hookEventName":
+  "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "<reason>"}}` refuses the call with no
+  prompt, in `default` and in `yolo` mode alike: the call's row reads `x WriteFile …` with the reason under it, and the
+  model is called again with the refusal. (`decision: "deny"` / `"block"` is read the same, by the code.) The matcher
+  is a regular expression over the tool's name; the file-writing tools are `edit` and `write_file` (`file_path`) and
+  `notebook_edit` (`notebook_path`). The guard is registered in the launch's system settings file for
+  `^(edit|write_file|notebook_edit)$`, and, as the status hook is, made to decide only for the launch's own Qwen Code:
+  the guard is given the same mark (`octoboardd guard-hook --fired-by <file>`) and decides only where the Qwen Code
+  above the shell has it on its command line, or where that cannot be told. With the mark on Qwen Code's command line
+  the write was refused; launched without it, the same write went through (measured with a shell wrapper reading
+  `ps -ww -o args= -p $PPID`, which the mode's check replaced).
+- **Its own memory.** Qwen Code keeps a memory of its own, on by default (`memory.enableManagedAutoMemory`): after a
+  turn it makes a second model request, as a "managed memory extraction subagent", which writes
+  `<Qwen home>/memories/MEMORY.md` (the user's scope) and `<Qwen home>/projects/<project>/memory/MEMORY.md` with
+  `meta.json` and `extract-cursor.json` beside it, and every request carries an `# auto memory` section with the
+  index. `memory.enableManagedAutoDream` (on by default) consolidates it. With both `false` in the launch's system
+  settings file, which outranks the user's, the section was gone from the request, no extraction request was made and
+  none of those files was written. So one launch can switch it off, and Octoboard's provider declares it switchable:
+  a launch while Octoboard's memory is on writes both settings `false`.
+- **Exiting ends its commands' process groups.** A command's shell (`bash -c`) leads a process group of its own, a
+  child of Qwen Code. A background command (`(sleep 3041 &); sleep 3042`, `is_background`) was gone with its orphan
+  (same group, parent 1) within a second of `SIGTERM` to Qwen Code, and a background `sleep` likewise at `/quit`; the
+  groups are not the terminal's foreground group, so it is Qwen Code that ends them. A plain `sleep` in the foreground
+  is refused by Qwen Code itself ("Blocked: standalone sleep …").
+- **Images.** A path of an image file pasted on its own into the box is attached, not typed: the box stays empty and
+  an `Attachments: [clipboard-<n>-0.png]` row is drawn above it, one `[…]` per image, with `↑ to manage attachments`
+  under the box. The image is copied to `<Qwen home>/tmp/clipboard/` and sent with the next message as an `@` reference
+  (a model the stand-in did not declare as taking images was given "[Unsupported image file …]" in its place).
+  Neither Ctrl-U nor Esc takes an attachment off, and Enter with nothing written beside the attachments sends
+  nothing: they go with the next message. The prompt `UserPromptSubmit` reports for such a message is `@<path>
+  [@<path> …]`, a blank line, the text, then `--- Content from referenced files ---`, what was read of each file and
+  `--- End of content ---`; the content block follows any prompt that names a file with `@`. So Qwen Code's screen
+  reader gives the `Attachments:` row as the box's first row, counted as the images and left out of the text beside
+  them, declares `message_images`, and takes a reported prompt to be a message written when it is the text without
+  the content block, or without that and the line of references.
+- **Slash commands.** A `/word` in the box draws a completion list under it, the highlighted row marked `>`
+  (`> stats [model|…]  Show usage statistics dashboard.` for `/sta`), which Enter runs. **A space before the slash
+  does not stop it**: ` /quit now` quit the session. A zero-width space (U+200B) before it was sent to the model as
+  text (`\u200b/stats probe0`), so that is the guard a message's leading slash gets. Ctrl-U clears the box. The
+  guard stays in the prompt `UserPromptSubmit` reports (`\u200b/stats probe guarded`), so a reported prompt is
+  compared with the message written with invisible characters ignored on both sides.
+- **Version and updates.** `qwen --version` prints the version the Qwen home it runs with uses: the launcher
+  (`cli-entry.js`) runs `<Qwen home>/updates/npm/<first 16 hex digits of the SHA-256 of the launcher's real path>/
+  versions/<version>/…/cli.js` where `active.json` there names a version whose `bootstrap` is this launcher, whose
+  `baseVersion` is the npm package's version and whose `bootstrapCtimeMs` is the launcher's change time; anything else
+  runs the npm package itself (read from 0.28.3's `cli-entry.js`). So an npm update of the package, which changes its
+  version, makes every home run the new package until it updates itself again, and the version Octoboard asks of the
+  CLI in the default account's environment is the one that account runs. Another account's home may run another
+  version. So the version is read per account from these files, as the launcher reads them
+  (`AgentProvider::account_version`): the active update's where `active.json` matches, else the npm package's
+  `package.json`. The key was measured as computed (`3fe0cacc706db533` for this machine's launcher) and
+  `bootstrapCtimeMs` is the change time as Node gives it, seconds × 1000 plus nanoseconds / 10⁶ in double precision
+  (`1795100767270.9033` for a change time of `1795100767.270903249` s). A launch reads its account's version; the CLI
+  status shows the default account's. The change time is read as Node reads it on every host: on Windows from the
+  file's basic information (`ChangeTime`, as libuv turns it into `ctimeMs`), not from its last write time, and
+  `bootstrapCtimeMs` is compared exactly, read from the number's own text. Where an `active.json` matches the launcher
+  in all else and the change time cannot be read, the files tell nothing and the CLI is asked for `--version`.
+
+### Answering its prompts
+
+Measured on 0.28.3 as above, `--approval-mode default`. A permission prompt and an `ask_user_question` form are each
+drawn in place of the input box, from the call's row, which starts `?` and ends with `←`, to the row
+`Waiting for user confirmation...`.
+
+- **Permission prompt.** `? WriteFile Writing to ok.txt ←` (a new file's lines under it), `? Edit a.txt ←` (the diff),
+  `? NotebookEdit replace notebook cell c1 in nb.ipynb ←` (the notebook's diff), `? Shell mkdir probe-dir (Make a
+  directory) ←` (a blank row, the command's rows, one a line, then `Allow execution of: 'mkdir'?`; a command of
+  several lines wraps the call's row too), `? WebFetch Fetching content from <url> (format: auto) and processing with
+  prompt: "…" ←` (then `URLs to fetch:` and `- <url>` on a row of its own), and `? nap (octoboard MCP Server) {…} ←`
+  for an MCP tool of a server not trusted (`MCP Server: octoboard`, `Tool: nap`). The choices are `N. label` rows, the
+  cursor's marked `›`: for a file write, an edit or a notebook cell `1. Yes, allow once`, `2. Yes, allow always`,
+  `3. No, suggest changes (esc)`; for a command `1. Yes, allow once`, `2. Always allow run 'mkdir *' commands in this
+  project`, `3. Always allow run 'mkdir *' commands for this user`, `4. No, suggest changes (esc)`; for a fetch the
+  same with `Always allow fetch from 127.0.0.1 …`, for an MCP tool with `Always allow mcp__octoboard__nap …`. **A digit
+  takes its choice at once**: `1` wrote the file, `3` declined the edit. "No, suggest changes", by its digit or by
+  Enter on it, declines the call and ends the turn, with no text field and no model call.
+- **"Yes, allow always" of a file change is per launch** (2026-11-23): `2` wrote the file and switched the session to
+  accepting file changes (the footer read `auto-accept edits (shift + tab to cycle)`); the next `write_file` and
+  `edit` ran with no prompt, a command still asked, the user's and the project's settings files were not written
+  (no project `.qwen/` was made; the user's file gained only the `$version` every start writes), and a new launch in
+  the same home and folder was back to `Ask permissions`. The "Always allow …" rows record a rule in the project's or
+  the user's settings, as they say. Every choice that allows is offered from the window.
+- **Which tools ask** (read from 0.28.3's code): besides those above, a web search, the creation of a task or a
+  scheduled job, a skill, a subagent, image generation, a read outside the workspace and a few others can ask in
+  `default` mode; their prompts were not drawn here (a web search's tool was not registered without a search
+  provider). They are matched by a text of the call's input drawn as a whole row, or after `: `, as Claude Code's
+  are, and only on a prompt not drawn for a tool measured above (its call's row naming `Shell`, `WriteFile`, `Edit`,
+  `NotebookEdit`, `WebFetch` or `AskUserQuestion`, or an MCP tool's `(<server> MCP Server)`): such a prompt is that
+  tool's call's alone, also where the call failed to match it.
+- **A scrollbar beside the prompt.** While the history scrolls, Qwen Code draws a scrollbar in the last column of
+  the rows above `Waiting for user confirmation...` (`█` on its thumb, `│` on its track; `ui.showScrollbar`, on by
+  default, "auto-hiding"); it was there 1.2 s after a prompt came up and gone 5 s after the screen settled. A launch
+  turns it off in its system settings (`ui.showScrollbar: false`), and the reader still takes such a cell off each
+  row. Measured on 0.28.3 (2026-11-24, a scratch `HOME` against a stand-in, a PTY at 120x40, a 120-line answer and
+  then a shell call's prompt): with `ui.showScrollbar: true` in the system settings file 38 rows ended in `█` or `│`
+  1.2 s after the prompt came up; with `false` none did, then or 4 s later. The same file with an unknown `ui` key
+  beside it was taken without a word (`-p` ran its turn, status 0); an earlier version, which may not know the key,
+  was not measured.
+- **Question form.** With more than one question a tab row (`▸ Colour   Size  Submit`; an answered tab gets `✓`), with
+  one only the header; then the question, the options as `N. label` with the description on the row below, `[ ]` /
+  `[✓]` before each where more than one may be chosen, the cursor's marked `❯`, and a last `Type something...` row.
+  The footer is `↑/↓: Navigate | ←/→: Switch tabs | Enter: Select | Esc: Cancel` (`Space: Toggle | Enter: Confirm` for
+  a multiple choice). A digit on a single choice chooses its option and goes on to the next question; on a multiple
+  choice it only moves the cursor, Space ticks the row under it and Enter goes on. With the cursor on the last row it
+  opens as a field (`> Type something...`) that takes typed or pasted text, which on a multiple choice ticks the row
+  beside the others ticked; Enter there goes straight to the `Submit` tab, past any question after it. Down does not
+  wrap. After the last of several questions comes `Submit`: `Your answers:` with each (`(not answered)` for one left
+  out), `Ready to submit your answers?`, `1. Submit answers`, `2. Cancel`; a single question has none, its digit
+  answers it. Esc dismisses the form, which fires nothing but the `idle_prompt` notification.
+- So Qwen Code's interaction reader publishes a prompt only when it is drawn as Qwen Code drew it, matched to a call
+  its hooks reported (a command by all its rows, a file by the name the call's row shows, a fetch by its address's
+  row, an MCP tool by its server and tool rows, another tool by a text of its input), presses a choice only while the
+  prompt on the screen is still that call's, and presses the answers with digits, Space, the pasted text, Enter and
+  Esc; only the last question takes a written answer, beside the options on a multiple choice and in their place on
+  a single one. A launch with its hooks switched off reports no call, so none of its prompts is published, and its
+  cross-project guard does not run: its notice says both.
+
+### Plan quota
+
+An account that signs in with a key has no plan quota, and Qwen Code has nothing to read one from (0.28.3's code, and
+0.28.0 run on 2026-11-22 in a scratch `QWEN_HOME` with a made-up key and a model endpoint nothing listens on, so no
+model was reached):
+
+- **`/usage` is another name of `/stats`**, the local statistics of the session and of the sessions stored in the
+  home (`altNames: ["usage"]`; it runs in the TUI, in print mode and over ACP). `qwen -p "/usage"` printed `Session
+  duration`, `Prompts`, `API requests`, `Tokens — prompt: …, output: …`, `Tool calls` and `Files` and exited with
+  status 0. Those are counts of what this home's sessions did, not a quota: no limit, no remaining share, no reset.
+- A used home also holds a `usage/` directory and a `usage_record.jsonl` (seen by name only; not read).
+- The words "plan usage" appear only for a subscription login ("Run /usage to see your plan usage" in the
+  subscription's welcome text; `/upgrade` and `/logout` are offered only when `security.auth.selectedType` is
+  `qwen-subscription` and its session is signed in). What `/usage` shows a subscriber, and where it gets it, was not
+  found in the code by searching and not run: it needs a subscription.
+
+### Not measured
+
+Qwen subscription sign-in and quota need a Qwen subscription or Coding Plan account. The
+`subscription_credentials.json` record is known from code. On 0.28.3 with a key, `/usage` showed only the local
+`/stats` counts. Also unmeasured: the owner's Web Shell key submission and resulting sign-in reading, and other
+sign-in routes besides choosing a key through `/auth`. What Esc gives back where more than one message was held,
+bare mode's tools and whether it loads the launch's MCP configuration, and the trust dialog's `blocked` report where Octoboard presses the dialog itself: it may raise the session's hand and tell
+a bound owner the session waits for the moment before the press, as the title's glyph did before the reports were
+read.
+
+### ACP mode
+
+Measured on 2026-11-22 with `qwen --acp`: on 0.28.3 with a signed-in account (`~/.qwen`, an API key), and on
+0.28.0 in a scratch `HOME` and `QWEN_HOME`, once with a made-up key and two made-up `modelProviders` entries and once
+empty. `QWEN_CODE_SKIP_UPDATE_CHECK_ONCE=true` and `QWEN_CODE_NO_RELAUNCH=true` were set. The probe wrote `initialize` (protocol version 1, no client capability) and then `session/new` (a
+scratch working directory, no MCP server) as JSON-RPC lines on stdin, read the answers, sent no prompt, and ended the
+input.
+
+- `initialize` was answered after 6 s on the signed-in account and 10 to 14 s in a new home: `agentInfo` (`qwen-code`,
+  the version that home runs), one `authMethods` entry and capabilities for loading, resuming and listing sessions.
+- `session/new` was answered within a second with `sessionId`, `models`, `modes` and `configOptions`:
+  - **`models.availableModels` is the account's `modelProviders`, entry for entry, and no more**: the signed-in account
+    listed its own entries and the scratch home its two. Each is `{modelId, name, description, _meta}` where `modelId`
+    is `<id>(<auth type>)` (`stub-a(openai)`), `name` the entry's `name`, and `_meta` carries `baseModelId` (the entry's
+    `id`, what `--model` takes), `authType`, `baseUrl`, `envKey` (the variable's name, never its value), `contextLimit`
+    and `isRuntime`. `currentModelId` is the settings' `model`.
+  - **`configOptions` adds what the settings do not say**: `reasoning_effort` (category `thought_level`) with `none`,
+    `default`, `low`, `medium`, `high`, `xhigh` and `max`, the same list whatever the model ("Providers map or clamp
+    the requested tier for the active model"), beside `model` (the same ids), `mode` (the five approval modes) and
+    `workflow_mode`.
+  - `modes`: `plan`, `default`, `auto-edit`, `auto`, `yolo`, the current one `auto`.
+- An `available_commands_update` followed: 54 slash commands with descriptions.
+- **With no method chosen** (the empty home), `initialize` answered the same and `session/new` was refused:
+  `{"code": -32000, "message": "Authentication required: Use /auth to sign in or configure a model first."}`.
+- **It keeps no record of the session.** In the user's home the run changed three things: an empty directory
+  `tmp/<a hash>` was created, the `sessions` directory's time changed with nothing left in it, and the marker
+  `.openai-logs-cleanup-…` was rewritten. No `projects/…/chats` file was written. A new home also gets what any first
+  run creates (`installation_id`, `model-registry.json`, `output-language.md`, the extension store).
+- The process exited by itself 1 to 6 s after its input ended (status 1 after 6 s on the signed-in account, 0 in the
+  scratch homes). Nothing was spent: no prompt was sent, and the made-up key and base URL were never used.
+
+## Pi
+
+Unless stated otherwise, measurements used Pi 1.5.2
+(`@earendil-works/pi-coding-agent`, on Node 22) on macOS on 2026-11-20, in a scratch home and scratch working
+directories, with a local stand-in answering the model requests as a provider of the scratch `models.json`; where a
+fact is read from the package's bundled docs or code instead, it says so. What was then measured against a real
+account and a real model is under "Through a real model and a development daemon" below.
+
+**Windows 11 ARM64 (23H2, build 22631.6199).** npm's global install put `pi.cmd` in the scratch
+prefix. It ran on ARM64 Node 26.13.0 and reported **1.5.2**. In an SSH preflight of the
+development daemon, the private PTY relayed the xAI device page and code to the control
+client. The same private-PTY flow reported success when run in the interactive desktop
+after the user authorized the device in Chrome. One native CLI turn through xAI Grok 4.3
+returned the verification word. In the development daemon, the channel helper started from a
+scratch path with spaces. With the batch launcher, the helper could poll the daemon and survived
+Ctrl-C, but nothing reached Node's standard-output pipe. A loopback fixture isolated this to
+the batch launch: starting the helper as an executable delivered the message and returned
+its outcome. The extension now starts it directly, detached. The console and project reached
+the local model, including a send after raw Ctrl-C with the same helper and a send after archive
+and resume. The session records show a successful Octoboard tool read, the child's report received
+by the parent, and the parent's instruction received by the child. A single terminal Esc closed
+an active stand-in request. Inbox ConPTY did not deliver Pi's OSC turn state, and the daemon
+initially read Idle during the request. The provider sends Pi's working, user wait and settling
+states through the extension's launch hook on that host. The rebuilt daemon showed Working,
+cancelled the active request using its interrupt command and returned to Idle. A follow-up
+acknowledged before Escape reached the local model once after the next prompt.
+
+**Linux daemon** (1.5.2, Debian 13 arm64, glibc 2.41). A console and project session completed turns on a
+file-based Anthropic account and called the injected Octoboard MCP server. The project received the console's
+instruction, and the console's native record includes the project's report. Both sessions interrupted a turn,
+archived and relaunched. Pi emitted native OSC 7501 status reports and kept records under `~/.pi/agent/sessions`.
+On a follow-up turn with a local stand-in, `strace` recorded the Node extension directly executing the
+launch's hook script with its `/bin/sh` shebang.
+
+**Status: OSC 7501.** Pi asks the support query (`OSC 7501 ; ? ST`) as it starts and reports only once it is
+answered; unanswered it reports nothing. `PI_PROGRAM_STATUS=1` would report without asking, which Octoboard does not
+need, since every session terminal answers. Every report addresses the root record and carries `app=pi`:
+
+| When | Report |
+|---|---|
+| Started, past the project-trust confirmation | `idle` |
+| A prompt submitted (the positional one of the launch included) | `working` |
+| The run finished, a tool call's included | `done` |
+| The model request refused (HTTP 400) | `error`, `msg` the first line of the error |
+| Esc during a run | `idle` |
+| `/name` | the current state again, `msg` the session name |
+| `/new` | `idle` |
+| Quit (Ctrl-D) | `clear` |
+
+`blocked` is reported while an extension's dialog waits (1.5.2, 2026-11-23, a scratch extension against a stand-in
+model): `kind=permission` for `ctx.ui.confirm()`, `kind=question` for `ctx.ui.select()` and `ctx.ui.input()`, each
+with `msg` the dialog's title. The answer, or Esc, is followed by the state before it: `idle` for a dialog a slash
+command raised outside a run, `working` for one raised from a `tool_call` handler mid-run, which then went on to
+`done`. Octoboard's program status path reads these as they are: *waiting for the user* and back. On Pi 1.5.2 on macOS, selecting OAuth after `/login xai` emitted
+`blocked` with `kind=auth` while the device authorization waited. Pressing Escape returned to `idle` without
+authorizing the device. Pi's own selectors (`/model`, `/resume`, `/settings`, `/tree`, `/fork`, `/login`'s menu, `/mcp`) report nothing. Nothing is
+reported while the project-trust confirmation is up, nor for a `!` shell command the user runs.
+
+A named session's reports carry the session name as `msg`: `/name` repeats the current state with it, and `working`
+and `done` carry it from then on, while `error` carries the first line of the error and `idle` nothing (1.5.2,
+2026-11-23, a session named `Fix - the build` against a stand-in model). No report carries what the model said. Pi
+reports `done` or `error` as it handles its own `agent_settled` event, once a run is over and it will not run again by
+itself (an error it retries, a message that was waiting); a run cancelled with Esc settles with `aborted` set and is
+reported `idle`. Octoboard would take the `msg` of a `done` as what the turn said, so Pi's provider supplies the turn's
+message itself: the extension keeps the text of the last assistant message of each `agent_end` (the error message
+where a run ended on an error with no text), and forwards it at `agent_settled`, `null` where there is none and
+nothing for a cancelled run, whose text it drops: a settling that follows no run (a manual `/compact`) would carry
+it otherwise. The text is cut at 200,000 UTF-16 units, one short where that would split a surrogate pair, whose lone
+half `JSON.stringify` writes as an escape the daemon's parser refuses the whole payload for. Measured, the forwarded event reached the hook script 30 to 250 ms after the `done`
+report was written, inside the two seconds a turn end waits for it. A turn end that is given no message (a last
+assistant message with no text, a manual `/compact`, which reports `working` and `done` with no run, or a hook that
+fails) ends with none: Pi's provider answers that its report's `msg` is not the turn's message
+(`HookInterpreter::report_msg_is_turn_message`), so the session name is never told as what a turn said. Not seen in a
+development daemon.
+
+**No hooks; an extension instead.** `--extension <file>` loads a JavaScript or TypeScript module for the run, before
+the project-trust confirmation and without a trust decision of its own, and lists it under `[Extensions]` in the
+start-up banner. An ES module with a default export loads from a `.js` file. Octoboard's extension
+(`apps/daemon/src/adapter/pi/extension.js`) does the things listed below, beside the turn's message above and what
+"Prompts, the cross-project guard, images and slash commands" describes. A factory
+that throws while Pi loads the extension ends Pi (`Failed to load extension`), and the action methods (`getAllTools`,
+`getActiveTools`) throw until the extension is bound, so the extension catches everything and reads nothing of Pi's
+while loading. Pi runs the factory again for the session `/new` opens, after `session_shutdown` for the one before
+(measured); the bundled `extensions.md` says the same of `/resume`, `/fork`, `/clone` and `/reload` (Pi "emits
+`session_shutdown` for the old extension instance, reloads and rebinds extensions for the new session, then emits
+`session_start`"), read from the doc and not measured. So what the extension keeps in memory lasts one session, and
+nothing a `session_shutdown` handler ended has to be started again by the same instance:
+
+- `pi.registerMcpServer("octoboard", { command, args, exposure: "direct", timeout })`. With `direct` exposure the
+  tools are declared to the model beside the built-in ones as `mcp__octoboard__<tool>` (the default exposure,
+  `codemode`, declares none of them); the first prompt waits for a `direct` server to connect. `timeout` is in seconds
+  per request (Pi's default is 60): a call that outlasts it comes back to the model as the tool result
+  `MCP request timed out after <ms>ms`, and the turn goes on. A server of the same name in the user's `mcp.json` takes
+  precedence over a registered one (bundled `extensions.md`), measured on 1.5.2 on 2026-11-23 with stub servers that
+  log their own start: with `{"mcpServers": {"octoboard": …}}` in the configuration directory's `mcp.json`, only the
+  user's server was started, the registered one never, the model was declared the user's tools as
+  `mcp__octoboard__<tool>`, and `/mcp` said `overridden: "octoboard" registered by <extension> is overridden by
+  "octoboard" in <mcp.json>`. Names that differ only in `-` and `_` count as the same (bundled `mcp.md`), and a
+  trusted project's `.pi/mcp.json` is read the same way. No flag or variable of 1.5.2 changes the precedence
+  (`--no-mcp` turns every server off). So where the configuration directory's `mcp.json` or the working directory's
+  `.pi/mcp.json` names such a server, the extension registers nothing with Pi's MCP support: it starts the session's
+  server itself at `session_start`, speaks MCP to it over its stdin and stdout, and registers each tool with
+  `pi.registerTool` under `mcp__octoboard__<tool>`. Measured on 1.5.2 on 2026-11-23 against stub servers and a
+  stand-in model:
+  - `registerTool` takes the server's JSON Schema as `parameters` unchanged, validates the arguments against it
+    (`Validation failed for tool "…": - status: expected one of […]` comes back to the model as the result) and
+    declares the tool to the model under exactly the name given. It works while loading and later.
+  - A tool an extension registers and a tool of the same name that Pi's MCP support registers for the user's server
+    do not clash: Pi keeps one definition a name, the first in extension order (bundled `runner.js`), and the
+    launch's `--extension` came before the built-in MCP support, whichever of the two registered first. With the user's server offering `report` and
+    `user_only`, the model was declared Octoboard's `mcp__octoboard__report` and the user's
+    `mcp__octoboard__user_only`; a call of the first reached Octoboard's server and of the second the user's. So the
+    user's own server keeps every tool but one that shares a tool name with Octoboard's.
+  - The launch's first prompt is held until an async `session_start` handler returns, but a prompt after `/new` is
+    not, so the extension waits for its registration in `before_agent_start`, up to ten seconds, as Pi's MCP support
+    waits for its direct servers; the tools were declared in the first request of the launch and of a `/new` session.
+  - A tool the server withdraws (`notifications/tools/list_changed`) is registered again as `hidden`, since Pi has no
+    way to take a tool back, and one it adds is declared from the next request. Esc during a call aborts the signal
+    `execute` is given, on which the extension sends `notifications/cancelled`, as it does for a request that
+    outlasts the timeout, but never for `initialize`, which MCP lets no client cancel.
+  - Against `octoboardd mcp` itself (0.1.0-beta.5, with no daemon to reach): the handshake at protocol `2025-06-18`,
+    all 37 tools registered and declared, and a call's `isError` result came back to the model as its text.
+  - Names are compared as Pi compares them, `-` and `_` alike and nothing else: a user server `octo-board` is a
+    different server from `octoboard` and both ran. The extension does not check that the project is trusted or the
+    entry valid: taking the registration over where Pi would have served the tools costs nothing.
+  - Pi does not cut these tools' results as it cuts an MCP server's over 20 KB, and `/mcp` lists no Octoboard server
+    in such a session.
+- It forwards `session_start`, which fires once start-up is past the trust confirmation (`reason: "startup"`) and again
+  when `/new`, `/resume` or `/fork` replaces the session in the same process. A session's file is written at its first
+  message, so at `startup`, `new` and `fork` there is none and the extension names no id; at `resume` it names the
+  session resumed. Measured on 2026-11-23: after `/fork` (which also puts the forked message's text into the input
+  box) and a message, the fork was a file of its own id that no event had named, so a later resume would have opened
+  the original. The extension therefore sends `session_start` once more, with the id and `reason: "saved"`, at the
+  first `agent_end` after which the session's file exists and its id differs from the one last named: measured, one
+  such event each after the first run of the launch's session, of a fork and of a `/new` session, and none after later
+  runs.
+
+**Launch and resume.**
+
+- `--session-id <id>` opens the working directory's session of that id and creates it where there is none, silently,
+  also when a session of that id exists under another directory. `--session <id>` opens the stored session; for an
+  id nothing matches it prints `No session found matching '<id>'` and exits, and for a session of another directory it
+  asks `Fork this session into current directory? [y/N]`. It matches partial ids too. So a new session passes
+  `--session-id` and a resume `--session`.
+- A session's file, `sessions/--<working directory, separators as dashes>--/<timestamp>_<id>.jsonl` under the
+  configuration directory, is written at the first message, not at start.
+- The file is a tree (1.5.2, headless against a stand-in, 2026-11-22). Its first line is a header (`type: "session"`,
+  whose `id` names the conversation); every other line carries its own `id` and `parentId`. Going back to an earlier entry writes
+  nothing by itself: the next message is appended with the earlier entry as its `parentId`, the abandoned lines stay,
+  and with a summary a `branch_summary` line (`parentId` the entry gone back to, `fromId` the abandoned leaf) comes
+  first. A resume carries on from the line written last, which the bundled `session-format.md` and
+  `session-manager.js` call the leaf. A fork into another directory is a new file under that directory's folder with
+  an id of its own, holding a copy of the branch and `parentSession` in its header: it needs nothing of the original.
+- `--model` takes `provider/id`; `--thinking` takes `off`, `minimal`, `low`, `medium`, `high`, `xhigh` and `max`, lowers
+  a level the model does not support to the highest it does (`xhigh` and `max` became `high`), and ignores a value it
+  does not know.
+- `--append-system-prompt` takes a file's path as readily as text: the file is listed under `[Context]` and its
+  contents are appended once. Pi builds the system prompt afresh on every start, so the same flag on a resume leaves
+  the text in the prompt once, neither doubled nor dropped.
+- Positional messages start the first turn and leave the TUI interactive; `--` before them keeps a message that
+  starts with `-` from being read as an option. A positional argument that starts with `@` is read as a file to
+  include, after `--` too (1.5.2, 2026-11-23): `pi … -- '@nofile explain'` printed `Error: File not found: <cwd>/nofile
+  explain` and exited. With a space before it (`' @notes.txt explain'`) it reached the model as that text, space
+  included and no file read. Pasted into the input box of a running Pi, `@nofile explain` and `@notes` (a prefix of an
+  existing file's name) were sent as typed, with no completion list opened by the paste. Octoboard queues a first task
+  that starts with `@` as the session's first message instead of passing it as an argument.
+- `--approve` (`-a`) trusts project-local files for the run: in a folder whose plain launch showed the trust
+  confirmation, a launch with `--approve` showed none, started, and left no `trust.json` in the configuration
+  directory; the next plain launch asked again (1.5.2, 2026-11-23). `--no-approve` ignores them for the run (help
+  text).
+- A subcommand (`install`, `remove`, `uninstall`, `update`, `list`, `config`, `auth`, `mcp`) is run only as the first
+  argument; anywhere else its name is a message, with or without the `--` (1.5.2, measured on macOS on 2026-11-22
+  without a terminal, with `PI_OFFLINE=1` and a scratch `PI_CODING_AGENT_DIR` holding no login). `pi list` printed
+  `No packages installed.` and `pi mcp` its usage, where `pi --session-id <id> list`, `pi --session-id <id> -- list`,
+  `pi -- list` and `pi --session-id <id> -- mcp` all went on to the prompt and stopped at `No API key found for the
+  selected model.`, as `pi --session-id <id> -- 'list the files'` did. Octoboard passes its flags first, so a first
+  task that is a subcommand's name needs no shaping.
+- `PI_CODING_AGENT_DIR` names the configuration directory itself (default `~/.pi/agent`): `auth.json`,
+  `models.json`, `settings.json`, `mcp.json`, `trust.json`, `sessions/`.
+
+**Instruction files and compatibility.** Stand-in requests from Pi 1.5.2 included `CLAUDE.md` when it was the
+directory's only context file and `AGENTS.md` when both were present. With project resources trusted, a skill from
+`.agents/skills` reached the system prompt. The sentinels from `.claude/skills` and `.claude/commands` stayed out of
+the request. `--no-context-files` suppressed both context filenames, leaving the `.agents` skill. `--no-approve`
+suppressed the local skill and still loaded `AGENTS.md`. Pi 1.5.2 exposes no launch switch for just the Claude
+fallback. Octoboard uses the native fallback and offers no compatibility switch for it.
+
+**The project-trust confirmation** appears for a folder holding project resources Pi would load, before anything
+else is drawn: measured with `.pi/settings.json` alone, and (2026-11-23) with no `.pi` at all in a folder holding
+`AGENTS.md`, `.agents/skills/<name>/SKILL.md` and `.claude/settings.json`, which is what a console session's
+directory holds. Of those three it is `.agents/skills` that raises it (1.5.2, 2026-11-23, one scratch folder a case):
+a folder holding `.agents/skills/<name>/SKILL.md` alone was asked about, as was one holding an empty `.agents/skills`,
+while a folder holding `AGENTS.md` alone, `.claude/settings.json` alone or `.claude/skills/<name>/SKILL.md` alone
+started with no confirmation, as one holding none of them did. A `.pi/mcp.json` alone raises it too.
+
+```text
+ Trust project folder?
+ <folder>
+ This allows pi to load .pi settings and resources, install missing project packages, and execute project extensions.
+ → Trust
+   Trust parent folder (<parent>)
+   Trust (this session only)
+   Do not trust
+   Do not trust (this session only)
+ ↑↓ navigate  enter select  escape/ctrl+c cancel
+```
+
+The cursor (`→`) starts on `Trust`; Enter accepts and records the folder in `trust.json`, and Down moves the cursor,
+redrawing only the two rows it leaves and enters. Bracketed paste is on from Pi's first byte, before this screen.
+
+**The input box and its keys.**
+
+- A bracketed paste followed by Enter submits.
+- Esc stops a run, before the model has shown anything and after alike; the prompt is not put back in the input box,
+  and the transcript shows `Operation aborted`.
+- A message entered during a run waits as a steering message (`Steering: <text>`, one row a message, above the box,
+  with a row `↳ Option+Up to edit all queued messages` under them) until the current response and its tool calls are
+  done. Esc puts every message still waiting back into the input box, unsent, in order with an empty line between
+  two, then an empty line and whatever was already typed there (measured again on 2026-11-23 with a draft typed
+  during the run, `pi_box_drafted_cancelled.bin`); the interrupted prompt is not among them, and the
+  next Enter sends all of it as one message. Nothing on the screen tells a message given back from typed text: what
+  comes back is each message's own text, and it is by those texts, which it keeps for the turn, that Octoboard knows
+  the messages at the start of the box and writes them again, in order, after its next message.
+- The box is the rows between two full-width rules of `─`, above a footer of two rows (the working directory, then
+  the context use and the model). Its rows start in the first column with no prompt mark, an empty box is one empty
+  row with no placeholder, a line longer than the width wraps onto the next row, and a completion list (after `/`)
+  is drawn under the lower rule. During a run the upper rule reads `── <spinner> Working ───…`. The rules are drawn
+  in the colour of the thinking level (bundled `theme.js`), which at `off` is faint (SGR 2), as the footer and the
+  steering rows are, so with faint cells blanked the box has nothing around it to be found by: Octoboard reads it off
+  the screen as drawn.
+- The box shows at most five rows, or three tenths of the terminal's height where that is more; beyond that it
+  scrolls, and the rule on the side with rows out of sight carries their count (`─── ↑ 3 more ───`, `↓` below;
+  bundled `editor.js`). A paste of more than ten lines or a thousand characters is shown as `[paste #1 +24 lines]` or
+  `[paste #1 2400 chars]`.
+- Pi draws its selectors and dialogs in the box's place, between rules of the same shape (theirs are coloured, not
+  faint): `/model`, `/thinking`, `/scoped-models`, `/settings`, `/resume`, `/tree`, `/fork`, `/mcp`, `/login`, an
+  extension's `confirm`, `select` and `input`, and the trust confirmation. Each has an entry under a list cursor (`→`
+  or `›`) or ends with a row of key hints whose last says what Esc does (`… escape/ctrl+c cancel`, `Esc to cancel`,
+  `escape/ctrl+c close`); the session selector starts with `Resume Session (`. Octoboard reads rows of that shape as
+  no input box.
+- Ctrl-U deletes from the cursor back to the start of its line, a wrapped line whole, and at the start of a line the
+  line break before it; on an empty box it does nothing. Three lines took five presses. After a cancel gave two
+  steering messages back, the cursor stood at the end of the last, and the presses took its text, then the two line
+  breaks before it one a press, then the first message's text.
+- Ctrl-D quits, during a `!` command too.
+
+**Terminal title.** `π - <folder>` (the working directory's last component), and `π - <session name> - <folder>` once
+the session has a name (`/name`). No activity glyph. Neither part is escaped: in a folder named `my - proj` the titles
+were `π - my - proj` and, after `/name Fix - the build`, `π - Fix - the build - my - proj` (1.5.2, 2026-11-23), so
+Octoboard takes the folder off by the working directory's own name.
+
+**Processes.**
+
+- Every command Pi runs gets `AI_AGENT=pi`, `PI_CODING_AGENT=true` and `PI_SKIP_VERSION_CHECK=1`; those of the model's
+  shell tool also `PI_SESSION_ID`, `PI_PROVIDER`, `PI_MODEL` and `PI_REASONING_LEVEL`, and `PI_SESSION_FILE` for a
+  saved session (bundled docs).
+- Pi runs each command in a process group of its own and kills the groups of the commands still running as it exits:
+  a `sleep` running under `!` was gone after Ctrl-D, after SIGHUP and after SIGTERM, on each of which Pi exits at
+  once. A job a finished command left in the background
+  (`sleep 300 &`) is not Pi's to end and survived.
+
+### Model and reasoning effort
+
+`pi --list-models` prints a table of the models of every model provider the account holds a usable credential for,
+sorted by provider and id, in about a second and without a model call:
+
+```text
+provider  model          context  max-out  thinking  images
+openai    gpt-4.1        1.0M     32.8K    no        yes
+```
+
+A model is passed to `--model` as `provider/model`. A model id that holds a `/` itself is listed as it is
+(`standin  org/sub-model`) and taken as `--model standin/org/sub-model`: the request named `org/sub-model`. Octoboard
+offers the levels of `--thinking` for a model whose
+`thinking` column says `yes` and none for the others. With no usable credential it prints, with exit status 0,
+`No models available. Use /login to log into a provider via OAuth or API key. See:` and two paths of its docs.
+
+### Sign-in
+
+Pi signs in to model providers, not to one account. A credential is any of: an entry of `auth.json`
+(`{"<provider>": {"type": "api_key", "key": …}}` after `pi auth login <provider> --api-key`, which asks for the key in
+the terminal), a provider's key in the environment (`OPENAI_API_KEY`), or a provider of `models.json` with its key.
+`pi auth check` needs `--provider` or `--model` (exit status 2 without) and prints, with `--json`,
+`{"status":"ready","provider":"openai","authType":"api_key"}` (status 0) or
+`{"status":"not_ready","provider":"openai","reason":"credentials_not_configured"}` (status 1). Since it answers for one
+provider only, the background reading checks the named providers with `--json --no-refresh` when OAuth is stored.
+A ready provider means signed in. If no check confirms a ready provider, the reading is unknown, since Pi may
+refresh OAuth at the next session start. For accounts without stored OAuth, `pi --list-models` also covers credentials
+from the environment and custom providers. Its no-models notice means signed out.
+
+On Pi 1.5.2 on macOS (2026-11-24), the account held `anthropic` of type `api_key` (fields `type` and `key`) and
+`xai` of type `oauth` (fields `type`, `access`, `refresh`, `expires`). The checks exited 0 with
+`status: "ready"` and `authType: "api_key"` and `"oauth"` respectively. The same account returned 18 Anthropic
+and 4 xAI rows in `pi --list-models` with its cached catalogue and `PI_OFFLINE=1`. The listing acquires an
+`auth.json.lock` beside the resolved credential file, including through a symlink. Both checks and the listing
+were run with the user's credential linked into scratch and protected from writes. The file stayed byte-identical
+and the temporary lock was gone afterwards.
+
+**Device sign-in.** `pi auth login xai --no-browser` refuses pipes with exit 1, requiring an interactive terminal.
+On a private PTY, Pi 1.5.2 printed `Open <https URL on accounts.x.ai> and enter code: <device code>` and
+`Waiting for authentication...`, and left the browser closed. The probe cancelled before authorizing the device.
+Octoboard runs this command on a private PTY, shows the page and device code in its login dialog, and leaves the
+authorization and credential storage to Pi. The window's **Log in** uses xAI. The CLI's
+`pi auth login <provider>` remains available for other providers and `--api-key` for providers accepting a key.
+Octoboard's login has no provider picker or field for a key.
+
+**Pi has no plan of its own, so there is no plan quota to read.** What a session spends is counted by each model
+provider against that provider's key or subscription, and `pi --help` (1.5.2) names no command for a quota or for
+usage; Octoboard reads none for Pi, and its descriptor declares no quota window.
+
+### Reading and carrying records
+
+Measured on Pi 1.5.2 on macOS (2026-11-24). Pi writes each turn as `type: "message"` entries. Its message roles are
+`user`, `assistant` and `toolResult` for the prompt, the reply and a tool outcome. An assistant's `toolCall` content
+block carries the call ID, name and arguments. `model_change` names `provider` and `modelId`, while
+`thinking_level_change` names `thinkingLevel`. Octoboard reads archived history and the live feed from the latest
+written branch. It keeps the prompt and reply text, classifies tool calls and attaches outcomes to their call IDs
+in the feed. The stand-in's raw branch capture is `apps/daemon/testdata/pi_branched_records.jsonl`. Going back to
+the first reply and then prompting appended a new path in that file. The abandoned path stayed on disk and was
+absent from the next model request.
+
+A `compaction` appends a summary with `firstKeptEntryId`. Pi presents the summary first, followed by the entries
+beginning at that ID and by entries after the compaction. It retains the earlier lines for history. A
+`context_edit` with `targetId` and `replacement: null` leaves its target in the file and omits it from what the
+model sees. A stand-in reply omitted this way stayed in the raw record and disappeared from the next request.
+Octoboard keeps the original messages in the archive and marks compactions in the live feed.
+
+With a stand-in replying with `input: 100`, `cacheRead: 23`, `output: 17`, and `totalTokens: 140`, Pi's
+`ctx.getContextUsage()` reported 140 of 60,000 at settle. The context edit reset the usage baseline and the live
+projection estimated 3,485 tokens. After compaction Pi reported a null size until the next reply, which restored
+140. Pi's bundled implementation adds estimated trailing messages after the latest valid assistant usage and
+falls back to an estimate from the projected context after a context edit. Octoboard's launch extension
+reports this figure and the model window on session and model changes, before model requests, at turn end
+and settle, and after tree navigation or compaction. An in-memory tree rewind reaches the collector even before
+a new entry is written. Without a live report, the collector reads assistant usage on the persisted branch
+and clears that reading at compaction or context edit until a new reply.
+
+A resume in an independent scratch configuration directory returned exit 1 before its record was copied. After
+copying only `sessions/<working directory>/<timestamp>_<id>.jsonl` at the same relative path, Pi resumed the same
+conversation and the next model request included its earlier prompt. The signed-in check repeated the move from a
+scratch home using the Anthropic key to another scratch home using xAI OAuth. The xAI model repeated the marker
+from the prior reply and Pi appended to the copied file. Two real model turns were used. History, removal and
+carrying operate on this one JSONL file. Pi's standard record layout has no separate archive directory. When the
+configured records directories can be searched completely, the missing file means the conversation is gone.
+Pi also advertises `PI_CODING_AGENT_SESSION_DIR` and `--session-dir` for nonstandard record locations. Octoboard
+also searches the directory named by the environment variable, where Pi puts its JSONL files directly.
+Relative directories are resolved from the launch's working directory.
+
+### Sharing configuration and MCP inventory
+
+Measured on Pi 1.5.2 on macOS (2026-11-24), with two scratch configuration directories and the second linking
+`settings.json`, `models.json`, `mcp.json` and `extensions/` to the first. A local package install updated
+`settings.json` through its link, and `pi mcp add` updated `mcp.json` through its link. Both links remained in
+place. Installing a file stored under the second account as `installed.js` recorded `"installed.js"` in the
+shared settings' `packages` array. Pi resolves that relative name under the active account directory. Sharing
+`settings.json` therefore needs to handle account-relative local packages as well as absolute paths. The
+shared `extensions/` directory can hold local extension sources with the same relative location in both
+accounts. In a second 1.5.2 scratch run, a local model stand-in received the original prompt on resume through
+linked `sessions/`. Both accounts loaded the linked extension, while only the default directory loaded the
+relative package that existed beside its settings. A separate scratch probe set `httpProxy` and confirmed
+that Pi sent the inline authentication to the local proxy. Octoboard shares `extensions/`, `sessions/` and
+eligible `settings.json`. It leaves settings private and reports the reason when either file holds an inline
+credential or a local source cannot be resolved. It resolves relative package sources from the default directory
+before linking settings. During a session, a new relative source refers to the active account. Octoboard uses
+the stable absolute spelling if it resolves outside the sharing account. Model and MCP definitions can hold
+credentials in keys, headers or command arguments, so `models.json` and `mcp.json` stay private with
+`auth.json` and `mcp-auth.json`. A separately configured `PI_CODING_AGENT_SESSION_DIR` is outside sharing.
+
+`pi mcp list --json` reads `mcp.json`, starts enabled servers and returns each server's scope, transport, state
+and tools. Pi 1.5.2 reported failures for a missing local command and an unreachable HTTP server and created
+`mcp-auth.json` during the read. Octoboard lists the account's configured servers from `mcp.json` without
+running them. It shows only an HTTP origin for a remote server and leaves runtime, tool count and remote sign-in
+unknown. The CLI's live diagnostic remains available explicitly in a terminal.
+
+### Install and update
+
+The npm package `@earendil-works/pi-coding-agent`, binary `pi`; `pi update` updates Pi itself (`--self`, the default
+with no target, updates Pi only). The package names `https://github.com/earendil-works/pi` as its repository
+(`package.json`), which is the address Octoboard gives for installing it.
+
+- **npm.** The binary on `PATH` links to `<package>/dist/bundle/cli.js` (1.5.2), and the package's `package.json` is
+  three levels above it. Octoboard reads the version there, the package's name checked, and updates the install with
+  npm.
+- **The vendor's installer** (`curl -fsSL https://pi.dev/install.sh | sh`, `irm https://pi.dev/install.ps1 | iex` on
+  Windows) makes a *managed* install on macOS and Linux. Read from the script as served on 2026-11-23 and from Pi
+  1.5.2's own update code (`dist/package-manager-cli.js`), and seen on disk the same day: the script run in a scratch
+  home on macOS, with only Node.js and npm on `PATH`, installed Pi 1.6.0 as follows. The root is `install` in the
+  configuration directory (`~/.pi/agent/install`, or `$PI_CODING_AGENT_DIR/install` as the installer ran), holding
+  `managed-install.json` (`{"kind": "pi-managed-install", "schemaVersion": 1, "layout": "releases-v1", "entrypoint":
+  {"type": "symlink", "path": "<home>/.local/bin/pi"}}`), a `current-version` file of one line (`1.6.0`), a
+  `staging` directory, and each release under `releases/<version>` (a lockfile root package
+  `@earendil-works/pi-coding-agent-install` of the same version, a `metadata.json`, and its dependencies installed with
+  `npm ci`) so that Pi is `releases/<version>/node_modules/@earendil-works/pi-coding-agent`, version 1.6.0 in its
+  `package.json`. The command is a shell script the installer
+  writes at `<configuration directory>/bin/pi`, which reads `current-version`, checks it holds only letters, digits and
+  `._+-`, exports `PI_MANAGED_INSTALL_ROOT` and starts that release's `node_modules/.bin/pi`; a directory on `PATH`
+  (`~/.local/bin`, `~/bin`, a Homebrew `bin`) gets a link to it. `pi update --self` started through the launcher
+  updates the managed install itself (`runManagedSelfUpdate`); on Windows the installer makes an npm install. Octoboard
+  reads a launcher's version from `current-version` and that release's `package.json`, the marker checked, and
+  recognises an install whose launcher is `~/.pi/agent/bin/pi` (a link to it followed) as the installer's, updated with
+  `pi update --self`, its latest version read from the npm registry. A launcher under another configuration directory,
+  which can have any name, is recognised the same way by the marker `install/managed-install.json` beside its `bin`
+  (`CliPackaging::native_markers`).
+
+### Through a real model and a development daemon
+
+Measured on 2026-11-22 with Pi 1.5.2 signed in to one model provider with an API key (`auth.json` holding
+`{"anthropic": {"type": "api_key", …}}`), through a development build of the daemon driven on its control socket,
+with `anthropic/claude-haiku-4-5` and `--thinking off`. The daemon ran under a home of its own whose `.pi` was a link
+to the user's, since the daemon's data directory follows `HOME` and Pi's credential is a file, not a keychain entry.
+
+- **Sign-in and models**: the account read as signed in, and the catalogue listed all 18 rows of `pi --list-models`
+  as `anthropic/<model>`, each with the seven levels (every row's `thinking` column said `yes`).
+- **Start**: a console session and a project session both got their Pi session id from the extension's
+  `session_start` about a second after launch, and their first task from the launch arguments. No trust confirmation
+  appeared for a project folder with no `.pi` resources. Pi wrote `settings.json` (`lastChangelogVersion`) and `bin/`
+  (`fd`, `rg`) into a configuration directory that had only held `auth.json` and `models-store.json`.
+- **Status**: a session launched with a task read *working*, then *idle* for a few tenths of a second (Pi's `idle` once
+  it is past start-up), then *working* again when Pi reported the turn, and *idle* at `done`. The program status path
+  has since been changed to hold an `idle` reported before the launch's prompt has started its turn and to pass it
+  over when `working` follows; a Pi session has not been seen through a development daemon since.
+- **Octoboard's tools**: the model called `mcp__octoboard__list_projects`, `open_session`, `send_message`,
+  `interrupt_session`, `get_session` and `report` by those names, and each came back with its result.
+- **A report to a parent**: a project session's `report` with status `done` reached the console session (queued while
+  that session was mid-turn, delivered when it could take a message) and archived the reporter.
+- **An instruction written in**: the parent's instruction arrived in the idle project session as a user message and
+  started a turn (*working*).
+- **An interrupt by a parent**: with the project session in a `sleep 120` of the shell tool, the Esc ended the command
+  (`Command aborted`, the turn's last assistant entry `aborted`, no `sleep` left running) and the session read *idle*.
+  Pi reports `idle`, not `error`, for this, so the session was **not shown paused**, and the parent was told that it
+  had stopped without reporting. The program status path has since been changed to read `working` to `idle` with no
+  `done` as an interrupted turn (`docs/product/program-status-reports.md`); a Pi session has not been seen through a
+  development daemon since.
+- **Resume after archive**: an archived session resumed with `--session <id>` into the same session file, and the
+  model answered from the earlier turns.
+- A fresh session's first request carried about 32,000 tokens of system prompt and tool declarations for a project
+  session and 39,000 for a console session.
+
+In a later Pi 1.5.2 macOS run with a loopback model, an interrupt returned a busy message to the daemon's queue
+and left the terminal draft in place. Two turns read 110 and 210 context tokens in a 60,000-token window.
+Rewinding without a summary returned the live count to 110 without another prompt. With
+`PI_CODING_AGENT_SESSION_DIR` set, the daemon read archive history and context from that directory and resumed
+the same Octoboard session.
+
+### Prompts, the cross-project guard, images and slash commands
+
+Measured on Pi 1.5.2 on macOS on 2026-11-23, in a scratch `HOME` and `PI_CODING_AGENT_DIR` and a scratch working
+directory, with a local stand-in answering the model's requests as a provider of the scratch `models.json` (its model
+declared `"input": ["text", "image"]`); first with a probe extension that logged Pi's events, then with Octoboard's
+extension itself, a stub hook script and a stub guard script. No real model turn was spent. The captures are in
+`apps/daemon/testdata/pi-captures.md`.
+
+- **The prompt.** A user message fires `message_start` with `role: "user"` as it enters the conversation: the prompt
+  that starts a run, after `input` and `before_agent_start`, and a steering message once the run takes it, after the
+  current response (`input` fired for it at once, with `streamingBehavior: "steer"`). A steering message Esc put back in
+  the input box fired `input` and never `message_start`. Its content is what the model is given: Pi trims what it takes
+  from the box, and an `input` handler's transform is applied first. The extension forwards each as `message_start` with
+  its text as `prompt`, which Octoboard reads as the submitted prompt (`HookInterpreter::starts_conversation`):
+  measured, one for each of two prompts, a message of one image alone (an empty text), one of two images and text, and a
+  prompt and its steering message. Pi awaits every `before_agent_start` handler before the run's `agent_start`, at which
+  it reports `working` (bundled `agent-session.js` and `program-status-reporter.js`); its event carries the run's prompt
+  as `prompt`, as the box gave it after the `input` transform, and nothing for a run of an extension's custom message.
+  So the extension forwards a run's prompt from there, waiting for the hook script to exit (up to the hook mode's
+  deadline and half a second), and does not forward that run's first user `message_start` again (a mark each run sets
+  afresh and its `agent_end` or `agent_settled` clears, so a run cancelled before its own message leaves nothing to
+  skip); a steering message is still forwarded at its `message_start`. Measured on 1.5.2 on 2026-11-23 against a
+  stand-in model, with a stand-in hook script that took 0.3 s and logged its exit, and the PTY's reports logged as they
+  were read: the script had exited 9 to 12 ms before `working` was read for a prompt the stand-in answered, one it
+  refused with HTTP 400 (`error` 27 ms after `working`), one Esc cancelled mid-request, and one Esc cancelled as it was
+  being started (`working` and then `idle` 5 ms apart); forwarded at `message_start`, the prompt would have gone out
+  only after `working`. The hook script exits once the daemon has queued the event, which the daemon applies on a task
+  of its own beside the one applying the reports, so the report can still be applied first: Pi's provider declares that
+  a run's opening prompt may follow its turn's start (`HookInterpreter::opening_prompt_may_follow_start`).
+- **The cross-project guard.** Pi's file-writing tools are `write` (`{path, content}`) and `edit`
+  (`{path, edits: [{oldText, newText}]}`); `bash` writes too, and like the other agents' shell tools is not guarded.
+  Pi resolves `path` before it writes (`resolveToCwd`): unicode spaces read as spaces, a leading `@` dropped, `~` the
+  home directory, a `file://` URL its path, and a relative path against the working directory. A `tool_call` handler
+  runs before the tool, sibling calls of one message one after another, and is awaited: an `async` handler that took a
+  second refused the call. Answering `{ block: true, reason }` refuses it, and the model is given `reason`, as it was
+  written, as the call's result; the call's other siblings went on (`local.txt` was written beside a refused write).
+  The extension, given the session's guard script in its data file, asks it about every `write` and `edit` with
+  `{"tool_name", "tool_input": {"path": <resolved>}, "cwd"}` on stdin, and hands back a refusal it answers; a guard
+  that does not answer within ten seconds, cannot run, or answers anything else lets the call go ahead. Measured: a
+  `write` into another directory and an `edit` named `~/../other/y.txt` were refused with the stub guard's reason and
+  left the files as they were, and a `write` into the working directory was asked about and went ahead.
+- **Images.** Pi 1.5.2 attaches an image only from the clipboard (Ctrl+V writes it to a temporary file and inserts that
+  file's path) and from a `@file` argument of the launch: a path pasted into the box is shown as the text it is,
+  wrapped at the box's width like any text, and the box submits text alone (`session.prompt(text)`), so the model is
+  given the path as text. An `input` handler's `{action: "transform", text, images}` attaches images: the model was
+  given `[{type: "text"}, {type: "image_url", …}]`. The extension takes the paths of the images Octoboard pasted out
+  of the text, a file `paste-<n>-<n>.<extension>` whose real directory is the session's `pasted` directory beside the
+  extension, bare or in single quotes, and attaches each file; any other path is left as text. Octoboard pastes each
+  path on its own with nothing between, and the extension took two paths and text pasted one after another apart. A
+  path pasted alone and entered was sent, the Enter not lost, as one image with no text. Octoboard counts the paths in
+  the box as the images attached (`ScreenReader::image_placeholders`).
+- **Slash commands.** A command pasted into the box and entered runs: `/name probe-name` renamed the session. Pi trims
+  the text first, so ` /name guarded` ran too, and a message's leading slash is guarded with a zero-width space
+  (U+200B), which Pi keeps: `\u{200B}/name zw` reached the model as that text. A pasted command draws no
+  completion: Pi opens its command list only as `/` is typed, and `/na` pasted showed none; an Enter runs the pasted
+  text as it is, so a command Pi does not know (`/sess`) reaches the model as a message.
+- **Memory.** Pi keeps no memory of its own across sessions: its docs and code have none (the only matches in the
+  package are the bundled Anthropic SDK's memory-store client), a new session's first request held nothing of an
+  earlier session's messages, and the control, a resume of that earlier session, held them all. Its descriptor
+  declares `NativeMemory::Absent`.
+- **Prompts a window could answer.** Pi asks for no approval and offers no tool for asking the user; a dialog a user's
+  own extension draws (`ctx.ui.confirm()`, `select()`, `input()`) and a sign-in that waits are reported `blocked`
+  (above) and are no tool call. Its descriptor declares neither kind of `interactions`.
+
+### Not measured
+
+The guard, the forwarded prompt and an image sent through a development
+daemon; an image Pi resizes or refuses for its size, and a model that takes no images; Windows paths in the guard and
+in an image's path. Completing a new device authorization through Octoboard's window and the trust confirmation pressed by the daemon in a
+real project, and the interrupted turn, the cleared input box and the session id after `/fork` seen through a
+development daemon, and neither the extension's own registration of Octoboard's tools nor the turn's message it
+forwards; a session whose built-in MCP support is off or replaced (`"extensions": ["-builtin:mcp"]`, an extension
+that registers `/mcp`), where the bundled `extensions.md` says a registration is reported as an extension error;
+a selector or dialog an extension draws with `ctx.ui.custom()`, which Octoboard would read as the input box unless it
+has a list cursor or a key-hint row, and whether any panel Pi itself draws has neither (the step of `/login` that
+takes a pasted code, for one).
+
+### A user message sent by an extension
+
+Measured on Pi 1.5.2 on macOS on 2026-11-23, in a scratch `PI_CODING_AGENT_DIR` and a scratch working directory, with
+a local stand-in answering the model's requests as a provider of the scratch `models.json`; no real turn was spent. A
+probe extension loaded with `--extension` called `pi.sendUserMessage` when a file appeared and logged Pi's events.
+The provider uses the session's channel helper, with its path in the extension's launch data.
+
+- **At the prompt** `pi.sendUserMessage(text)` starts a turn at once: the `input` event fires with
+  `source: "extension"`, then `before_agent_start` with the text as the prompt, and the model is asked with it as a
+  user message. It returns `undefined` and throws nothing. Text the user has typed into the input box and not sent is
+  left there untouched, and no part of it goes with the message.
+- **During a run it has to say how the message is delivered.** With `{deliverAs: "steer"}` or
+  `{deliverAs: "followUp"}` the message waits (`ctx.hasPendingMessages()` turns true) and joins the run: the model was
+  asked for the steering message as soon as the running response was done, and for the follow-up one right after,
+  each as a user message of its own, inside one `agent_start` to `agent_end` span. With neither, the call still
+  returns `undefined` and throws nothing, the `input` event fires, and the message is dropped: it never reached the
+  model (the bundled `extensions.md` says Pi reports an extension error). `ctx.isIdle()` tells the two cases apart.
+- **Esc gives the waiting messages back.** With a steering and a follow-up message of the extension's waiting, Esc
+  ended the run and put both into the input box, unsent, in order with an empty line between two, followed by what
+  the user had typed there; the next Enter sent all of it as one message (`source: "interactive"`). So a message an
+  extension sent during a run is not delivered once the run is cancelled, and it then sits in the user's input box.
+  `ctx.ui.getEditorText()` and `ctx.ui.setEditorText()` read and replace the box's text.
+- Not measured: a message sent while the project-trust confirmation or an extension dialog is up; images in the
+  content list; `expandPromptTemplates`.
+
+With the production extension and a stand-in channel helper on Pi 1.5.2 (macOS, 2026-11-24), the idle message
+arrived in the model request and was reported `taken`. During a delayed reply, a follow-up was reported
+`taken` when the extension observed Pi's queue become nonempty. Escape restored it along with the draft.
+The extension recognized the exact restored editor contents, removed its own message while retaining the draft
+and reported `returned`. The waiting message never reached the model. With other pending input or an ambiguous
+editor, the extension requires a matching message entry for acceptance or leaves the restored message in the
+editor. A missing channel helper leaves the ordinary terminal path available. Explicit slash commands and image
+attachments use the existing terminal path. On Windows the extension starts the executable directly and
+detached. Pi 1.5.2 delivered messages with that helper from a path containing spaces.
+
+A direct loopback request to the daemon's production channel route, with a stand-in registered as Pi, released
+its pending poll about 7 ms after the client disconnected on macOS. The probe shortened the response deadline
+to two seconds, so the release was from the disconnect.
+
+## Across the agents
 
 **Injected MCP tool names** differ in shape, which matters wherever a role description has to name a tool: a server
-registered under the key `k` exposes its tool `t` as `mcp__k__t` on Claude Code and Codex, and as `k__t` on Grok.
+registered under the key `k` exposes its tool `t` as `mcp__k__t` on Claude Code, Codex, Qwen Code and Pi. The same
+tool is qualified as `k__t` on Grok Build, `k/t` in Antigravity CLI, `k-t` on GitHub Copilot CLI and `k_t` on OpenCode.
+Antigravity CLI calls it through its generic MCP tool.
 
-**All three connect their MCP servers when the process starts**, before any turn — a `command`-type server's child is
+**Claude Code, Codex and Grok Build connect their MCP servers when the process starts**, before any turn — a `command`-type server's child is
 already running by the time the TUI is drawn. So whether an injected server was accepted is observable without a prompt
 ever being submitted.
 
 ### Each agent's own memory, and turning it off for one launch
 
-All three keep a memory of their own across sessions: notes the agent writes by itself and reads back in a later
+Qwen Code reads and writes managed auto memory. The launch’s system settings turn off both managed auto memory and auto dream. GitHub Copilot CLI keeps Copilot Memory and offers no per-launch off switch. Antigravity CLI, OpenCode and Pi have no native memory. See the memory measurements in each agent’s section.
+
+Claude Code, Codex and Grok Build keep a memory of their own across sessions: notes the agent writes by itself and reads back in a later
 session, apart from the instruction files. Each can be turned off for one launch without touching any configuration,
 and the switch outranks the user's own settings. Measured on macOS with Claude Code 2.1.328 (the off switch also read out
 of 2.1.274), Codex 0.167.1 and Grok Build 1.0.89, each from a scratch home with a fake API key and inference on a local
@@ -1388,13 +5257,84 @@ against a run with memory on in the same setup.
   Its guide's priority order puts only a `requirements.toml` pin above either. Off, no `memory-v2/` directory is
   created. Grok also keeps memory off by itself in a temporary directory.
 
-While Octoboard's own memory is on (the application setting `memory_enabled`, off by default), Octoboard turns each
-agent's memory off in every session it launches, console and project sessions alike, with the switch in the table:
+While Octoboard's own memory is on (the application setting `memory_enabled`, off by default), Octoboard turns off switchable native memory for every console and project launch. Copilot Memory follows its own account setting.
 each session keeps what it learns in Octoboard's memory instead (a console's, or a project's place's), which every
 agent and account reads. While the setting is off, each agent's memory is left as the agent and the user set it.
 Memory files an agent wrote before are left where they are.
 
+### Whether a command the agent runs sees the launch's variables unchanged
+
+The newer agents’ launch sections record which variables reach their tools and children. OpenCode restores the shell’s original Claude-compatibility variable values in commands the agent starts. Qwen Code guards its injected hook environment from nested Qwen launches. Pi, Copilot and Antigravity launch with their provider-specific account or scratch paths.
+
+A daemon started from a command an agent runs tells what the session's launch set from what the user set by comparing
+each variable's value with a digest the launch recorded (`OCTOBOARD_SESSION_EXPORTS`; "The launch environment" in
+`docs/product/launching-agents.md`). A CLI that rewrote one of those variables for its commands would make the
+comparison miss, and the rewritten value would be kept as the user's.
+
+- **Claude Code 2.1.330, macOS, measured** by comparing the environment of the `claude` process of a project session
+  on the default account with the environment of a command its Bash tool ran (names compared, no model turn spent on
+  it beyond the command): every variable of the process reaches the command with the same value, `PATH`, `HOME`,
+  `TERM`, `GIT_CONFIG_PARAMETERS` and Octoboard's `OCTOBOARD_*` variables included; only `PWD`, `OLDPWD`, `SHLVL` and
+  `_` differ, which the shell sets. It adds variables of its own and changes none: `AI_AGENT`, `CLAUDECODE`,
+  `CLAUDE_CODE_CHILD_NOTES_DIR`, `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_EXECPATH`,
+  `CLAUDE_CODE_MESSAGING_SOCKET`, `CLAUDE_CODE_MESSAGING_TOKEN`, `CLAUDE_CODE_SESSION_ATTENDED`,
+  `CLAUDE_CODE_SESSION_ID`, `CLAUDE_EFFORT`, `CLAUDE_PID`, `COREPACK_ENABLE_AUTO_PIN`, `GIT_EDITOR` and
+  `NoDefaultCurrentDirectoryInExePath` (and, from the user's shell profile rather than from Claude Code, `CPATH`,
+  `LIBRARY_PATH`, `MANPATH` and `SDKROOT`). `CLAUDE_CODE_CHILD_NOTES_DIR` was first seen on
+  2.1.330 and is declared with the others as the session's. Not measured: a pinned account (`CLAUDE_CONFIG_DIR` set by the launch), and the launch's memory
+  variables; nothing seen suggests they are treated differently from the variables that were present.
+- **Codex 0.167.1, macOS, measured** with one `codex exec --sandbox workspace-write --ephemeral` turn on the default
+  account, whose only command wrote the names of its environment and digests of a fixed few, compared with the same
+  taken where Codex was started: no variable of the process is missing from the command, and `HOME`, `TERM`,
+  `GIT_CONFIG_PARAMETERS` and the `OCTOBOARD_*` variables hold the same values. `PATH` is the one value changed. Added:
+  `CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS`, `CODEX_CI`, `CODEX_SANDBOX`, `CODEX_SESSION_ID`, `CODEX_THREAD_ID`,
+  `CODEX_TOOL_CALL_ID`, `CODEX_VERSION`, `COLORTERM`, `GH_PAGER`, `GIT_PAGER`, `LC_ALL`, `LC_CTYPE` and `NO_COLOR`.
+  `CODEX_HOME` was unset and stayed unset; a pinned account's, and the interactive TUI, were not measured. A user's own
+  `shell_environment_policy.set` could give a command another value for a variable the launch set; that value is then
+  the user's doing and is kept.
+- **Grok Build 1.0.92, macOS, measured** the same way with one `grok -p --always-approve` turn on the default account:
+  no variable of the process is missing from the command, the same variables hold the same values, and `PATH` is the
+  one value changed. Added: `AWS_PAGER`, `CARGO_TERM_PROGRESS_WHEN`, `CARGO_TERM_PROGRESS_WIDTH`, `CLICOLOR`,
+  `CLICOLOR_FORCE`, `COLORTERM`, `FORCE_COLOR`, `GH_PAGER`, `GIT_PAGER`, `GIT_SEQUENCE_EDITOR`, `GIT_TERMINAL_PROMPT`,
+  `GPG_TTY`, `GRADLE_OPTS`, `GROK_AGENT`, `GROK_SESSION_ID`, `MANPAGER`, `MAVEN_OPTS`, `NO_COLOR`,
+  `NPM_CONFIG_PROGRESS`, `PIP_PROGRESS_BAR` and `SYSTEMD_PAGER`. `GROK_HOME` was unset and stayed unset; a session
+  launched with one, and the interactive TUI, were not measured.
+- So none of the three changes or removes, for the commands it runs, a variable a launch sets. What each adds is
+  handled in two ways. A variable of the CLI's own that marks its session is declared by name and taken out of a nested
+  daemon's snapshot (`inherited_session_vars`): Codex's `CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS` (`1`), `CODEX_CI`
+  (`1`), `CODEX_SANDBOX` (`seatbelt` on macOS), `CODEX_SESSION_ID`, `CODEX_THREAD_ID`, `CODEX_TOOL_CALL_ID` and
+  `CODEX_VERSION`; Grok Build's `GROK_AGENT` (`1`) and `GROK_SESSION_ID`. A switch under a name users also set is
+  declared with its exact value (`command_environment`) and put back by value, so that a user's own setting of the same
+  name is kept:
+
+  | CLI | Sets for a command |
+  |---|---|
+  | Claude Code 2.1.330 | `COREPACK_ENABLE_AUTO_PIN=0`, `GIT_EDITOR=true`, `NoDefaultCurrentDirectoryInExePath=1` |
+  | Codex 0.167.1 (`codex exec`) | `GH_PAGER=cat`, `GIT_PAGER=cat`, `LC_ALL=C.UTF-8`, `LC_CTYPE=C.UTF-8`, `NO_COLOR=1`, `PAGER=cat` (only where `PAGER` was unset: a `PAGER=less` of the user's stayed), and an empty `COLORTERM` |
+  | Grok Build 1.0.92 (`grok -p`) | `AWS_PAGER=` (empty), `CARGO_TERM_PROGRESS_WHEN=always`, `CARGO_TERM_PROGRESS_WIDTH=80`, `CLICOLOR=1`, `CLICOLOR_FORCE=1`, `COLORTERM=truecolor`, `FORCE_COLOR=1`, `GH_PAGER=cat`, `GIT_EDITOR=true`, `GIT_PAGER=cat`, `GIT_SEQUENCE_EDITOR=true`, `GIT_TERMINAL_PROMPT=0`, `GPG_TTY=` (empty), `GRADLE_OPTS=-Dorg.gradle.console=rich`, `MANPAGER=cat`, `MAVEN_OPTS=-Dstyle.color=always`, `NO_COLOR=1`, `NPM_CONFIG_PROGRESS=true`, `PAGER=cat` (also over a `PAGER=less` of the user's), `PIP_PROGRESS_BAR=on`, `SYSTEMD_PAGER=cat` |
+
+  Codex sets neither `GIT_EDITOR`, `COREPACK_ENABLE_AUTO_PIN` nor `NoDefaultCurrentDirectoryInExePath`, and Grok Build
+  neither of the last two (measured with all three removed from where the CLI was started). `COLORTERM` is one of the
+  snapshot shell's terminal variables, which a snapshot drops by name already. The Codex values were read under
+  `codex exec --color never` and the Grok Build ones under `grok -p`, both headless turns; an interactive session was
+  not measured. A value that differs there only makes the comparison miss, which leaves that variable in a nested
+  daemon as it was before these values were declared.
+- **`PATH`.** Claude Code 2.1.330 gives a command the `PATH` it was started with. Codex and Grok Build run a command
+  through the user's shell with its profile read again, so whatever the profile does to `PATH` is done once more: the
+  entries it adds are added again (21 entries became 32 under Codex), and an entry it makes per shell (fnm's
+  `fnm_multishells/<pid>/bin`) is another one. Grok Build 1.0.92 adds nothing of its own. Codex 0.167.1 adds the
+  `codex-path` directory of its installed release (first, and once more further on) and a directory of the session's
+  own, `$CODEX_HOME/tmp/arg0-<os>/codex-arg0<random>`. The `PATH` a daemon started from such a command inherits is
+  therefore the profile's doing as much as the CLI's, not the launch's with a fixed set of entries added, and it is left
+  as inherited on purpose: a nested daemon's own reading of the shell environment runs the profile again and rebuilds
+  it, and what remains of Codex's is a tool directory and a temporary directory that is gone.
+- **OpenCode** is the one known to rewrite: Octoboard's own plugin hands the user's `OPENCODE_CONFIG_CONTENT` and
+  `OPENCODE_DISABLE_TERMINAL_TITLE` back to the shells the agent starts, so a daemon started there sees the user's
+  values, which is what it should keep.
+
 ### Exiting ends the process groups of running commands
+
+GitHub Copilot CLI, OpenCode, Qwen Code and Pi also end the groups of commands still running at exit. Antigravity CLI’s measured shell formed its own group, and a descendant ignoring SIGHUP, SIGTERM and SIGINT outlived both hang-up and normal exit. See the exit measurements in each agent’s section.
 
 Measured on macOS with Claude Code 2.1.327 and Codex 0.167.1, by sending `SIGTERM` to `claude -p` and `codex exec` and
 watching marker `sleep` processes. Grok Build 1.0.89 was only read from its executable, which runs each command in a
@@ -1407,7 +5347,16 @@ under Claude Code, does a `nohup … &` orphan whose command had already finishe
 tasks before it exits, so a probe of this has to end it. How Octoboard refuses to keep such a process is in "Processes
 in a command the agent still runs" in `docs/product/background-processes.md`.
 
+GitHub Copilot CLI 1.0.114 does the same through its npm loader (measured against a stand-in; "GitHub Copilot CLI",
+"Command groups at exit").
+
 ### Terminal titles and the titles in an agent's own records
+
+- **Antigravity CLI** emits no title unless given a title command. Its saved transcript annotation can carry a task title.
+- **GitHub Copilot CLI** uses its recorded session name in the title. It reports activity separately through OSC 7501.
+- **OpenCode** emits a terminal title. The conversation’s name comes from its native session records.
+- **Qwen Code** uses `Qwen - <folder>` by default with activity glyphs. Its active conversation can have a saved title of its own.
+- **Pi** uses the folder or its recorded session name, with no activity glyph.
 
 Each agent sends its title with OSC 0/2 and decorates it (raw strings observed with Codex 0.163, Claude Code 2.1.301 and
 Grok Build 1.0.52, `proj` being the working directory's name):
@@ -1438,6 +5387,8 @@ Grok Build 1.0.52, `proj` being the working directory's name):
 
 ### What the user said, in an agent's own record
 
+Antigravity CLI keeps user steps in its transcript, GitHub Copilot CLI writes user messages to its session event log, OpenCode exposes user messages from its native store, Qwen Code writes them on its active chat branch and Pi records them on its JSONL session tree. Rewinds, attachments and native follow-up turns are described in the corresponding agent sections.
+
 An agent's record holds more than the user lines one would expect (observed on Claude Code 2.1.295–2.1.302, Codex
 0.162.1 and Grok Build 1.0.62):
 
@@ -1459,6 +5410,8 @@ An agent's record holds more than the user lines one would expect (observed on C
   `compaction_meta` line carries the user info and rules.
 
 ### Subagent events
+
+Antigravity CLI follows background tasks and identifies subagent hooks separately from the main turn. GitHub Copilot CLI attributes events to subagents by `agentId` and reads the record for background work. OpenCode separates child sessions from the attached conversation. Qwen Code reports subagent events and lists background tasks on stop. Pi’s extension receives the main session’s events.
 
 Subagent events carry join traps that make them unusable as if they were the session's own. Octoboard drops them from
 the session's status, and registers Claude Code's `SubagentStart` and `SubagentStop` only for the background-task list:
@@ -1493,7 +5446,9 @@ the session's status, and registers Claude Code's `SubagentStart` and `SubagentS
 
 ### Quitting at the prompt
 
-Quitting an agent cleanly at its prompt fires no `UserPromptSubmit` on any of the three agents (measured on Claude Code
+For GitHub Copilot CLI, Qwen Code and Antigravity CLI, the individual sections describe the keys that leave the prompt and the difference between a cancellation and an exit. Pi exits with Ctrl-D. OpenCode has no folder-trust prompt to clear before its terminal is ready. Octoboard observes the process ending directly.
+
+Quitting an agent cleanly at its prompt fires no `UserPromptSubmit` on Claude Code, Codex or Grok Build (measured on Claude Code
 2.1.316 and 2.1.274, Codex 0.163.0 and Grok Build 1.0.70, each in an isolated probe), so the session's last reported
 status at a clean quit is still its prompt. The quits measured were `/exit`, `/quit`, Ctrl+D, Ctrl+C and a bare
 `exit`, plus Ctrl+Q on Grok Build. What fires instead:
@@ -1504,6 +5459,8 @@ status at a clean quit is still its prompt. The quits measured were `/exit`, `/q
 - Grok — `SessionEnd`, then `Stop` with `reason` `shutdown`.
 
 ### Stopped by a signal mid-turn
+
+The command cleanup measurements for GitHub Copilot CLI, OpenCode, Qwen Code and Pi are in their sections and summarized above. Antigravity CLI can leave a signal-resistant descendant running after a terminal hang-up. These cleanup measurements do not establish whether a partial reply is saved.
 
 Sent `SIGTERM` while a turn is in progress (the model request held open), no agent reports the turn as having ended
 normally. Measured on Codex 0.163.0, Claude Code 2.1.316 and Grok Build 1.0.70 in an isolated probe:
@@ -1519,9 +5476,20 @@ the PTY master closed, stdin closed or `session/close` on `grok agent stdio` all
 `SIGKILL` fires nothing. Each of Octoboard's teardowns is one of these, so a `channel_closed` `Stop` is not expected
 from it; were one to arrive, Octoboard's mapping, which only sets `shutdown` aside, would read it as a normal turn end.
 
+## Linux release verification
+
+Focused Linux Rust tests for the five providers (credential-store, account, settings layering and OpenCode paths)
+are due at the first Linux release that includes them. The local Docker build of the test binary hit the VM's
+8 GiB memory limit. Confirm that the release ref passes the `linux-daemon` gate in `.github/workflows/release.yml`,
+which calls `.github/workflows/linux-daemon.yml` for clippy and the full glibc and musl daemon suites.
+
+The installed-Qwen hook ancestry test is ignored by those suites because it requires Qwen Code on `PATH`.
+The live Debian 0.28.0 probe covered the marked outer hook and the suppression of inherited hooks in nested shell
+and MCP callers. See "Settings layers, and how Octoboard is injected" under "Qwen Code".
+
 ## The agents on Windows
 
-What differs for the three agents when the daemon runs on Windows, beyond what the sections above say. Measured in
+What differs when the daemon runs on Windows, beyond what the provider sections above say. Measured in
 November 2026 on Windows 11 23H2 (an ARM64 virtual machine) on
 **Claude Code 2.1.318** and **2.1.319**, **Codex 0.166.0** (the stop and the hook commands also on **0.163.0**) and
 **Grok Build 1.0.77**; each fact names the build it came from where it matters. The probes ran from an elevated session
@@ -1716,9 +5684,49 @@ on Windows. Measured on 0.163.0 and 0.166.0:
 - Not measured on Windows: a non-elevated (medium integrity) run, a long collapsed paste through the app server, x64,
   and Octoboard's own generated hook scripts, MCP server, developer instructions and reviewer overrides.
 
+### Antigravity CLI, GitHub Copilot CLI, OpenCode, Qwen Code and Pi on Windows
+
+The Windows 11 ARM64 VM ran build **22631.6199** (23H2). Pi 1.5.2, Qwen Code 0.28.3,
+OpenCode 1.19.6 and GitHub Copilot CLI 1.0.114 were installed with npm 11.20.0 into isolated
+global prefixes on the VM's ARM64 Node 26.13.0. Antigravity CLI 1.5.16 came from the vendor's
+Windows ARM64 manifest. Pi used `PI_CODING_AGENT_DIR/sessions`, Qwen used `QWEN_HOME/projects`,
+Copilot used `COPILOT_HOME/session-state`, OpenCode used `XDG_DATA_HOME/opencode/opencode.db`,
+and Antigravity used the `config` and `antigravity-cli` entries under `HOME/.gemini`. Each
+provider section gives the launcher measurement.
+
+The x64 development daemon resolved the four npm configurations on the VM and reported each
+installed version. It recognised the Antigravity native layout and read the available version
+from its update manifest. OpenCode 1.19.6 reached the daemon's idle state for both session
+kinds. The first `POST /session` timed out in the cold scratch home while the CLI was downloading
+ripgrep, leaving the launch trust gate pending. After ripgrep 15.1.0 was in the scratch cache and
+on the task PATH, the daemon delivered the first console and project prompts and the first
+prompt after `/new` to the stand-in, with no message delivery notices.
+
+On the inbox pseudoconsole, a native child confirmed that stdin and stdout were terminals by
+asking its question only there. The prompt arrived whole and unfinished, the answer echo was
+an ended line, and the last words arrived unfinished and were captured. A separate redraw test
+confirmed that the login flow puts one question to the user. The Copilot native stand-in also
+covered the device page, code, and the explicit answer about plaintext storage.
+
+The SSH logon had no desktop session. In that logon, `cmdkey /list:<target>` returned exit
+status 0 for a missing target, and `cmdkey /generic:<target>` refused to create a synthetic
+credential in that logon. `CredWriteW` also returned 1312 for a synthetic session credential
+with an empty blob. In desktop session 1, `cmdkey /list` returned metadata for Antigravity
+and Copilot. A targeted query returned the same exit status for their targets and for a
+random absent target. The daemon uses the native generic credential lookup. WinCred returns a distinct
+error when a target is absent and when there is no logon vault. A native task in the desktop logon found
+both live sign-in items and reported the scratch Copilot target absent. No credential dialog appeared.
+
+Pi, Qwen Code, Copilot and OpenCode ran console and project turns against local stand-ins, exchanged
+Octoboard tool calls, reports and instructions, and interrupted active requests. Pi, Copilot and OpenCode
+sent again after archive and resume. Antigravity's first-run Terms screen held the interactive session
+waiting for the user's answer. The user accepted stopping the Windows lifecycle verification there.
+
 ## Moving a conversation to another config directory
 
-All three agents resume a conversation under a second config directory when **the session's own record** is copied
+GitHub Copilot CLI carries the session directory and registers the copied conversation in the destination index on resume. Pi carries its JSONL session file. Qwen Code carries its chat and title and runtime sidecars. Antigravity CLI uses one system login even when `--gemini_dir` changes. OpenCode keeps its database under `XDG_DATA_HOME` and has no agent-specific data-directory override. Neither offers an account-to-account move.
+
+Claude Code, Codex and Grok Build resume a conversation under a second config directory when **the session's own record** is copied
 into it — for Codex, every rollout file of the thread, since a thread that was ever reverted is a chain of them (see
 "Codex, history segments" below). No index, registry or per-project entry has to travel with it, although all three
 keep one. Each result carried a control in the same run.
@@ -1918,6 +5926,14 @@ successful switch.
 
 ## Signing in a config directory without a terminal
 
+| Agent | Sign-in observed |
+|---|---|
+| Antigravity CLI | Google OAuth through a browser link and an authorization code entered in the dialog. The system credential store holds the login. |
+| GitHub Copilot CLI | GitHub device authorization. Where no credential store is available, Copilot asks for explicit permission to store the token in plaintext. |
+| OpenCode | `opencode auth login` asks for a provider key in the terminal. Octoboard offers no sign-in dialog. The OAuth route is awaiting measurement. |
+| Qwen Code | Qwen’s Web Shell collects and saves the provider key. |
+| Pi | `pi auth login xai --no-browser` requires a PTY and prints the device page and code. Other providers and API-key entry use Pi’s terminal. |
+
 Measured on 2026-10-19 with **Claude Code 2.1.303**, **Codex 0.162.1** and **Grok Build 1.0.62**, each against scratch
 config directories that either did not exist or had just been created empty. Each command ran the way the daemon runs
 an account command: the agent's directory variable set, the working directory the home directory, stdin `/dev/null` or
@@ -2015,6 +6031,8 @@ and the process killed; one Grok Build login completed on its own (see below).
 
 ### Before a login, on the quota path
 
+For Antigravity CLI and GitHub Copilot CLI, the quota probe and credential-presence rules are in the respective Plan quota and sign-in measurements. Pi, OpenCode and Qwen Code's key accounts have no plan quota to probe, so sign-in is read separately.
+
 The same probes as in "Plan quota" below, against a directory that does not exist and one created empty:
 
 - **Claude Code does not tell the two apart, and recreates a missing directory.** Both the probe and `claude auth
@@ -2102,6 +6120,8 @@ none of them should still be shown as a plain failure.
 
 ### What the background runs write into an account's configuration
 
+Antigravity CLI model and quota queries use Octoboard-owned directories. GitHub Copilot CLI runs background quota and catalogue queries in private configuration. OpenCode may initialize its own local data on a CLI query. Qwen Code’s catalogue reads account settings without starting the CLI. Pi’s model listing can create a temporary lock next to the resolved credential file.
+
 Measured on macOS on 2026-11-22 with Claude Code **2.1.330**, Codex **0.167.1** and Grok Build **1.0.92**: every run
 of an agent's CLI the daemon makes on its own, each against two scratch homes, one the CLI had already been run in
 interactively and one holding only a configuration file the CLI had never run against, comparing the home's
@@ -2176,6 +6196,8 @@ in `<dir>`, none in `GROK_HOME` (the refresh itself was refused, the issuer bein
 home and the user's own `grok` take the same lock before they refresh the sign-in.
 
 ## Sharing a session directory between accounts
+
+GitHub Copilot CLI links `session-state/` but keeps its index account-local. Qwen Code links `projects/`. Pi links `sessions/`. Antigravity CLI and OpenCode have one account each and offer no shared session directory. See the provider sections for the respective copy and resume behavior.
 
 Octoboard links an account's session directory into another account's only as part of an account sharing the whole of
 the default account's configuration (see "What is shared" in `docs/product/sharing-the-default-configuration.md`). This
@@ -2314,6 +6336,8 @@ how a session is found and written, not a completed model turn. A failed turn st
   different account. The machine has one Grok Build account.
 
 ## Sharing a configuration directory between accounts
+
+GitHub Copilot CLI shares eligible settings, MCP configuration and instructions, with credentials and index kept account-local. Qwen Code shares `QWEN.md` and skills, while extension settings can write an `.env` through a linked extensions directory, so extensions stay account-local. Pi shares eligible settings and extensions separately from model, MCP and sign-in files. Antigravity CLI and OpenCode offer no configuration sharing because each has a single supported account. See the individual provider measurements for eligible paths.
 
 Measured on 2026-10-20 on **Claude Code 2.1.304**, **Codex 0.162.1** and **Grok Build 1.0.62**, the installs the login
 shell resolves, in scratch config directories (a throwaway `HOME`, the agent's config-directory variable set
@@ -2687,12 +6711,17 @@ first turn set a secret word; success means the model recalled it. Compression w
 
 ## Plan quota
 
-Each CLI can say how much of an account's plan quota is used, over a channel meant for its own front ends. All three
-are marked experimental by their makers. What Octoboard does with a reading is under "How a quota is read" and "What
+Claude Code, Codex and Grok Build expose plan quotas through interfaces for their own front ends. Their quota
+interfaces were marked experimental at the measured versions. What Octoboard does with a reading is under "How a quota is read" and "What
 reading a quota leaves behind" in `docs/product/account-quota-readings.md`. Measured against the default account of each on
 Claude Code 2.1.302, Codex 0.162.1 and Grok Build 1.0.60, with the working directory set to the home directory and the
 agent's configuration-directory variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GROK_HOME`) set to a pinned account's
 directory, or left alone for the default account. The CLI handles its own login, Keychain access and token refresh.
+
+The other agents’ quota measurements are in each agent’s section: GitHub Copilot CLI's free plan
+answers through its SDK server and Antigravity CLI's through `agy -p "/usage"`, both measured to run in a directory
+that is not the user's; Qwen Code has no quota for an account that signs in with a key; Pi and OpenCode have no plan
+of their own.
 
 Codex and Grok Build want **stdin kept open until the reply is on stdout**: they exit silently when it closes first.
 Claude Code answers with stdin open as well, so all three are asked the same way. Each answers in about one to three
@@ -2864,7 +6893,9 @@ signed-in account of each (Claude Code 2.1.312, Codex 0.163.0, Grok Build 1.0.70
 
 ## Starting a quota window
 
-A window only starts counting at the account's first request after it resets; until then the CLI reports it with no
+The measured kick commands below apply to Claude Code, Codex and Grok Build. GitHub Copilot CLI reports a fixed monthly reset rather than a first-use start. Antigravity CLI reports its two model groups’ weekly reset times without a start action. Pi and OpenCode have no plan quota, and Qwen Code’s key accounts report local use only.
+
+A first-use window starts counting at the account’s first request after it resets; until then the CLI reports it with no
 reset time, except Codex, which reports a placeholder reset (see the Codex measurement at the end of this section). A
 **kick** is one one-word request on that account that starts it. How Octoboard runs one (the environment, the time and
 output limits, what counts as success) is under "How a kick runs" in `docs/product/starting-usage-windows.md`. Each
@@ -2987,6 +7018,16 @@ every agent; Octoboard compares readings over time (a reset that keeps its dista
 unstarted Grok Build window reports a reset time is still not measured.
 
 ## Injecting Octoboard into each agent
+
+| Agent | Per-launch injection |
+|---|---|
+| Antigravity CLI | A private `--gemini_dir` holds the merged hooks, MCP configuration and role text. The CLI identifies its transcript after launch. |
+| GitHub Copilot CLI | A launch plugin supplies hooks, `--additional-mcp-config` supplies the server and `COPILOT_CUSTOM_INSTRUCTIONS_DIRS` includes the role. The launch supplies the session ID. |
+| OpenCode | The launch gives its plugin, MCP declaration and role instructions through the inline configuration. The attached session supplies the conversation ID. |
+| Qwen Code | A launch system settings file carries hooks. `--mcp-config` supplies the server and `--append-system-prompt` supplies the role. The launch supplies the session ID. |
+| Pi | A launch extension reports events and provides the Octoboard tools, with the role appended to the system prompt. The launch supplies the session ID. |
+
+The individual sections give the initialization flags, merge rules and platform differences.
 
 How each agent is given Octoboard's status hooks, its MCP server and a role description, with the condition each one
 brings. Everything is per launch (arguments, an environment variable, or files Octoboard writes itself) and never an
@@ -3144,7 +7185,9 @@ in `docs/product/per-agent-launch-specifics.md`.
 
 ### Folder-trust confirmations
 
-Each agent asks once per folder it has not been told to trust, on a confirmation of its own, before any hook runs.
+Antigravity CLI’s Enter on the trust option writes to its private launch configuration. GitHub Copilot CLI’s first option approves this session without recording trust. Qwen Code asks only with folder trust enabled and can use a temporary trust file for a launch. Pi asks when there are project resources to load and has a session-only trust choice. See their sections for what answering each screen writes.
+
+Some agents gate the prompt on a folder-trust confirmation. Qwen Code can report startup before asking. OpenCode shows no such confirmation.
 What Octoboard sends to answer each is under "How a confirmation is pressed" in `docs/product/folder-trust.md`.
 
 - **Claude Code** shows its workspace-trust screen the first time it runs in a directory, with the cursor on "No,
@@ -3226,6 +7269,8 @@ whether one launch can be trusted there without the agent recording the director
   directory for that launch and is gone with the session's home.
 
 ### Writing into a running session
+
+Pi can accept plain text on the launch extension’s channel without disturbing the editor draft. OpenCode’s private server can steer a running conversation and reports when a prompt reaches a turn. GitHub Copilot CLI and Qwen Code have native queues whose held messages may be dropped on cancellation. Antigravity CLI uses its terminal and reports turn activity separately. See each provider’s measurements for terminal paste, image attachments, command completion and interruption.
 
 **A terminal paste submits any existing draft too.** With Claude Code 2.1.274 and 2.1.314, and Grok Build 1.0.70,
 typing a draft without Enter and then writing a bracketed paste followed by CR submits the draft and the pasted
@@ -3382,7 +7427,7 @@ model endpoint, in a scratch home:
   before the server has handled its events. Octoboard waits for up to 2 seconds after a start until the status is
   active and the latest turn is the one started.
 
-The terminal paste sequence all three agents accept is `ESC[200~`, the text with LF separators, `ESC[201~`, then `CR`;
+The terminal paste sequence measured for Claude Code, Codex and Grok Build is `ESC[200~`, the text with LF separators, `ESC[201~`, then `CR`;
 multi-line text arrives as one message with no delay between paste and Enter. Every agent queues a message written
 mid-turn and consumes it when the turn ends. (Codex additionally has `codex queue --thread <session id>`.) Seven rules,
 each failing silently or destructively if ignored:

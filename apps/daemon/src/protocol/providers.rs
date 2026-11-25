@@ -4,8 +4,8 @@
 use serde::Serialize;
 
 use crate::providers::{
-    descriptors, AgentId, Capabilities, ModelDisplay, ProviderDescriptor, QuotaWindowNaming,
-    SettingDescriptor,
+    descriptors, AgentId, Capabilities, ModelDisplay, NativeMemory, ProviderDescriptor,
+    QuotaWindowNaming, SettingDescriptor,
 };
 
 /// One registered provider, as `snapshot` carries it.
@@ -31,6 +31,11 @@ pub struct ProviderInfo {
     pub quota_windows: QuotaWindowNaming,
     /// How a model id of the provider is shown.
     pub model_display: ModelDisplay,
+    /// Whether the agent keeps a memory of its own across sessions, and whether one launch can
+    /// turn it off: a client names, beside the memory setting, the agents whose own memory a
+    /// session launched while it is on has turned off and those whose own memory such a session
+    /// leaves as the user set it in the agent, unable to turn it off.
+    pub native_memory: NativeMemory,
     /// The settings the user can make for the provider, in the order a client lists them. Their
     /// values in effect are `Settings::provider_settings`.
     pub settings: &'static [SettingDescriptor],
@@ -54,6 +59,7 @@ impl ProviderInfo {
             capabilities: descriptor.capabilities,
             quota_windows: descriptor.quota_windows,
             model_display: descriptor.model_display,
+            native_memory: descriptor.native_memory,
             settings: descriptor.settings,
         }
     }
@@ -71,6 +77,27 @@ pub fn registered_providers() -> Vec<ProviderInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Each provider serves its descriptor's own memory fact, under its wire name, so a client
+    /// tells an agent whose memory a launch turns off from one whose memory no launch can turn off
+    /// and from one with no memory of its own.
+    #[test]
+    fn every_provider_serves_its_own_memory_fact() {
+        for (provider, descriptor) in registered_providers().iter().zip(descriptors()) {
+            assert_eq!(
+                provider.native_memory, descriptor.native_memory,
+                "{}",
+                descriptor.id
+            );
+            let wire = serde_json::to_value(provider).unwrap()["native_memory"].clone();
+            let expected = match descriptor.native_memory {
+                NativeMemory::Absent => "absent",
+                NativeMemory::Switchable => "switchable",
+                NativeMemory::Unswitchable => "unswitchable",
+            };
+            assert_eq!(wire, expected, "{}", descriptor.id);
+        }
+    }
 
     #[test]
     fn every_registered_provider_is_served_in_the_registrys_order() {
@@ -102,6 +129,14 @@ mod tests {
         let grok = serde_json::to_value(&served[2]).unwrap();
         assert_eq!(grok["quota_windows"]["kinds"][0], "credit_period");
         assert_eq!(grok["model_display"]["family_version"], false);
+        let copilot = served
+            .iter()
+            .find(|provider| provider.id == AgentId::COPILOT)
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(copilot).unwrap()["quota_windows"]["credit_period"],
+            "plan"
+        );
         let reviewer = &serde_json::to_value(&served[1]).unwrap()["settings"][0];
         assert_eq!(reviewer["id"], "approval_reviewer");
         assert_eq!(reviewer["kind"]["type"], "choice");
@@ -152,6 +187,26 @@ mod tests {
             );
             assert_eq!(setting["compatibility_with"], "codex");
         }
+    }
+
+    /// Whether a provider's accounts beyond the default each have a directory of their own is
+    /// served with its other capabilities, as the descriptor declares it.
+    #[test]
+    fn owned_accounts_is_served_as_the_descriptor_declares_it() {
+        for provider in registered_providers() {
+            let served = serde_json::to_value(&provider).unwrap();
+            assert_eq!(
+                served["capabilities"]["owned_accounts"],
+                provider.id.descriptor().capabilities.owned_accounts,
+                "{}",
+                provider.id.wire_name()
+            );
+        }
+        let _declared = crate::providers::test_provider::without_owned_accounts();
+        let served =
+            serde_json::to_value(ProviderInfo::of(AgentId::TEST, AgentId::TEST.descriptor()))
+                .unwrap();
+        assert_eq!(served["capabilities"]["owned_accounts"], false);
     }
 
     /// Claude Code's simple shell commands switch follows Codex compatibility: off until chosen,

@@ -8,7 +8,8 @@ is dropped onto a session's terminal, and paste the saved file's path into it (s
 browser" in `docs/product/dropping-files-onto-a-terminal.md`); they offer no other way to attach a file.
 
 An image meant for the agent to take as an image is not attached this way: it is saved as a pasted image (see
-`docs/product/pasting-images.md`), whose path every agent takes as an attached image rather than a file to read.
+`docs/product/pasting-images.md`), whose path an agent that takes pasted images takes as an attached image rather than
+a file to read; for an agent that does not, a dropped image is attached like any other file.
 
 ## Whether a daemon takes attachments
 

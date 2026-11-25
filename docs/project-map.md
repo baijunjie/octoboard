@@ -3,7 +3,7 @@
 Top-level map of the code: what is built with what, and which structure doc answers where things are and which shared
 entry points new code must use.
 
-Octoboard is a monorepo that orchestrates AI coding agents (Claude Code, Codex, Grok Build) on a developer's machine.
+Octoboard is a monorepo that orchestrates AI coding agents (Claude Code, Codex, Grok Build, Antigravity CLI, GitHub Copilot CLI, OpenCode, Qwen Code and Pi) on a developer's machine.
 Everything revolves around one daemon; every client reaches it only through the WebSocket/HTTP protocol in
 [`apps/daemon/PROTOCOL.md`](../apps/daemon/PROTOCOL.md).
 
@@ -46,7 +46,8 @@ documentation index, `docs/README.md`, "Coding conventions", lists them. The str
 applies.
 
 - [Daemon](structure/daemon.md) — `apps/daemon/` ([README](../apps/daemon/README.md)): `octoboardd`, the core of the
-  system; owns every agent process and all of Octoboard's data.
+  system; owns every agent process and all of Octoboard's data. The provider map covers native record readers,
+  account operations and session delivery, including the [OpenCode adapter](../apps/daemon/src/adapter/opencode/README.md).
 - [UI](structure/ui.md) — `packages/ui/` ([README](../packages/ui/README.md)): the React UI of the desktop application,
   which reaches HeroUI and React Aria only through its wrapper layer (`src/primitives/`), with the dev-only state
   gallery, the fixtures runtime and the website preview build.

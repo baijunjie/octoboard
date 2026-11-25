@@ -78,12 +78,16 @@ export function reportSwitchFailures(failures: SwitchFailure[], accountName: str
   // A code's own remedy is said once for the code, and the failures without one share their kind's, once.
   const specific = new Map<string, CodedError>();
   const generic = new Set<ErrorRecovery>();
+  // The failure a generic remedy is said for, which may word it for its provider (a batch switches to one account).
+  // A provider's own remedy that names a param of the code is filled from this first failure alone.
+  const remedied = new Map<ErrorRecovery, CodedError>();
   for (const { error } of failures) {
     const classification = classifyError(error);
     if (hasSpecificRecovery(error)) {
       if (!specific.has(error.code)) specific.set(error.code, error);
     } else if (classification.kind === "actionable" && classification.recovery !== "none") {
       generic.add(classification.recovery);
+      if (!remedied.has(classification.recovery)) remedied.set(classification.recovery, error);
     }
     const also = additionalRecovery(error);
     if (also) generic.add(also);
@@ -112,7 +116,7 @@ export function reportSwitchFailures(failures: SwitchFailure[], accountName: str
           ))}
         </ul>
         {[...specific].map(([code, error]) => <DaemonErrorMessage key={code} error={error} part="remedy" />)}
-        {remedies.map((recovery) => <p key={recovery}><RecoveryGuidance recovery={recovery} /></p>)}
+        {remedies.map((recovery) => <p key={recovery}><RecoveryGuidance recovery={recovery} error={remedied.get(recovery)} /></p>)}
       </div>
     ),
     details: details.length ? details.map(({ session, content }) => <SessionDetails key={session.id} session={session} content={content} />) : null,

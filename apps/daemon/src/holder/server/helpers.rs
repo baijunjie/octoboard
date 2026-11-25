@@ -13,7 +13,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use axum::extract::{Path, RawQuery, Request, State};
+use axum::extract::{Path, Query, RawQuery, Request, State};
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
@@ -23,7 +23,7 @@ use bytes::Bytes;
 
 use super::launches::Launches;
 use super::relay::{Failure, Relays};
-use crate::holder::protocol::{HookMark, RelayRoute};
+use crate::holder::protocol::{HookMark, HookQuery, RelayRoute};
 use crate::request_guard::{headers_allowed, same_secret, supplied_key};
 
 /// What the helper routes work on.
@@ -40,6 +40,7 @@ pub(super) fn router(helpers: Arc<Helpers>) -> Router {
         .route("/context-window/:session", post(report_context_window))
         .route("/revert-gate/:session", post(ask_revert_gate))
         .route("/mcp/:token", post(ask_mcp))
+        .route("/channel/:session", post(ask_channel))
         // Inside the key check, so that only a request it lets in has its body held; on the routes
         // alone, so that a path none of them takes is not held either.
         .route_layer(axum::middleware::from_fn(crate::request_body::buffer))
@@ -97,17 +98,30 @@ async fn keyed(
 /// What a report is answered with, which is what the daemon's route answers a well-formed one
 /// with. The helpers that report ignore the answer, and a request the daemon cannot read is not
 /// the holder's to refuse.
-fn queued(helpers: &Helpers, route: RelayRoute, session: String, body: Bytes) -> Response {
-    helpers.relays.report(route, session, body.to_vec());
+fn queued(
+    helpers: &Helpers,
+    route: RelayRoute,
+    session: String,
+    body: Bytes,
+    event: Option<String>,
+) -> Response {
+    helpers.relays.report(route, session, body.to_vec(), event);
     StatusCode::OK.into_response()
 }
 
 async fn report_hook(
     State(helpers): State<Arc<Helpers>>,
     Path(session): Path<String>,
+    query: Option<Query<HookQuery>>,
     body: Bytes,
 ) -> Response {
-    queued(&helpers, RelayRoute::Hook, session, body)
+    queued(
+        &helpers,
+        RelayRoute::Hook,
+        session,
+        body,
+        HookQuery::event(query),
+    )
 }
 
 /// A hook that names its launch ([`HookMark`]), relayed with the session and the launch as one
@@ -115,13 +129,20 @@ async fn report_hook(
 async fn report_launch_hook(
     State(helpers): State<Arc<Helpers>>,
     Path((session, launch)): Path<(String, String)>,
+    query: Option<Query<HookQuery>>,
     body: Bytes,
 ) -> Response {
     let mark = HookMark {
         session,
         launch: Some(launch),
     };
-    queued(&helpers, RelayRoute::Hook, mark.param(), body)
+    queued(
+        &helpers,
+        RelayRoute::Hook,
+        mark.param(),
+        body,
+        HookQuery::event(query),
+    )
 }
 
 async fn report_git_ref(
@@ -129,7 +150,7 @@ async fn report_git_ref(
     Path(session): Path<String>,
     body: Bytes,
 ) -> Response {
-    queued(&helpers, RelayRoute::GitRef, session, body)
+    queued(&helpers, RelayRoute::GitRef, session, body, None)
 }
 
 async fn report_context_window(
@@ -137,7 +158,7 @@ async fn report_context_window(
     Path(session): Path<String>,
     body: Bytes,
 ) -> Response {
-    queued(&helpers, RelayRoute::ContextWindow, session, body)
+    queued(&helpers, RelayRoute::ContextWindow, session, body, None)
 }
 
 async fn ask_revert_gate(
@@ -154,6 +175,16 @@ async fn ask_mcp(
     body: Bytes,
 ) -> Response {
     asked(&helpers, RelayRoute::Mcp, token, body).await
+}
+
+/// A poll of the session's extension channel: a question the daemon answers once it has messages
+/// to hand over, or its window runs out.
+async fn ask_channel(
+    State(helpers): State<Arc<Helpers>>,
+    Path(session): Path<String>,
+    body: Bytes,
+) -> Response {
+    asked(&helpers, RelayRoute::Channel, session, body).await
 }
 
 /// Puts a question to the daemon and answers with its answer, or with the status a helper reads
@@ -369,6 +400,55 @@ mod tests {
             (route, param.as_str(), body.as_slice()),
             (RelayRoute::Hook, "s1/l1", &b"second"[..])
         );
+    }
+
+    /// The hook route's `event` query parameter is relayed beside the body, decoded, and the
+    /// body is relayed as it was posted; a hook posted with none, an empty one or a query that cannot
+    /// be read (a duplicated `event`), and the routes that have no such parameter, relay none and
+    /// are answered as they always were.
+    #[tokio::test]
+    async fn a_hooks_event_name_is_relayed_beside_its_body() {
+        let served = serve(PATIENCE).await;
+        let key = served.helpers.launches.issue("t1", "s1", None).unwrap();
+        let mut frames = link(&served.helpers, 1);
+        let port = served.port;
+
+        for (path, expected) in [
+            ("/hook/s1?event=PreToolUse", Some("PreToolUse")),
+            ("/hook/s1/l1?event=Stop", Some("Stop")),
+            (
+                "/hook/s1?event=Pre%20Tool%2FUse%C3%A9",
+                Some("Pre Tool/Use\u{e9}"),
+            ),
+            ("/hook/s1", None),
+            // A query that names none, or cannot be read, is answered all the same, with none.
+            ("/hook/s1?event=", None),
+            ("/hook/s1?event=A&event=B", None),
+            ("/hook/s1?other=x", None),
+            ("/git-ref/s1?event=PreToolUse", None),
+            ("/context-window/s1?event=PreToolUse", None),
+        ] {
+            assert!(post(port, &key, path, b"{\"n\":1}")
+                .await
+                .unwrap()
+                .is_empty());
+            let FromHolder::Relay {
+                param, body, event, ..
+            } = next(&mut frames).await
+            else {
+                panic!("not a relay");
+            };
+            assert_eq!(
+                param,
+                if path.starts_with("/hook/s1/l1") {
+                    "s1/l1"
+                } else {
+                    "s1"
+                }
+            );
+            assert_eq!(event.as_deref(), expected, "{path}");
+            assert_eq!(body, b"{\"n\":1}", "{path}");
+        }
     }
 
     #[tokio::test]
@@ -731,5 +811,63 @@ mod tests {
         };
         assert_eq!(gone, req);
         call.await.expect("the helper ran");
+    }
+
+    /// A poll of a session's channel is a question: relayed under its own route with the
+    /// session and the body as posted, and answered with the daemon's answer, its status included
+    /// (`404` where the session has no channel). Another session's key is refused.
+    #[tokio::test]
+    async fn a_channel_poll_is_relayed_as_a_question_and_answered_with_the_daemons_status() {
+        let served = serve(PATIENCE).await;
+        let key = served.helpers.launches.issue("t1", "s1", None).unwrap();
+        let other = served.helpers.launches.issue("t2", "s2", None).unwrap();
+        let mut frames = link(&served.helpers, 1);
+        let relays = served.helpers.relays.clone();
+        let answering = tokio::spawn(async move {
+            let mut relayed = Vec::new();
+            for (status, answer) in [(200, r#"{"messages":[]}"#), (404, "")] {
+                let FromHolder::Relay {
+                    req,
+                    route,
+                    param,
+                    waits,
+                    body,
+                    ..
+                } = next(&mut frames).await
+                else {
+                    panic!("not a relay");
+                };
+                relayed.push((route, param, waits, body));
+                relays.answer(
+                    req,
+                    super::super::relay::Answer {
+                        status,
+                        body: answer.to_string(),
+                    },
+                );
+            }
+            relayed
+        });
+        assert_eq!(
+            post(served.port, &key, "/channel/s1", br#"{"wait":true}"#)
+                .await
+                .unwrap(),
+            br#"{"messages":[]}"#
+        );
+        let no_channel = post(served.port, &key, "/channel/s1", br#"{"wait":true}"#)
+            .await
+            .expect_err("no channel");
+        assert_eq!(crate::loopback::error_status(&no_channel), Some(404));
+        let refused = post(served.port, &other, "/channel/s1", b"{}")
+            .await
+            .expect_err("refused");
+        assert_eq!(crate::loopback::error_status(&refused), Some(401));
+        for (route, param, waits, body) in answering.await.unwrap() {
+            assert_eq!(
+                (route, param.as_str(), waits),
+                (RelayRoute::Channel, "s1", true)
+            );
+            assert_eq!(body, br#"{"wait":true}"#);
+        }
     }
 }

@@ -314,7 +314,8 @@ fn console_session_pointer(agent: AgentId) -> String {
 /// at the end of its reply. The tool is named for an agent whose descriptor names it
 /// (`ProviderDescriptor::ask_question_tool`), and told of generically to one whose descriptor
 /// names none. `agent` is `None` in the console instruction file, which serves every agent and
-/// names the tool of each agent whose descriptor names one.
+/// names the tool of each agent whose descriptor names one, by the agent's short name, with the
+/// agents that share a tool under one mention.
 pub(super) fn asking_guidance(agent: Option<AgentId>) -> String {
     let tool = match agent {
         Some(agent) => agent
@@ -323,11 +324,20 @@ pub(super) fn asking_guidance(agent: Option<AgentId>) -> String {
             .map(|tool| format!(" (`{tool}`)"))
             .unwrap_or_default(),
         None => {
-            let named: Vec<String> = crate::providers::descriptors()
-                .filter_map(|descriptor| {
-                    let tool = descriptor.ask_question_tool?;
-                    Some(format!("`{tool}` in {}", descriptor.label))
-                })
+            // Providers that declare the same tool share one mention, in registration order.
+            let mut groups: Vec<(&str, Vec<&str>)> = Vec::new();
+            for descriptor in crate::providers::descriptors() {
+                let Some(tool) = descriptor.ask_question_tool else {
+                    continue;
+                };
+                match groups.iter_mut().find(|(known, _)| *known == tool) {
+                    Some((_, names)) => names.push(descriptor.short_name),
+                    None => groups.push((tool, vec![descriptor.short_name])),
+                }
+            }
+            let named: Vec<String> = groups
+                .iter()
+                .map(|(tool, names)| format!("`{tool}` in {}", names.join(" and ")))
                 .collect();
             if named.is_empty() {
                 String::new()
@@ -934,11 +944,11 @@ mod tests {
     use super::*;
     use crate::session_tools::console_instructions::console_session_instructions;
 
-    /// A role description that names a tool with the wrong prefix points the model at something it
-    /// cannot see, and the prefix differs between the agents; every tool each kind is offered is
-    /// named in it by that name.
+    /// A role description that names a tool with the wrong prefix or separator points the model at
+    /// something it cannot see, and both differ between the agents; every tool each kind is
+    /// offered is named in it by that name.
     #[test]
-    fn tool_names_in_the_role_text_carry_that_agents_prefix() {
+    fn tool_names_in_the_role_text_carry_that_agents_prefix_and_separator() {
         // With Octoboard's memory on, so the memory tools are offered and named too.
         let options = RoleOptions {
             memory_enabled: true,
@@ -975,6 +985,18 @@ mod tests {
                         "{} (worker: {worker})",
                         tool.name
                     );
+                }
+            }
+            if agent.descriptor().tool_name_separator != "__" {
+                // A separator that is not the double underscore leaves none of its spelling behind.
+                let wrong = format!("{}__", crate::session_tools::catalogue::SERVER_KEY);
+                for text in [
+                    &console_session,
+                    &project_session,
+                    &unbound_session,
+                    &parented_session,
+                ] {
+                    assert!(!text.contains(&wrong), "{agent:?}: {text}");
                 }
             }
             if agent == AgentId::GROK {
@@ -1735,6 +1757,9 @@ mod tests {
                 assert!(!off.contains("## Asking the user"));
                 assert!(!off.contains("AskUserQuestion"));
                 assert!(!off.contains("ask_user_question"));
+                for tool in crate::providers::descriptors().filter_map(|d| d.ask_question_tool) {
+                    assert!(!off.contains(&format!("`{tool}`")), "{tool}");
+                }
                 let section = on
                     .strip_suffix(project_closing().as_str())
                     .and_then(|rest| {
@@ -1742,14 +1767,16 @@ mod tests {
                     })
                     .expect("the section goes in just before the closing sentence");
                 assert!(section.starts_with("## Asking the user\n\n"));
-                assert_eq!(
-                    section.contains("`AskUserQuestion`"),
-                    agent == AgentId::CLAUDE
-                );
-                assert_eq!(
-                    section.contains("`ask_user_question`"),
-                    agent == AgentId::GROK
-                );
+                // The section names the agent's own tool, and no other agent's tool unless that
+                // agent declares the same one.
+                let own_tool = agent.descriptor().ask_question_tool;
+                for tool in crate::providers::descriptors().filter_map(|d| d.ask_question_tool) {
+                    assert_eq!(
+                        section.contains(&format!("`{tool}`")),
+                        own_tool == Some(tool),
+                        "{agent:?} {tool}"
+                    );
+                }
                 assert!(
                     on.find("## Developing in a worktree").unwrap()
                         < on.find("## Asking the user").unwrap()

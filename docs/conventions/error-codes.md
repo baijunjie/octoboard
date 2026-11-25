@@ -26,6 +26,10 @@ messages". What code must do to meet it:
   reading of a situation is a new code, never a changed one.
 - **A failure becomes an `error` reply only through `src/protocol/errors.rs`**, and is raised as a `CodedError`.
 - **Translatable words are never baked into params.**
+- **A code that names a provider for a client to act on (an account to log in, an agent to open) carries the provider's
+  wire id as `agent_id`**, beside `agent`, the label a client shows. Not: a client mapping the label back to an id, or
+  `agent` repurposed to hold the id (`provider_unsupported` is the one code that does, as `apps/daemon/PROTOCOL.md`,
+  "Coded messages", says).
 - **The param that carries the situation of a code covering several is named `cause`**, never `reason`, `reason_code` or
   `title`: `report_failed_launch` overwrites those on a launch failure. Its values are a fixed vocabulary. A code that
   wraps another failure is the exception: it carries that failure as `reason` and `reason_code` (`CodedError::nesting`),
@@ -49,7 +53,11 @@ messages". What code must do to meet it:
   in `codes`, the words in every language of `messages`, keyed by the code itself (`provider.<id>.<code>`, no `daemon.`
   before it).
 - **A remedy of the code's own, where it has one, is `provider.<id>.<code>.remedy`, named as the record's `recovery`.**
-  Not every provider code has one: a record may instead use a recovery group, `"none"`, or `"account"`.
+  Not every provider code has one: a record may instead use a recovery group, `"none"`, or `"account"`. It may use the
+  code's own params (`codeParams`, `uiParams`) beside `agent`, the module's `recoveryReferences`, the recovery params
+  and the global placeholders, none of which a code param may share a name with (a record's own `uiParams.agent`, the
+  module's label, is the same value). Every surface that shows a code's remedy draws it (the alert, a failure mark's
+  popover), so it is worded to hold wherever the code is raised.
 
 ## The UI's record of a daemon code
 
@@ -70,6 +78,13 @@ messages". What code must do to meet it:
 - **A code worded by a param uses `variantOf`**, with `daemon.<code>.<variant>` per variant; the code's own key is
   worded for any variant (what an unknown variant shows), never as a placeholder.
 - **A notice shown as an error alert sets `failureNotice: true`**; nothing else makes it one.
+- **A notice that is no failure but has to be read before the user goes on sets `acknowledgedNotice: true`**, never
+  `failureNotice`: it is shown in the same alert until dismissed, titled "Session notice" unless it has an `alertTitle`,
+  with its record's remedy where it has one and none otherwise. A provider's record may set it. Mark one only where a
+  toast that closes by itself would lose what the user has to know (rules of theirs that are not in force, a path to
+  act on); every other notice stays unmarked, a toast, which draws no remedy: its record gives none (`recovery` unset,
+  except on a code the daemon also raises as an error, which keeps the `recovery` that route needs), and its own
+  sentence says what to do.
 - **A code with a step of its own sets `recoveryLine: true`** and has `.summary`, `.recovery` and the combined
   `daemon.<code>` keys.
 - **A word the sentence names that the daemon does not send is a fixed `uiParams` entry**; if it varies with where the
@@ -90,9 +105,10 @@ messages". What code must do to meet it:
   failure, a mark's popover, beside a field), as `models_command_failed` and `quota_command_failed` do. A record with
   `detailBlock: true` has a `.summary` for every variant that could arrive with `detail` (the normaliser's
   unknown-cause default included), never dropped as unused unless the code is `noSummary`.
-- **A code of a quota reading, a models list or a login needs only its message facets, no remedy**
-  (`models_unavailable_code`, `quota_unavailable_code`, `login_failure_code`). Why: it is shown where it is read, so the
-  remedy a `recovery` gives does not apply.
+- **A code of a quota reading, a models list or a login needs only its message facets, with no recovery group**
+  (`models_unavailable_code`, `quota_unavailable_code`, `login_failure_code`). Why: it is shown where it is read, so a
+  group's general remedy does not apply. A provider code raised there too may still have its own `.remedy`, worded to
+  hold both where it is read and where it is raised, since the surfaces that show the reading show it.
 - **A remedy done in Settings' Agent accounts section gets a case in `recoveryAction`**
   (`packages/ui/src/components/alerts/ErrorGuidance.tsx`), and the recovery text says only what to do there.
 

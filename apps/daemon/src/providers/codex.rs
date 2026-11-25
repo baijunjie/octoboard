@@ -2,11 +2,11 @@
 
 use std::time::Duration;
 
-use super::layout::AgentLayout;
+use super::layout::{AgentLayout, ConfigDirVarNames};
 use super::{
     AgentId, Capabilities, DeliveryQuirks, DetectionMarkers, InteractionKinds, ModelDisplay,
-    ProviderCode, ProviderDescriptor, QuotaWindowKind, QuotaWindowNaming, SessionWindowName,
-    SettingChoice, SettingDescriptor, SettingKind, SwitchDefault,
+    NativeMemory, ProviderCode, ProviderDescriptor, QuotaWindowKind, QuotaWindowNaming,
+    SessionWindowName, SettingChoice, SettingDescriptor, SettingKind, SwitchDefault,
 };
 use crate::platform::term::{Input, QuitKeys};
 
@@ -40,6 +40,9 @@ impl AgentId {
     pub const CODEX: AgentId = AgentId(DESCRIPTOR.id);
 }
 
+/// The instruction file Codex reads from the working directory.
+pub(crate) const CODEX_INSTRUCTION_FILE: &str = "AGENTS.md";
+
 /// Codex: `~/.codex`, a thread's rollouts at
 /// `sessions/<year>/<month>/<day>/rollout-<start>-<thread id>.jsonl` (`.jsonl.zst` once compressed;
 /// a later history segment adds `_<segment id>`), moved under `archived_sessions/` by
@@ -47,6 +50,7 @@ impl AgentId {
 /// `state_<generation>.sqlite`.
 pub(crate) const LAYOUT: AgentLayout = AgentLayout {
     config_dir_var: "CODEX_HOME",
+    config_dir_var_names: ConfigDirVarNames::Directory,
     default_dir: ".codex",
     records_dir: CODEX_RECORDS_DIR,
     archived_records_dir: Some(CODEX_ARCHIVED_DIR),
@@ -102,10 +106,29 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         own: &[".codex"],
         generic: &["AGENTS.md", ".agents"],
     },
-    inherited_session_vars: &[],
-    instruction_file: "AGENTS.md",
+    // What 0.167.1 sets for the commands it runs that marks them as its session's; the colour,
+    // pager and locale switches it sets beside them are `command_environment`.
+    inherited_session_vars: &[
+        "CODEX_APPLY_PATCH_PRESERVE_LINE_ENDINGS",
+        "CODEX_CI",
+        "CODEX_SANDBOX",
+        "CODEX_SESSION_ID",
+        "CODEX_THREAD_ID",
+        "CODEX_TOOL_CALL_ID",
+        "CODEX_VERSION",
+    ],
+    command_environment: &[
+        ("GH_PAGER", "cat"),
+        ("GIT_PAGER", "cat"),
+        ("LC_ALL", "C.UTF-8"),
+        ("LC_CTYPE", "C.UTF-8"),
+        ("NO_COLOR", "1"),
+        ("PAGER", "cat"),
+    ],
+    instruction_file: CODEX_INSTRUCTION_FILE,
     instruction_import_prefix: None,
     tool_name_prefix: "mcp__",
+    tool_name_separator: "__",
     // Its structured-question features are off in the measured version.
     ask_question_tool: None,
     // Ending its console ends it at once, the turn lost and no `SessionEnd`; a Ctrl-C quits a turn
@@ -132,6 +155,8 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         // `docs/agent-cli-reference.md`, "Folder-trust confirmations".
         console_trust: super::ConsoleTrust::Answered,
         config_sharing: true,
+        owned_accounts: true,
+        login_flow: true,
         mcp_inventory: true,
         // Measured: its commands still running as it exits have their groups killed, each led by
         // a direct child of the process that runs commands (its private app server where it has
@@ -150,10 +175,11 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         kinds: &[QuotaWindowKind::Session, QuotaWindowKind::Weekly],
         session_window: SessionWindowName::FiveHour,
         weekly_all_models: false,
+        credit_period: None,
     },
     model_display: ModelDisplay::PLAIN,
     compatibility_source: true,
-    native_memory_switch: true,
+    native_memory: NativeMemory::Switchable,
     settings: &[
         SettingDescriptor {
             id: "approval_reviewer",
@@ -204,12 +230,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn its_launch_overrides_are_these_compatibility_switches() {
+        let overridable: Vec<_> = AgentId::CODEX
+            .descriptor()
+            .overridable_settings()
+            .map(|setting| setting.id)
+            .collect();
+        assert_eq!(overridable, ["claude_compatibility"]);
+    }
+
+    #[test]
     fn the_layout_names_are_the_ones_codex_writes() {
         assert_eq!(AgentId::CODEX.descriptor().layout, &LAYOUT);
         assert_eq!(
             LAYOUT,
             AgentLayout {
                 config_dir_var: "CODEX_HOME",
+                config_dir_var_names: ConfigDirVarNames::Directory,
                 default_dir: ".codex",
                 records_dir: "sessions",
                 archived_records_dir: Some("archived_sessions"),

@@ -10,10 +10,9 @@ use crate::session::input_box::captures::*;
 use crate::session::input_box::input_box;
 use crate::session::input_box_clear::PRESS_OVERRIDE;
 use crate::state::AppState;
-use crate::test_support::{
-    app_state, console, console_session, fake_live_session, watched_live_session, ScratchDir,
-    StandIn, PATIENCE,
-};
+#[cfg(unix)]
+use crate::test_support::watched_live_session;
+use crate::test_support::{app_state, console, console_session, ScratchDir, StandIn, PATIENCE};
 
 /// A running title of each agent, as it sends one a turn.
 fn running_title(agent: AgentId) -> &'static [u8] {
@@ -62,14 +61,15 @@ impl Fixture {
     /// arrived, so an absence asserted in it is one of a reader that has caught up.
     fn keys_after_marker(&self) -> Vec<u8> {
         const MARKER: &[u8] = b"marker";
+        let minimum = self.keys().len() + MARKER.len();
         self.live.write_input(MARKER).unwrap();
         let deadline = Instant::now() + PATIENCE;
         loop {
             let keys = self.keys();
-            if keys.ends_with(MARKER) || Instant::now() >= deadline {
-                assert!(keys.ends_with(MARKER), "{keys:?}");
+            if keys.len() >= minimum && keys.ends_with(MARKER) {
                 return keys[..keys.len() - MARKER.len()].to_vec();
             }
+            assert!(Instant::now() < deadline, "{keys:?}");
             std::thread::sleep(Duration::from_millis(10));
         }
     }
@@ -101,16 +101,30 @@ fn fixture_with(
         .unwrap();
     let ready = dir.join("ready");
     let keys = dir.join("keys");
-    let script = format!(
-        "stty raw -echo && touch '{}' && exec cat > '{}'",
-        ready.display(),
-        keys.display()
-    );
-    let live = if trust_watch {
+    #[cfg(unix)]
+    let live = {
+        let script = format!(
+            "stty raw -echo && touch '{}' && exec cat > '{}'",
+            ready.display(),
+            keys.display()
+        );
         watched_live_session("s", agent, 120, 40, &script, None)
-    } else {
-        fake_live_session("s", agent, 120, 40, &script)
     };
+    #[cfg(windows)]
+    let live = crate::test_support::watched_live_session_running(
+        "s",
+        agent,
+        120,
+        40,
+        &crate::test_support::fixture::Steps::new()
+            .raw_input()
+            .write_file(&ready, "")
+            .record_input(&keys)
+            .program("interrupt-keys"),
+    );
+    if !trust_watch {
+        live.trust.end_watch();
+    }
     let live = match transport {
         Some(transport) => live.with_transport(transport),
         None => live,
@@ -121,6 +135,8 @@ fn fixture_with(
         std::thread::sleep(Duration::from_millis(10));
     }
     state.register_live(live.clone());
+    // These titles follow a draw. A rendering host ignores the title it creates at startup.
+    live.on_output(b"Ready");
     Fixture {
         state,
         live,
@@ -1261,6 +1277,7 @@ async fn a_restored_prompt_is_not_cleared_once_a_new_turn_has_started() {
         Duration::from_millis(200),
         Duration::from_millis(200),
         before,
+        &FirstReading::take(),
     );
 
     assert!(
@@ -1295,6 +1312,7 @@ async fn a_restored_prompt_is_not_cleared_once_the_hooks_report_a_new_turn() {
         Duration::from_millis(200),
         Duration::from_millis(200),
         before,
+        &FirstReading::take(),
     );
 
     assert!(
@@ -1776,5 +1794,427 @@ fn the_waiting_for_user_copy_names_the_title_the_sessions_provider_shows() {
              clear in the terminal.",
             "{agent:?}"
         );
+    }
+}
+
+/// The keys a provider declares, as the test-only provider declares them: what the generic code
+/// sends for each is the same whoever declares it.
+mod declared_keys {
+    use super::*;
+    use crate::session::screen::{Interrupt, InterruptKey};
+    use crate::test_support::test_provider::declaring_interrupt;
+
+    /// What the test-only provider's terminal reports of its turn through OSC 7501, which is how
+    /// its session shows a turn running: it has no title that says so.
+    const TEST_REPORTS_WORKING: &[u8] = b"\x1b]7501;state=working:app=test-agent\x1b\\";
+
+    fn nothing_to_add(_written: usize) -> String {
+        String::new()
+    }
+
+    const fn declaring(key: InterruptKey) -> Interrupt {
+        Interrupt {
+            key,
+            restores_prompt: false,
+            written_during_turn: nothing_to_add,
+            queued_waiting: None,
+        }
+    }
+
+    static ESC_ONCE: Interrupt = declaring(InterruptKey::Esc);
+    static ESC_TWICE: Interrupt = declaring(InterruptKey::EscTwice);
+    static CTRL_C_ONLY: Interrupt = declaring(InterruptKey::CtrlC);
+    static CTRL_C_AFTER_CLEARING: Interrupt =
+        declaring(InterruptKey::CtrlCAfterClearing { undo: None });
+
+    /// A session of the test-only provider in a turn: working by its hooks, and its terminal
+    /// reporting the turn running.
+    fn working_test_agent(name: &str) -> Fixture {
+        let fixture = fixture(name, AgentId::TEST, SessionStatus::Working, false);
+        fixture.live.on_output(TEST_REPORTS_WORKING);
+        fixture
+    }
+
+    /// Each key a provider can declare puts exactly its keys into the terminal, the last of which
+    /// ends the turn: one Esc, two Esc, one Ctrl-C with no Ctrl-U before it, and (unchanged) a
+    /// Ctrl-U and then a Ctrl-C.
+    #[tokio::test]
+    async fn each_declared_key_sends_its_own_keys_and_ends_the_turn() {
+        for (name, interrupt, keys) in [
+            ("esc", &ESC_ONCE, vec![ESC]),
+            ("esc-twice", &ESC_TWICE, vec![ESC, ESC]),
+            ("ctrl-c", &CTRL_C_ONLY, vec![CTRL_C]),
+            (
+                "ctrl-c-after-clearing",
+                &CTRL_C_AFTER_CLEARING,
+                vec![CTRL_U, CTRL_C],
+            ),
+        ] {
+            let _declared = declaring_interrupt(interrupt);
+            let fixture = working_test_agent(&format!("declared-{name}"));
+            let last = keys.len() - 1;
+            let steps: Vec<Step> = keys
+                .iter()
+                .enumerate()
+                .map(|(at, key)| {
+                    let act: Box<dyn FnOnce() + Send> = if at == last {
+                        back_at_prompt(&fixture.state)
+                    } else {
+                        Box::new(|| {})
+                    };
+                    (*key, act)
+                })
+                .collect();
+            let agent = respond(&fixture, steps);
+
+            let result = interrupt_session(&fixture.state, "s").await.unwrap();
+            agent.join().unwrap();
+
+            assert!(result.interrupted, "{name}: {result:?}");
+            assert_eq!(fixture.keys_after_marker(), keys.concat(), "{name}");
+        }
+    }
+
+    /// What the test-only provider's terminal reports once its turn is over.
+    const TEST_REPORTS_IDLE: &[u8] = b"\x1b]7501;state=idle:app=test-agent\x1b\\";
+
+    /// A provider whose cancel puts back what it held: its interrupt is one Esc, after which the
+    /// box is watched and cleared, and its reader, the test-only provider's own for everything
+    /// else (`crate::adapter::test_provider::TestScreen`: a row `INPUT>` is the box, Ctrl-U clears
+    /// it), says a cancel gives the held messages back.
+    static ESC_RESTORING: Interrupt = Interrupt {
+        key: InterruptKey::Esc,
+        restores_prompt: true,
+        written_during_turn: nothing_to_add,
+        queued_waiting: None,
+    };
+
+    struct GivesBack;
+
+    impl crate::session::screen::ScreenReader for GivesBack {
+        fn input_box_rows(&self, screen: &str) -> Option<Vec<String>> {
+            crate::session::screen::ScreenReader::input_box_rows(
+                &crate::adapter::test_provider::TestScreen,
+                screen,
+            )
+        }
+
+        fn clears_input_box_with_ctrl_u(&self) -> bool {
+            true
+        }
+
+        fn cancel_restores_held_messages(&self) -> bool {
+            true
+        }
+
+        fn interrupt(&self) -> Option<&'static Interrupt> {
+            crate::test_support::test_provider::declared_interrupt()
+        }
+    }
+
+    /// [`respond`], for a session whose input already holds `written`.
+    fn respond_after(
+        fixture: &Fixture,
+        written: Vec<u8>,
+        steps: Vec<Step>,
+    ) -> std::thread::JoinHandle<()> {
+        let keys = fixture.keys.clone();
+        std::thread::spawn(move || {
+            let mut expected = written;
+            for (key, act) in steps {
+                expected.extend_from_slice(key);
+                let deadline = Instant::now() + PATIENCE;
+                while std::fs::read(&keys).unwrap_or_default() != expected {
+                    if Instant::now() >= deadline {
+                        return;
+                    }
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                act();
+            }
+        })
+    }
+
+    /// Waits until no drain owns the session's queue, so that what a drain on another thread is
+    /// writing is whole before the session's input is read.
+    fn no_drain(fixture: &Fixture) {
+        let deadline = Instant::now() + PATIENCE;
+        while fixture.state.outbox.is_draining("s") {
+            assert!(Instant::now() < deadline, "a drain never ended");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// Drains the session's queue and says what the drain came to, asking again while another
+    /// drain, one the session's own events started, owns the queue.
+    fn drained(fixture: &Fixture, status: SessionStatus) -> crate::messaging::outbox::Drain {
+        use crate::messaging::outbox::Drain;
+        let deadline = Instant::now() + PATIENCE;
+        loop {
+            no_drain(fixture);
+            match fixture.state.flush_outbox("s", status) {
+                Drain::Pending if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                drain => {
+                    no_drain(fixture);
+                    return drain;
+                }
+            }
+        }
+    }
+
+    fn position(keys: &[u8], text: &str) -> Option<usize> {
+        keys.windows(text.len())
+            .rposition(|window| window == text.as_bytes())
+    }
+
+    /// Has `then` run once the next interrupt has first read text in the box its agent put a prompt
+    /// back in, before it waits for the rest to be drawn: where a stand-in draws the burst that
+    /// the first reading must not have seen.
+    fn after_the_first_reading(then: impl FnOnce() + Send + 'static) {
+        AFTER_FIRST_READING.with(|held| *held.borrow_mut() = Some(Box::new(then)));
+    }
+
+    /// A message the queue wrote while a turn ran, which the agent held, is put back in its box by
+    /// the cancel `interrupt_session` makes, and the interrupt clears the box right after its key.
+    /// The message is not lost with it: it is queued again, held, so no drain writes it into the
+    /// agent the interrupt has just stopped, and it is written right after the next message that
+    /// goes into the session. The agent draws what it gives back in two bursts, and the interrupt
+    /// first reads the box between them: what was put back is told by the box as read once the
+    /// screen is quiet, the part the first reading saw being no message of Octoboard's.
+    #[tokio::test]
+    async fn a_message_the_interrupt_clears_is_held_and_written_after_the_next_message() {
+        let _reader = crate::test_support::test_provider::declaring_screen(&GivesBack);
+        let _declared = declaring_interrupt(&ESC_RESTORING);
+        let fixture = working_test_agent("held-message");
+        // The writes this test makes itself do not wait a whole test's patience for the message
+        // written before them to leave the box.
+        let _settle = crate::session::swap::message_seen_at_once();
+        let live = fixture.live();
+        draw(&live, "INPUT>");
+        live.settle_input();
+
+        // The queue writes a message into the running turn, and the agent takes it out of its box.
+        fixture.state.queue_message("s", "held one").unwrap();
+        assert_eq!(
+            drained(&fixture, SessionStatus::Working),
+            crate::messaging::outbox::Drain::Clear
+        );
+        assert_eq!(fixture.state.queued_count("s"), 0);
+        // No drain is writing by now, so a marker can follow what was written without mixing
+        // into it; the stand-in has taken everything before it once it shows.
+        let mut written = fixture.keys_after_marker();
+        assert!(position(&written, "held one").is_some(), "{written:?}");
+        written.extend_from_slice(b"marker");
+
+        let (restored, rest, cleared) = (live.clone(), live.clone(), live.clone());
+        after_the_first_reading(move || draw(&rest, "INPUT> held one"));
+        let back = back_at_prompt(&fixture.state);
+        let agent = respond_after(
+            &fixture,
+            written.clone(),
+            vec![
+                (
+                    ESC,
+                    // The first burst of what the agent gives back; the second is drawn only
+                    // once the interrupt has read this one.
+                    Box::new(move || {
+                        restored.on_output(TEST_REPORTS_IDLE);
+                        draw(&restored, "INPUT> held");
+                    }),
+                ),
+                (
+                    CTRL_U,
+                    Box::new(move || {
+                        draw(&cleared, "INPUT>");
+                        back();
+                    }),
+                ),
+            ],
+        );
+
+        let result = interrupt_session(&fixture.state, "s").await.unwrap();
+        agent.join().unwrap();
+        assert!(result.interrupted, "{result:?}");
+
+        // Queued again, and held: a drain takes nothing, and nothing but the interrupt's keys has
+        // gone into the agent that was just stopped.
+        assert_eq!(fixture.state.queued_count("s"), 1);
+        assert_eq!(
+            drained(&fixture, SessionStatus::Idle),
+            crate::messaging::outbox::Drain::Clear
+        );
+        assert_eq!(fixture.state.queued_count("s"), 1, "still held");
+        let interrupted = [written.as_slice(), ESC, CTRL_U].concat();
+        assert_eq!(fixture.keys_after_marker(), interrupted);
+
+        // The next message releases it, and it follows that message.
+        live.settle_input();
+        fixture.state.queue_message("s", "the next").unwrap();
+        assert_eq!(
+            drained(&fixture, SessionStatus::Idle),
+            crate::messaging::outbox::Drain::Clear
+        );
+        assert_eq!(fixture.state.queued_count("s"), 0);
+        let all = fixture.keys_after_marker();
+        let rest = &all[interrupted.len() + b"marker".len()..];
+        let next = position(rest, "the next").expect("the next message was written");
+        let again = position(rest, "held one").expect("the held message was written again");
+        assert!(next < again, "{rest:?}");
+    }
+
+    /// Has the pause between the next interrupt's two Esc presses end when the returned sender is
+    /// sent on or dropped, in place of `BETWEEN_KEYS`: a stand-in agent says through it that it has
+    /// done what it does about the first press.
+    fn agent_says_when_it_has_acted() -> std::sync::mpsc::Sender<()> {
+        let (acted, pause) = std::sync::mpsc::channel();
+        BETWEEN_ESCS.with(|held| *held.borrow_mut() = Some(pause));
+        acted
+    }
+
+    /// What the agent does about a key, and then its saying so (`agent_says_when_it_has_acted`).
+    fn then_says_so(
+        act: Box<dyn FnOnce() + Send>,
+        acted: std::sync::mpsc::Sender<()>,
+    ) -> Box<dyn FnOnce() + Send> {
+        Box::new(move || {
+            act();
+            // Nobody waits any more once the interrupt has returned.
+            let _ = acted.send(());
+        })
+    }
+
+    /// The second Esc is withheld once the turn has ended, so it cannot land on the prompt the turn
+    /// left, and the caller is told that only the first went in and why.
+    #[tokio::test]
+    async fn the_second_esc_is_withheld_once_the_turn_has_ended() {
+        let _declared = declaring_interrupt(&ESC_TWICE);
+        let fixture = working_test_agent("esc-twice-ended");
+        let acted = agent_says_when_it_has_acted();
+        let agent = respond(
+            &fixture,
+            vec![(ESC, then_says_so(back_at_prompt(&fixture.state), acted))],
+        );
+
+        let result = interrupt_session(&fixture.state, "s").await.unwrap();
+        agent.join().unwrap();
+
+        assert!(!result.interrupted, "{result:?}");
+        assert!(
+            result
+                .note
+                .contains("Only the first of the two Esc presses that interrupt a turn of Test Agent was sent")
+                && result.note.contains("the turn ended first"),
+            "{}",
+            result.note
+        );
+        assert_eq!(fixture.keys_after_marker(), ESC);
+    }
+
+    /// The first Esc is held to the same gate as any key: with the terminal not showing the turn
+    /// running, neither goes in, and the caller is told so.
+    #[tokio::test]
+    async fn no_esc_goes_in_unless_the_terminal_shows_the_turn_running() {
+        let _declared = declaring_interrupt(&ESC_TWICE);
+        let fixture = fixture(
+            "esc-twice-not-shown",
+            AgentId::TEST,
+            SessionStatus::Working,
+            false,
+        );
+
+        let result = interrupt_session(&fixture.state, "s").await.unwrap();
+
+        assert!(!result.interrupted, "{result:?}");
+        assert_eq!(result.note, NOT_SHOWN_RUNNING);
+        assert!(fixture.keys_after_marker().is_empty());
+    }
+
+    /// Someone else writing into the terminal between the two presses stops the second.
+    #[tokio::test]
+    async fn the_second_esc_is_withheld_when_something_else_writes_between_the_presses() {
+        let _declared = declaring_interrupt(&ESC_TWICE);
+        let fixture = working_test_agent("esc-twice-touched");
+        let live = fixture.live();
+        let acted = agent_says_when_it_has_acted();
+        let agent = respond(
+            &fixture,
+            vec![(
+                ESC,
+                then_says_so(Box::new(move || live.write_input(b"x").unwrap()), acted),
+            )],
+        );
+
+        let result = interrupt_session(&fixture.state, "s").await.unwrap();
+        agent.join().unwrap();
+
+        assert!(!result.interrupted, "{result:?}");
+        assert!(
+            result
+                .note
+                .contains("Only the first of the two Esc presses")
+                && result
+                    .note
+                    .contains("something else wrote into its terminal first"),
+            "{}",
+            result.note
+        );
+        assert_eq!(fixture.keys_after_marker(), [ESC, b"x"].concat());
+    }
+
+    /// The second Esc does not go into a turn the agent has started since the first: the turn the
+    /// first press armed the interrupt for has ended, though the session reads as working and its
+    /// terminal shows a turn running throughout.
+    #[tokio::test]
+    async fn the_second_esc_is_withheld_from_a_turn_started_since_the_first() {
+        let _declared = declaring_interrupt(&ESC_TWICE);
+        let fixture = working_test_agent("esc-twice-next-turn");
+        fixture.state.turn_started("s", None);
+        let state = fixture.state.clone();
+        let acted = agent_says_when_it_has_acted();
+        let agent = respond(
+            &fixture,
+            vec![(
+                ESC,
+                then_says_so(
+                    Box::new(move || {
+                        state.abandon_turn("s");
+                        state.turn_started("s", None);
+                    }),
+                    acted,
+                ),
+            )],
+        );
+
+        let result = interrupt_session(&fixture.state, "s").await.unwrap();
+        agent.join().unwrap();
+
+        assert!(!result.interrupted, "{result:?}");
+        assert!(
+            result
+                .note
+                .contains("Only the first of the two Esc presses")
+                && result.note.contains("the turn ended first"),
+            "{}",
+            result.note
+        );
+        assert_eq!(fixture.keys_after_marker(), ESC);
+    }
+
+    /// A plain Ctrl-C leaves whatever the input box holds alone: nothing is cleared first, however
+    /// much is typed there.
+    #[tokio::test]
+    async fn a_plain_ctrl_c_leaves_a_draft_in_the_input_box_alone() {
+        let _declared = declaring_interrupt(&CTRL_C_ONLY);
+        let fixture = working_test_agent("ctrl-c-draft");
+        draw(&fixture.live, "INPUT> a draft in progress");
+        let agent = respond(&fixture, vec![(CTRL_C, back_at_prompt(&fixture.state))]);
+
+        let result = interrupt_session(&fixture.state, "s").await.unwrap();
+        agent.join().unwrap();
+
+        assert!(result.interrupted, "{result:?}");
+        assert_eq!(fixture.keys_after_marker(), CTRL_C);
     }
 }

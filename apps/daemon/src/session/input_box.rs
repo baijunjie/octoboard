@@ -6,17 +6,21 @@
 //! horizontal rules, Grok Build's composer drawn as a box of its own, Codex's composer above its
 //! status footer.
 //!
-//! The screen given is the one with faint cells blanked
-//! (`crate::terminal::snapshot::TerminalSnapshot::visible_text_undimmed`): Claude Code writes the
-//! hints of an empty box faint (a fresh session's `❯ Try "…"`, `❯ Press up to edit queued
-//! messages` while a message waits for the turn to end), and they are no text of the box.
-//! Grok Build writes nothing in its composer faint (1.0.70).
+//! The screen given is the one the provider's reader asks for
+//! (`crate::session::screen::ScreenReader::input_box_screen`, which
+//! `crate::session::LiveSession::box_screen` reads). By default it is the one with faint cells
+//! blanked (`crate::terminal::snapshot::TerminalSnapshot::visible_text_undimmed`): Claude Code
+//! writes the hints of an empty box faint (a fresh session's `❯ Try "…"`, `❯ Press up to edit
+//! queued messages` while a message waits for the turn to end), and they are no text of the box.
+//! Grok Build writes nothing in its composer faint (1.0.70). A reader whose box can only be found
+//! by what the provider draws faint, such as the rules that frame it, asks for the screen as drawn.
 //!
-//! Where the host renders what the program draws (`TermFacts::host_renders`), the host may draw a
-//! faint cell plain, so a box that shows nothing but one of the provider's placeholders
+//! Where a faint cell reaches the reader as text — the host renders what the program draws
+//! (`TermFacts::host_renders`) and may draw a faint cell plain, or the box is read off the screen
+//! as drawn — a box that shows nothing but one of the provider's placeholders
 //! (`crate::session::screen::ScreenReader::input_placeholder`) is read as empty whatever it is
 //! drawn with ([`placeholder_as_empty`], which `crate::session::LiveSession::input_box_rows`
-//! applies); the faint cells are still blanked there too.
+//! applies); on a host that renders, the faint cells are still blanked for a reader that asks so.
 
 use crate::protocol::AgentId;
 

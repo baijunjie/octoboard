@@ -11,6 +11,7 @@ pub(crate) mod application;
 pub(crate) mod build_files;
 #[cfg(target_os = "macos")]
 pub(crate) mod cf;
+pub(crate) mod credential_store;
 #[cfg(unix)]
 pub(crate) mod descriptors;
 pub(crate) mod fs;

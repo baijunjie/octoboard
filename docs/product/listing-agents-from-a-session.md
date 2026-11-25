@@ -53,6 +53,11 @@ are percentages only; no absolute token or money amount is given, and no account
   of the default configuration is running — the reasons, besides being turned off, that automatic account selection
   passes an account over for. It is `null` when `can_open` is `true`.
 
+The accounts of an agent whose quota Octoboard does not read (see "Agents whose quota Octoboard does not read" in
+`docs/product/account-quotas.md`) are listed with `plan` `null`, `windows` empty and `exhausted` `false`: they have no
+quota to weigh, so being used up is never why one cannot open, and whether it is logged in comes from its sign-in
+reading. The tool's description tells the agent so.
+
 By default it answers from the readings already held and takes no new one, so an entry is as old as its `fetched_at`
 and a call spends nothing. With `refresh` set to `true` it first reads again the accounts it lists — every agent's, or
 only `agent`'s when that is given — together with those of an agent that is installed but not added, which Octoboard

@@ -80,17 +80,16 @@ fn receive(socket: &mut WebSocket<TcpStream>) -> Option<Value> {
     serde_json::from_str(message.to_text().ok()?).ok()
 }
 
-/// The next connection on `listener`; panics, rather than waiting for ever, when none comes
-/// within [`PATIENCE`].
+/// The next connection on `listener` that is not a port probe's; panics, rather than waiting for
+/// ever, when none comes within [`PATIENCE`].
 fn accepted(listener: &TcpListener) -> TcpStream {
     listener.set_nonblocking(true).unwrap();
     let deadline = Instant::now() + PATIENCE;
     loop {
         match listener.accept() {
-            Ok((stream, _)) => {
-                stream.set_nonblocking(false).unwrap();
-                return stream;
-            }
+            // A port probe is not the client's connection.
+            Ok((stream, _)) if crate::test_support::answered_as_probe(&stream) => {}
+            Ok((stream, _)) => return stream,
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 assert!(Instant::now() < deadline, "no connection came");
                 std::thread::sleep(Duration::from_millis(10));
@@ -2147,9 +2146,13 @@ impl ServedAll {
             while !halt.load(Ordering::Acquire) {
                 match listener.accept() {
                     Ok((stream, _)) => {
-                        stream.set_nonblocking(false).unwrap();
                         let (token, answer, log) = (token.clone(), answer.clone(), log.clone());
-                        std::thread::spawn(move || serve_connection(stream, &token, &answer, &log));
+                        std::thread::spawn(move || {
+                            // A port probe is not a client: it is answered and left out.
+                            if !crate::test_support::answered_as_probe(&stream) {
+                                serve_connection(stream, &token, &answer, &log);
+                            }
+                        });
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                         std::thread::sleep(Duration::from_millis(10));

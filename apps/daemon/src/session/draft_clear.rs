@@ -1,20 +1,28 @@
 //! Clearing a draft out of the way of a message past the draft's grace, where the agent's native
 //! stash cannot take it: past the grace delivery comes before the draft, so the draft is cleared,
 //! handed to every client in a `draft_discarded` notice, and the message written only once the
-//! screen shows the box empty. Where the box cannot be cleared — no key is known for the agent, a
-//! press was not seen, the clear left text behind, the box cannot be read off a whole frame, or it
-//! holds only the message Octoboard wrote before — the message waits, but only for
-//! [`UNCLEARABLE_DRAFT_WAIT`]: then it goes into the box as it stands, with whatever the box holds,
-//! and every client is told in a `message_sent_with_draft` notice. The rules are in
+//! screen shows the box empty. Messages of Octoboard's own that the agent held for the end of a
+//! turn and put back in the box at a cancel, the latest alone or several in the order written,
+//! are cleared the same way, but they are no draft of the user's: they are queued to be written
+//! again right after the message they were cleared for (`crate::messaging::cleared_messages`),
+//! and nobody is told, since nothing is lost; only text the user typed after them is told as a
+//! draft. Only where one cannot be written again is every client told, in a
+//! `message_cleared_after_cancel` notice that carries its text. Where the box cannot be cleared —
+//! no key is known for the agent, a press was not seen, the clear left text behind, the box
+//! cannot be read off a whole frame, or it holds only the message Octoboard wrote before, left
+//! unsent there — the message waits, but only for [`UNCLEARABLE_DRAFT_WAIT`]: then it goes into
+//! the box as it stands, with whatever the box holds, and every client is told in a
+//! `message_sent_with_draft` notice. The rules are in
 //! `docs/product/draft-preservation.md`, sections "Clearing a draft past the grace period", "When
 //! the composer cannot be cleared" and "The draft grace period".
 //!
-//! The keys are the run of Ctrl-U presses an interrupt also uses
-//! (`crate::session::input_box_clear`), one a write, each through `LiveSession::write_keys_if` and
-//! seen on the screen before the next, and only for
-//! an agent whose Ctrl-U is measured to do nothing but delete a line of its box
-//! (`crate::session::screen::ScreenReader::clears_input_box_with_ctrl_u`). The session's queue is
-//! not paused around them: they are typed from inside the queue's own write of the message, which
+//! The keys are the ones an interrupt also uses (`crate::session::input_box_clear`), each a write
+//! through `LiveSession::write_keys_if`: a run of Ctrl-U presses, each seen on the screen before
+//! the next, for an agent whose Ctrl-U is measured to do nothing but delete a line of its box
+//! (`crate::session::screen::ScreenReader::clears_input_box_with_ctrl_u`); or, at the idle prompt,
+//! a single press of the key a provider declares to empty its whole box there
+//! (`crate::session::screen::ScreenReader::input_box_clearing_key`). The session's queue is not
+//! paused around them: they are typed from inside the queue's own write of the message, which
 //! holds the session's drain, so no other message of Octoboard's can be written meanwhile. Keys the
 //! user types meanwhile go straight in and end the run, since every press expects the count of
 //! writes past its own: the message then waits rather than join what they typed.
@@ -22,8 +30,10 @@
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
+use super::draft::{HeldMessage, ToldLost};
 use super::input_box_clear::{clear_allowance, clear_input_box, press_timeout, Cleared};
 use super::swap::{archived_refusal, blocked};
+use super::text::bare;
 use super::{BoxIs, LiveSession};
 use crate::platform::term::{Input, PartialWrite};
 use crate::protocol::{notice_code, Notice};
@@ -77,15 +87,116 @@ pub(super) struct UnseenClear {
     at: Instant,
 }
 
+/// The messages of Octoboard's that the agent gave back at a cancel
+/// ([`LiveSession::given_back_at_a_cancel`]), to be cleared.
+struct GivenBack {
+    /// The messages, oldest first, each as it reads and under the identity the queue wrote it
+    /// with, where it wrote it.
+    messages: Vec<HeldMessage>,
+    /// Whether they are several messages written while the turn ran, told by the texts the
+    /// typing record keeps of them (`Draft::held_messages`), rather than the latest one alone.
+    several: bool,
+    /// What the box showed after them: text of the user's own, cleared with them and told as a
+    /// draft.
+    draft: Option<String>,
+}
+
+impl GivenBack {
+    /// The latest message alone, as the box showed it.
+    fn latest(text: &str, id: Option<String>) -> Self {
+        Self {
+            messages: vec![HeldMessage {
+                text: text.to_string(),
+                id,
+                records_prompt: true,
+            }],
+            several: false,
+            draft: None,
+        }
+    }
+}
+
+/// The latest of `held`, the messages written while the turn ran, that `shown`, the input box's
+/// text, begins with: one after another in the order they were written in, compared without
+/// whitespace ([`bare`]), so neither the wrapping nor what an agent puts between two of them (an
+/// empty row, a row break) counts. As how many they are and what the box shows after them,
+/// trimmed; the longest such run. What follows them has to be set off from the last by
+/// whitespace: text that only begins as a message does is none of it. Never for an empty box.
+fn given_back_run(shown: &str, held: &[HeldMessage]) -> Option<(usize, String)> {
+    let bare_shown = bare(shown);
+    (1..=held.len()).rev().find_map(|count| {
+        let run: String = held[held.len() - count..]
+            .iter()
+            .map(|message| bare(&message.text))
+            .collect();
+        if run.is_empty() || !bare_shown.starts_with(&run) {
+            return None;
+        }
+        let rest = after_bare(shown, run.chars().count());
+        (rest.is_empty() || rest.starts_with(char::is_whitespace))
+            .then(|| (count, rest.trim().to_string()))
+    })
+}
+
+/// `text` past its first `count` characters that are not whitespace.
+fn after_bare(text: &str, count: usize) -> &str {
+    let mut left = count;
+    text.trim_start_matches(|c: char| {
+        if left == 0 {
+            return false;
+        }
+        if !c.is_whitespace() {
+            left -= 1;
+        }
+        true
+    })
+}
+
+/// Whether the input box's `shown` text is `message` and nothing else ([`bare`]); never for an
+/// empty box.
+fn same_text(shown: &str, message: &str) -> bool {
+    let shown = bare(shown);
+    !shown.is_empty() && shown == bare(message)
+}
+
+/// What the input box's `shown` text holds after `message`, which it begins with ([`bare`]):
+/// text set off from the message by whitespace, trimmed. `None` where the box does not begin
+/// with the message or nothing follows it.
+fn text_after(shown: &str, message: &str) -> Option<String> {
+    let message = bare(message);
+    if message.is_empty() || !bare(shown).starts_with(&message) {
+        return None;
+    }
+    let rest = after_bare(shown, message.chars().count());
+    (rest.starts_with(char::is_whitespace) && !rest.trim().is_empty())
+        .then(|| rest.trim().to_string())
+}
+
+/// Whether the input box's `shown` text is a part of `message` ([`bare`]); never for an empty
+/// box.
+fn part_of(shown: &str, message: &str) -> bool {
+    let shown = bare(shown);
+    !shown.is_empty() && bare(message).contains(&shown)
+}
+
 /// What a write past the grace found in the box before any key went in.
 enum Found {
     /// Nothing: the box emptied since it was read.
     Empty,
-    /// A draft to clear, with the box's rows and the count of writes so far.
+    /// A draft to clear, with the box's rows and the count of writes so far, or, with `given_back`,
+    /// the message Octoboard wrote last that the agent gave back at a cancel, under the identity the
+    /// queue wrote it with.
     Draft {
         text: String,
         rows: Option<Vec<String>>,
         writes: u64,
+        given_back: Option<GivenBack>,
+        /// Whether the text is what is left of such a message, cleared in part before and queued
+        /// to be written again: clearing it tells nobody.
+        remainder: bool,
+        /// What follows the text of messages already queued again that the box begins with:
+        /// the only draft of the user's there, where the box holds both.
+        after_queued: Option<String>,
     },
     /// Text no key may clear now, and why.
     Unclearable(&'static str),
@@ -110,9 +221,7 @@ impl LiveSession {
         prompt: &str,
         finish: super::Finish<'_>,
     ) -> Result<(), PartialWrite> {
-        if !crate::adapter::provider(self.agent)
-            .screen()
-            .clears_input_box_with_ctrl_u()
+        if !crate::session::screen::clears_input_box(crate::adapter::provider(self.agent).screen())
         {
             return self.write_unclearable(
                 message,
@@ -152,6 +261,61 @@ impl LiveSession {
                 ));
             }
             let (composer, whole, _) = self.read_box();
+            // The box holds nothing but the message Octoboard wrote last, with nothing typed
+            // since.
+            let only_the_message = composer.as_deref().is_some_and(|text| {
+                !text.is_empty()
+                    && !draft.typed_since_message()
+                    && self.holds_only_the_message(text, draft.message_text())
+            });
+            // Or the very text of that message after keys typed since: a cancel the user typed
+            // in the terminal is such a key, and what the agent then put back is the message, not
+            // a draft. Told by its text alone, never by a placeholder a paste of the user's own
+            // would show too.
+            let its_text_after_keys = composer.as_deref().is_some_and(|text| {
+                draft.typed_since_message()
+                    && draft
+                        .message_text()
+                        .is_some_and(|message| same_text(text, message))
+            });
+            // What is left of a message already cleared in part and queued to be written again:
+            // neither that message any more nor a draft of the user's.
+            // Only while nothing has been typed since: text of the user's own that happens to be a
+            // part of the message is a draft.
+            let remainder = draft.was_queued_again()
+                && !draft.typed_since_queued_again()
+                && composer.as_deref().is_some_and(|text| {
+                    draft
+                        .queued_again_text()
+                        .is_some_and(|message| part_of(text, message))
+                });
+            // Or that text with more after it: what follows is the user's, and the messages it
+            // follows are no draft of theirs.
+            let after_queued = (draft.was_queued_again() && !remainder)
+                .then(|| {
+                    composer.as_deref().and_then(|text| {
+                        draft
+                            .queued_again_text()
+                            .and_then(|message| text_after(text, message))
+                    })
+                })
+                .flatten();
+            let given_back = ((only_the_message || its_text_after_keys)
+                && !draft.was_queued_again()
+                && self.given_back_at_a_cancel(&draft))
+            .then(|| {
+                GivenBack::latest(
+                    composer.as_deref().unwrap_or_default(),
+                    draft.message_id().map(str::to_string),
+                )
+            })
+            // Or several of the messages written while the turn ran, given back together, with
+            // or without text of the user's own after them.
+            .or_else(|| {
+                composer
+                    .as_deref()
+                    .and_then(|text| self.several_given_back(&draft, text))
+            });
             match composer {
                 _ if incomplete => Found::Unclearable(
                     "a key typed into the session never got the rest of its bytes",
@@ -162,11 +326,12 @@ impl LiveSession {
                     }
                     Found::Empty
                 }
-                // Octoboard's own message still in the box, left unsent, is no draft to discard.
-                Some(text)
-                    if !draft.typed_since_message()
-                        && self.holds_only_the_message(&text, draft.message_text()) =>
-                {
+                // Octoboard's own message still in the box, left unsent, is no draft to discard;
+                // one the agent held for the end of a turn and gave back at a cancel is cleared
+                // as a draft is, below, and told as what it is; what is left of one already
+                // handled (queued again, or told as possibly not carried out) is cleared with
+                // nobody told.
+                Some(_) if only_the_message && given_back.is_none() && !remainder => {
                     Found::Unclearable(
                         "the session's input box holds only the message written before, which \
                          is not cleared",
@@ -180,7 +345,7 @@ impl LiveSession {
                     // The wait on a draft runs from the first attempt that found one, whatever the
                     // clears take out of it meanwhile.
                     self.unclearable_wait_over(prompt);
-                    let rows = self.input_box_rows(&self.screen_text_undimmed());
+                    let rows = self.input_box_rows(&self.box_screen());
                     if self.clear_held(rows.as_deref()) {
                         Found::Unclearable(
                             "a key clearing the session's input box was not seen to change it, \
@@ -191,19 +356,48 @@ impl LiveSession {
                             text,
                             rows,
                             writes: self.input_writes.load(Ordering::Acquire),
+                            given_back,
+                            remainder,
+                            after_queued,
                         }
                     }
                 }
                 None => Found::Unclearable("the session's input box cannot be read to clear it"),
             }
         };
-        let (draft, rows, mut writes) = match found {
+        let (draft, rows, mut writes, given_back, remainder, after_queued) = match found {
             // Emptied since it was read: nothing is left to clear.
             Found::Empty => return self.write_empty_message_input(message, prompt, true, finish),
             Found::Unclearable(reason) => {
                 return self.write_unclearable(message, prompt, reason, finish)
             }
-            Found::Draft { text, rows, writes } => (text, rows, writes),
+            Found::Draft {
+                text,
+                rows,
+                writes,
+                given_back,
+                remainder,
+                after_queued,
+            } => (text, rows, writes, given_back, remainder, after_queued),
+        };
+        // What the presses removed is told as a draft cleared; a message given back is written
+        // again instead, and what a clear before left of one is nobody's to keep.
+        let write_again = |presses: usize, cleared: Cleared| {
+            if let Some(given_back) = &given_back {
+                self.write_again_or_report(given_back, presses, cleared, false);
+            }
+        };
+        // What the user typed after messages given back is the only draft there is to tell.
+        let own_text = match &given_back {
+            Some(given_back) => given_back.draft.as_deref(),
+            None if remainder => None,
+            None => Some(after_queued.as_deref().unwrap_or(&draft)),
+        };
+        let report = |presses: usize, cleared: Cleared| {
+            write_again(presses, cleared);
+            if let Some(text) = own_text {
+                self.report_discarded_draft(text, presses, cleared);
+            }
         };
         let (cleared, presses, changed, unseen) = clear_input_box(
             self,
@@ -222,12 +416,12 @@ impl LiveSession {
         // does not go in.
         let removed = presses > 0 && (changed || cleared == Cleared::Empty);
         if removed && !force {
-            self.report_discarded_draft(&draft, presses, cleared);
+            report(presses, cleared);
         }
         if unseen {
             // A press nobody saw, whatever the presses before it did: the next is not sent blind
             // on a later try either, until the box shows something other than it does now.
-            let now = self.input_box_rows(&self.screen_text_undimmed());
+            let now = self.input_box_rows(&self.box_screen());
             *self
                 .unseen_clear
                 .lock()
@@ -240,19 +434,33 @@ impl LiveSession {
             tracing::warn!(session = %self.id, presses, "a key clearing the input box was not seen to change it; the message waits");
         }
         if force {
+            // A message given back that the presses took something out of is queued again here,
+            // whatever the write then finds: it is spoilt either way, and the write's own notices
+            // speak of a draft. What is left of it goes in with the message as the box shows it.
+            let told = removed && given_back.is_some();
+            if told {
+                write_again(presses, cleared);
+            }
             let written = self.write_message_into_box(
                 message,
                 prompt,
                 true,
                 BoxIs::Unclearable {
                     unsent: false,
-                    read_before: Some(&draft),
+                    read_before: match &given_back {
+                        Some(given_back) => given_back.draft.as_deref(),
+                        None => Some(after_queued.as_deref().unwrap_or(&draft)),
+                    },
                 },
                 finish,
             );
             // Refused after all: what the presses removed is never lost unseen.
             if written.is_err() && removed {
-                self.report_discarded_draft(&draft, presses, cleared);
+                if !told {
+                    report(presses, cleared);
+                } else if let Some(text) = own_text {
+                    self.report_discarded_draft(text, presses, cleared);
+                }
             }
             return written;
         }
@@ -294,6 +502,230 @@ impl LiveSession {
         }
         self.end_torn_run();
         self.write_message_into_box(message, prompt, true, BoxIs::Cleared(writes), finish)
+    }
+
+    /// Notes that an interrupt of Octoboard's own cleared `shown`, the text the input box held
+    /// after its key, with `presses` presses that left the box as `cleared` says. Where that text
+    /// was the message Octoboard wrote last, which the agent held and gave back at the cancel
+    /// ([`Self::given_back_at_a_cancel`]), the message is queued to be written again, held until
+    /// the next message is written into the session so that the agent stays stopped, or, where it
+    /// cannot be written again, every client is told ([`Self::write_again_or_report`]). Where the
+    /// box showed only the provider's placeholder for a long paste, which may stand for that
+    /// message or for the interrupted prompt, the message is not written again and every client
+    /// is told, with its text. Where it began with messages written while the turn ran
+    /// ([`Self::several_given_back`]), they are queued again the same way, and text the user typed
+    /// after them is told as a draft cleared (`draft_discarded`), as a write past the grace tells
+    /// it. Anything else the interrupt cleared (the interrupted prompt) is nothing to write again.
+    pub(super) fn given_back_cleared_by_interrupt(
+        &self,
+        shown: &str,
+        presses: usize,
+        cleared: Cleared,
+    ) {
+        let given_back = {
+            let draft = self.draft.lock().expect("draft lock poisoned");
+            // Known limit: where a cancel report already queued the messages again, text the user
+            // typed after them is not told here as a draft. Only a provider declaring both cancel
+            // behaviours with the interrupt key the one that gives back reaches it, and none does;
+            // a fix would copy the write path's `after_queued` branch.
+            if draft.was_queued_again() || !self.given_back_at_a_cancel(&draft) {
+                return;
+            }
+            let Some(message) = draft.message_text() else {
+                return;
+            };
+            if same_text(shown, message) {
+                let id = draft.message_id().map(str::to_string);
+                GivenBack::latest(shown, id)
+            } else if let Some(several) = self.several_given_back(&draft, shown) {
+                several
+            } else if crate::adapter::provider(self.agent)
+                .screen()
+                .collapsed_paste(shown.trim())
+            {
+                // The placeholder of a long paste: the message, or the interrupted prompt, which
+                // nothing here can tell apart. Written again it could be delivered twice, and
+                // dropped unseen it could be lost, so it is not written again and the user is
+                // told, with the text of the message itself.
+                GivenBack::latest(message, None)
+            } else {
+                return;
+            }
+        };
+        self.write_again_or_report(&given_back, presses, cleared, true);
+        // What the user typed after the messages went with them, and is theirs to have back.
+        if let Some(text) = &given_back.draft {
+            self.report_discarded_draft(text, presses, cleared);
+        }
+    }
+
+    /// The messages written while the turn ran that `shown`, the input box's text, begins with,
+    /// where they are more than the latest one alone or text follows them
+    /// ([`given_back_run`]): several messages the agent gave back at a cancel, with what the user
+    /// typed after them. Told by their texts alone, whatever was typed since: a cancel typed in
+    /// the terminal is a key, and what the agent then put back is the messages, not a draft.
+    /// `None` where the agent gives nothing back, or where a clear before already queued them
+    /// again.
+    fn several_given_back(&self, draft: &super::draft::Draft, shown: &str) -> Option<GivenBack> {
+        if !self.cancel_gives_back || draft.was_queued_again() {
+            return None;
+        }
+        let held: Vec<HeldMessage> = draft.held_messages().cloned().collect();
+        let (count, rest) = given_back_run(shown, &held)?;
+        Some(GivenBack {
+            messages: held[held.len() - count..].to_vec(),
+            several: true,
+            draft: (!rest.is_empty()).then_some(rest),
+        })
+    }
+
+    /// Notes that a turn of the session's agent began: what was written while the turn before it
+    /// ran is held by the agent no longer (`Draft::turn_began`).
+    pub(crate) fn note_turn_began(&self) {
+        self.draft.lock().expect("draft lock poisoned").turn_began();
+    }
+
+    /// The messages Octoboard wrote while the turn ran that the agent still held when it reported
+    /// the turn cancelled, and dropped, oldest first, each as the identity the queue wrote it
+    /// under (where it wrote it) and its text; none for a launch whose cancel drops nothing, as
+    /// its provider answered for it (`crate::adapter::AgentProvider::launch_cancel_drops_held_messages`,
+    /// by default the reader's `cancel_drops_held_messages`). They are taken off
+    /// the typing record, which notes them as queued again: where the cancel was one that gave
+    /// them back instead, what the box then shows is what is left of messages already queued
+    /// again, cleared with nobody told, and never the messages themselves a second time.
+    pub(crate) fn take_dropped_at_cancel(&self) -> Vec<(Option<String>, String)> {
+        if !self.cancel_drops {
+            return Vec::new();
+        }
+        let mut draft = self.draft.lock().expect("draft lock poisoned");
+        let count = draft.held_messages().count();
+        let held: Vec<_> = draft
+            .held_messages()
+            .map(|message| (message.id.clone(), message.text.clone()))
+            .collect();
+        if count > 0 {
+            draft.messages_queued_again(count);
+        }
+        held
+    }
+
+    /// Notes that the session's turn ended, not cancelled, for an agent that reports each message
+    /// it takes as a prompt sent: the messages written while the turn ran that it has not reported
+    /// taking are kept apart, for [`Self::take_untaken`] once the agent has had time to take them
+    /// as a turn of their own. Says whether there were any, and hands back, each as the
+    /// identity the queue wrote it under and its text, the oldest ones no longer kept for that
+    /// (`Draft::turn_ended`), to be told at once.
+    pub(crate) fn note_turn_ended_untaken(
+        &self,
+        now: Instant,
+    ) -> (bool, Vec<(Option<String>, String)>) {
+        let (any, pushed_off) = self
+            .draft
+            .lock()
+            .expect("draft lock poisoned")
+            .turn_ended(now);
+        let pushed_off = pushed_off
+            .into_iter()
+            .map(|message| (message.id, message.text))
+            .collect();
+        (any, pushed_off)
+    }
+
+    /// Notes that the message `text`, written under `id`, has just been told as not carried out,
+    /// as `told`: a report of it sent a while after still finds it ([`Self::take_told_lost`]).
+    pub(crate) fn note_told_lost(&self, told: ToldLost, id: Option<String>, text: String) {
+        self.draft
+            .lock()
+            .expect("draft lock poisoned")
+            .note_told_lost(Instant::now(), told, id, text);
+    }
+
+    /// The message told as not carried out ([`Self::note_told_lost`]) that `reported`, a prompt
+    /// the agent reports sending, is, as what it was told, the identity the queue wrote it under
+    /// and its text: it ran after all. Taken off, so it is found once.
+    pub(crate) fn take_told_lost(
+        &self,
+        reported: &str,
+    ) -> Option<(ToldLost, Option<String>, String)> {
+        self.draft
+            .lock()
+            .expect("draft lock poisoned")
+            .take_told_lost(Instant::now(), reported, self.agent)
+            .map(|(told, message)| (told, message.id, message.text))
+    }
+
+    /// Whether `reported`, a prompt the agent reports sending, is a message Octoboard wrote that
+    /// the agent may still take or have taken unseen (`Draft::wrote_message`): whatever it looks
+    /// like, the agent sending it is that message taken.
+    pub(crate) fn wrote_message(&self, reported: &str) -> bool {
+        self.draft
+            .lock()
+            .expect("draft lock poisoned")
+            .wrote_message(reported, self.agent)
+    }
+
+    /// The messages [`Self::note_turn_ended_untaken`] kept apart at a turn's end no later than
+    /// `ended_by` that the agent has not reported taking since, oldest first, each as the
+    /// identity the queue wrote it under (where it wrote it) and its text. They are taken off, so
+    /// none is told twice.
+    pub(crate) fn take_untaken(&self, ended_by: Instant) -> Vec<(Option<String>, String)> {
+        self.draft
+            .lock()
+            .expect("draft lock poisoned")
+            .take_untaken(ended_by)
+            .into_iter()
+            .map(|message| (message.id, message.text))
+            .collect()
+    }
+
+    /// The messages Octoboard wrote while the turn ran that the agent may have dropped at the
+    /// cancel it has just reported, oldest first, each as the identity the queue wrote it under
+    /// (where it wrote it, which finds its sender) and its text, on a launch that cannot tell them from
+    /// messages the turn took (`LiveSession::cancel_drops_unseen`): none are written again, since
+    /// one the turn took would run twice. They are taken off the list so a later cancel does not
+    /// name them again, and noted as handled, as [`Self::take_dropped_at_cancel`] notes the ones
+    /// it takes: where the cancel gave them back to the box instead, what the box shows of them
+    /// is cleared with nobody told, never written again nor told as a draft, since the notice
+    /// already carries each one's text for the user to send again. None on any other launch.
+    pub(crate) fn take_unseen_at_cancel(&self) -> Vec<(Option<String>, String)> {
+        if !self.cancel_drops_unseen {
+            return Vec::new();
+        }
+        let mut draft = self.draft.lock().expect("draft lock poisoned");
+        let held: Vec<_> = draft
+            .held_messages()
+            .map(|message| (message.id.clone(), message.text.clone()))
+            .collect();
+        if !held.is_empty() {
+            draft.messages_queued_again(held.len());
+        }
+        held
+    }
+
+    /// Whether `reported`, a prompt the agent reports sending, is `written`, a message Octoboard
+    /// wrote, as the provider's reader compares the two
+    /// (`crate::session::screen::ScreenReader::same_as_submitted`).
+    pub(crate) fn same_as_written(&self, written: &str, reported: &str) -> bool {
+        crate::adapter::provider(self.agent)
+            .screen()
+            .same_as_submitted(written, reported)
+    }
+
+    /// The identity the queue knows the message whose write is under way by, if the queue is
+    /// writing it ([`Self::message_key`] without the fallback of a direct write).
+    pub(super) fn queued_as(&self) -> Option<String> {
+        self.writing.lock().expect("writing lock poisoned").clone()
+    }
+
+    /// Whether the message Octoboard wrote last, which the box shows alone (with nothing typed
+    /// since, or as its very text after keys such as the Esc of a cancel typed in the terminal),
+    /// is one the agent took out of its box while a turn ran and put back, unsent, when the turn
+    /// was cancelled
+    /// (`crate::session::screen::ScreenReader::cancel_restores_held_messages`), rather than one
+    /// left unsent in the box it was written into: it would be sent with the next message, or
+    /// hold that message back, so it is no message to leave where it is.
+    fn given_back_at_a_cancel(&self, draft: &super::draft::Draft) -> bool {
+        draft.message_held_mid_turn() && self.cancel_gives_back
     }
 
     /// Writes `message` into a box that holds text no key may clear now, as the box stands, once
@@ -522,6 +954,123 @@ impl LiveSession {
     /// the write of the message that followed them (`LiveSession::write_message_into_box`).
     pub(super) fn report_draft_cleared(&self, draft: &str) {
         self.report_discarded_draft(draft, 0, Cleared::Empty);
+    }
+
+    /// Has the messages of Octoboard's that the agent gave back at a cancel, unsent, and that were
+    /// cleared from the input box out of the way of the next one, all of them (`cleared`
+    /// [`Cleared::Empty`]) or only part, written again right after that one, in the order they
+    /// were written in (`crate::messaging::cleared_messages`), and tells nobody: nothing is lost.
+    /// Where one cannot be written again (the queue did not write it, it was more than text, it
+    /// has been written again as often as a message is, or the daemon is stopping), every client
+    /// is told it was not carried out, in a notice that carries its text. With `held`, no next
+    /// message is being written (an interrupt cleared them): they are written again after
+    /// whichever message is written into the session next.
+    fn write_again_or_report(
+        &self,
+        given_back: &GivenBack,
+        presses: usize,
+        cleared: Cleared,
+        held: bool,
+    ) {
+        let state = self
+            .title
+            .lock()
+            .expect("title observer lock poisoned")
+            .state
+            .upgrade();
+        // Latest first: each is put at the front of the queue, so the oldest ends up first.
+        let mut lost = Vec::new();
+        let mut again = 0;
+        for message in given_back.messages.iter().rev() {
+            let queued = message.id.as_deref().is_some_and(|id| {
+                state
+                    .as_ref()
+                    .is_some_and(|state| state.redeliver_cleared_message(&self.id, id, held))
+            });
+            if queued {
+                again += 1;
+            } else {
+                lost.push(message);
+            }
+        }
+        if given_back.several {
+            // Queued again or told, none of them is held any more, and what is left of their
+            // text in the box is no draft.
+            self.draft
+                .lock()
+                .expect("draft lock poisoned")
+                .messages_queued_again(given_back.messages.len());
+        } else if again > 0 {
+            self.draft
+                .lock()
+                .expect("draft lock poisoned")
+                .message_queued_again();
+        } else {
+            // Told as not written again, it is held no longer either: a cancel reported after
+            // this does not tell it a second time.
+            self.draft
+                .lock()
+                .expect("draft lock poisoned")
+                .message_held_no_longer();
+        }
+        if again > 0 {
+            tracing::info!(
+                session = %self.id,
+                agent = %self.agent.label(),
+                messages = again,
+                presses,
+                outcome = ?cleared,
+                "cleared what the agent gave back at a cancel out of the way of the next message; \
+                 it is queued to be written again after that one"
+            );
+        }
+        for message in lost.into_iter().rev() {
+            self.report_not_written_again(&message.text, presses, cleared);
+        }
+    }
+
+    /// Tells every client that `message`, a message of Octoboard's the agent gave back at a
+    /// cancel and that was cleared from the input box, could not be written again, so it was not
+    /// carried out.
+    fn report_not_written_again(&self, message: &str, presses: usize, cleared: Cleared) {
+        tracing::warn!(
+            session = %self.id,
+            agent = %self.agent.label(),
+            chars = message.chars().count(),
+            presses,
+            outcome = ?cleared,
+            "cleared a message the agent gave back at a cancel out of the way of the next; it \
+             could not be queued again, so it was not carried out"
+        );
+        let notice = if cleared == Cleared::Empty {
+            Notice::new(
+                notice_code::MESSAGE_CLEARED_AFTER_CANCEL,
+                format!(
+                    "{} put a message it had held for the end of the turn back in the session's \
+                     input box, unsent, when the turn was cancelled. It was cleared from the box \
+                     and could not be written again, so it was not carried out. It read:\n{message}",
+                    self.agent.label()
+                ),
+                &[("agent", self.agent.label()), ("detail", message)],
+            )
+        } else {
+            Notice::new(
+                notice_code::MESSAGE_CLEARED_AFTER_CANCEL,
+                format!(
+                    "{} put a message it had held for the end of the turn back in the session's \
+                     input box, unsent, when the turn was cancelled. Part of it was cleared from \
+                     the box and it could not be written again, so it was not carried out. It \
+                     read:\n{message}",
+                    self.agent.label()
+                ),
+                &[
+                    ("agent", self.agent.label()),
+                    ("detail", message),
+                    ("cleared", "part"),
+                ],
+            )
+        };
+        self.broadcast_notice(notice);
     }
 
     /// Tells every client about the session that `draft`, the text its input box showed, was

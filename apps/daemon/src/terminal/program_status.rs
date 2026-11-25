@@ -66,10 +66,10 @@ pub enum ReportedState {
 }
 
 impl ReportedState {
-    /// Whether a program in this state is in the middle of a turn: from the moment its root record
-    /// goes to working or blocked from neither until it leaves both (a blocked program is held up
-    /// within its turn, as an agent asking for a permission is).
-    pub fn in_turn(self) -> bool {
+    /// Whether a program in this state has not gone back to its prompt: it works, or is held up
+    /// (within its turn, as an agent asking for a permission is, or before one, at a screen it
+    /// shows as it starts).
+    pub fn holds_the_session(self) -> bool {
         matches!(self, Self::Working | Self::Blocked)
     }
 
@@ -117,6 +117,32 @@ pub struct Record {
     pub app: Option<String>,
     pub title: Option<String>,
     pub msg: Option<String>,
+}
+
+/// A move of the root record: the state it went to, `None` where it went, and the `kind` and `msg`
+/// the record carries from the report that moved it there.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RootMove {
+    pub state: Option<ReportedState>,
+    pub kind: Option<BlockedKind>,
+    pub msg: Option<String>,
+}
+
+impl From<Option<ReportedState>> for RootMove {
+    fn from(state: Option<ReportedState>) -> Self {
+        Self {
+            state,
+            kind: None,
+            msg: None,
+        }
+    }
+}
+
+/// A move compares with the state it went to, for what only the state matters to.
+impl PartialEq<Option<ReportedState>> for RootMove {
+    fn eq(&self, state: &Option<ReportedState>) -> bool {
+        self.state == *state
+    }
 }
 
 /// What a report asks for.
@@ -257,10 +283,10 @@ pub struct ProgramStatus {
 }
 
 impl ProgramStatus {
-    /// Applies a report. Says whether the root record's state changed, which includes it coming
-    /// or going.
+    /// Applies a report. Says whether the root record moved: its state changed, which includes it
+    /// coming or going, or it stayed `blocked` on another kind of thing, which is another wait.
     pub fn apply(&mut self, report: Report) -> bool {
-        let before = self.root();
+        let before = self.root_standing();
         match report {
             Report::Set { id, record } => {
                 let id = id.unwrap_or_default();
@@ -284,7 +310,7 @@ impl ProgramStatus {
                     .retain(|kept, _| kept != &id && !kept.starts_with(&children));
             }
         }
-        self.root() != before
+        self.root_standing() != before
     }
 
     /// Forgets the records of programs still running or held up (`working` and `blocked`), whatever
@@ -294,7 +320,7 @@ impl ProgramStatus {
     pub fn end_volatile(&mut self) -> bool {
         let before = self.root();
         self.records
-            .retain(|_, (record, _)| !record.state.in_turn());
+            .retain(|_, (record, _)| !record.state.holds_the_session());
         self.root() != before
     }
 
@@ -341,6 +367,23 @@ impl ProgramStatus {
     /// The state of the root record, the program's own status; `None` while it has none.
     pub fn root(&self) -> Option<ReportedState> {
         self.records.get("").map(|(record, _)| record.state)
+    }
+
+    /// Where the root record stands: its state, and what it is blocked on.
+    fn root_standing(&self) -> Option<(ReportedState, Option<BlockedKind>)> {
+        self.records
+            .get("")
+            .map(|(record, _)| (record.state, record.kind))
+    }
+
+    /// The root record as a move to where it now stands ([`RootMove`]).
+    pub fn root_move(&self) -> RootMove {
+        let root = self.records.get("").map(|(record, _)| record);
+        RootMove {
+            state: root.map(|record| record.state),
+            kind: root.and_then(|record| record.kind),
+            msg: root.and_then(|record| record.msg.clone()),
+        }
     }
 
     /// The record `id` addresses (`""`, the root).
@@ -580,5 +623,45 @@ mod tests {
         status.apply(parse(b"state=working").unwrap());
         assert!(status.reset());
         assert_eq!(status.root(), None);
+    }
+
+    /// The root record's move carries the `msg` of the report that made it, and none once the
+    /// record has gone or a report without one has replaced it.
+    #[test]
+    fn a_root_move_carries_the_msg_of_the_report_that_made_it() {
+        let mut status = ProgramStatus::default();
+        assert_eq!(status.root_move(), RootMove::from(None));
+        status.apply(parse(b"state=working").unwrap());
+        assert_eq!(
+            status.root_move(),
+            RootMove::from(Some(ReportedState::Working))
+        );
+        status.apply(parse(format!("state=done:msg={}", b64("all done")).as_bytes()).unwrap());
+        assert_eq!(
+            status.root_move(),
+            RootMove {
+                state: Some(ReportedState::Done),
+                kind: None,
+                msg: Some("all done".to_string()),
+            }
+        );
+        // A child's report says nothing of the root.
+        status.apply(parse(format!("state=done:id=a:msg={}", b64("child")).as_bytes()).unwrap());
+        assert_eq!(status.root_move().msg.as_deref(), Some("all done"));
+        status.apply(parse(b"state=clear").unwrap());
+        assert_eq!(status.root_move(), RootMove::from(None));
+    }
+
+    /// A root record that stays `blocked` on another kind of thing has moved, as a change of its
+    /// state has; a report that repeats what it is blocked on has not.
+    #[test]
+    fn a_root_blocked_on_another_kind_has_moved() {
+        let mut status = ProgramStatus::default();
+        assert!(status.apply(parse(b"state=blocked:kind=auth").unwrap()));
+        assert!(!status.apply(parse(b"state=blocked:kind=auth").unwrap()));
+        assert!(status.apply(parse(b"state=blocked:kind=permission").unwrap()));
+        assert_eq!(status.root_move().kind, Some(BlockedKind::Permission));
+        assert!(status.apply(parse(b"state=blocked").unwrap()));
+        assert!(!status.apply(parse(b"state=blocked:id=child:kind=question").unwrap()));
     }
 }

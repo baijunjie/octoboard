@@ -624,6 +624,10 @@ function mountForWithdrawal() {
   return {
     notice: (session: string, code = "message_not_sent") => act(() => deliver(broadcastNotification({ type: "session_notice", session, code, params: {}, message: "raw" }, state, "en"))),
     withdraw: (session: string, code = "message_not_sent") => act(() => deliver(broadcastNotification({ type: "session_notice_withdrawn", session, code }, state, "en"))),
+    noticeOf: (session: string, code: string, detail: string) =>
+      act(() => deliver(broadcastNotification({ type: "session_notice", session, code, params: { agent: "Codex", detail }, message: "raw" }, state, "en"))),
+    withdrawOf: (session: string, code: string, detail: string) =>
+      act(() => deliver(broadcastNotification({ type: "session_notice_withdrawn", session, code, detail }, state, "en"))),
   };
 }
 const shownAlert = () => document.querySelector('[role="alertdialog"]');
@@ -658,6 +662,15 @@ it("leaves the alerts of another session or another code alone when a notice is 
   withdraw("s1", "draft_save_unconfirmed");
   expect(errorAlerts.getSnapshot()).toHaveLength(2);
   expect(shownAlert()?.textContent).toContain("Fix login");
+});
+
+it("withdraws, by its message, only the notice about that message where the withdrawal names one", () => {
+  const { noticeOf, withdrawOf } = mountForWithdrawal();
+  noticeOf("s1", "message_not_taken", "first");
+  noticeOf("s1", "message_not_taken", "second");
+  withdrawOf("s1", "message_not_taken", "first");
+  expect(errorAlerts.getSnapshot()).toHaveLength(1);
+  expect(errorAlerts.getSnapshot()[0]?.notice?.detail).toBe("second");
 });
 
 it("ignores the withdrawal of a notice nothing shows, and of one already acknowledged", () => {

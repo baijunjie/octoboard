@@ -735,12 +735,15 @@ fn a_list_that_is_missing_or_unreadable_is_no_list() {
 // -- the hook as an agent runs it -----------------------------------------------
 
 /// What the stand-in starts for `octoboardd guard-hook`: this test binary, running only this test,
-/// with the list's file in the environment.
+/// with the list's file in the environment, and `OCTOBOARD_TEST_GUARD_REFUSED` set where the call
+/// is not the session's own agent's.
 #[test]
 #[ignore = "started by the tests below as the guard-hook process"]
 fn guard_hook_child() {
     let list = std::env::var_os("OCTOBOARD_TEST_GUARD_LIST").unwrap();
-    super::run(Path::new(&list));
+    super::run(Path::new(&list), || {
+        std::env::var_os("OCTOBOARD_TEST_GUARD_REFUSED").is_none()
+    });
     std::process::exit(0);
 }
 
@@ -816,6 +819,25 @@ fn the_hook_prints_the_denial_on_one_line_and_exits_zero() {
     let reason = denial(ran.decision.clone()).unwrap_or_else(|| panic!("{}", ran.printed));
     assert_reason(&reason, &text(&target), "Beta", TOOL);
     assert_eq!(ran.printed.lines().count(), 1, "{}", ran.printed);
+}
+
+/// A call that is not the session's own agent's (`guard-hook --fired-by` finds no mark) is let
+/// through, even one into another project, after its payload is read.
+#[test]
+fn the_hook_decides_nothing_for_a_call_not_of_the_session_s_own_agent() {
+    let pair = pair();
+    let payload = write_payload(&pair.other.join("file.txt"), &pair.own).to_string();
+    let refused = pair.root.join("refused");
+
+    let ran = run_child(
+        &written_list(&pair),
+        &payload,
+        &[("OCTOBOARD_TEST_GUARD_REFUSED", &refused)],
+    );
+
+    assert!(ran.success, "{}", ran.stderr);
+    assert_eq!(ran.decision, None, "{}", ran.printed);
+    assert_eq!(ran.printed, "");
 }
 
 /// A project name of CJK characters and an astral one (an emoji, which is a surrogate pair in

@@ -1,0 +1,25 @@
+[
+  {
+    "type": "document",
+    "path": "/private/tmp/octoboard-m35.KZroBt/v24-f6eqbphg/config/opencode/opencode.json",
+    "info": {
+      "mcp": {
+        "servers": {
+          "probe": {
+            "type": "local",
+            "command": [
+              "/usr/bin/python3",
+              "/private/tmp/octoboard-m35.KZroBt/mcp.py"
+            ],
+            "codemode": false,
+            "protocol": "legacy"
+          }
+        }
+      }
+    }
+  },
+  {
+    "type": "directory",
+    "path": "/private/tmp/octoboard-m35.KZroBt/v24-f6eqbphg/config/opencode"
+  }
+]

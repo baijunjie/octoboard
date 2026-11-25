@@ -1,11 +1,12 @@
 import type { ProviderPresentation } from "./types";
 
 // The presentation module of the test-only provider `test_agent`, registered only under the test runner (see
-// `registry.ts`). It carries the copy of its one setting, `mode`, but no colour, references or codes, so a test finds
-// what a provider with the least presentation does.
+// `registry.ts`). It carries the copy of its one setting, `mode`, and its sign-in hint (it has no login flow) with the
+// command that hint names, but no colour or codes, so a test finds what a provider with the least presentation does.
 const en = {
   "provider.test_agent.label": "Test Agent",
   "provider.test_agent.shortName": "Test",
+  "provider.test_agent.signInHint": "To log in, run {command} in a terminal, with {dir} as its configuration directory.",
   "provider.test_agent.setting.mode.heading": "Test mode",
   "provider.test_agent.setting.mode.helpLabel": "About the test mode",
   "provider.test_agent.setting.mode.label": "Mode for {agent}",
@@ -20,6 +21,7 @@ const en = {
 const zhCN = {
   "provider.test_agent.label": "Test Agent",
   "provider.test_agent.shortName": "Test",
+  "provider.test_agent.signInHint": "要登录，请在终端中运行 {command}，并以 {dir} 作为其配置目录。",
   "provider.test_agent.setting.mode.heading": "测试模式",
   "provider.test_agent.setting.mode.helpLabel": "关于测试模式",
   "provider.test_agent.setting.mode.label": "{agent} 的模式",
@@ -34,5 +36,6 @@ const zhCN = {
 export const testAgent = {
   id: "test_agent",
   mark: { fill: "currentColor", d: "M4 4h16v16H4z" },
+  references: { signInHint: { command: "test-agent login" } },
   messages: { en, "zh-CN": zhCN },
 } as const satisfies ProviderPresentation;

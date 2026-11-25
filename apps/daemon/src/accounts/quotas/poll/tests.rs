@@ -1,5 +1,6 @@
 use super::*;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -1297,4 +1298,256 @@ fn quota_with_session(key: &Key, resets_at: Option<i64>) -> AccountQuota {
         windows: vec![window(QuotaWindowKind::Session, 0.0, resets_at)],
         ..quota_of(key, false)
     }
+}
+
+/// Makes the test-only provider (which has no quota probe) available and gives it a stored account
+/// `a` whose directory `dir/a` exists; returns the directory.
+fn test_provider_account(state: &Arc<AppState>, dir: &crate::test_support::ScratchDir) -> PathBuf {
+    state.set_agent_availability(vec![crate::protocol::AgentAvailability {
+        agent: AgentId::TEST,
+        availability: Availability::Available,
+        default_account_dir: None,
+    }]);
+    let account_dir = dir.join("a");
+    std::fs::create_dir(&account_dir).unwrap();
+    state
+        .store
+        .insert_account(&crate::protocol::Account {
+            id: "a".to_string(),
+            agent: AgentId::TEST,
+            name: "A".to_string(),
+            config_dir: account_dir.to_string_lossy().into_owned(),
+            share_default_config: false,
+            share_default_config_incomplete: false,
+            disabled: false,
+            versions: Default::default(),
+        })
+        .unwrap();
+    account_dir
+}
+
+/// For a provider with no quota probe the poll publishes the provider's sign-in reading in the
+/// reading every client receives: no plan and no windows, the email when signed in, the
+/// not-signed-in reason when signed out, the missing-directory reason when the directory is gone,
+/// and no reason when the provider cannot tell. The default account is read the same way.
+#[tokio::test]
+async fn a_provider_with_no_quota_probe_is_read_for_its_sign_in() {
+    use crate::providers::test_provider::SIGN_IN_RECORD;
+
+    let (state, dir) = crate::test_support::app_state("quota-sign-in-reading");
+    let account_dir = test_provider_account(&state, &dir);
+    let default_dir = dir.join("default");
+    std::fs::create_dir(&default_dir).unwrap();
+    let env = HashMap::from([(
+        "OCTOBOARD_TEST_AGENT_HOME".to_string(),
+        default_dir.to_string_lossy().into_owned(),
+    )]);
+    let shell: ShellSource = Arc::new(move || Ok(env.clone()));
+    let scope = Scope {
+        agent: Some(AgentId::TEST),
+        account: None,
+    };
+    let held = |account: Option<&str>| {
+        state
+            .account_quotas
+            .list()
+            .into_iter()
+            .find(|quota| quota.account.as_deref() == account)
+            .expect("a reading")
+    };
+    let read_again = || async {
+        state.account_quotas.make_due(AgentId::TEST, None);
+        state.account_quotas.make_due(AgentId::TEST, Some("a"));
+        refresh_with(&state, &scope, Trigger::Poll, shell.clone()).await;
+    };
+
+    // Never read, and no record to read: nothing is said of the sign-in, and no quota is shown.
+    read_again().await;
+    for account in [None, Some("a")] {
+        let reading = held(account);
+        assert_eq!(reading.unavailable, None);
+        assert_eq!(reading.email, None);
+        assert_eq!((reading.plan, reading.windows), (None, Vec::new()));
+    }
+
+    std::fs::write(
+        account_dir.join(SIGN_IN_RECORD),
+        "signed-in me@example.com\n",
+    )
+    .unwrap();
+    std::fs::write(
+        default_dir.join(SIGN_IN_RECORD),
+        "signed-in you@example.com\n",
+    )
+    .unwrap();
+    read_again().await;
+    assert_eq!(held(Some("a")).email.as_deref(), Some("me@example.com"));
+    assert_eq!(held(None).email.as_deref(), Some("you@example.com"));
+    assert_eq!(held(Some("a")).unavailable, None);
+    assert!(held(Some("a")).windows.is_empty());
+
+    std::fs::write(account_dir.join(SIGN_IN_RECORD), "signed-out\n").unwrap();
+    std::fs::write(default_dir.join(SIGN_IN_RECORD), "signed-out\n").unwrap();
+    read_again().await;
+    for account in [None, Some("a")] {
+        let reading = held(account);
+        assert_eq!(reading.unavailable.unwrap().code, code::NOT_SIGNED_IN);
+        assert_eq!(reading.email, None);
+        assert!(reading.windows.is_empty() && reading.plan.is_none());
+    }
+    assert!(state
+        .account_quotas
+        .signed_out(AgentId::TEST, Some("a"), account_dir.to_str()));
+
+    // Back to a record it cannot read: no reason, so the account no longer reads as signed out.
+    std::fs::write(account_dir.join(SIGN_IN_RECORD), "???\n").unwrap();
+    read_again().await;
+    assert_eq!(held(Some("a")).unavailable, None);
+
+    std::fs::remove_dir_all(&account_dir).unwrap();
+    read_again().await;
+    assert_eq!(
+        held(Some("a")).unavailable.unwrap().code,
+        code::CONFIG_DIR_MISSING
+    );
+}
+
+/// A provider with no quota probe whose shell environment could not be captured is published as
+/// that failure, with no plan, no windows and no email, for an owned account and the default one:
+/// the sign-in cannot be read without the environment.
+#[test]
+fn a_provider_with_no_quota_probe_reads_a_shell_environment_failure_as_one() {
+    let dir = crate::test_support::ScratchDir::new("quota-sign-in-no-shell");
+    let account_dir = dir.join("a");
+    std::fs::create_dir(&account_dir).unwrap();
+    std::fs::write(
+        account_dir.join(crate::providers::test_provider::SIGN_IN_RECORD),
+        "signed-in me@example.com\n",
+    )
+    .unwrap();
+    let shell = || Err(anyhow::anyhow!("no shell"));
+    let owned = Key::of(AgentId::TEST, Some("a"), account_dir.to_str());
+    let default = Key::of(AgentId::TEST, None, None);
+    for key in [owned, default] {
+        let quota = read(&key, &shell, &AtomicBool::new(false)).0;
+        assert_eq!(
+            quota.unavailable.expect("a reason").code,
+            code::SHELL_ENVIRONMENT_FAILED,
+            "{key:?}"
+        );
+        assert_eq!((quota.plan, quota.email), (None, None));
+        assert!(quota.windows.is_empty());
+    }
+}
+
+/// An account of a provider with no quota has no window to start: with the setting that starts
+/// quota windows on, no reading of it, signed in or out, calls for a kick, while a reading with an
+/// unstarted window of the same account would.
+#[tokio::test]
+async fn no_reading_of_an_account_with_no_quota_calls_for_a_kick() {
+    use crate::providers::test_provider::SIGN_IN_RECORD;
+
+    let (state, dir) = crate::test_support::app_state("quota-sign-in-no-kick");
+    state.store.set_auto_start_quota_windows(true).unwrap();
+    let account_dir = test_provider_account(&state, &dir);
+    let shell: ShellSource = Arc::new(|| Ok(HashMap::new()));
+    let scope = Scope {
+        agent: Some(AgentId::TEST),
+        account: Some("a".to_string()),
+    };
+    let key = Key::of(AgentId::TEST, Some("a"), account_dir.to_str());
+    for record in ["signed-in me@example.com\n", "signed-out\n"] {
+        std::fs::write(account_dir.join(SIGN_IN_RECORD), record).unwrap();
+        state.account_quotas.make_due(AgentId::TEST, Some("a"));
+        refresh_with(&state, &scope, Trigger::Poll, shell.clone()).await;
+        assert!(
+            state.account_quotas.claim_kick(&state, &key).is_none(),
+            "{record}"
+        );
+    }
+
+    // The same account with a window not started yet would be kicked, so the setting is on.
+    let unstarted = AccountQuota {
+        windows: vec![window(QuotaWindowKind::Session, 0.0, None)],
+        ..quota_of(&key, false)
+    };
+    state
+        .account_quotas
+        .hold_in_dir_for_test(&unstarted, account_dir.to_str().unwrap());
+    assert!(state.account_quotas.claim_kick(&state, &key).is_some());
+}
+
+/// Only a sign-in reading that could not tell is marked as saying nothing (`sign_in_unknown`), which
+/// the log then neither reads as a sign-out nor as a recovery; a signed-in or signed-out reading,
+/// and a shell environment that could not be captured, are judged as readings of any kind.
+#[test]
+fn only_a_sign_in_reading_that_could_not_tell_is_marked_unknown() {
+    use crate::providers::test_provider::SIGN_IN_RECORD;
+
+    let dir = crate::test_support::ScratchDir::new("quota-sign-in-unknown");
+    let account_dir = dir.join("a");
+    std::fs::create_dir(&account_dir).unwrap();
+    let key = Key::of(AgentId::TEST, Some("a"), account_dir.to_str());
+    let shell = || Ok(HashMap::new());
+    let trace_of = |record: Option<&str>| {
+        match record {
+            Some(text) => std::fs::write(account_dir.join(SIGN_IN_RECORD), text).unwrap(),
+            None => {
+                let _ = std::fs::remove_file(account_dir.join(SIGN_IN_RECORD));
+            }
+        }
+        let (quota, trace) = read(&key, &shell, &AtomicBool::new(false));
+        (quota, trace.sign_in_unknown)
+    };
+
+    let (quota, unknown) = trace_of(None);
+    assert!(unknown);
+    assert_eq!(quota.unavailable, None);
+    assert!(trace_of(Some("???\n")).1);
+    assert!(!trace_of(Some("signed-in me@example.com\n")).1);
+    let (quota, unknown) = trace_of(Some("signed-out\n"));
+    assert!(!unknown);
+    assert_eq!(quota.unavailable.unwrap().code, code::NOT_SIGNED_IN);
+    let failing = || Err(anyhow::anyhow!("no shell"));
+    assert!(
+        !read(&key, &failing, &AtomicBool::new(false))
+            .1
+            .sign_in_unknown
+    );
+}
+
+/// For a provider with no quota probe, a signed-in reading that carries no email takes the one the
+/// provider's email reader finds (`AccountOps::email`); an email the reading carries is kept, and
+/// a signed-out reading has none, whatever the reader would find.
+#[test]
+fn a_signed_in_reading_with_no_email_takes_the_one_the_providers_email_reader_finds() {
+    use crate::providers::test_provider::{EMAIL_RECORD, SIGN_IN_RECORD};
+
+    let dir = crate::test_support::ScratchDir::new("quota-sign-in-email");
+    let account_dir = dir.join("a");
+    std::fs::create_dir(&account_dir).unwrap();
+    let key = Key::of(AgentId::TEST, Some("a"), account_dir.to_str());
+    let shell = || Ok(HashMap::new());
+    let email_of = |sign_in: &str| {
+        std::fs::write(account_dir.join(SIGN_IN_RECORD), sign_in).unwrap();
+        read(&key, &shell, &AtomicBool::new(false)).0
+    };
+    std::fs::write(account_dir.join(EMAIL_RECORD), "from-reader@example.com\n").unwrap();
+
+    assert_eq!(
+        email_of("signed-in\n").email.as_deref(),
+        Some("from-reader@example.com")
+    );
+    assert_eq!(
+        email_of("signed-in from-record@example.com\n")
+            .email
+            .as_deref(),
+        Some("from-record@example.com")
+    );
+    let out = email_of("signed-out\n");
+    assert_eq!(out.email, None);
+    assert_eq!(out.unavailable.unwrap().code, code::NOT_SIGNED_IN);
+    // No email the reader can find leaves a signed-in reading with none.
+    std::fs::remove_file(account_dir.join(EMAIL_RECORD)).unwrap();
+    assert_eq!(email_of("signed-in\n").email, None);
 }

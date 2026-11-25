@@ -14,25 +14,50 @@ definition; which test helper to use for what is in the "Shared entry points" ta
   suite's load is broken, not intermittent; rerunning it alone only lets a merge go ahead and does not clear it. Time is
   driven by a fake clock started before the code arms its timers, and durations come from the production constant
   ("Time in tests").
-- **Tests never hard-code the provider list.** Under test a fourth provider exists (`AgentId::TEST`, `test_agent`; the
-  UI's `TEST_PROVIDERS` and `TEST_AGENTS`) that declares no code or account operation and only the capabilities generic
-  code is shown to follow from a declaration, so `AgentId::ALL` holds four providers. A test of a rule every provider
-  follows iterates all of them and derives each expectation from the descriptor; a test needing a real provider's
-  fixtures picks by the capability or sub-interface the code reads
-  (`provider(agent).accounts().and_then(|ops| ops.quota_probe()).is_some()`), not by id; a `match` over ids ends in a
-  panicking arm (`other => panic!("no fixture for {other}")`). A test of one provider's own behaviour may name that
-  provider. The gallery serves only `FIXTURE_PROVIDERS`.
+- **Tests never hard-code the provider list.** Under test the test-only provider exists beside the registered ones
+  (`AgentId::TEST`, `test_agent`; the UI's `TEST_PROVIDERS` and `TEST_AGENTS`). It declares `owned_accounts` (many tests
+  add accounts of it) and, of the other capabilities, only those generic code is shown to follow from a declaration; no
+  quota window, no login flow, no compatibility and no codes, and a tool-name separator unlike the others'; its accounts
+  answer a sign-in reading and an email from files in the account's directory
+  (`providers::test_provider::SIGN_IN_RECORD`, `EMAIL_RECORD`). A test of a rule every provider follows iterates all of
+  them and derives each expectation from the descriptor. A test that iterates every provider, or every provider a
+  capability filter keeps, takes each provider's fixture from the provider (a `#[cfg(test)]` method on the
+  sub-interface, such as `QuotaProbe::test_fixture`; in the UI, `providers/<id>.fixture.ts`), never from a list in the
+  generic test; a `match` over ids is reached only for the agents the test names. A test that the released providers
+  keep a default takes them from the source the preview gate feeds, never from a literal list: in the daemon
+  `providers::released`, in the UI `FIXTURE_PROVIDERS`. A test of one provider's own behaviour may name that provider,
+  and sits in that provider's own files (its descriptor, adapter or presentation module test), never as a row in a
+  shared test's table, since adding or changing a provider must not edit a shared test. A test of
+  what generic code does with a declaration the registered providers do not make takes a switch from the test-only
+  provider's two modules: a descriptor variant from `providers::test_provider`, a behaviour (a trust screen, an
+  interrupt key, a hook interpreter, what a screen reader declares, the signals a provider reports beside its hooks)
+  from `test_support::test_provider`. In the UI it is a helper under
+  `packages/ui/src/test/` that a test file passes to `vi.mock` of `providers/registry`, adding the declaration to
+  `test_agent` for that file alone (`remedyProvider.ts`), never an edit to a real provider's module or to
+  `providers/testAgent.ts`. While its guard lives, the test-only provider declares that, on the thread that took the
+  guard only (work handed to another thread, a blocking task or a multi-threaded runtime sees the plain provider), and
+  the registry's own entries (`providers::descriptors`) stay the plain descriptor. The gallery serves only
+  `FIXTURE_PROVIDERS`, the released providers. See [`provider-neutral-core.md`](provider-neutral-core.md).
 - **An intermittent failure is fixed at its race** ([P8](principles.md)): name which two things in which order fail,
   make it fail on demand by injecting a delay at that point, keep the delay while checking the fix, and fix wherever
   the cause is: the fixture, the product or the test (a stand-in writing a file line by line, a kill returning before
   its processes were gone, a server answering before it read the request). Never a longer timeout, a retry, a sleep, a
   looser assertion or a serialized run. Then fix the same shape across the tree and, where it can be recognised in
   source, ban it with a source scan naming the sanctioned form (`docs/structure/daemon.md`, "Source rules").
+- **A test's loopback listeners take strangers' connections.** The running daemon sends `HEAD /` to every port a
+  session's process tree listens on (`processes::web_ports`), and tests run in an agent session are in that tree. A
+  stand-in answers or ignores the probe and leaves it out of what it records, and its own tests send it one
+  (`test_support::port_probe` in each crate: `is_port_probe`, `probe_port`, and the daemon's `accept_past_probes`,
+  `accept_from` and `assert_only_probes_connected`). A test never counts a listener's connections, takes the first as
+  its own, or asserts that none came, without that filter; where the listener is production code under test, the test
+  asserts only what its own connections got.
 
 ## Where tests sit
 
 - **UI tests read `packages/ui/src/fixtures/` for shared data, never gallery scenarios;** besides the fixtures, a UI
-  test may read a daemon case table (next bullet).
+  test may read the served-info fixtures beside the presentation modules (`packages/ui/src/providers/<id>.fixture.ts`,
+  the `ProviderInfo` the daemon serves for that provider, gathered in `BUILT_IN` order by `providers/servedFixtures.ts`;
+  a new provider brings its own) and a daemon case table (next bullet).
 - **A rule implemented in both the daemon and the UI is pinned by one case table under `apps/daemon/testdata/`, run by a
   test on each side** (Rust `include_str!`, vitest `readFileSync`). The table is registered in `UI_READS_DAEMON`
   (`scripts/verify/scope.mjs`) and in `UI_READERS` and `UI_DISK_TESTS_COVERED` (`scripts/verify/quick.mjs`), and each
@@ -68,7 +93,12 @@ definition; which test helper to use for what is in the "Shared entry points" ta
   - behaviour derived from what an agent or another tool prints (a hook payload, a transcript, a screen, a package
     manager's failure) is verified by replaying a real capture, committed under `apps/daemon/testdata/` with the CLI
     version beside it; replay the production entry conditions too (the offset the real caller starts from, a
-    half-finished write), and commit the near-miss capture next to the matching one;
+    half-finished write, the events the launch registers its hooks for: a hook capture is taken through the launch's
+    own registration, or a test asserts the registration holds each event the interpreter reads, and the rendering the production caller reads a screen through: a screen capture is kept as
+    the raw bytes the CLI wrote and replayed through that rendering, for an input-box reader the one it declares in
+    `ScreenReader::input_box_screen` (`visible_text_undimmed()` for `FaintBlanked`, `visible_text()` for `AsDrawn`)
+    and `visible_text()` for a start signal, since a CLI that draws its box's rules or marks faint reads differently
+    in the two), and commit the near-miss capture next to the matching one;
   - a reader that classifies an agent's records line by line is built from a survey of every record of that agent on
     the machine, across all the CLI versions they span and including long, compacted sessions, with a real line for
     each distinct value of the fields that tell lines apart (`type`, `origin`, attachment and synthetic-line markers,
@@ -165,8 +195,8 @@ collection say on their doc comments when a test needs them.
   point under test, reruns the whole scenario until `PATIENCE` runs out rather than failing or lengthening it.
 - **A window or limit the production code sets is shortened, held or lowered for a test only through a `#[cfg(test)]`
   hook in production, never by asserting or widening the figure:**
-  - a window a stand-in must answer inside is read through a getter that returns `PATIENCE` under `#[cfg(test)]` unless
-    a `thread_local!` override is set (`settle` and `SETTLE_OVERRIDE` in `session/interrupt/mod.rs`); only the test
+  - a window a stand-in must answer inside is read through a getter that returns `PATIENCE` (or a multiple of it, where
+    a passing test itself waits `PATIENCE` for the outcome) under `#[cfg(test)]` unless a `thread_local!` override is set (`settle` and `SETTLE_OVERRIDE` in `session/interrupt/mod.rs`); only the test
     proving the window runs out sets a short override, and a case where the window is not under test sets a zero
     override once its fixture is ready. Where a window cannot go through such a getter, the fixture does its one-time
     setup first and runs only shell builtins inside the window, so no `exec` lands in it;
@@ -200,7 +230,7 @@ collection say on their doc comments when a test needs them.
   place,** as the real program replaces it by rename; a shell redirect writes a line at a time and a poll can act on a
   prefix.
 - **A loopback stand-in server that takes only so many connections accepts them through
-  `test_support::accept_unprobed`,** and any stand-in leaves the probe out of what it records
+  `test_support::accept_past_probes` (`accepted_past_probes` on the runtime),** and any stand-in leaves the probe out of what it records
   (`test_support::is_port_probe`): a running Octoboard daemon asks every port a session's process tree listens on for
   `HEAD /`, and tests run inside such a session, so a probe can arrive first and be taken for the client's connection.
 - **A test asserting a stand-in session was sent nothing uses `test_support::running` and `heard_after_marker`; one

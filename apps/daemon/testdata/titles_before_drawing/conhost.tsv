@@ -1,0 +1,4 @@
+# capture<TAB>title<TAB>glyph (U+XXXX, or nothing); a title of * is every title of the capture.
+# The inbox console host's own titles (`../conhost-captures.md`): `claude` before Claude Code's first
+# drawing. Codex's path comes after its first frame, and is not lost.
+conhost_claude_*	claude

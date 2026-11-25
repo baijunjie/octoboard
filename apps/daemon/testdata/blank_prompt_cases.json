@@ -1,0 +1,21 @@
+{
+  "description": "Which prompts count as blank: nothing but whitespace is left of them once their control and invisible characters are stripped. The daemon's refusal of such a scheduled task's prompt (session/term/mod.rs, is_blank_once_stripped) and the window's check before it saves one (packages/ui/src/scheduledTasks/blankPrompt.ts, isBlankPrompt) both read every case, so that the two copies of the rule stay in step. `text` is JSON, so its characters are written as escapes.",
+  "cases": [
+    { "name": "an empty prompt is blank", "text": "", "blank": true },
+    { "name": "spaces, tabs and line breaks are blank", "text": " \t\r\n ", "blank": true },
+    { "name": "no-break and ideographic spaces are whitespace", "text": "\u00a0\u2003\u3000", "blank": true },
+    { "name": "control characters are stripped, the C1 next-line among them", "text": "\u0001\u007f\u0085\u009f", "blank": true },
+    { "name": "zero-width characters are stripped", "text": "\u200b\u200c\u200d\u200e\u200f\u2060\ufeff", "blank": true },
+    { "name": "bidirectional marks and isolates are stripped", "text": "\u202e\u2066\u2067\u2068\u2069\u061c", "blank": true },
+    { "name": "formatting fillers and selectors are stripped", "text": "\u00ad\u034f\u115f\u1160\u17b4\u180b\u3164\ufe0f\uffa0\ufff9", "blank": true },
+    { "name": "line and paragraph separators are blank", "text": "\u2028\u2029", "blank": true },
+    { "name": "characters outside the basic plane are stripped", "text": "\ud804\udc7f\udb40\udc41\udb40\udc7f", "blank": true },
+    { "name": "whitespace mixed with invisible characters is blank", "text": " \u200b\n\u2068 \u0007\t", "blank": true },
+    { "name": "a letter is not blank", "text": "x", "blank": false },
+    { "name": "a letter among invisible characters is not blank", "text": "\u200b\u2068x\u2069\u200b", "blank": false },
+    { "name": "a blank-looking character that is not whitespace is not blank", "text": "\u2800", "blank": false },
+    { "name": "the object replacement character is not blank", "text": "\ufffc", "blank": false },
+    { "name": "an emoji joined by an invisible joiner is not blank", "text": "\ud83e\uddd1\u200d\ud83d\udcbb", "blank": false },
+    { "name": "a keycap is not blank", "text": "1\ufe0f\u20e3", "blank": false }
+  ]
+}

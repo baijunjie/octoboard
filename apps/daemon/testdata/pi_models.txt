@@ -1,0 +1,4 @@
+provider  model       context  max-out  thinking  images
+another   plain       128K     16.4K    no        no    
+local     deep-think  1.0M     32.8K    yes       yes   
+local     small-chat  32.8K    4.1K     no        no    

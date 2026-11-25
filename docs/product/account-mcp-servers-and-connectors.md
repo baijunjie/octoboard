@@ -1,6 +1,6 @@
 # Account MCP servers and connectors
 
-The daemon can read, for one Claude Code, Codex or Grok Build account, which MCP tools the account has: the **platform
+The daemon can read, for an agent account, which MCP tools the account has: the **platform
 connectors** its platform account holds (claude.ai connectors for Claude Code, ChatGPT Apps for Codex; Grok Build's cannot
 be listed) and the **local MCP servers** configured for it, each with its state. This reading is the account's **MCP inventory**. It is taken only when a client
 asks for it, through the control request `read_account_mcp_inventory`; the daemon never reads it by itself, and never
@@ -25,11 +25,11 @@ stop of the reading is answered as a failure. Slow readings and unexpected failu
 diagnostics, with the elapsed time and, for the overall deadline, whether the wait was for the shell or the CLI.
 
 - **Which agents can be read** is served to every window with the agents, as the capability `mcp_inventory`: Claude
-  Code, Codex and Grok Build can be read. A request for an agent that cannot be read is answered as
-  `unsupported_agent` (see "When an MCP inventory cannot be read" below).
-- **Refused** only when the account is not an account of the agent (`unknown_account`). Every other failure is an
-  answer: an inventory whose two lists are empty and which says why it could not be read (see "When an MCP inventory
-  cannot be read" below).
+  Code, Codex and Grok Build can be read.
+- **Refused** only when the account is not an account of the agent (`unknown_account`), and for an agent whose provider
+  does not declare `mcp_inventory`, with `provider_unsupported` (operation `mcp_inventory`; see "The error alert" in
+  `docs/product/error-alerts.md`), nothing being run. Every other failure is an answer: an inventory whose two lists are
+  empty and which says why it could not be read (see "When an MCP inventory cannot be read" below).
 - **One reading per account at a time.** A request for an account already being read joins that reading and gets the
   same inventory, whatever refresh either asked for. Readings of different accounts run independently.
 - **Refresh** asks the agent to refetch what it caches rather than report what it holds. Only Codex caches anything
@@ -171,6 +171,16 @@ A server of a plugin is not marked as one. No Grok Build server is one
 Octoboard can sign in to: Grok's sign-in is the `/mcps` modal of its terminal interface, and its CLI has no login
 command. A Grok Build configuration with a syntax error reads as no servers, as Grok itself reports.
 
+## How the other agent accounts are read
+
+- **Pi** and **Qwen Code** show configured servers from account settings. Their inventory does not report live
+  server health.
+- **GitHub Copilot CLI** shows user, plugin and built-in servers from Copilot's listing in a private configuration
+  directory. The listing supplies neither live health nor MCP OAuth status.
+- **Antigravity CLI** shows servers from its global configuration and enabled plugins.
+- **OpenCode** shows servers from its merged configuration, including disabled servers and failed connections that
+  the CLI reports.
+
 ## When an MCP inventory cannot be read
 
 An inventory that could not be read carries one reason, from a closed set clients word themselves, optionally with a
@@ -181,7 +191,6 @@ detail (what the agent or the daemon said):
 | `not_signed_in` | The agent says the account is not signed in (see "How a Codex account is read" and "How a Claude Code account is read" above) |
 | `cli_missing` | The agent is not available, or its CLI cannot be started |
 | `timed_out` | The CLI exhausted the shared 60-second read budget, an initial command exceeded its own shorter limit (15 seconds for `claude auth status` and `grok mcp list`), or the whole reading reached the 90-second deadline |
-| `unsupported_agent` | The agent has no way of listing its MCP servers: none of the supported agents at present |
 | `failed` | Anything else, with a detail saying what: the login shell's environment could not be read, the account's directory does not exist, the CLI failed, or the reading was cut short by the daemon shutting down |
 
 A run of the agent's CLI is stopped as every short run of an agent's CLI is, the daemon's shutdown included (see "How a
@@ -312,11 +321,10 @@ the dialog, red, worded by its reason (see "When an MCP inventory cannot be read
 | `not_signed_in` | The account is not logged in, and its connectors and MCP servers can be read once it is; log in, then try again |
 | `cli_missing` | The agent is not available: its CLI could not be found or started; install it or make sure it runs, then try again |
 | `timed_out` | The reading timed out: the agent did not answer in time; make sure the servers it connects to are reachable, then try again |
-| `unsupported_agent` | The agent cannot list its MCP servers or connectors |
 | `failed` | The connectors and MCP servers could not be read; try again in a moment |
 
 A reason the window does not know, from a daemon newer than the window, is shown as `failed`. The reason's detail, where
-there is one, is behind the alert's **Details**. Every reason but `unsupported_agent` offers **Try again**, which reads
+there is one, is behind the alert's **Details**. Every reason offers **Try again**, which reads
 again with refresh on. A request that is refused, or that does not reach the daemon, is shown as a red alert saying the
 connectors and MCP servers could not be read, with the failure's own message, and Try again where reading again can
 help. Either alert is announced to assistive technology as it appears, and again when a further reading fails in the

@@ -41,9 +41,9 @@ import Screenshot from "../../../../components/Screenshot.astro";
 
 ## 沿用另一个智能体的配置
 
-每个智能体还可以加载另一个智能体的配置，这样移交之后的会话仍然遵循你为第一个智能体写下的规则。这些<strong>兼容性</strong>开关是：Claude Code 的<strong>兼容 Codex</strong>，Codex 的<strong>兼容 Claude</strong>，Grok Build 则两者都有。它们默认关闭。
+部分智能体还可以加载另一个智能体的配置，这样移交之后的会话仍然遵循你为第一个智能体写下的规则。这些<strong>兼容性</strong>开关是：Claude Code 的<strong>兼容 Codex</strong>，Codex 的<strong>兼容 Claude</strong>，Grok Build 则两者都有。OpenCode 可以加载 Claude Code 的指令和技能，Qwen Code 可以加载其指令文件。Pi、Antigravity CLI 和 GitHub Copilot CLI 按各自的规则查找配置。兼容性开关默认关闭。
 
-- 开启后，每次启动都会给会话另一个智能体的指令（<code dir="ltr">CLAUDE.md</code> 和规则，或 <code dir="ltr">AGENTS.md</code> 和规则）、技能、命令或自定义提示，以及 MCP 服务器，并要求它遵守那个智能体的钩子和权限。智能体把这些当作指令来执行，{productName} 不检查它如何执行。恢复的 Grok Build 会话只会带上 MCP 服务器和技能，因为它沿用首次启动时的指令。
+- 对 Claude Code、Codex 和 Grok Build，开启兼容性后，每次启动都会给会话另一个智能体的指令（<code dir="ltr">CLAUDE.md</code> 和规则，或 <code dir="ltr">AGENTS.md</code> 和规则）、技能、命令或自定义提示，以及 MCP 服务器，并要求它遵守那个智能体的钩子和权限。智能体把这些当作指令来执行，{productName} 不检查它如何执行。恢复的 Grok Build 会话只会带上 MCP 服务器和技能，因为它沿用首次启动时的指令。
 - {productName} 只读取另一个智能体的文件，从不写入。每次启动都会重新计算，所以更改会在会话启动、恢复或被移交时生效。
 - {productName} 无法安全传递的服务器会被略去，窗口里不会说明是哪些。Codex 的项目配置只在 Codex 信任的文件夹中生效。
 - Grok Build 自带对 Claude Code 的支持，除非它的配置关闭了，否则默认开启；所以即使开关关着，它也可能加载 Claude Code 的配置。

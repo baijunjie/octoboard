@@ -57,11 +57,13 @@ const availabilityOf = (unavailable: Agent) => new Map(
   TEST_AGENTS.map((agent): [Agent, AgentAvailability] => [agent, { agent, availability: agent === unavailable ? "unavailable" : "available", default_account_dir: null }]),
 );
 
-it("lists every added agent as selectable when adding, naming the ones known to be missing", async () => {
+it("lists every added agent that has accounts of its own as selectable when adding, naming the ones known to be missing", async () => {
   render(undefined, () => Promise.resolve(), availabilityOf("codex"));
   await act(async () => document.body.querySelector<HTMLElement>('[data-slot="select-trigger"]')!.click());
   const options = Array.from(document.body.querySelectorAll('[role="option"]'));
-  expect(options.map((o) => o.textContent)).toEqual(TEST_PROVIDERS.map(({ id, label }) => id === "codex" ? `${label}, Not installed` : label));
+  expect(options.map((o) => o.textContent)).toEqual(
+    TEST_PROVIDERS.filter(({ capabilities }) => capabilities.owned_accounts).map(({ id, label }) => id === "codex" ? `${label}, Not installed` : label),
+  );
   expect(options.some((o) => o.hasAttribute("data-disabled") || o.getAttribute("aria-disabled") === "true")).toBe(false);
 });
 

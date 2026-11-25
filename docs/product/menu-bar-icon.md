@@ -148,7 +148,8 @@ the application's. From top to bottom:
    account the selected session is running on, as that section has it: it stays listed in its place, its header line
    ending in **Disabled**, in secondary text after its reached-limit tag, or after its name and plan when there is
    no tag. An agent that is not added, not available, whose availability is not yet determined, or whose
-   accounts are all turned off, bar that one, has none. The submenus are set off from the sessions and from
+   accounts are all turned off, bar that one, has none, and neither has an agent whose quota Octoboard does not read
+   (see "Agents whose quota Octoboard does not read" in `docs/product/account-quotas.md`). The submenus are set off from the sessions and from
    Check for updates by separators. Inside a submenu, nothing can be chosen:
    - each account is a header line, at the small size of a section header and regular weight, with its name and plan
      in the secondary text colour. The agent's default account uses the name the user gave it, else **Default** (see

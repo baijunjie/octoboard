@@ -143,3 +143,5 @@ mac-notification-sys = "=0.6.15"
 # For the test that the shell plugin's `open` validation set in `tauri.conf.json` admits what the pages open,
 # compiled as the plugin compiles it. The release line the plugin already resolves.
 regex = "1"
+# The paused clock (`#[tokio::test(start_paused = true)]`), for tests of waits that touch no real I/O.
+tokio = { version = "1", features = ["test-util"] }

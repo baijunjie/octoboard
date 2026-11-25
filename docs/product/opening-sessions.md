@@ -225,10 +225,13 @@ keeps running, and resuming, reopening or restarting it is never refused for thi
 in `docs/product/account-quotas.md`). Whatever opens it — the same openings as for a turned-off account above — a new
 session whose account, once resolved, is found not logged in by the reading the daemon holds at that moment is refused
 with `account_not_signed_in`, and nothing is recorded; the user's own request is refused too. Where the quota is
-checked as well (a handoff's receiving session, below), it is checked after the quota. The refusal carries `agent` and
-`account` (the account's name). In the window it is shown in an error alert, in the UI's language, saying the account is not logged in, so a session cannot be opened on it; the next step is to
+checked as well (a handoff's receiving session, below), it is checked after the quota. The refusal carries `agent`,
+`agent_id` (the agent's id), `account` (the account's name) and `config_dir` (the account's configuration directory,
+the default account's as the daemon resolves it; absent while that is not known). In the window it is shown in an error alert, in the UI's language, saying the account is not logged in, so a session cannot be opened on it; the next step is to
 choose another account, or to log in to this one, and the alert has a **Manage accounts** button (see "Recovery and
-unexpected errors" in `docs/product/error-alerts.md`). An agent's tool call is refused with a reason in English naming
+unexpected errors" in `docs/product/error-alerts.md`); for an agent Octoboard cannot log in, the alert says how to log
+in with the agent's own CLI instead and has no such button (see "Agents Octoboard cannot log in" in
+`docs/product/logging-accounts-in.md`). An agent's tool call is refused with a reason in English naming
 the account and the agent and saying to choose another account or log in to it in Settings → Agent accounts. A session
 request is refused that way before the user is asked, and again on approval should the account be found not logged in
 by then; an owner's handoff the user is asked to approve is refused for it only on approval, as for a used-up account

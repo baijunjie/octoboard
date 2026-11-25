@@ -14,14 +14,14 @@ import { fakeTimers } from "../test/clock";
 import { LOGIN_ENDS_MS, LOGIN_WAITING_MS, RESET_CREDIT_REREAD_MS } from "./fixtureAccounts";
 import { createFixtureDaemon, NOTIFICATION_DELAY_MS } from "./fixtureDaemon";
 import { LIST_LATER_AFTER_MS } from "./fixtureProcesses";
-import { FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "./fixtureProviders";
+import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "./fixtureProviders";
 import type { AccountMcpAnswer, Fixture, McpServerAuthAnswer } from "./fixture";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./restoreSample";
 import type { FixtureFile } from "./sampleFiles";
 import { SAMPLE_GIT } from "./sampleGit";
 import { quotaFailure, quotaOf, quotaWindow, resetCreditOf, resetCreditsOf } from "./quotas";
-import { accountOf, accountSharingOf, branchItemOf, broadcastErrorNotification, consoleOf, gitStatusOf, keptOf, leftoverOf, markdownContent, pageOf, processTreeOf, projectOf, sessionNoticeNotification, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./builders";
+import { accountOf, accountSharingOf, branchItemOf, broadcastErrorNotification, consoleOf, effectiveProviderSettings, gitStatusOf, keptOf, leftoverOf, markdownContent, pageOf, processTreeOf, projectOf, sessionNoticeNotification, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./builders";
 import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 
 /** A listener that adds each notification to `list`, a scenario's notifications being shown ones, never withdrawals. */
@@ -927,10 +927,15 @@ describe("the fixture daemon's deletion of archived sessions", () => {
 });
 
 
+/** The agents whose settings these tests name; a provider registered beside them is covered by its defaults. */
+const NAMED_AGENTS: Agent[] = ["claude", "codex", "grok"];
+
 /** Every provider's every setting in effect: every compatibility switch and Claude Code's simple shell commands off, no
  * permission approval chosen, except what `compatibility`, the approvals and `claude` say. */
 function providerSettings(compatibility: { codex?: boolean; grok?: boolean } = {}, claude: { approval_mode?: string; simple_shell_commands?: boolean } = {}, codex: { approval_reviewer?: string } = {}, grok: { approval_mode?: string } = {}): Settings["provider_settings"] {
   return {
+    // Any other registered provider holds its settings' defaults, which its own descriptor sets.
+    ...Object.fromEntries(Object.entries(effectiveProviderSettings({})).filter(([agent]) => !NAMED_AGENTS.includes(agent))),
     claude: { approval_mode: claude.approval_mode ?? null, codex_compatibility: false, simple_shell_commands: claude.simple_shell_commands ?? false },
     codex: { approval_reviewer: codex.approval_reviewer ?? null, claude_compatibility: compatibility.codex ?? false },
     grok: { approval_mode: grok.approval_mode ?? null, claude_compatibility: compatibility.grok ?? false, codex_compatibility: false },
@@ -3321,8 +3326,11 @@ describe("the fixture daemon's providers", () => {
       ["codex", "Codex", "Codex", "https://github.com/openai/codex", ".codex"],
       ["grok", "Grok Build", "Grok", "https://docs.x.ai/build/overview", ".grok"],
     ];
-    expect(served(createFixtureDaemon({}))).toEqual(expected);
-    expect(served(createFixtureDaemon({ state: snapshotState({}) }))).toEqual(expected);
+    // Every released provider is served, in the registry's order; the first three are the ones named here.
+    const registered = (daemon: ReturnType<typeof createFixtureDaemon>) => daemon.store.getState().providers.map(({ id }) => id);
+    expect(registered(createFixtureDaemon({}))).toEqual(FIXTURE_AGENTS);
+    expect(served(createFixtureDaemon({})).filter(([id]) => NAMED_AGENTS.includes(id))).toEqual(expected);
+    expect(served(createFixtureDaemon({ state: snapshotState({}) })).filter(([id]) => NAMED_AGENTS.includes(id))).toEqual(expected);
   });
 
   it("reports, takes and exports the settings of a provider it serves beside the registered ones", async () => {

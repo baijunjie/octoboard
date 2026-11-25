@@ -75,10 +75,11 @@ recipe for a role that has a token, or overrides a HeroUI component's semantic c
   title, control label or technical literal in prose, headings, descriptions, Alerts, field errors, tooltips or toasts.
   A name uses the non-monospace chip with `dir="auto"`; a technical literal (a path, URL, branch, commit, ID, command,
   setting value) its monospace, left-to-right form. Never a raw `code`, the layer's `Code` or `Chip`, or a hand-built
-  pill.
+  pill. A product name the host supplies to a message (an agent's label `{agent}`, `{git}`, `{appName}`) stays plain
+  text, isolated where it can carry left-to-right content, and takes no chip.
 - **A name is referenced once per piece of copy**; later mentions use a pronoun or a plain reference.
 - **A name shown on its own takes no chip**: a row's title, a list entry, a heading that is just the name, a label, a
-  value on its own line, and a run of names joined only by a connector (one chip around the whole run when that run is
+  value on its own line, and a run of names joined only by a symbol such as `・` or `｜` (one chip around the whole run when that run is
   itself referenced).
 - **A navigation path through menus or settings is one `InlinePath`** (the sentence takes it as one parameter), never
   separate chips joined by words.
@@ -120,6 +121,9 @@ reduced motion.
 - **A busy dialog (`busy` on `Dialog`) disables everything in it but the pending action**, Cancel, the × and links
   included, and is never made `inert`; holds that are not the action itself (a file picker waiting, a quick lookup's
   `waiting`) leave it leavable.
+- **An action the agent's provider cannot offer at all is left out, not shown unavailable**: one resting on a
+  capability the provider does not declare (Add account for an agent with only its default account, Log in for one
+  Octoboard cannot log in, Connectors and MCP, Open in the agent's app) is not drawn.
 - **A control unavailable for a reason the user needs says why in its tooltip, and nowhere else.** `Button`, `Switch`
   and `Checkbox` take the reason as `unavailable`: `aria-disabled`, focusable, faded, no hover tint or press, the reason
   as plain tooltip and description, nothing on a click, Enter or Space, and on touch the reason in the touch popover.
@@ -256,6 +260,8 @@ Where an error or a warning is shown follows from how it arises, not from the sc
 6. **A destructive confirmation** (removing, deleting, archiving) is a warning modal, never an ordinary modal with a
    warning Alert in it.
 
+- **A notice that says a protection is not in force, or names a step the user must take, is acknowledged**
+  (`acknowledgedNotice`), never a timed toast; a notice that only informs may be a toast.
 - **A refusal the window could have foreseen is prevented, not alerted**: the confirm or submit is disabled while the
   state holds, the reason standing where the action is (an Alert under the choice, a `FieldError`, or a consequence
   line), and announced as it appears. The error alert is for what could not be known beforehand: a state that changed
@@ -267,12 +273,14 @@ Where an error or a warning is shown follows from how it arises, not from the sc
 ### The error alert dialog
 
 - **It stays until dismissed on purpose**, with its acknowledgement or its ×, never a toast, a timeout, an outside
-  press or Escape. It is HeroUI's alert dialog (the layer's `Modal` with `alert`, `status="danger"`), takes focus on the
-  alert itself and announces through `role="alertdialog"` alone. Distinct failures queue; copies of a pending one do
-  not multiply.
+  press or Escape. It is HeroUI's alert dialog (the layer's `Modal` with `alert`, `status="danger"`); a notice to
+  acknowledge (`acknowledgedNotice`), being no failure, takes `status="warning"` and a non-danger acknowledgement. It
+  takes focus on the alert itself and announces through `role="alertdialog"` alone. Distinct failures queue; copies of
+  a pending one do not multiply.
 - **Its body is the application's own prose**; what is not written for the reader (system, Git, daemon or agent text,
-  a stack, a diagnostic block) sits behind **Error details**, each block on a surface of its own. Only text of the
-  user's own handed back to keep (a cleared draft) stands in the body, as a `DiagnosticBlock` under a label.
+  a stack, a diagnostic block) sits behind **Error details**, each block on a surface of its own. Only text handed
+  back to keep or send again (a cleared draft, a message cleared before it was carried out) stands in the body, as a
+  `DiagnosticBlock` under a label.
 - **A recovery action is a button in its footer, never in its body**, secondary beside the acknowledgement; with Report
   issue and a recovery both offered, the acknowledgement goes, the × standing for it, and the recovery is the primary
   in the accent colour. A failure the user can resolve names its remedy; an unexpected one keeps its diagnostics and

@@ -58,7 +58,7 @@ use crate::protocol::{
 use crate::state::{shutting_down_refusal, AppState};
 use crate::time::now_millis;
 use install::{Install, ToolCommand};
-use latest::Registry;
+use latest::VersionSources;
 
 /// How long `--version` may take where the install does not tell the version.
 const VERSION_TIMEOUT: Duration = Duration::from_secs(10);
@@ -330,7 +330,7 @@ pub(crate) fn check_requested(state: &Arc<AppState>, agent: Option<AgentId>) {
         let state = state.clone();
         tokio::task::spawn_blocking(move || match check_shell() {
             Ok(shell_env) => {
-                let status = check(agent, &shell_env, registry());
+                let status = check(agent, &shell_env, version_sources());
                 state.agent_clis.record_checked(&state, &claim, status);
             }
             Err(err) => tracing::warn!(%agent, %err, "could not check the agent's CLI"),
@@ -342,13 +342,14 @@ pub(crate) fn check_requested(state: &Arc<AppState>, agent: Option<AgentId>) {
 pub(crate) fn check(
     agent: AgentId,
     shell_env: &HashMap<String, String>,
-    registry: &dyn Registry,
+    sources: &dyn VersionSources,
 ) -> AgentCliStatus {
     let packaging = adapter::provider(agent).cli_packaging();
     let mut status = AgentCliStatus {
         agent,
         installed_version: None,
         install_method: CliInstallMethod::Unknown,
+        npm_package: None,
         latest_version: None,
         latest_error: None,
         latest_detail: None,
@@ -358,7 +359,8 @@ pub(crate) fn check(
     if let Some((_, install, installed_version)) = inspect(agent, shell_env) {
         status.installed_version = installed_version;
         status.install_method = install.method;
-        match latest::latest_version(agent, packaging, &install, shell_env, registry) {
+        status.npm_package = install.npm_package();
+        match latest::latest_version(agent, packaging, &install, shell_env, sources) {
             Some(Ok(version)) => status.latest_version = Some(version),
             Some(Err(failure)) => {
                 status.latest_error = Some(failure.code());
@@ -379,11 +381,14 @@ fn inspect(
     shell_env: &HashMap<String, String>,
 ) -> Option<(ResolvedBinary, Install, Option<String>)> {
     let binary = adapter::resolve_binary(agent, shell_env).ok()?;
-    let provider = adapter::provider(agent);
-    let install = Install::of_binary(provider.cli_packaging(), &binary);
-    let version = provider
-        .installed_version(&binary.program.to_string_lossy())
-        .or_else(|| asked_version(agent, shell_env));
+    let install = Install::of_binary(adapter::provider(agent).cli_packaging(), &binary);
+    // The default account's version, the one the asked version would be.
+    let version = adapter::version_for_account(
+        agent,
+        &binary.program.to_string_lossy(),
+        &adapter::default_account_dir(agent, shell_env),
+    )
+    .or_else(|| asked_version(agent, shell_env));
     let version =
         version.map(|(major, minor, patch): AgentVersion| format!("{major}.{minor}.{patch}"));
     Some((binary, install, version))
@@ -472,8 +477,8 @@ fn check_shell() -> Result<HashMap<String, String>> {
 
 /// Where the latest version is read from.
 #[cfg(not(test))]
-fn registry() -> &'static dyn Registry {
-    &latest::NpmRegistry
+fn version_sources() -> &'static dyn VersionSources {
+    &latest::Network::PUBLIC
 }
 
 /// Under test, no shell, no registry and no update: the host's login shell and the network are
@@ -485,6 +490,6 @@ fn check_shell() -> Result<HashMap<String, String>> {
 }
 
 #[cfg(test)]
-fn registry() -> &'static dyn Registry {
-    &tests::NoRegistry
+fn version_sources() -> &'static dyn VersionSources {
+    &tests::NoNetwork
 }

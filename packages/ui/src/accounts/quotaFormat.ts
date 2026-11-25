@@ -92,8 +92,8 @@ function isSessionNamed(naming: QuotaNaming): boolean {
 }
 
 /** The window's name: "Session" or "5h" (as the agent's own interface calls its short window), "Weekly",
- * "Weekly · all models" (an account-wide one beside a model's own), "<Model> weekly". A credit pool is named for the length of its current period, which the agent bills over
- * (weekly on the measured account). */
+ * "Weekly · all models" (an account-wide one beside a model's own), "<Model> weekly". A credit pool uses the
+ * provider's native name if declared, then the length of its current period. */
 export function quotaWindowLabel(t: Translate, naming: QuotaNaming, window: QuotaWindow): string {
   switch (window.kind) {
     case "session":
@@ -103,6 +103,7 @@ export function quotaWindowLabel(t: Translate, naming: QuotaNaming, window: Quot
     case "weekly_model":
       return window.label ? t("quota.window.weeklyModel", { model: isolate(window.label) }) : t("quota.window.weekly");
     case "credit_period": {
+      if (naming.windowNaming?.credit_period === "plan") return t("quota.window.plan");
       const length = creditPeriodLength(window);
       return t(length === "weekly" ? "quota.window.weekly" : length === "monthly" ? "quota.window.monthly" : "quota.window.credits");
     }
@@ -220,6 +221,7 @@ export function quotaWindowPhrase(t: Translate, naming: QuotaNaming, window: Quo
     case "weekly_model":
       return window.label ? t("quota.windowPhrase.weeklyModel", { model: isolate(window.label) }) : t("quota.windowPhrase.weekly");
     case "credit_period": {
+      if (naming.windowNaming?.credit_period === "plan") return t("quota.windowPhrase.plan");
       const length = creditPeriodLength(window);
       return t(length === "weekly" ? "quota.windowPhrase.weekly" : length === "monthly" ? "quota.windowPhrase.monthly" : "quota.windowPhrase.credits");
     }

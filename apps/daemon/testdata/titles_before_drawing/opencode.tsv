@@ -1,0 +1,9 @@
+# capture<TAB>title<TAB>glyph (U+XXXX, or nothing); a title of * is every title of the capture.
+# OpenCode 1.19.6 sets its first title after start-up queries and blank repaints, before the logo.
+# In OpenCode 2.4.1 the start-up title is sent three times with no drawing between them.
+# The title sequences after a visible drawing are reported in both generations.
+opencode_screen_*	OpenCode
+opencode_screen_permission_120x40_2.4.1.bin	OpenCode
+opencode_screen_permission_120x40_2.4.1.bin	OpenCode
+opencode_screen_question_120x40_2.4.1.bin	OpenCode
+opencode_screen_question_120x40_2.4.1.bin	OpenCode

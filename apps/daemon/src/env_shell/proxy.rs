@@ -23,6 +23,29 @@ pub fn proxy_for(
     proxy_in(shell_env, host, crate::platform::shell::ENV_NAMES_FOLD_CASE)
 }
 
+/// The proxy `shell_env` names for a request to `url`, matched by the host it names
+/// ([`host_of`]). The error says which variable is not a proxy address, or that `url` names no
+/// host.
+pub fn proxy_for_url(
+    shell_env: &HashMap<String, String>,
+    url: &str,
+) -> Result<Option<ureq::Proxy>, String> {
+    let host = host_of(url).ok_or_else(|| format!("{url} names no host"))?;
+    proxy_for(shell_env, host)
+}
+
+/// The host an `https://` or `http://` `url` names, which `NO_PROXY` is matched against: what
+/// comes before the first `/`, `?` or `#`, without user information or a port.
+pub fn host_of(url: &str) -> Option<&str> {
+    let rest = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))?;
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let host = authority.rsplit('@').next()?;
+    let host = host.split(':').next()?;
+    (!host.is_empty()).then_some(host)
+}
+
 /// [`proxy_for`], with variable names matched without regard to case where `fold_case`.
 fn proxy_in(
     shell_env: &HashMap<String, String>,
@@ -252,5 +275,19 @@ mod tests {
     fn a_value_that_is_no_proxy_address_names_its_variable() {
         let err = proxy_for(&env(&[("ALL_PROXY", "://")]), HOST).unwrap_err();
         assert_eq!(err, "ALL_PROXY is not a proxy address");
+    }
+
+    #[test]
+    fn a_manifest_s_host_is_what_its_url_names() {
+        assert_eq!(
+            host_of("https://updater.example.com/manifests/darwin_arm64.json"),
+            Some("updater.example.com")
+        );
+        assert_eq!(
+            host_of("http://user@127.0.0.1:8080/m.json"),
+            Some("127.0.0.1")
+        );
+        assert_eq!(host_of("https://"), None);
+        assert_eq!(host_of("ftp://example.com/m.json"), None);
     }
 }

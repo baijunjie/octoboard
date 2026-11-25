@@ -7,7 +7,7 @@ import { Aside, Steps } from "@astrojs/starlight/components";
 import { productName } from "../../../../commands.ts";
 import Screenshot from "../../../../components/Screenshot.astro";
 
-每个智能体都有自己的记忆，按智能体和账户分开，所以换了智能体或账户的会话，看不到之前的会话学到的东西。{productName} 有一份所有智能体共享的记忆：会话把值得留下的内容记下来，之后的会话一开始就知道，无论它们用的是哪个智能体或账户。你随时可以查看和修正。
+智能体自带的记忆归该智能体和账户所有。{productName} 有一份所有智能体共享的记忆：会话把值得留下的内容记下来，之后的会话一开始就知道，无论它们用的是哪个智能体或账户。你随时可以查看和修正。
 
 <Screenshot id="memory-dialog" alt="“控制台记忆”对话框，列出各条目，每条有一行摘要、更新的时间和更新者，并有“添加条目”和“全部删除”按钮。" />
 
@@ -28,7 +28,7 @@ import Screenshot from "../../../../components/Screenshot.astro";
 
 ## 为什么这样设计
 
-- <strong>智能体自带的记忆会被关闭，所以不会学两遍。</strong>共享记忆开启时，{productName} 启动的每个会话，在这次启动里都会关闭它的智能体自带的记忆，让它把学到的东西记在共享记忆里。不会往智能体的配置里写任何东西，智能体之前写下的内容也保持原样。
+- <strong>智能体支持时，共享记忆会接管其记忆。</strong>启动 Claude Code、Codex、Grok Build 和 Qwen Code 会话时，{productName} 会关闭该会话的原生记忆。GitHub Copilot CLI 沿用自身设置。Antigravity CLI、OpenCode 和 Pi 没有自带的记忆。
 - <strong>没人会覆盖自己没见过的修改。</strong>修改某个条目的保存，如果在读取之后条目已被别人保存过，就会被拒绝，不会丢失任何内容：会话或你的表单会拿到当前的条目，合并后再保存。
 - <strong>项目的记忆属于文件夹，而不是项目本身。</strong>同一台电脑上同一位置的所有项目共享它；移除项目会保留它的记忆，除非你在移除确认里勾选了<strong>同时删除此项目的记忆</strong>，所以在同一文件夹重新添加项目，就能再次找到它。
 

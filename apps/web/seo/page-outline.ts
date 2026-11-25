@@ -73,6 +73,11 @@ export const heroAgents = [
   { name: "Claude Code", icon: "claude" },
   { name: "Codex", icon: "codex" },
   { name: "Grok Build", icon: "grok" },
+  { name: "Antigravity CLI", icon: "antigravity" },
+  { name: "GitHub Copilot CLI", icon: "copilot" },
+  { name: "OpenCode", icon: "opencode" },
+  { name: "Qwen Code", icon: "qwen" },
+  { name: "Pi", icon: "pi" },
 ] as const;
 
 // The illustrative workflow in WorkflowDemo.vue. Paths and agent names are

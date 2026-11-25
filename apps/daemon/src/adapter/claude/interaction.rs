@@ -36,6 +36,7 @@ use crate::protocol::{
     Question, QuestionAnswer, QuestionOption, QuestionPrompt,
 };
 use crate::session::interaction::{Answer, CallSeen, InteractionReader, NextKey, Reading};
+use crate::session::screen::ScreenText;
 
 pub(super) struct ClaudeInteractions;
 
@@ -55,8 +56,8 @@ const LONG_COMMAND: usize = 300;
 impl InteractionReader for ClaudeInteractions {
     /// Faint cells blanked: Claude Code draws the placeholder of an empty text field faint, which
     /// would read as typed text (see the module comment).
-    fn faint_blanked(&self) -> bool {
-        true
+    fn prompt_screen(&self) -> ScreenText {
+        ScreenText::FaintBlanked
     }
 
     /// Only the main agent's own calls, by the hook interpreter's own test for a subagent's
@@ -1479,5 +1480,13 @@ mod tests {
             0
         );
         assert_eq!(screen.image_placeholders(""), 0);
+    }
+
+    /// Claude Code draws the placeholder of an empty text field faint, so its prompts are read
+    /// off the screen with faint cells blanked: read as drawn, the placeholder would be typed
+    /// text.
+    #[test]
+    fn a_prompt_is_not_read_with_its_faint_text() {
+        assert_eq!(ClaudeInteractions.prompt_screen(), ScreenText::FaintBlanked);
     }
 }

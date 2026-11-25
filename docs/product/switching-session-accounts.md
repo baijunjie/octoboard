@@ -40,7 +40,9 @@ titled that the account could not be switched opens over the confirmation, which
 it says that the account is disabled, so a session cannot use it, and to choose another account or turn it back on;
 for one found not logged in, that the account is not logged in, so a session cannot use it, and to choose another
 account or log in to it; either has a **Manage accounts** button (see "Recovery and unexpected errors" in
-`docs/product/error-alerts.md`). For a used-up account (see "A used-up account" in `docs/product/account-quotas.md`) it
+`docs/product/error-alerts.md`), except that for an agent Octoboard cannot log in the alert says how to log in with the
+agent's own CLI in place of that advice and has no button (see "Agents Octoboard cannot log in" in
+`docs/product/logging-accounts-in.md`). For a used-up account (see "A used-up account" in `docs/product/account-quotas.md`) it
 says that the account cannot be used for now, naming the quota it has reached and when it resets, and is a plain alert.
 Each is a known refusal, with no request to report an issue.
 
@@ -270,6 +272,8 @@ separately.
 
 ## Carrying the conversation
 
+Antigravity CLI has one system credential-store login regardless of `--gemini_dir`. OpenCode has one account because its database follows `XDG_DATA_HOME` with no agent-specific override. Octoboard offers no account switch or conversation carry for either.
+
 **The conversation continues** where the agent has one stored: it is copied — added to the target directory, or
 replacing an earlier copy there — and the original stays in the account it came from, so a failed switch loses
 nothing and switching back needs no second copy. A session nobody ever typed into, unless it was opened to resume a
@@ -285,6 +289,9 @@ came from:
 | Claude Code | the session's transcript (`projects/<project slug>/<session id>.jsonl`), and, where they exist, the directory of the same name beside it (`projects/<project slug>/<session id>/`: subagent transcripts, tool results, the conversation's custom title) and the session's rewind checkpoints (`file-history/<session id>/`) |
 | Codex | the session's rollouts, as they are, compressed or not: the first rollout and, for a thread that had a turn reverted, every later history segment (see "Agent session data" in `docs/product/launching-agents.md`); Codex decompresses the compressed ones it reads when it resumes |
 | Grok Build | the session's directory, whole |
+| GitHub Copilot CLI | the session directory. Copilot registers the conversation in the destination index on resume |
+| Qwen Code | the chat and its title and runtime sidecars |
+| Pi | the conversation's JSONL |
 
 - **A Codex thread is carried whole**: its first rollout and every history segment, the head among them (see "Agent
   session data" in `docs/product/launching-agents.md`). The head is located once the session's process has ended, so

@@ -340,3 +340,33 @@ it("pushes its daemon's menu from the window of another daemon too, whose icon h
   expect(setMenu).toHaveBeenCalled();
   expect(setMenu.mock.lastCall![0]).toMatchObject({ disconnect: "Disconnect", quit: "Quit completely" });
 });
+
+it("leaves the icon's bars and the submenus empty for a session of an agent whose provider declares no plan quota", async () => {
+  const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
+  const statusItem: StatusItemCapability = { setMenu, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} };
+  const own = sessionOf("own", "console", undefined, "Own", "idle", { agent: "test_agent" });
+  const claude = sessionOf("claude", "console", undefined, "Claude", "idle");
+  const reading = (agent: "claude" | "test_agent"): AccountQuota => ({
+    agent, account: null, fetched_at: 1, plan: null, unavailable: null,
+    windows: [{ kind: "session", label: null, used_percent: 20, resets_at: null, window_minutes: null }], email: null,
+  });
+  const available = (agent: "claude" | "test_agent") => [agent, { agent, availability: "available" as const, default_account_dir: null }] as const;
+  const { select } = mount(statusItem, vi.fn(), {
+    consoles: new Map([["console", consoleOf("console", "Main")]]),
+    sessions: new Map([[own.id, own], [claude.id, claude]]),
+    settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "test_agent"], default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
+    agentAvailability: new Map([available("claude"), available("test_agent")]),
+    accountQuotas: [reading("claude"), reading("test_agent")],
+  });
+  const settle = () => act(async () => {});
+  const last = () => setMenu.mock.lastCall![0];
+  select(own.id, "console");
+  await settle();
+  expect(last().quota_remaining).toBeUndefined();
+  expect(last().quota_weekly_remaining).toBeUndefined();
+  expect(last().quota_label).toBeUndefined();
+  expect(last().submenus.map((submenu) => submenu.title)).toEqual(["\u2068Claude\u2069 usage"]);
+  select(claude.id, "console");
+  await settle();
+  expect(last().quota_remaining).toBe(80);
+});

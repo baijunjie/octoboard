@@ -19,7 +19,7 @@ pub(super) async fn serve_with_output_dir(name: &str) -> (u16, std::path::PathBu
 }
 
 /// Serves the real router over `state` on an ephemeral loopback port and returns the port.
-pub(super) async fn serve_state(state: std::sync::Arc<AppState>) -> u16 {
+pub(crate) async fn serve_state(state: std::sync::Arc<AppState>) -> u16 {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("a loopback port");

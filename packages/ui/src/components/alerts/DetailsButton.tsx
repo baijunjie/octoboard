@@ -16,13 +16,13 @@ export const DETAILS_POPOVER = "[data-details-popover]";
  * are never behind it. The button takes the Alert's status colour (`AlertButton`), and the popover's text
  * keeps the muted small style of the Alert it belongs to. It is as wide as its text asks, up to 24rem and never wider
  * than the window less the popover's 12px of collision padding on each side. */
-export function DetailsButton({ children }: { children: React.ReactNode }): React.ReactElement {
+export function DetailsButton({ id, children }: { id?: string; children: React.ReactNode }): React.ReactElement {
   const t = useT();
   const label = t("error.details");
   const owner = usePopoverOwnerProps();
   return (
     <Popover>
-      <AlertButton kind="details" size="sm">{label}</AlertButton>
+      <AlertButton id={id} kind="details" size="sm">{label}</AlertButton>
       <PopoverContent
         placement="bottom end"
         label={label}

@@ -479,8 +479,10 @@ async fn check_resumable(
         });
     }
     let shell = shell.clone();
+    let state = Arc::clone(state);
     tokio::task::spawn_blocking(move || {
-        let judgement = records::judge(&records::Locator::with_shell(shell), &session);
+        let locator = records::Locator::with_shell(shell).with_store(&state.store);
+        let judgement = records::judge(&locator, &session);
         Checked { session, judgement }
     })
     .await

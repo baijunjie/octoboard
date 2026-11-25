@@ -19,7 +19,7 @@ them, one after another, as `set_account_sharing` turns it off, refusals include
 
 ## The sharing choice
 
-Every account the user owns has the choice; the default account has none, being the directory the others share, and
+An account the user owns has the choice when its agent offers sharing. Antigravity CLI uses one system credential-store login even with different `--gemini_dir` values. OpenCode uses one account because its data directory follows `XDG_DATA_HOME` with no agent-specific override. Both have no sharing choice. The default account is the directory the others share, and
 asking for it is refused (`default_account_not_shareable`). So is turning sharing on for an account whose directory
 resolves to the default directory under another spelling. The account carries two values:
 
@@ -64,6 +64,9 @@ A fixed list of entries per agent, directly inside the config directory. There i
 | Claude Code | `settings.json`, `CLAUDE.md`, `keybindings.json`, `loop.md`; `agents/`, `commands/`, `skills/`, `output-styles/`, `rules/`, `plugins/`, `workflows/`, `routines/`, `themes/`, `hooks/`, `agent-memory/` | `projects/`, `file-history/`, `paste-cache/`, `image-cache/`, `session-env/`, `todos/`, `tasks/`, `history.jsonl` |
 | Codex | `config.toml`, `AGENTS.md`, `AGENTS.override.md`, `hooks.json`; `rules/`, `skills/`, `prompts/`, `plugins/`, `themes/`, `agents/` | `sessions/`, `archived_sessions/`, `session_index.jsonl`, `history.jsonl`, `state_5.sqlite` (not on Windows) |
 | Grok Build | `config.toml`, `AGENTS.md`, `pager.toml`, `lsp.json`, `settings.json`, `sandbox.toml`, `statusline.sh`, `disabled-hooks`; `rules/`, `skills/`, `commands/`, `agents/`, `personas/`, `workflows/`, `plugins/`, `hooks/`, `installed-plugins/` | `sessions/` |
+| GitHub Copilot CLI | `settings.json`, `mcp-config.json`, `instructions/` | `session-state/` |
+| Qwen Code | `QWEN.md`, `skills/` | `projects/` |
+| Pi | `settings.json` when eligible, `extensions/` | `sessions/` |
 
 Nothing else is shared. In particular:
 
@@ -80,6 +83,17 @@ Nothing else is shared. In particular:
   account.
 - **Grok Build's `trusted_folders.toml` and `hooks-paths`** are not shared: Grok replaces the first with a plain file
   when it saves it, and refuses to write the second through a link.
+- **Pi** keeps `models.json`, `mcp.json`, `auth.json` and `mcp-auth.json` in the account directory. When either
+  account's settings file contains an inline credential, such as credentials in an HTTP proxy URL, turning sharing on
+  or repairing the link leaves the settings private and reports why. A package source that cannot be resolved
+  also prevents linking settings. A separate history directory selected with `PI_CODING_AGENT_SESSION_DIR` is
+  outside sharing.
+- **Qwen Code** keeps `settings.json`, `.env` and `subscription_credentials.json` in the account directory.
+  Extension sharing is unavailable (verified on Qwen Code 0.28.0 and accepted on 2026-11-25).
+  Qwen Code's extension settings command can create an
+  `extensions/<name>/.env` file after the directory is linked, and whole-entry sharing cannot keep this file
+  private. The extension directory and its enablement store stay with the account.
+- **GitHub Copilot CLI** keeps `config.json`, `installed-plugins/` and its session index in the account directory.
 - **Agent caches, process registries and per-machine state** (Claude Code's `sessions/`, for one) are not shared.
 
 A configuration file is shared whole. Codex's and Grok Build's `config.toml` hold the model, MCP servers and plugin
@@ -164,6 +178,9 @@ leading into the default directory" below), and the change completes once they a
    | Claude Code | the transcript with the directory of the same name beside it, and the rewind checkpoints (`file-history/<id>/`) |
    | Codex | every rollout of the thread, those in `archived_sessions/` too |
    | Grok Build | the session's directory |
+   | GitHub Copilot CLI | the session's directory |
+   | Qwen Code | the chat and its title and runtime sidecars |
+   | Pi | the transcript |
 
    - Where the account already holds a file of it, the copy written last stays and the other is set aside under
      `<directory>.bak-<stamp>/` in the account's directory.
@@ -459,6 +476,16 @@ the default account's plugins working.
 |---|---|---|
 | Claude Code | `plugins/installed_plugins.json` and `plugins/known_marketplaces.json` | `installed_plugins.json` on a plugin install, and again on a plugin update |
 | Grok Build | `installed-plugins/registry.json` | on a plugin install |
+| GitHub Copilot CLI | Directory marketplace sources in `settings.json` | on a local marketplace registration |
+| Pi | Package sources in `settings.json` | on a package install |
+
+When first linking Pi's settings, Octoboard resolves local relative package paths from the default directory and
+records their absolute paths. A relative source written by a session of a sharing account is resolved from that
+account's directory. An absolute source recorded through a sharing account is repointed to the same source through
+a shared or independent directory. If a source only exists under a private account directory, Octoboard leaves the
+registry as it is and reports the sharing or repair failure. Move the source to a shared or independent directory
+and update the agent's registry before retrying. GitHub Copilot CLI uses this same rule for local marketplace paths.
+Octoboard links the settings files whole.
 
 Codex has no such registry: a plugin installed through the account is named in `config.toml` and copied into
 `plugins/cache/`, and no path through the account's directory is recorded.

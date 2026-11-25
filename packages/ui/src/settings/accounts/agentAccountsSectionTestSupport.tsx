@@ -8,7 +8,6 @@ import { afterEach, beforeEach, expect, onTestFinished, vi } from "vitest";
 
 import type { Account, AccountSharing, Settings } from "../../protocol";
 import type { State } from "../../store";
-import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import { TestHost } from "../../test/TestHost";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
@@ -48,7 +47,7 @@ beforeEach(() => {
   animate.mockClear();
   request.mockReset().mockResolvedValue({});
   readMcpInventory.mockReset().mockReturnValue(new Promise(() => {}));
-  settings.added_agents = [...FIXTURE_AGENTS];
+  settings.added_agents = ["claude", "codex", "grok"];
   consoles.clear();
   projects.clear();
   sessions.clear();
@@ -160,7 +159,7 @@ export const chooseItem = (name: string) => act(async () => {
 export const rowOf = (container: ParentNode, id: string) => container.querySelector<HTMLElement>(`[data-account-row="${id}"]`)!;
 
 /** Opens the actions menu of an account's row, the way a pointer does, and returns its trigger. */
-async function openRowMenu(container: ParentNode, id: string): Promise<HTMLElement> {
+export async function openRowMenu(container: ParentNode, id: string): Promise<HTMLElement> {
   const trigger = rowOf(container, id).querySelector<HTMLElement>("[data-row-actions] button")!;
   await act(async () => {
     trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0 }));

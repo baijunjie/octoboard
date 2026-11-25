@@ -158,7 +158,10 @@ and only these eight.
   this conversation?", Codex's sign-in screen, or Grok Build's usage-limit screen — holds its session at *waiting for
   the user* for as long as the session's rendered screen shows it, whatever the agent's hook reports say meanwhile; once
   it is gone the session shows the agent's last reported status again. Claude Code's views of its background agents are
-  recognised the same way but show the session *dormant* instead (see "Dormant" above). Which screens are recognised is
+  recognised the same way but show the session *dormant* instead (see "Dormant" above), and a view of the agent's own
+  that the person opened themselves over the conversation (a list of commands, a picker, a help screen, where a
+  provider marks its screens so) changes nothing of the status: the session keeps the one it had, with its messages
+  held while the view is up. Which screens are recognised is
   in "Messages held until a session can take them" in `docs/product/message-delivery.md`. Where that screen is the
   agent's usage-limit screen (Codex's usage-limit prompt, Grok Build's usage-limit screen) over a turn that has
   stopped, the session record also carries `at_usage_limit: true`, absent otherwise and never stored, and keeps the
@@ -176,17 +179,17 @@ and only these eight.
 A session's end is not taken from a hook either: the process is observed directly.
 
 All of the above is for an agent with a status integration of its own — hooks or signals of the agent that give its
-status — which Claude Code, Codex and Grok Build all have. A session whose agent has none takes its status from what the
+status. Claude Code, Codex, Grok Build, GitHub Copilot CLI, OpenCode and Qwen Code have one. A session whose agent has none takes its status from what the
 program in its terminal reports about itself through OSC 7501 instead, still held at *waiting for the user* by a session
 request as above; in a session whose agent has one, such reports move no status, and only say whether a turn is
-running. See "Where the protocol is supported and where reports give the status" in
-`docs/product/program-status-reports.md`.
+running, unless the agent's provider declares that they also say when it waits on the user or when a turn was
+cancelled, as Qwen Code does. Antigravity CLI and Pi take their status from OSC 7501, as does a Qwen Code launch with hooks disabled. See "Where the protocol is supported and where reports
+give the status" and "What reports can say beside an agent's hooks" in `docs/product/program-status-reports.md`.
 
 Where an agent reports nothing, the status simply stays at its last reported value. The known cases, which are
 limitations of what the agents expose rather than of this one:
 
-- A turn that ends with the agent asking a question **as plain prose** is indistinguishable from a finished turn on all
-  three agents, so such a session reads as at its prompt — *done*, normally — rather than waiting for the user.
+- A turn that ends with the agent asking a question **as plain prose** is indistinguishable from a finished turn for a session, so such a session reads as at its prompt — *done*, normally — rather than waiting for the user.
 - Grok Build's bash mode (`!`) fires no tool or turn events, so work done through it never shows in the status; Grok's
   turn-end backstop, which was seen to follow about a minute later in one run (see "When a session does not report" in
   `docs/product/reporting-to-owners.md`), finds the session already at its prompt.
@@ -194,7 +197,7 @@ limitations of what the agents expose rather than of this one:
   their own events. Codex has no such event: its `request_user_input` questions raise the hand from the call's start,
   which Codex reports alike for a question it shows (Plan mode) and for one it rejects at once (Default mode), so the
   latter raises the hand briefly (see "Codex" in `docs/product/pending-interactions.md`).
-- For status reporting, work left running in the background is followed for **Claude Code and Grok Build only**. A Codex
+- Claude Code, Grok Build, Antigravity CLI, GitHub Copilot CLI and Qwen Code follow native background work for status reporting. A Codex
   session whose turn ends with work still running reads as *done* (or another status at its prompt), never *working in
   background*.
   Process cleanup follows every agent's launches separately (see "Automatic stopping and its boundaries" in
@@ -397,6 +400,11 @@ mode's card and every accessible name say only that it is paused.
   Build's `StopCancelled` and `StopFailure` — or as Octoboard recovers it where no hook reports it: a Claude Code
   decline or cancel, a Grok Build cancel before its first token, and a Codex turn that ended in an error (see
   `docs/product/turns-hooks-do-not-report.md`);
+- the end of the turn as the program in the session's terminal reports it through OSC 7501, where those reports give
+  the session its status — an `error`, or a turn back to `idle` with no `done` or `error`, which is a cancel (see "From
+  the root record to the session's status" in `docs/product/program-status-reports.md`) — or a cancel such reports
+  show where the agent's provider declares that they say one (see "What reports can say beside an agent's hooks" in
+  `docs/product/program-status-reports.md`);
 - the session losing its process while its agent was last reported *working* or *waiting for the user*: the agent exiting or
   crashing, the session being interrupted or archived, the application quitting, or the daemon going down. A session
   force-quit in the middle of a turn reads as *interrupted* and, once resumed, comes back *paused* rather than *done*.
@@ -425,7 +433,9 @@ mode's card and every accessible name say only that it is paused.
   conversation, `/compact` included, leaves it;
 - the agent no longer having the session's conversation, so that its next launch opens a fresh one.
 
-Grok Build's turn-end backstop and its turn end at shutdown neither set nor clear it.
+Grok Build's turn-end backstop and its turn end at shutdown neither set nor clear it, and neither does a program's
+OSC 7501 report that puts the session at its prompt without ending a turn, such as the `idle` it reports as it starts
+(see "From the root record to the session's status" in `docs/product/program-status-reports.md`).
 
 **A turn's own end can arrive after its process ended.** Codex does not wait for any of its hooks, nor Claude Code for
 hooks given in the command form (see "What is injected on every launch" in `docs/product/launching-agents.md`), so

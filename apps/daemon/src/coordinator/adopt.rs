@@ -101,6 +101,23 @@ struct SessionMeta {
     launch_prompt: Option<String>,
     #[serde(default)]
     adoption: Option<Value>,
+    /// The launch's messages go through its extension channel
+    /// (`crate::session::channel`). False from builds that predate it.
+    #[serde(default)]
+    channel: bool,
+    /// Whether the program's reports give the launch its status, as its provider answered at the
+    /// launch. Absent from builds that predate the answer, which takes the provider's answer for
+    /// all its launches.
+    #[serde(default)]
+    status_from_reports: Option<bool>,
+    /// Whether a cancel of the launch can drop the messages its agent held, as its provider
+    /// answered at the launch. Absent from builds that predate the answer, which takes the
+    /// provider's reader's declaration.
+    #[serde(default)]
+    cancel_drops: Option<bool>,
+    /// The agent's configuration directory the launch runs on, where it named one.
+    #[serde(default)]
+    config_dir: Option<String>,
 }
 
 /// What a terminal found in a holder is, by its meta and what the daemon has on record.
@@ -400,7 +417,10 @@ fn adopt_session(
         agent_session_id: agent_session_id.as_deref(),
         server,
     });
-    let (transport, after_exit) = (rebuilt.transport, rebuilt.after_exit);
+    // The launch's channel helper posts to its holder, which relays to whichever daemon is
+    // linked: the channel is made again here, and the helper's next poll finds it.
+    let (transport, _) = crate::session::channel::transport_of(rebuilt.transport, meta.channel);
+    let after_exit = rebuilt.after_exit;
     // Only the directory the daemon makes for the session is kept, and removed with its process:
     // a meta that names another place is not trusted with the removal.
     let scratch = meta
@@ -421,6 +441,9 @@ fn adopt_session(
         // the holder, which ends it with the terminal.
         before_scratch_removal: crate::session::term::before_scratch_removal(transport, after_exit),
         display: DisplaySeed::new(state.display_fallback.clone(), None),
+        status_from_reports: meta.status_from_reports,
+        cancel_drops: meta.cancel_drops,
+        config_dir: meta.config_dir.map(PathBuf::from),
     }));
     // Its agent ran its start hook, if it ever did, before this daemon was there to see it.
     live.trust.note_adopted();

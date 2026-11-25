@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ModelDisplay, ProviderInfo, SettingDescriptor } from "../protocol";
+import { BUILT_IN_SERVED } from "../providers/servedFixtures";
 import { FIXTURE_PROVIDERS } from "./fixtureProviders";
 
 // The fixture daemon serves a hand-written copy of what the daemon's registry describes of each provider, so a
@@ -49,6 +50,8 @@ function capabilitiesOf(source: string): ProviderInfo["capabilities"] {
     native_app_scheme: required(body, /\bnative_app_scheme: (Some\("[a-z]+"\)|None)/, "native_app_scheme").replace(/^Some\("([a-z]+)"\)$/, "$1").replace(/^None$/, "") || null,
     per_session_trust: flag("per_session_trust"),
     config_sharing: flag("config_sharing"),
+    owned_accounts: flag("owned_accounts"),
+    login_flow: flag("login_flow"),
     mcp_inventory: flag("mcp_inventory"),
     ends_command_groups_on_exit: flag("ends_command_groups_on_exit"),
     interactions: kinds(required(body, /\binteractions: InteractionKinds::([A-Z]+)/, "interactions")),
@@ -64,10 +67,12 @@ function capabilitiesOf(source: string): ProviderInfo["capabilities"] {
 
 function quotaWindowsOf(source: string): ProviderInfo["quota_windows"] {
   const body = between(source, "quota_windows: QuotaWindowNaming {", "model_display:");
+  const creditPeriod = body.match(/credit_period: Some\(CreditPeriodName::(\w+)\)/)?.[1];
   return {
     kinds: [...between(body, "kinds:", "session_window:").matchAll(/QuotaWindowKind::(\w+)/g)].map(([, kind]) => snake(kind)) as ProviderInfo["quota_windows"]["kinds"],
     session_window: snake(required(body, /session_window: SessionWindowName::(\w+)/, "session window")) as ProviderInfo["quota_windows"]["session_window"],
     weekly_all_models: required(body, /weekly_all_models: (true|false)/, "weekly_all_models") === "true",
+    ...(creditPeriod ? { credit_period: snake(creditPeriod) as ProviderInfo["quota_windows"]["credit_period"] } : {}),
   };
 }
 
@@ -91,8 +96,9 @@ function settingsOf(source: string): SettingDescriptor[] {
     const kind: SettingDescriptor["kind"] = setting.includes("SettingKind::Choice")
       ? { type: "choice", choices: [...setting.matchAll(/value: "([^"]+)",\s*confirm: (true|false)/g)].map(([, value, confirm]) => ({ value, confirm: confirm === "true" })) }
       : { type: "switch", default: switchDefault(required(setting, /default: SwitchDefault::(\w+)/, "default")) };
+    const id = required(setting, /\bid: ("[a-z_][a-z_0-9]*"|[A-Z][A-Z_0-9]*),/, "setting id");
     return {
-      id: required(setting, /\bid: "([a-z_]+)"/, "setting id"),
+      id: id.startsWith('"') ? id.slice(1, -1) : required(source, new RegExp(`\\bconst ${id}: &str = "([a-z_][a-z_0-9]*)";`), "setting id"),
       kind,
       exported: required(setting, /exported: (true|false)/, "exported") === "true",
       shown_to_agents: required(setting, /shown_to_agents: (true|false)/, "shown_to_agents") === "true",
@@ -101,13 +107,20 @@ function settingsOf(source: string): SettingDescriptor[] {
   });
 }
 
+function nativeMemory(variant: string): ProviderInfo["native_memory"] {
+  if (variant === "Absent") return "absent";
+  if (variant === "Switchable") return "switchable";
+  if (variant === "Unswitchable") return "unswitchable";
+  throw new Error(`unknown native memory ${variant}`);
+}
+
 function switchDefault(rule: string): Extract<SettingDescriptor["kind"], { type: "switch" }>["default"] {
   if (rule === "On") return "on";
   if (rule === "Off") return "off";
   throw new Error(`unknown switch default ${rule}`);
 }
 
-describe.each(FIXTURE_PROVIDERS.map((provider) => [provider.id, provider] as const))("the fixture provider %s", (id, served) => {
+describe.each(BUILT_IN_SERVED.map((provider) => [provider.id, provider] as const))("the fixture provider %s", (id, served) => {
   const source = read(`${id}.rs`);
 
   it("serves the names, install link and configuration directory of its descriptor", () => {
@@ -133,13 +146,42 @@ describe.each(FIXTURE_PROVIDERS.map((provider) => [provider.id, provider] as con
     expect(served.model_display).toEqual(modelDisplayOf(source));
   });
 
+  it("serves the memory fact of its descriptor", () => {
+    const variant = required(source, /^ {4}native_memory: NativeMemory::(\w+),/m, "native_memory");
+    expect(served.native_memory).toBe(nativeMemory(variant));
+  });
+
   it("serves the settings of its descriptor", () => {
     expect(served.settings).toEqual(settingsOf(source));
   });
 });
 
-it("serves every provider the daemon registers, in its order", () => {
-  const registry = read("mod.rs");
-  const registered = [...between(registry, "const REGISTRY: &[&ProviderDescriptor] = &[", "];").replace(/#\[cfg\(test\)\]\s*&test_provider::DESCRIPTOR,/, "").matchAll(/&(\w+)::DESCRIPTOR/g)].map(([, module]) => module);
-  expect(FIXTURE_PROVIDERS.map(({ id }) => id)).toEqual(registered);
+/** The released descriptors in registry order, before the test-only provider. */
+function daemonRegistry(): string[] {
+  const body = between(read("mod.rs"), "const REGISTRY: &[&ProviderDescriptor] = &[", "#[cfg(test)]");
+  return [...body.matchAll(/&(\w+)::DESCRIPTOR,/g)].map(([, module]) => module);
+}
+
+it("has a served-info fixture for every provider the daemon registers, in its order", () => {
+  expect(BUILT_IN_SERVED.map(({ id }) => id)).toEqual(daemonRegistry());
+});
+
+it("serves the providers the daemon releases, in its order", () => {
+  expect(FIXTURE_PROVIDERS.map(({ id }) => id)).toEqual(daemonRegistry());
+});
+
+describe("a released provider with no registered served-info fixture", () => {
+  afterEach(() => {
+    vi.doUnmock("../providers/servedFixtures");
+    vi.resetModules();
+  });
+
+  it("fails the import of the fixture providers, naming it", async () => {
+    vi.resetModules();
+    vi.doMock("../providers/servedFixtures", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("../providers/servedFixtures")>();
+      return { ...actual, BUILT_IN_SERVED: actual.BUILT_IN_SERVED.filter(({ id }) => id !== "codex") };
+    });
+    await expect(import("./fixtureProviders")).rejects.toThrow(/codex.*no registered served-info fixture/);
+  });
 });

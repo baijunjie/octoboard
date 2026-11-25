@@ -66,8 +66,10 @@ among the shell's own processes, for the busy reading and the close below.
 interactive shell — on a Windows daemon host the environment built as Windows builds a new sign-in's —
 reused under the same rules and filtered the same way (see "The launch environment" in
 `docs/product/launching-agents.md`). Unlike an agent launch, **a capture that fails does not refuse the shell**: it
-starts instead in the daemon's own environment, less the variables that mark a process as running inside an agent
-session, and loads the user's profile itself as any login shell does. Either way the terminal is declared as
+starts instead in the daemon's own environment, read as a snapshot is — what the launch of an agent session the daemon
+was started in set put back, and the variables that mark a process as running inside an agent session removed (see
+"The launch environment" in `docs/product/launching-agents.md`) — and loads the user's
+profile itself as any login shell does. Either way the terminal is declared as
 `xterm-256color`, and nothing else is set over that environment: none of the variables Octoboard sets for an agent
 session (its session id, the daemon's port, the git hook path, an agent's config directory or home) is set.
 

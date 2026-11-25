@@ -54,6 +54,25 @@ pub enum PathStyle {
     Windows,
 }
 
+/// The part of a path after a leading `~` and the host's directory separator, if present.
+pub fn home_relative(path: &str) -> Option<&str> {
+    let rest = path.strip_prefix('~')?;
+    if rest.is_empty() {
+        return Some(rest);
+    }
+    rest.strip_prefix(std::path::is_separator)
+}
+
+/// The path's text with host directory separators written as slashes for a file URI.
+pub fn file_uri_path(path: &Path) -> Cow<'_, str> {
+    let text = path.to_string_lossy();
+    if PATH_STYLE == PathStyle::Windows && text.contains('\\') {
+        Cow::Owned(text.replace('\\', "/"))
+    } else {
+        text
+    }
+}
+
 /// Whether `recorded` is an absolute path in the other host family's style: on a Windows host a
 /// path in Unix form (starting with `/`, a `//server/share` form being Windows's own), on a Unix
 /// host a Windows one (`C:\`, `C:/`, `\\server\share`, `\\?\`). Such a path, written by a host

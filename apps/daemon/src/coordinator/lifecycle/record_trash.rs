@@ -43,6 +43,7 @@ pub(super) fn trash_agent_records_of(
         }
     };
     let mut paths: Vec<PathBuf> = Vec::new();
+    let mut rows_removed = std::collections::HashSet::new();
     for session in deleted {
         let Some(agent_id) = &session.agent_session_id else {
             continue;
@@ -60,6 +61,12 @@ pub(super) fn trash_agent_records_of(
         {
             if !paths.contains(&path) {
                 paths.push(path);
+            }
+        }
+        // A row store removes its own conversation once, however many deleted sessions use it.
+        if rows_removed.insert((session.agent, &session.config_dir, agent_id)) {
+            if let Some(Err(err)) = records::rows::remove(&locator, session) {
+                tracing::warn!(session = %session.id, %err, "removing the agent's own record of the session failed");
             }
         }
     }

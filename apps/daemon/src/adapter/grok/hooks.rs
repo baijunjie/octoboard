@@ -35,8 +35,27 @@ use crate::protocol::{AgentId, BackgroundTask, SessionStatus};
 pub(super) struct GrokHooks;
 
 impl HookInterpreter for GrokHooks {
-    fn starts_conversation(&self, event: &str) -> bool {
+    /// Grok Build runs no hook before its trust screen is answered, and `SessionStart` right
+    /// after.
+    fn past_startup(&self, _event: &str, _payload: &Value) -> bool {
+        true
+    }
+
+    fn starts_conversation(&self, event: &str, _payload: &Value) -> bool {
         event == "UserPromptSubmit"
+    }
+
+    /// Grok Build (1.0.70) supplies the pasted text verbatim.
+    fn submitted_prompt<'a>(&self, payload: &'a Value) -> Option<&'a str> {
+        payload.get("prompt")?.as_str()
+    }
+
+    fn is_subagent(&self, payload: &Value) -> bool {
+        crate::hooks::is_named_subagent(payload)
+    }
+
+    fn agent_session_id(&self, payload: &Value) -> Option<String> {
+        crate::hooks::agent_session_id(payload)
     }
 
     fn edit_targets(&self, payload: &Value) -> (Vec<String>, Option<std::path::PathBuf>) {
@@ -64,6 +83,12 @@ impl HookInterpreter for GrokHooks {
         Some(serde_json::json!({"hookSpecificOutput": {
             "hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason
         }}))
+    }
+
+    /// Grok runs no hook before its trust confirmation has been answered, and `SessionStart` is
+    /// the first it sends.
+    fn announces_session_start(&self, event: &str, _payload: &Value) -> bool {
+        event == "SessionStart"
     }
 
     fn status(&self, event: &str, payload: &Value) -> Option<SessionStatus> {
@@ -106,8 +131,6 @@ impl HookInterpreter for GrokHooks {
         let key = field(payload, "promptId", "prompt_id")?;
         (!key.is_empty()).then(|| key.to_string())
     }
-
-    // The default `submitted_prompt`: Grok Build (1.0.70) supplies the pasted text verbatim.
 
     /// A background task's or subagent's completion, which Grok Build (1.0.77) reports to the
     /// session as a prompt of its own wrapped in `<system-reminder>`: `Background task "<id>"
@@ -235,12 +258,13 @@ impl HookInterpreter for GrokHooks {
     fn record_watch<'a>(
         &self,
         event: &str,
-        _payload: &'a Value,
+        payload: &'a Value,
         previous: Option<SessionStatus>,
         status: SessionStatus,
     ) -> Option<RecordWatch<'a>> {
         (status == SessionStatus::Working
-            && (self.starts_conversation(event) || previous == Some(SessionStatus::WaitingUser)))
+            && (self.starts_conversation(event, payload)
+                || previous == Some(SessionStatus::WaitingUser)))
         .then_some(RecordWatch::Interrupt {
             record: None,
             turn_id: None,

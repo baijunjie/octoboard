@@ -2,7 +2,7 @@ import React from "react";
 
 import { CodedError, type MessageParams } from "../../errors/codedError";
 import { hasCodeParams, hasShellTimeoutDetails, isStructuredFailure, type ErrorPresentation } from "../../errors/errorPresentation";
-import { classifyError } from "../../errors/errorRecovery";
+import { classifyError, isProviderRemedy } from "../../errors/errorRecovery";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { errorText } from "../../errors/errorText";
 import { isolate } from "../../i18n/isolate";
@@ -31,13 +31,16 @@ export function ownTextOf(error: ErrorPresentation): React.ReactNode {
 /** The one main thing to do about a failure, in the application's own words, shown in the alert's
  * description and never behind Details, or nothing when the failure has none. A Git that could not be found has its
  * remedy from its classification (`classifyError`), its code's record carrying no remedy line of its own, so the
- * remedy reads the same wherever that failure is shown. */
+ * remedy reads the same wherever that failure is shown; so does a provider code's own remedy
+ * (`provider.<id>.<code>.remedy`, the record's `recovery`), drawn with the code's params. */
 export function errorRemedy(error: ErrorPresentation): React.ReactNode {
   if (typeof error === "string") return undefined;
   if (hasErrorRemedy(error)) return <DaemonErrorMessage error={error} part="remedy" />;
   const classification = classifyError(error);
-  return classification.kind === "actionable" && (classification.recovery === "installGit" || classification.recovery === "installGitNoRetry")
-    ? <RecoveryGuidance recovery={classification.recovery} />
+  if (classification.kind !== "actionable") return undefined;
+  const { recovery } = classification;
+  return recovery === "installGit" || recovery === "installGitNoRetry" || isProviderRemedy(recovery)
+    ? <RecoveryGuidance recovery={recovery} error={error} />
     : undefined;
 }
 

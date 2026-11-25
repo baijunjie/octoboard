@@ -356,9 +356,10 @@ pub(super) fn delete_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Sess
 pub(super) fn inspect_session_records(
     state: &AppState,
     ids: &[String],
-    mut locator: records::Locator,
+    locator: records::Locator<'_>,
 ) -> Result<crate::protocol::SessionRecordPresence> {
     use crate::protocol::SessionRecordPresence::{Absent, Present, Unknown};
+    let mut locator = locator.with_store(&state.store);
     let accounts = state.store.list_accounts()?;
     let mut presence = Absent;
     for id in ids {
@@ -427,7 +428,7 @@ impl RecordsConsent {
 }
 
 /// Whether deleting `session` may move its agent's own records to the Trash: the one place that
-/// decides it, for every path that deletes a session. The records of a session that never had a
+/// decides it for deletions that can request a cleanup. Row records require the explicit option. The records of a session that never had a
 /// conversation are what Octoboard's own launch made the agent write, so they go with it; those of
 /// a session that had one hold the user's conversation, and move only on the user's tick. The
 /// deletion of every archived session in a scope is stricter: left unticked it moves nothing, a
@@ -438,7 +439,9 @@ impl RecordsConsent {
 fn may_move_agent_records(session: &Session, consent: RecordsConsent) -> bool {
     match consent {
         RecordsConsent::Ticked => true,
-        RecordsConsent::Unticked => !session.has_conversation,
+        RecordsConsent::Unticked => {
+            !session.has_conversation && records::rows::shaped(session.agent).is_none()
+        }
         RecordsConsent::UntickedBulk => false,
     }
 }
@@ -486,7 +489,7 @@ fn borne_out_as_unused(
 pub(super) async fn trash_unconfirmed_agent_records_with(
     state: &Arc<AppState>,
     deleted: Vec<Session>,
-    locator: records::Locator,
+    locator: records::Locator<'static>,
     trash: impl Fn(&Path) -> Result<(), TrashFailure> + Send + 'static,
 ) {
     trash_agent_records_with(state, deleted, RecordsConsent::Unticked, locator, trash).await;
@@ -501,7 +504,7 @@ async fn trash_agent_records_with(
     state: &Arc<AppState>,
     deleted: Vec<Session>,
     consent: RecordsConsent,
-    locator: records::Locator,
+    locator: records::Locator<'static>,
     trash: impl Fn(&Path) -> Result<(), TrashFailure> + Send + 'static,
 ) {
     let deleted: Vec<Session> = deleted
@@ -513,7 +516,7 @@ async fn trash_agent_records_with(
     }
     let state = Arc::clone(state);
     let moved = tokio::task::spawn_blocking(move || {
-        let mut locator = locator;
+        let mut locator = locator.with_store(&state.store);
         let deleted = match consent {
             RecordsConsent::Ticked | RecordsConsent::UntickedBulk => deleted,
             RecordsConsent::Unticked => borne_out_as_unused(&state, deleted, &mut locator),
@@ -638,16 +641,19 @@ async fn delete_requested_with(
     consent: RecordsConsent,
     only_if_unused: bool,
     (force_remove, keep): (Vec<SessionBranchTarget>, Vec<SessionBranchTarget>),
-    locator: records::Locator,
+    locator: records::Locator<'static>,
     trash: impl Fn(&Path) -> Result<(), TrashFailure> + Send + 'static,
 ) -> Result<()> {
     let _admission = state.admit_change()?;
-    let deleted = if only_if_unused {
+    let mut deleted = if only_if_unused {
         delete_unused_session(state, &session)?
     } else {
         delete_session(state, &session)?
     };
     remove_branches_once_stopped(state, deleted.clone(), force_remove, keep);
+    if only_if_unused {
+        deleted.retain(|session| records::rows::shaped(session.agent).is_none());
+    }
     trash_agent_records_with(state, deleted, consent, locator, trash).await;
     Ok(())
 }

@@ -325,14 +325,15 @@ fn an_older_hook_reads_an_answer_without_a_verdict_and_skips_one_that_has_it() {
     assert_eq!(back.foreign_repository.unwrap().project, OTHER);
 }
 
-/// A stand-in for a daemon that answers the one request it gets with `body` as JSON.
+/// A stand-in for a daemon that answers the one request it gets with `body` as JSON; a port
+/// probe is not that request.
 fn answering_with_body(body: &'static str) -> u16 {
     use std::io::{Read, Write};
 
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     std::thread::spawn(move || {
-        let (mut helper, _) = listener.accept().unwrap();
+        let mut helper = crate::test_support::accept_past_probes(&listener);
         let mut request = [0u8; 4096];
         let _ = helper.read(&mut request);
         write!(
@@ -346,6 +347,11 @@ fn answering_with_body(body: &'static str) -> u16 {
         let mut rest = Vec::new();
         let _ = helper.read_to_end(&mut rest);
     });
+    // Probed before the test uses it, as a running daemon may probe it at any point.
+    assert_eq!(
+        crate::test_support::probe_port(port),
+        "HTTP/1.1 404 Not Found"
+    );
     port
 }
 

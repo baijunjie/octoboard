@@ -33,14 +33,15 @@ use crate::protocol::{
     PermissionPrompt, Question, QuestionAnswer, QuestionOption, QuestionPrompt, ToolCategory,
 };
 use crate::session::interaction::{Answer, CallSeen, InteractionReader, NextKey, Reading};
+use crate::session::screen::ScreenText;
 
 pub(super) struct GrokInteractions;
 
 impl InteractionReader for GrokInteractions {
     /// Faint cells blanked, as its composer is read (`GrokScreen`); its cards draw nothing faint
     /// that a reading needs (the replayed captures, `testdata/grok-interaction-captures.md`).
-    fn faint_blanked(&self) -> bool {
-        true
+    fn prompt_screen(&self) -> ScreenText {
+        ScreenText::FaintBlanked
     }
 
     /// A call of the session itself: a subagent's calls are asked about on its own card, but are

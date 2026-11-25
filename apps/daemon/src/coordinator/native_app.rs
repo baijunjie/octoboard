@@ -16,7 +16,7 @@ use anyhow::Result;
 
 use crate::adapter::{native_app_unavailable as unavailable, provider, NativeApp, NativeAppOpen};
 use crate::platform::open::native_app::url_scheme_handled;
-use crate::protocol::{error_code, AgentId, CodedError, Session, SessionStatus};
+use crate::protocol::{error_code, AgentId, CodedError, ProviderOperation, Session, SessionStatus};
 use crate::records::locate::Locator;
 use crate::state::AppState;
 
@@ -48,15 +48,15 @@ pub fn installed_agents() -> Vec<AgentId> {
 /// `account_sharing_in_progress` while a change of its account's sharing moves the account's
 /// directory, `session_did_not_stop`, the codes of [`super::processes::keep`] for a tree that
 /// cannot be kept, `daemon_shutting_down`, `shell_environment_timeout` when the shell environment
-/// cannot be captured, and `native_app_unavailable` for an agent with no application, one that is
-/// not installed, a session with no conversation yet, a conversation id the agent would not take
-/// and a launch that fails. Everything that does not depend on archiving is checked before it, so
-/// a refusal for it leaves everything as it was; the one exception is a `session_working` found
-/// only by the check repeated after the chosen trees were kept, which leaves them kept, and the
-/// session running. The archive cancels the session's pending recoveries as its process leaves
-/// (the user now has the conversation); those of a session with no process, or already archived,
-/// are cancelled just before the application is asked. `keep_process_ids` is ignored for an
-/// archived session.
+/// cannot be captured, `provider_unsupported` for an agent whose provider declares no application,
+/// and `native_app_unavailable` for an application that is not installed, a session with no
+/// conversation yet, a conversation id the agent would not take and a launch that fails.
+/// Everything that does not depend on archiving is checked before it, so a refusal for it leaves
+/// everything as it was; the one exception is a `session_working` found only by the check
+/// repeated after the chosen trees were kept, which leaves them kept, and the session running.
+/// The archive cancels the session's pending recoveries as its process leaves (the user now has
+/// the conversation); those of a session with no process, or already archived, are cancelled just
+/// before the application is asked. `keep_process_ids` is ignored for an archived session.
 pub async fn open_session_in_app(
     state: &Arc<AppState>,
     id: &str,
@@ -119,15 +119,11 @@ async fn open_with(
     if had_process {
         refuse_if_at_work(state, &session)?;
     }
-    let (Some(scheme), Some(app)) = (
-        scheme_of(session.agent),
-        provider(session.agent).native_app(),
-    ) else {
-        return Err(unavailable(&format!(
-            "{} has no desktop application",
-            session.agent.label()
-        )));
-    };
+    let (scheme, app) = CodedError::require_offered(
+        session.agent,
+        ProviderOperation::NativeApp,
+        scheme_of(session.agent).zip(provider(session.agent).native_app()),
+    )?;
     let Some(conversation) = crate::records::resumability::resumable_agent_session_id(&session)
     else {
         return Err(unavailable("this session has no conversation yet"));

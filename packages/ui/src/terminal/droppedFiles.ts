@@ -31,7 +31,7 @@ export function droppedPathsText(paths: string[]): string {
  * listing each (`dropped_files_refused`), or as it is where one was; a failure of the session itself ends the drop and
  * has an alert of its own. Everything comes through `latest`, since the controller is built once. */
 export function dropFilesHandler(
-  latest: () => { t: Translate; request: RequestSender; attachmentLimits: AttachmentLimits | null },
+  latest: () => { t: Translate; request: RequestSender; attachmentLimits: AttachmentLimits | null; takesImages: (sessionId: string) => boolean },
 ): NonNullable<TerminalControllerHandlers["dropFiles"]> {
   return {
     upload(files, sessionId, wanted = () => true) {
@@ -53,10 +53,10 @@ export function dropFilesHandler(
             if (wanted()) tellRefused();
             return undefined;
           }
-          const { t, request, attachmentLimits } = latest();
+          const { t, request, attachmentLimits, takesImages } = latest();
           turn.begin(dropped.file.name);
           try {
-            paths.push(await uploadDropped(dropped, sessionId, { t, request, attachmentLimits, signal: turn.signal, advance: turn.advance }));
+            paths.push(await uploadDropped(dropped, sessionId, { t, request, attachmentLimits, takesImages: takesImages(sessionId), signal: turn.signal, advance: turn.advance }));
             turn.end();
           } catch (error) {
             turn.end();
@@ -80,19 +80,19 @@ export function dropFilesHandler(
 }
 
 /** Sends one dropped file and answers with the daemon's unquoted path: an image the daemon takes as it is goes the way a
- * pasted image does, so agents take it as an attached image, and any other file is attached. Rejects with the failure
- * to show, before anything is sent where the file is one the daemon would refuse, and with `DropCancelled` once the
- * user cancels. */
+ * pasted image does where the session's agent takes images (`takesImages`), so the agent takes it as an attached image,
+ * and any other file is attached. Rejects with the failure to show, before anything is sent where the file is one the
+ * daemon would refuse, and with `DropCancelled` once the user cancels. */
 async function uploadDropped(
   { file, folder }: DroppedFile,
   sessionId: string,
-  { t, request, attachmentLimits, signal, advance }: { t: Translate; request: RequestSender; attachmentLimits: AttachmentLimits | null; signal: AbortSignal; advance: (uploaded: number, size: number) => void },
+  { t, request, attachmentLimits, takesImages, signal, advance }: { t: Translate; request: RequestSender; attachmentLimits: AttachmentLimits | null; takesImages: boolean; signal: AbortSignal; advance: (uploaded: number, size: number) => void },
 ): Promise<string> {
   const { name } = file;
   const unreadable = (cause: unknown) => new ActionableError(t("daemon.dropped_file_unreadable", { name: isolate(name) }), "none", { cause, code: "dropped_file_unreadable", params: { name } });
   if (folder) throw new ActionableError(t("daemon.dropped_file_folder", { name: isolate(name) }), "none", { code: "dropped_file_folder", params: { name } });
   if (file.size === 0) throw new ActionableError(t("daemon.dropped_file_empty", { name: isolate(name) }), "none", { code: "dropped_file_empty", params: { name } });
-  if (isSavedAsIs(file)) {
+  if (takesImages && isSavedAsIs(file)) {
     // What is not a coded failure here is the file's bytes failing to be read.
     return savePastedImagePath(file, sessionId, { t, request }).catch((error: unknown) => {
       throw error instanceof CodedError ? error : unreadable(error);

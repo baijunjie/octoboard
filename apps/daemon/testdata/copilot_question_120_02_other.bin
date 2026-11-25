@@ -1,0 +1,32 @@
+[96m╴╶[35m [m[96m▘▝[35m [m[25;117H6s[35;2H  alpha
+ [1;36m❯ beta[m[21;35r[35;1H
+
+
+[r[34;40r[40;1H
+
+
+[r[3;1H[2;90m│[m [34m ╭─╮╭─╮[m                             [2;90m│[m  [1;34mGetting started[m                                                             [2;90m│[m ┃
+[2C[34m ╰─╯╰─╯[m  Copilot v1.0.114 uses AI.  [2;90m│[m  Use the tabs above to explore your sessions and pull requests[17C[37m┃
+[2C[35m █ [96m▘▝[35m █[m  Check for mistakes.[5;42H/model — Switch models across providers, or use Auto[26C[37m┃
+[2C[35m  ▔▔▔▔ [m                           [5C                                                             [17C[37m┃
+[2C[m                            [7;39H                                                       [26C[37m┃
+[2;90m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[m [37m┃
+[118C[m[1K [37m┃
+[m [33m![m Model "standin" is not in the built-in catalog. Using defaults for: prompt tokens                                   [37m┃
+[3C[m(COPILOT_PROVIDER_MAX_PROMPT_TOKENS), output tokens (COPILOT_PROVIDER_MAX_OUTPUT_TOKENS). Run [37m copilot help [8C┃
+[C[m  [37mproviders [m for configuration details.                                            [35C[37m┃
+[118C[m[1K [37m┃
+[C[34m●[m MCP Servers reloaded: 0 servers connected[75C[37m┃
+[119C┃
+[C[m❯ use echo                                 [69C23:02 [37m┃
+[119C┃
+[C[34m●[m ok      [102C      [37m┃
+[119C┃
+[C[m❯ CMD:tool ask_user {"message": "Pick one?", "requestedSchema": {"properties": {"choice": {"type": "string",    23:02 [37m┃
+[3C[m"enum": ["alpha", "beta"]}, "note": {"type": "string", "description": "a note"}}, "required": ["choice"]}}[10C[37m┃
+[118C[m[1K [37m┃
+[C[m○ [1mAsking user [mPick one?[92C6s [37m┃
+[119C┃[33;4H[mbeta
+ [1;36m❯ Other (type your answer below)[4B[0;2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[m❯ Type your answer...
+[2m───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[?7l─[?7h[m[A❯ [?25h[?25l[23;117H7[39;3H[?25h

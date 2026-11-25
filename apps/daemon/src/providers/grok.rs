@@ -1,10 +1,10 @@
 //! Grok Build's descriptor, with its on-disk layout and the names in it only its own modules use.
 
-use super::layout::AgentLayout;
+use super::layout::{AgentLayout, ConfigDirVarNames};
 use super::{
     AgentId, Capabilities, DeliveryQuirks, DetectionMarkers, InteractionKinds, ModelDisplay,
-    ProviderCode, ProviderDescriptor, QuotaWindowKind, QuotaWindowNaming, SessionWindowName,
-    SettingChoice, SettingDescriptor, SettingKind, SwitchDefault,
+    NativeMemory, ProviderCode, ProviderDescriptor, QuotaWindowKind, QuotaWindowNaming,
+    SessionWindowName, SettingChoice, SettingDescriptor, SettingKind, SwitchDefault,
 };
 
 /// A Grok Build session's pinned source home exists but Grok has never been run against it, so it
@@ -22,11 +22,15 @@ impl AgentId {
     pub const GROK: AgentId = AgentId(DESCRIPTOR.id);
 }
 
+/// The instruction file Grok Build reads from the working directory.
+pub(crate) const GROK_INSTRUCTION_FILE: &str = "AGENTS.md";
+
 /// Grok Build: `~/.grok`, a session's directory at
 /// `sessions/<url-encoded working directory>/<id>/`, marked by its `usage.json`, holding the
 /// conversation in `chat_history.jsonl` and its title in `summary.json`.
 pub(crate) const LAYOUT: AgentLayout = AgentLayout {
     config_dir_var: "GROK_HOME",
+    config_dir_var_names: ConfigDirVarNames::Directory,
     default_dir: ".grok",
     records_dir: GROK_RECORDS_DIR,
     archived_records_dir: None,
@@ -73,16 +77,40 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         generic: &["AGENTS.md", ".agents"],
     },
     inherited_session_vars: &[
+        "GROK_AGENT",
         "GROK_HOOK_EVENT",
         "GROK_HOOK_NAME",
         "GROK_SESSION_ID",
         "GROK_WORKSPACE_ROOT",
     ],
-    instruction_file: "AGENTS.md",
+    command_environment: &[
+        ("AWS_PAGER", ""),
+        ("CARGO_TERM_PROGRESS_WHEN", "always"),
+        ("CARGO_TERM_PROGRESS_WIDTH", "80"),
+        ("CLICOLOR", "1"),
+        ("CLICOLOR_FORCE", "1"),
+        ("FORCE_COLOR", "1"),
+        ("GH_PAGER", "cat"),
+        ("GIT_EDITOR", "true"),
+        ("GIT_PAGER", "cat"),
+        ("GIT_SEQUENCE_EDITOR", "true"),
+        ("GIT_TERMINAL_PROMPT", "0"),
+        ("GPG_TTY", ""),
+        ("GRADLE_OPTS", "-Dorg.gradle.console=rich"),
+        ("MANPAGER", "cat"),
+        ("MAVEN_OPTS", "-Dstyle.color=always"),
+        ("NO_COLOR", "1"),
+        ("NPM_CONFIG_PROGRESS", "true"),
+        ("PAGER", "cat"),
+        ("PIP_PROGRESS_BAR", "on"),
+        ("SYSTEMD_PAGER", "cat"),
+    ],
+    instruction_file: GROK_INSTRUCTION_FILE,
     // A line `@AGENTS.md` reaches the model as written (Grok Build 1.0.77).
     instruction_import_prefix: None,
     // Grok Build presents an MCP tool as `<server>__<tool>`, with nothing before it.
     tool_name_prefix: "",
+    tool_name_separator: "__",
     ask_question_tool: Some("ask_user_question"),
     quit_keys: None,
     capabilities: Capabilities {
@@ -98,6 +126,8 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         // `docs/agent-cli-reference.md`, "Folder-trust confirmations".
         console_trust: super::ConsoleTrust::PerLaunch,
         config_sharing: true,
+        owned_accounts: true,
+        login_flow: true,
         mcp_inventory: true,
         // Read from the 1.0.89 binary, not measured: it runs each command in its own process group
         // (`posix_spawnattr_setpgroup`, `setpgid`) and kills child groups with `killpg`; headless
@@ -116,10 +146,11 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         kinds: &[QuotaWindowKind::CreditPeriod],
         session_window: SessionWindowName::FiveHour,
         weekly_all_models: false,
+        credit_period: None,
     },
     model_display: ModelDisplay::PLAIN,
     compatibility_source: false,
-    native_memory_switch: true,
+    native_memory: NativeMemory::Switchable,
     settings: &[
         SettingDescriptor {
             id: "approval_mode",
@@ -171,12 +202,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn its_launch_overrides_are_these_compatibility_switches() {
+        let overridable: Vec<_> = AgentId::GROK
+            .descriptor()
+            .overridable_settings()
+            .map(|setting| setting.id)
+            .collect();
+        assert_eq!(overridable, ["claude_compatibility", "codex_compatibility"]);
+    }
+
+    #[test]
     fn the_layout_names_are_the_ones_grok_build_writes() {
         assert_eq!(AgentId::GROK.descriptor().layout, &LAYOUT);
         assert_eq!(
             LAYOUT,
             AgentLayout {
                 config_dir_var: "GROK_HOME",
+                config_dir_var_names: ConfigDirVarNames::Directory,
                 default_dir: ".grok",
                 records_dir: "sessions",
                 archived_records_dir: None,

@@ -285,7 +285,9 @@ impl AppState {
             .lock()
             .expect("session publication lock poisoned");
         if let Some(project) = self.store.get_project(id)? {
-            self.publish_locked(Event::ProjectUpserted { project });
+            self.publish_locked(Event::ProjectUpserted {
+                project: Box::new(project),
+            });
         }
         Ok(())
     }

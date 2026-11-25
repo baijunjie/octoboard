@@ -189,14 +189,41 @@ pub(crate) fn preferred_weekly_account(
     state: &Arc<AppState>,
     agent: AgentId,
 ) -> Result<Option<Option<String>>> {
-    preferred_weekly_account_except(state, agent, &[], false)
+    ranked_by_weekly(state, agent, &[], false)
 }
 
-/// [`preferred_weekly_account`] without the accounts in `except` (`None` the default account), for
-/// a session that is to be moved off one of them. With `readable_only` also without an account
-/// whose last attempt to read its quota failed, whatever the reading still holds: a session is
-/// not moved onto an account that cannot be seen to have quota left.
-pub(crate) fn preferred_weekly_account_except(
+/// The account a session that is to be moved off its own is switched to, without the accounts in
+/// `except` (`None` the default account). For a provider with a quota window it is
+/// [`preferred_weekly_account`] without those accounts; with `readable_only` also without an
+/// account whose last attempt to read its quota failed, whatever the reading still holds: a
+/// session is not moved onto an account that cannot be seen to have quota left. A provider with no
+/// quota window has none to weigh, so it takes the first usable account in the saved order, and
+/// `readable_only` does not apply to it: the default sign-in reading cannot tell, so requiring a
+/// readable account would mean never switching.
+pub(crate) fn switch_target_except(
+    state: &Arc<AppState>,
+    agent: AgentId,
+    except: &[Option<String>],
+    readable_only: bool,
+) -> Result<Option<Option<String>>> {
+    // A provider with no quota window has no quota to weigh: the first usable account in the
+    // saved order is the target.
+    if agent.descriptor().quota_windows.kinds.is_empty() {
+        for account_id in account_candidates(state, agent)? {
+            if !except.contains(&account_id)
+                && cannot_open(state, agent, account_id.as_deref())?.is_none()
+            {
+                return Ok(Some(account_id));
+            }
+        }
+        return Ok(None);
+    }
+    ranked_by_weekly(state, agent, except, readable_only)
+}
+
+/// The weekly-window ranking behind [`preferred_weekly_account`] and
+/// [`switch_target_except`].
+fn ranked_by_weekly(
     state: &Arc<AppState>,
     agent: AgentId,
     except: &[Option<String>],

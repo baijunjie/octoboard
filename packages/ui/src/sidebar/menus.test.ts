@@ -68,6 +68,20 @@ describe("the Switch account entry", () => {
     expect(labels(project(), [off])).toBeUndefined();
   });
 
+  it("draws no usage bar in the entries of an agent whose provider declares no plan quota, only a blank of the bar's width", () => {
+    const own = project({ agent: "test_agent" });
+    const entry = sessionMenu(t, {} as SidebarHandlers, own, [account("w", "test_agent")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, quota: { quotas: [], now: 0 } })
+      .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu;
+    expect(entry.items).toHaveLength(2);
+    for (const item of entry.items as ActionMenuItem[]) {
+      const icon = item.icon as React.ReactElement<{ className?: string; children?: React.ReactNode }>;
+      expect(icon.props.className).toBe("w-8 shrink-0");
+      expect(icon.props.children).toBeUndefined();
+    }
+    const claude = submenu(project(), [account("w", "claude")])!.items as ActionMenuItem[];
+    expect((claude[0]!.icon as React.ReactElement<{ className?: string }>).props.className).not.toBe("w-8 shrink-0");
+  });
+
   it("disables an account whose quota is used up at the time given, with why, and never the current one", () => {
     const spent = (accountId: string | null) => ({
       agent: "claude" as const, account: accountId, fetched_at: 0, plan: null, unavailable: null,

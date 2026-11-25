@@ -10,6 +10,7 @@ import { agentIconPickerOptions } from "../components/icons/AgentIcon";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Agent, Console, Project } from "../protocol";
+import { accountConfigDir } from "../accounts/accountDir";
 import { quotaNaming } from "../accounts/quotaFormat";
 import { quotaUsedUpMessage } from "../quota/quotaCopy";
 import { useDaemonStore, useProviders } from "../store";
@@ -153,7 +154,7 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
     unavailable: disabled && chosenEntry
       ? accountRefusalMessage("accountChoice.disabled.description", chosenEntry.name)
       : signedOut && chosenEntry
-        ? accountRefusalMessage("accountChoice.signedOut.description", chosenEntry.name)
+        ? accountRefusalMessage("accountChoice.signedOut.description", chosenEntry.name, { providers, agent: choice.agent, dir: accountConfigDir(accounts, agentAvailability, providers, choice.agent, choice.account) })
         : exhaustedBy && chosenEntry?.quota
           ? quotaUsedUpMessage(t, quotaNaming(chosenEntry.quota, providers), chosenEntry.name, exhaustedBy, now)
           : changingSharing && chosenEntry

@@ -426,10 +426,114 @@ pub(crate) fn capacity_retry_prompt(attempt: usize, of: usize) -> String {
     )
 }
 
+/// What became of the messages a session sent that a note to it ([`sender_note`]) tells it of.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SenderNote {
+    /// Written while the turn ran, and the turn ended without the agent taking them.
+    NotTaken,
+    /// Written while the turn ran, which a cancel may have dropped unseen.
+    MaybeDroppedAtCancel,
+    /// Dropped by a cancel, and not to be written again.
+    DroppedAtCancel,
+    /// Given back by the agent's own server or channel, and not to be written again.
+    GivenBackUnsent,
+    /// Not sent by the agent, with its input box empty after: gone elsewhere.
+    NotDelivered,
+    /// Told as one of the above, and reported taken by the agent since.
+    RanAfterAll,
+}
+
+/// The note a session is told about messages it sent into the session `session`, whose agent is
+/// `agent`, that `note` says became of them: one note for all of them, with each message's text
+/// quoted, so that nothing of it reads as a header of Octoboard's own. `get_session` is the name
+/// the told session calls `get_session` by.
+pub(crate) fn sender_note(
+    note: SenderNote,
+    session: &str,
+    agent: &str,
+    get_session: &str,
+    texts: &[&str],
+) -> String {
+    let one = texts.len() == 1;
+    let pick = |single: &'static str, several: &'static str| if one { single } else { several };
+    let (it, was, is) = (pick("it", "them"), pick("was", "were"), pick("is", "are"));
+    let they = pick("it", "they");
+    let check = format!(
+        "The user has been told. Check the session with `{get_session}` before sending {it} again."
+    );
+    let subject = if one {
+        format!("your message to session `{session}`")
+    } else {
+        format!("{} of your messages to session `{session}`", texts.len())
+    };
+    let what = match note {
+        SenderNote::NotTaken => format!(
+            "{subject} {was} written while its turn ran, but {agent} did not take {it} before the \
+             turn ended, so the session has not read {it} ({they} may still be in its input box). \
+             {check}"
+        ),
+        SenderNote::MaybeDroppedAtCancel => format!(
+            "{subject} may not have been carried out: its turn was cancelled while {agent} may \
+             still have been holding {it}, and nothing tells whether {they} {was} taken, so {they} \
+             {is} not written again. {check}"
+        ),
+        SenderNote::DroppedAtCancel => format!(
+            "{subject} {was} not carried out: {agent} dropped {it} unsent when its turn was \
+             cancelled, and {they} could not be written again. {check}"
+        ),
+        SenderNote::GivenBackUnsent => format!(
+            "{subject} {was} not carried out: {agent} gave {it} back unsent from its own server or \
+             channel, and {they} could not be written again. {check}"
+        ),
+        SenderNote::NotDelivered => format!(
+            "{subject} {was} not delivered: {agent} did not send {it} to the conversation, and its \
+             input box then read empty, so {they} went elsewhere (into a dialog, say) and may be \
+             lost. {} not written again. {check}",
+            capitalised(&format!("{they} {is}"))
+        ),
+        SenderNote::RanAfterAll => format!(
+            "{subject}, which you were told had not been carried out, ran after all: {agent} \
+             reported taking {it}. Do not send {it} again."
+        ),
+    };
+    let quoted: Vec<String> = texts.iter().map(|text| naming::quote(text)).collect();
+    format!(
+        "{NOTICE_PREFIX}: {what} {}:\n{}",
+        pick("It read", "They read"),
+        quoted.join("\n\n")
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::protocol::{AgentId, SessionStatus};
+
+    /// A note to a sender is a notice of Octoboard's own, names the session written into, and
+    /// quotes each message's text line by line, worded for one message or for several.
+    #[test]
+    fn a_note_to_a_sender_quotes_each_message_under_the_notice_prefix() {
+        let one = sender_note(SenderNote::NotTaken, "s", "Codex", "get_session", &["a\nb"]);
+        assert!(one.starts_with(NOTICE_PREFIX), "{one}");
+        assert!(
+            one.contains("your message to session `s` was written"),
+            "{one}"
+        );
+        assert!(one.ends_with("It read:\n> a\n> b"), "{one}");
+        let several = sender_note(
+            SenderNote::NotDelivered,
+            "s",
+            "Codex",
+            "get_session",
+            &["a", "b"],
+        );
+        assert!(
+            several.contains("2 of your messages to session `s` were not delivered"),
+            "{several}"
+        );
+        assert!(several.contains("They are not written again"), "{several}");
+        assert!(several.ends_with("They read:\n> a\n\n> b"), "{several}");
+    }
 
     fn tree(command: &str, cwd: Option<&str>, ports: &[u16]) -> ProcessTree {
         ProcessTree {

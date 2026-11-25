@@ -979,3 +979,40 @@ describe.each([{ strict: false }, { strict: true }])("with a dialog opened after
     expect(alert.contains(document.activeElement)).toBe(true);
   });
 });
+
+describe("the daemon's account_not_signed_in alert", () => {
+  const refused = (params: Record<string, string>) => new CodedError("Work (Test Agent) is not logged in.", "account_not_signed_in", { agent: "Test Agent", account: "Work", ...params });
+  const raise = (error: CodedError) => {
+    mount(undefined, { kind: "browser", host: BROWSER_HOST }, testDaemon());
+    act(() => errorAlerts.report({ message: "Refused", error }));
+    return {
+      text: document.querySelector('[role="alertdialog"]')!.textContent!,
+      labels: Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).map((b) => b.textContent),
+    };
+  };
+
+  it("says how to log in with the provider's own command, and offers no way to Settings, for a provider with no login flow", () => {
+    const { text, labels } = raise(refused({ agent_id: "test_agent", config_dir: "/accounts/work" }));
+    expect(text).toContain("To log in, run test-agent login in a terminal, with /accounts/work as its configuration directory.");
+    expect(text).not.toContain("Choose another account, or log in to this one.");
+    expect(labels).not.toContain("Manage accounts");
+  });
+
+  it("falls back to the provider's usual directory for the default account, which the daemon names none for yet", () => {
+    const { text } = raise(refused({ agent_id: "test_agent" }));
+    expect(text).toContain("with ~/.octoboard-test-agent as its configuration directory.");
+  });
+
+  it("keeps the advice to log in and its way to Settings for a provider with a login flow", () => {
+    const { text, labels } = raise(refused({ agent_id: "claude", config_dir: "/accounts/work" }));
+    expect(text).toContain("Choose another account, or log in to this one.");
+    expect(text).not.toContain("To log in, run");
+    expect(labels).toContain("Manage accounts");
+  });
+
+  it("keeps it for an older daemon's error that names no agent_id", () => {
+    const { text, labels } = raise(refused({}));
+    expect(text).toContain("Choose another account, or log in to this one.");
+    expect(labels).toContain("Manage accounts");
+  });
+});

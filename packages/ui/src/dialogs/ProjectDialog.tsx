@@ -261,6 +261,7 @@ export function ProjectDialog({
   // A retry of the remote's check that succeeds takes the alert, and the Try again focused in it, away: focus goes
   // back to the Repository URL, the field the alert was about.
   const urlFieldRef = useRef<HTMLDivElement>(null);
+  const pathFieldRef = useRef<HTMLDivElement>(null);
   const urlFieldHandoff = useFocusHandoff(() => urlFieldRef.current?.querySelector("input")?.focus());
   const directoryDescriptionId = useId();
   const directoryDescription = source === "local" ? detection.status === "checking" ? t("dialog.project.pathChecking")
@@ -279,6 +280,7 @@ export function ProjectDialog({
       message={detection.error}
       onRetry={source === "git" ? retryDetection : undefined}
       pending={detection.retrying}
+      focusFallback={() => (source === "git" ? urlFieldRef : pathFieldRef).current?.querySelector("input")}
       attempt={detection.attempt}
     />
   ) : undefined;
@@ -433,7 +435,7 @@ export function ProjectDialog({
           </div>
         )}
         {!editing && (
-          <div className="flex flex-col gap-2">
+          <div ref={pathFieldRef} className="flex flex-col gap-2">
             <TextInput
               label={source === "git" ? t("dialog.project.cloneInto") : t("dialog.project.directory")}
               value={path}

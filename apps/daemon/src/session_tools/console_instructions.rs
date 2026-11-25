@@ -89,7 +89,7 @@ const CONSOLE_SESSION_INSTRUCTIONS_AFTER_MEMORY_TOOLS: &str =
            asked for it, and another agent only when the user asked for it or its tags \
            (`list_agents`) fit the work. The result gives the session's id and the agent, account, \
            model and effort it actually started with; a refusal explains why it could not start. \
-           The session is yours for its whole life. Automatic selection may choose another agent \
+           Automatic selection may choose another agent \
            when neither agent nor account is named; a named agent limits selection to it, and a \
            named account preserves both. Unspecified model and effort follow the final agent.\n\
          - `instruct_session` — the next instruction for a session already running. It \
@@ -150,7 +150,7 @@ const CONSOLE_SESSION_INSTRUCTIONS_AFTER_MEMORY_TOOLS: &str =
          a console session.\n\
          - `request_resume_session` — ask the user to resume a conversation by its agent \
          conversation id: the session that holds it comes back, or an independent session is \
-         opened on the agent's own record of it. For when the user asked for that conversation.\n\
+         opened on the agent's own record of it.\n\
          - `list_scheduled_tasks` / `list_scheduled_task_runs` / `create_scheduled_task` / \
            `update_scheduled_task` / `set_scheduled_task_enabled` / `delete_scheduled_task` / \
            `run_scheduled_task` — this console's scheduled tasks, the user's: change only \
@@ -243,7 +243,7 @@ const CONSOLE_SESSION_INSTRUCTIONS_AFTER_MEMORY_TOOLS: &str =
            `from` and `to`. `from` may be archived, to recover the branches it left behind; \
            `to` may not. Nothing changes in git: the answer lists each branch's worktree and \
            whether it holds uncommitted changes. A session that is working or waiting for the \
-           user cannot give branches up. It replaces no session; that is `handoff_session`.\n\
+           user cannot give branches up.\n\
          - `transfer_processes` moves process trees a session of yours started (a dev server, a \
            preview, a watcher) to another session of yours, without asking the user, so they keep \
            running until the receiving session's process ends instead of the giving one's. \
@@ -257,14 +257,12 @@ const CONSOLE_SESSION_INSTRUCTIONS_AFTER_MEMORY_TOOLS: &str =
            relaunched resuming it on the new account, and it is sent no message for it. It \
            comes back awaiting instructions and a turn in progress is cut off, so send it the \
            next step with `instruct_session` — unless the result's `note` says it was sent a \
-           prompt to continue, which you must not repeat. `list_agents` shows which accounts \
-           still have quota.\n\
+           prompt to continue, which you must not repeat.\n\
          - `set_session_model` changes the model or reasoning effort of a session of yours, on \
            its own agent and account, without asking the user. A running session is restarted to \
-           take them: its process is ended and relaunched resuming its conversation, and it is \
-           sent no message for it. It comes back awaiting instructions and a turn in progress is \
-           cut off, so send it the next step with `instruct_session` — unless the result's `note` \
-           says it was sent a prompt to continue, which you must not repeat. An interrupted \
+           take them, exactly as for `switch_session_account`: send it the next step with \
+           `instruct_session` unless the result's `note` says it was sent a prompt to continue. \
+           An interrupted \
            session takes them when it is next resumed. A session waiting for the user is \
            refused: the restart would end the prompt only they can answer. A usage-limit dialog \
            alone does not count: the restart ends it and continues the turn it stopped.\n\
@@ -909,8 +907,8 @@ mod tests {
 
     /// The guidance on asking the user is in the file only while the setting is on, comes after
     /// the other built-in guidance and before the user's own section, which stays last, and
-    /// names the Claude Code and Grok Build tools as those agents' own since the one file serves
-    /// every agent.
+    /// names the tool of every registered provider that declares one, as that provider's own, since
+    /// the one file serves every agent.
     #[test]
     fn the_guidance_on_asking_the_user_follows_the_setting() {
         let off = console_session_instructions(None, &memory_on());
@@ -929,9 +927,26 @@ mod tests {
         let built_in = &off[..off.find("\n\n## Memory\n").expect("a memory section")];
         assert!(on.starts_with(built_in));
         assert!(on.find("## Asking the user").unwrap() < on.find("## Memory\n").unwrap());
-        assert!(
-            on.contains("(`AskUserQuestion` in Claude Code, `ask_user_question` in Grok Build)")
-        );
+        assert!(on.contains("`AskUserQuestion` in Claude,"));
+        assert!(on.contains("`ask_user_question` in Grok and Qwen,"));
+        // Every registered provider that declares a tool for asking is named with it, by its
+        // short name, in the one mention of that tool.
+        for descriptor in crate::providers::descriptors() {
+            if let Some(tool) = descriptor.ask_question_tool {
+                let mention = on
+                    .split(&format!("`{tool}` in "))
+                    .nth(1)
+                    .expect("the tool is mentioned");
+                let mention = mention.split([',', ')']).next().unwrap();
+                assert!(
+                    mention
+                        .split(" and ")
+                        .any(|name| name == descriptor.short_name),
+                    "{}",
+                    descriptor.id
+                );
+            }
+        }
         assert!(on.contains("numbering the questions and lettering their options"));
         assert!(on.contains("rather than a `show_page` page"));
 

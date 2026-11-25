@@ -11,7 +11,7 @@ shows the failure notice below.
 
 Each provider declares which kinds of prompt it publishes and answers, in its descriptor's
 `capabilities.interactions`: `permission` (tool permission prompts) and `question` (its ask-the-user tool's
-questions). Claude Code, Codex and Grok Build declare both. An `answer_interaction` for a session of a provider that
+questions). Claude Code, Codex, Grok Build, Antigravity CLI, GitHub Copilot CLI, OpenCode and Qwen Code declare both. Pi declares neither. It has no native approval or ask-the-user tool, and its extension dialogs are reported as blocked without a tool call. Answer those dialogs in Pi’s terminal. An `answer_interaction` for a session of a provider that
 declares neither is refused with `provider_unsupported` (operation `interactions`), and nothing is pressed.
 
 ## When a prompt is published
@@ -22,7 +22,9 @@ A prompt is published as `Session.interaction` only while all of these hold:
 - the provider declares the prompt's kind;
 - the provider recognises the prompt on the agent's screen, which is read about every quarter of a second while the
   session waits, **and** matches it to a tool call the agent's hooks reported starting in the current turn (the turn's
-  last 16 calls are kept; a new prompt the agent is sent starts a new turn);
+  last 16 calls are kept; a new prompt the agent is sent starts a new turn, and so does a `working` report for an agent
+  whose status comes from its program's reports, which also start the watch of the screen when they say the agent
+  waits on the user);
 - the prompt is as it first appears: nothing picked, ticked or typed in it and no text field open, and for questions,
   their first page. A prompt the user has begun answering in the terminal is left to the terminal.
 
@@ -33,7 +35,10 @@ up when the daemon started), for one in a layout the provider does not know, or 
 Each prompt published gets a new `id`, which an answer has to name. A prompt that changes on screen is published again
 under a new `id`; so is one still up and unchanged after anything was typed into the session's terminal since it was
 published: from then on the earlier `id` is refused. A prompt the user is part way through answering in the terminal
-can stay published meanwhile, but an answer to it is refused all the same. The interaction is withdrawn once the prompt
+can stay published meanwhile, but an answer to it is refused all the same. For an agent whose prompt shows what is
+selected in colour alone, so that a key typed into it cannot be read back off the screen, a prompt anything was typed
+into since the daemon first saw it up is not published at all, and one published is withdrawn once anything is typed
+into it and not published again while it stays up. The interaction is withdrawn once the prompt
 is gone from the screen or no longer recognised there, the session no longer reads as waiting for the user, or the
 session's process ends. Clients receive it,
 added, replaced or withdrawn, on `session_upserted` like any field of the session, and in the snapshot.
@@ -58,8 +63,10 @@ PendingInteraction { id,
   `true`). Its `choices` are the options the prompt offers whose effect the daemon can tell, each with the agent's own
   label: allowing the call (`allow`), allowing it and adding a rule so the agent does not ask again (`allow_remember`),
   declining it (`deny`), declining it and adding a rule (`deny_remember`); `other` is for an option of none of these
-  effects, which none of the three agents publishes today. **An option that changes the agent's permission mode for the
-  rest of the session, or rewrites its configuration, is never published**: it is answered only in the terminal. A
+  effects, which none of the agents publishes today. An option that has the agent record a permission rule, whether
+  for the rest of the session or in its settings, is `allow_remember` or `deny_remember`, published with the agent's
+  label. **An option that switches the agent's permission mode is never published**: it is answered only in the
+  terminal. A
   choice with `text: "optional"` can carry text for the agent with the answer.
 - **Questions** carry each question's text, its short header where it has one, its options, whether several options
   may be chosen, and whether a written answer is taken `instead` of an option or `with` the options chosen (absent
@@ -80,10 +87,12 @@ removed (see "Messages held until a session can take them" in `docs/product/mess
 counts as none. An answer that does not fit the prompt is refused before anything is pressed: with `field_required`
 for a missing field and `unreadable_request` for one that does not fit, each naming the `field`.
 
-The daemon then presses the answer into the agent's terminal one key at a time. Each key is chosen from the screen as
-it stands, written only while the screen still shows what the key was chosen for and nothing has been typed into the
+The daemon then presses the answer into the agent's terminal key by key. Each key is chosen from the screen as it
+stands, written only while the screen still shows what the key was chosen for and nothing has been typed into the
 terminal since the prompt was published, and waited on, for up to 30 seconds, to change the screen before the next is
-chosen; the only text written is the user's own, pasted into a field the prompt opened for it. While an answer is being
+chosen. Where the screen tells nothing between keys (a selection drawn in colour alone), the provider chooses the keys
+together, and they are written as one write under the same rules and waited on as one key; each counts towards the 64
+keys an answer may take, and keys that would take it past that are not written; the only text written is the user's own, pasted into a field the prompt opened for it. While an answer is being
 pressed, nothing Octoboard queued for the session is written into it, and a second answer for the session is refused.
 The request is answered with `ack` once the prompt is seen gone.
 

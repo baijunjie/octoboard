@@ -4,7 +4,7 @@
 //! finds every record of a session by the one rule ([`record_paths`]), from which the conversation
 //! is read.
 
-use std::cell::OnceCell;
+use std::cell::{OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -17,18 +17,26 @@ use crate::adapter::provider;
 use crate::hostfs::{lexical_key, lexically_normalise, lexically_within};
 use crate::protocol::{Account, AgentId, Session};
 use crate::providers::layout::layout;
+use crate::records::rows::RowAccount;
 use crate::records::RecordStore;
 use crate::state::AppState;
 
-/// The record path each session's hook last reported, with the agent session id it reported it for.
+/// The record path each session's hook last reported, with the agent session id it reported it
+/// for; and, for a session whose records are rows (`crate::records::rows`), how many of its
+/// events have come in.
 #[derive(Default)]
 pub struct Hints {
     pub(super) hints: Mutex<HashMap<String, (String, PathBuf)>>,
+    pub(super) stirs: Mutex<HashMap<String, u64>>,
 }
 
 impl Hints {
     /// Forgets the sessions not in `ids` and returns what is left.
     pub fn retain(&self, ids: &HashSet<&str>) -> HashMap<String, (String, PathBuf)> {
+        self.stirs
+            .lock()
+            .expect("record stir lock poisoned")
+            .retain(|id, _| ids.contains(id.as_str()));
         let mut hints = self.hints.lock().expect("record hint lock poisoned");
         hints.retain(|id, _| ids.contains(id.as_str()));
         hints.clone()
@@ -37,6 +45,19 @@ impl Hints {
     pub(crate) fn hint(&self, session: &Session) -> Option<PathBuf> {
         let hints = self.hints.lock().expect("record hint lock poisoned");
         hinted_path(&hints, session)
+    }
+
+    /// Notes that an event of session `id` came in: its conversation may have changed.
+    pub(crate) fn stir(&self, id: &str) {
+        let mut stirs = self.stirs.lock().expect("record stir lock poisoned");
+        *stirs.entry(id.to_owned()).or_default() += 1;
+    }
+
+    /// How many events of session `id` have come in. A reader of a conversation kept as rows
+    /// reads it again when this has moved since its last read.
+    pub(crate) fn stirred(&self, id: &str) -> u64 {
+        let stirs = self.stirs.lock().expect("record stir lock poisoned");
+        stirs.get(id).copied().unwrap_or(0)
     }
 }
 
@@ -52,8 +73,13 @@ pub fn hinted_path(
 
 /// Notes the record path a hook of session `id` reports, read by its provider's `store`
 /// (`RecordStore::hinted_record`): the exact record, including a newly created one. Subagent hooks
-/// are filtered by the caller before this point.
+/// are filtered by the caller before this point. For a store whose records are rows, which no
+/// path names, the event itself is what is noted: the conversation may have changed
+/// (`Hints::stir`).
 pub fn on_hook(state: &AppState, id: &str, store: &dyn RecordStore, payload: &Value) {
+    if store.rows().is_some() {
+        state.record_hints.stir(id);
+    }
     let Some(hint) = store.hinted_record(payload) else {
         return;
     };
@@ -77,34 +103,76 @@ pub(crate) struct Index {
 /// a default account lives is taken only when something asks for one, and an unknown location is
 /// unknown, never a fallback to a different account's history.
 #[derive(Default)]
-pub struct Locator {
+pub struct Locator<'a> {
+    store: Option<&'a crate::store::Store>,
     shell: OnceCell<Option<HashMap<String, String>>>,
     indexes: HashMap<(AgentId, PathBuf), Index>,
-    record_dirs: HashMap<(AgentId, PathBuf), Index>,
+    record_dirs: HashMap<(AgentId, PathBuf, usize), Index>,
+    /// For a provider whose records are rows: the conversations each account holds
+    /// (`RowRecords::conversations`), by agent and the account's pinned directory, listed once.
+    row_listings: RefCell<RowListings>,
 }
 
-impl Locator {
+/// What each account of a provider whose records are rows was listed to hold, by agent and the
+/// account's pinned directory: `None` for an account that could not be listed.
+type RowListings = HashMap<(AgentId, Option<String>), Option<HashSet<String>>>;
+
+impl<'a> Locator<'a> {
     /// A locator that resolves default accounts through `shell`, a login-shell snapshot already
     /// taken, instead of asking for one.
     pub fn with_shell(shell: HashMap<String, String>) -> Self {
         Self {
             shell: OnceCell::from(Some(shell)),
-            indexes: HashMap::new(),
-            record_dirs: HashMap::new(),
+            ..Self::default()
         }
+    }
+
+    pub(crate) fn with_store<'store>(self, store: &'store crate::store::Store) -> Locator<'store> {
+        Locator {
+            store: Some(store),
+            shell: self.shell,
+            indexes: self.indexes,
+            record_dirs: self.record_dirs,
+            row_listings: self.row_listings,
+        }
+    }
+
+    /// The login-shell snapshot default accounts are resolved through, taken when first asked
+    /// for; `None` when it could not be taken.
+    pub(crate) fn shell_env(&self) -> Option<&HashMap<String, String>> {
+        self.shell
+            .get_or_init(|| crate::env_shell::cached_snapshot().ok())
+            .as_ref()
+    }
+
+    /// Whether `session`'s own account holds its conversation, for a provider whose records are
+    /// rows: `None` when that cannot be told (the provider's records are not rows, the session
+    /// names no conversation of its agent's shape, the account's environment is unknown, or the
+    /// account could not be listed). The account is listed once for as long as the `Locator`
+    /// lives.
+    pub(crate) fn holds_conversation(&self, session: &Session) -> Option<bool> {
+        let (rows, agent_id) = crate::records::rows::of(session)?;
+        let shell_env = self.shell_env()?;
+        let mut listings = self.row_listings.borrow_mut();
+        let listing = listings
+            .entry((session.agent, session.config_dir.clone()))
+            .or_insert_with(|| {
+                rows.conversations(&RowAccount {
+                    config_dir: session.config_dir.as_deref().map(Path::new),
+                    shell_env,
+                })
+            });
+        Some(listing.as_ref()?.contains(agent_id))
     }
 
     /// The account directory `config_dir` names, or the agent's default account when it is `None`.
     pub fn root(&self, agent: AgentId, config_dir: Option<&str>) -> Option<PathBuf> {
         match config_dir {
             Some(dir) => Some(PathBuf::from(dir)),
-            None => {
-                let shell = self
-                    .shell
-                    .get_or_init(|| crate::env_shell::cached_snapshot().ok())
-                    .as_ref()?;
-                Some(crate::adapter::default_account_dir(agent, shell))
-            }
+            None => Some(crate::adapter::default_account_dir(
+                agent,
+                self.shell_env()?,
+            )),
         }
     }
 
@@ -117,9 +185,72 @@ impl Locator {
     /// The records listed directly under the records directory `records`, a directory of its own
     /// rather than reached through an account's root.
     pub(crate) fn index_at(&mut self, agent: AgentId, records: &Path) -> &Index {
+        self.index_at_depth(agent, records, layout(agent).search_depth)
+    }
+
+    pub(super) fn index_at_depth(
+        &mut self,
+        agent: AgentId,
+        records: &Path,
+        depth: usize,
+    ) -> &Index {
         self.record_dirs
-            .entry((agent, records.to_path_buf()))
-            .or_insert_with(|| index_records_at(agent, records))
+            .entry((agent, records.to_path_buf(), depth))
+            .or_insert_with(|| index_records_at(agent, records, depth))
+    }
+
+    /// A configured records directory, or no override. An unresolved environment or working
+    /// directory leaves a missing record inconclusive.
+    pub(super) fn alternate_root(&self, session: &Session) -> Result<Option<(PathBuf, usize)>, ()> {
+        let Some(root) = provider(session.agent).records().record_root_override() else {
+            return Ok(None);
+        };
+        let env = self.shell_env().ok_or(())?;
+        let Some(path) = env.get(root.variable).filter(|path| !path.is_empty()) else {
+            return Ok(None);
+        };
+        let home_relative = crate::platform::names::home_relative(path);
+        let path = home_relative.map_or_else(
+            || PathBuf::from(path),
+            |relative| crate::adapter::snapshot_home(env).join(relative),
+        );
+        let path = if path.is_absolute() {
+            path
+        } else {
+            let store = self.store.ok_or(())?;
+            let cwd = store.session_working_directory(session).map_err(|_| ())?;
+            cwd.join(path)
+        };
+        let path = lexically_normalise(&path);
+        if !path.is_absolute() {
+            return Err(());
+        }
+        Ok(Some((path, root.search_depth)))
+    }
+
+    pub(super) fn alternate_root_complete(&mut self, session: &Session) -> bool {
+        match self.alternate_root(session) {
+            Ok(Some((dir, depth))) => self.index_at_depth(session.agent, &dir, depth).complete,
+            Ok(None) => true,
+            Err(()) => false,
+        }
+    }
+
+    pub(super) fn current_session_record(&mut self, session: &Session) -> Option<PathBuf> {
+        let id = session.agent_session_id.as_deref()?;
+        let agent = session.agent;
+        if let Ok(Some((dir, depth))) = self.alternate_root(session) {
+            if let Some(path) = self
+                .index_at_depth(agent, &dir, depth)
+                .records
+                .get(id)
+                .and_then(|paths| provider(agent).records().current_of(paths))
+            {
+                return Some(path);
+            }
+        }
+        let root = self.root(agent, session.config_dir.as_deref())?;
+        self.current_record(agent, &root, id)
     }
 
     /// The record of `agent_id` in the account at `root` that holds the conversation as it is now
@@ -135,9 +266,10 @@ impl Locator {
     }
 }
 
-/// The directory of an account where an agent keeps its session records.
-pub(crate) fn records_dir(agent: AgentId, root: &Path) -> PathBuf {
-    root.join(layout(agent).records_dir)
+/// The directory of an account where an agent keeps its session records; `None` for an agent that
+/// keeps none (`AgentLayout::records`).
+pub(crate) fn records_dir(agent: AgentId, root: &Path) -> Option<PathBuf> {
+    layout(agent).records().map(|relative| root.join(relative))
 }
 
 /// What a [`walk_records`] visitor decides about one entry.
@@ -227,7 +359,13 @@ fn walk_level(
 
 /// Index names once per account per pass; never read other sessions' contents or follow links.
 fn index_records(agent: AgentId, root: &Path) -> Index {
-    let mut out = index_records_at(agent, &records_dir(agent, root));
+    let Some(records) = records_dir(agent, root) else {
+        return Index {
+            complete: true,
+            ..Index::default()
+        };
+    };
+    let mut out = index_records_at(agent, &records, layout(agent).search_depth);
     out.complete &=
         !std::fs::symlink_metadata(root).is_ok_and(|meta| meta.file_type().is_symlink());
     out
@@ -235,9 +373,8 @@ fn index_records(agent: AgentId, root: &Path) -> Index {
 
 /// [`index_records`] for the records directory `records` itself: each entry the provider's store
 /// recognises as a record (`RecordStore::indexed`), under the agent session id it names.
-fn index_records_at(agent: AgentId, records: &Path) -> Index {
+pub(super) fn index_records_at(agent: AgentId, records: &Path, depth: usize) -> Index {
     let mut out = Index::default();
-    let depth = layout(agent).search_depth;
     let store = provider(agent).records();
     let mut visit = |path: &Path, name: &str, kind: std::fs::FileType, left: usize| {
         let Some((id, path)) = store.indexed(path, name, kind, left == 1) else {
@@ -315,9 +452,23 @@ pub fn record_paths(
     // Each record with the records directory it was found under.
     let mut records: Vec<(PathBuf, PathBuf)> = Vec::new();
     for root in &roots {
-        let dir = records_dir(agent, root);
+        let Some(dir) = records_dir(agent, root) else {
+            continue;
+        };
         for record in locator
             .index(agent, root)
+            .records
+            .get(agent_id)
+            .into_iter()
+            .flatten()
+        {
+            records.push((dir.clone(), record.clone()));
+        }
+    }
+    let alternate = locator.alternate_root(session).ok().flatten();
+    if let Some((dir, depth)) = &alternate {
+        for record in locator
+            .index_at_depth(agent, dir, *depth)
             .records
             .get(agent_id)
             .into_iter()
@@ -330,7 +481,10 @@ pub fn record_paths(
         let hint = lexically_normalise(&hint);
         let home = roots
             .iter()
-            .map(|root| records_dir(agent, root))
+            .filter_map(|root| records_dir(agent, root))
+            .chain(alternate.into_iter().filter_map(|(dir, depth)| {
+                (hint.strip_prefix(&dir).ok()?.components().count() == depth).then_some(dir)
+            }))
             .find(|dir| lexically_within(&hint, dir));
         if let (true, Some(dir)) = (hint.is_absolute(), home) {
             records.push((dir, hint));
@@ -478,6 +632,41 @@ pub fn plausible_id(id: &str) -> bool {
 mod tests {
     use super::*;
     use crate::records::fixtures::*;
+
+    /// Each event of a session moves its count, and no other session's.
+    #[test]
+    fn an_event_stirs_its_own_session() {
+        let hints = Hints::default();
+        assert_eq!(hints.stirred("a"), 0);
+        hints.stir("a");
+        hints.stir("a");
+        assert_eq!((hints.stirred("a"), hints.stirred("b")), (2, 0));
+        hints.retain(&HashSet::from(["b"]));
+        assert_eq!(hints.stirred("a"), 0);
+    }
+
+    /// A hook event of a session whose records are rows is noted as a stir, since no path names
+    /// what changed; one of a session whose records are files is not, its record being watched
+    /// by its path.
+    #[test]
+    fn a_hook_stirs_a_session_whose_records_are_rows_and_no_other() {
+        let (state, _dir) = crate::test_support::app_state("agent-records-hook-stir");
+        let payload = serde_json::json!({"session_id": ROW_ID});
+
+        on_hook(&state, "files", provider(AgentId::TEST).records(), &payload);
+        assert_eq!(state.record_hints.stirred("files"), 0);
+
+        let _declared = crate::providers::test_provider::with_row_records();
+        on_hook(&state, "rows", provider(AgentId::TEST).records(), &payload);
+        on_hook(&state, "rows", provider(AgentId::TEST).records(), &payload);
+        assert_eq!(
+            (
+                state.record_hints.stirred("rows"),
+                state.record_hints.stirred("files")
+            ),
+            (2, 0)
+        );
+    }
 
     /// The file a conversation is read from: the transcript or rollout itself, and for Grok the
     /// chat history inside its session directory; the newest copy when a switched session left one
@@ -820,5 +1009,87 @@ mod tests {
             ),
             [inside, projects.join(CLAUDE_ID)]
         );
+    }
+
+    /// An agent that keeps no record files has no records directory, and the account's own
+    /// directory is never taken for one: nothing is indexed, found, hinted at or removed there,
+    /// though the provider's store would claim any file it were shown (the test-only provider's
+    /// variant), so that a walk that reached the account's own files would find them.
+    #[test]
+    fn a_layout_with_no_records_directory_has_nothing_to_walk_find_or_remove() {
+        let _declared = crate::providers::test_provider::without_records();
+        let dir = crate::test_support::ScratchDir::new("agent-records-none");
+        let account = dir.join("account");
+        let home = dir.join("home");
+        let default_account =
+            home.join(crate::providers::layout::layout(AgentId::TEST).default_dir);
+        let strays: Vec<PathBuf> = [&account, &default_account]
+            .into_iter()
+            .flat_map(|root| {
+                [
+                    root.join(format!("{CLAUDE_ID}.jsonl")),
+                    root.join("work").join(CLAUDE_ID).join("usage.json"),
+                    root.join(CLAUDE_ID).join("usage.json"),
+                ]
+            })
+            .collect();
+        for stray in &strays {
+            touch(stray);
+        }
+        assert_eq!(records_dir(AgentId::TEST, &account), None);
+        let shell = HashMap::from([("HOME".to_owned(), home.to_string_lossy().into_owned())]);
+
+        let mut locator = Locator::with_shell(shell.clone());
+        let index = locator.index(AgentId::TEST, &account);
+        assert!(index.records.is_empty());
+        assert!(index.complete, "what is not found is not there");
+        assert!(locator
+            .current_record(AgentId::TEST, &account, CLAUDE_ID)
+            .is_none());
+
+        let own = session(AgentId::TEST, CLAUDE_ID, Some(&account));
+        let watch = Hints::default();
+        // A hint inside the account's own directory, or inside the default one, is no record of an
+        // agent that has none.
+        for hinted in [
+            account.join(format!("{CLAUDE_ID}.jsonl")),
+            default_account.join(format!("{CLAUDE_ID}.jsonl")),
+            account.join("work").join(CLAUDE_ID).join("usage.json"),
+        ] {
+            watch
+                .hints
+                .lock()
+                .unwrap()
+                .insert("s".to_owned(), (CLAUDE_ID.to_owned(), hinted.clone()));
+            assert!(
+                record_paths(&watch, &mut locator, &[], &own).is_empty(),
+                "{hinted:?}"
+            );
+            assert!(
+                crate::records::removal::removable_record_paths(&watch, &mut locator, &[], &own)
+                    .is_empty(),
+                "{hinted:?}"
+            );
+        }
+        // The default account's session, with no pinned directory, is no different.
+        let default_own = session(AgentId::TEST, CLAUDE_ID, None);
+        assert!(record_paths(&watch, &mut locator, &[], &default_own).is_empty());
+        assert!(crate::records::removal::removable_record_paths(
+            &watch,
+            &mut locator,
+            &[],
+            &default_own
+        )
+        .is_empty());
+        for root in [&account, &default_account] {
+            assert!(
+                crate::records::conversation_files_in(&mut locator, AgentId::TEST, root, CLAUDE_ID)
+                    .is_empty(),
+                "{root:?}"
+            );
+        }
+        for stray in &strays {
+            assert!(stray.exists(), "{stray:?} was touched");
+        }
     }
 }

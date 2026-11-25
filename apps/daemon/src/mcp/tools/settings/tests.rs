@@ -480,7 +480,10 @@ async fn the_console_session_reads_and_changes_its_own_console() {
 
     for (args, expected) in [
         (json!({ "name": " " }), "`name` is required"),
-        (json!({ "project_session_agent": "gemini" }), "gemini"),
+        (
+            json!({ "project_session_agent": "no-such-agent" }),
+            "no-such-agent",
+        ),
         (
             json!({ "icon": "https://example.com/a.png" }),
             "image `data:` URL",
@@ -675,16 +678,20 @@ async fn the_agent_account_settings_are_read_only_to_agents() {
         .unwrap();
     assert_eq!(before["auto_select_account"], false);
     assert_eq!(before["agent_tags"], json!({ "codex": ["review"] }));
-    // Every provider's switches are shown with the value in effect, Claude Code's simple shell
-    // commands among them; the approval settings and a provider with nothing to show are not.
-    assert_eq!(
-        before["provider_settings"],
-        json!({
-            "claude": { "codex_compatibility": false, "simple_shell_commands": false },
-            "codex": { "claude_compatibility": false },
-            "grok": { "claude_compatibility": false, "codex_compatibility": false },
-        })
-    );
+    let mut defaults = Map::new();
+    for provider in crate::providers::descriptors() {
+        let visible: Map<_, _> = provider
+            .settings
+            .iter()
+            .filter(|setting| setting.shown_to_agents)
+            .map(|setting| (setting.id.to_owned(), json!(setting.in_effect(None))))
+            .collect();
+        if !visible.is_empty() {
+            defaults.insert(provider.id.to_owned(), Value::Object(visible));
+        }
+    }
+    let mut expected_settings = Value::Object(defaults);
+    assert_eq!(before["provider_settings"], expected_settings);
     state
         .store
         .set_provider_setting(
@@ -723,14 +730,8 @@ async fn the_agent_account_settings_are_read_only_to_agents() {
     let with_simple_shell = call(&state, "a", "get_settings", &Map::new())
         .await
         .unwrap();
-    assert_eq!(
-        with_simple_shell["provider_settings"],
-        json!({
-            "claude": { "codex_compatibility": false, "simple_shell_commands": true },
-            "codex": { "claude_compatibility": false },
-            "grok": { "claude_compatibility": false, "codex_compatibility": false },
-        })
-    );
+    expected_settings["claude"]["simple_shell_commands"] = json!(true);
+    assert_eq!(with_simple_shell["provider_settings"], expected_settings);
 
     let updated = call(
         &state,

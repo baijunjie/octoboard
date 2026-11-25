@@ -272,7 +272,7 @@ impl RecordStore for CodexRecords {
     /// below it are still skipped. This read-only lookup does not populate the account index used
     /// for destructive record discovery.
     fn opening_file(&self, locator: &mut Locator, root: &Path, agent_id: &str) -> Option<PathBuf> {
-        let records = crate::hostfs::canonical(records_dir(AgentId::CODEX, root)).ok()?;
+        let records = crate::hostfs::canonical(records_dir(AgentId::CODEX, root)?).ok()?;
         locator
             .index_at(AgentId::CODEX, &records)
             .records

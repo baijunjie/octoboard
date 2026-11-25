@@ -31,7 +31,7 @@ use crate::text::trimmed_or_none;
 use crate::time::now_millis;
 
 use super::open::{check_saved_open, OpenRequest};
-use super::validate::{field_required, required_text};
+use super::validate::{field_required, required_prompt};
 use next_run::zone_name;
 pub(crate) use next_run::{local_zone, next_run};
 pub(crate) use runs::list_scheduled_task_runs;
@@ -339,7 +339,7 @@ async fn checked_definition(
         prompt,
         schedule,
     } = definition;
-    let prompt = required_text("prompt", &prompt)?;
+    let prompt = required_prompt("prompt", &prompt)?;
     let schedule = checked_schedule(schedule, check_once, now)?;
     if let Some(project_id) = &project_id {
         let project = state.store.require_project(project_id)?;

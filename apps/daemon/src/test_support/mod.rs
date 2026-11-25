@@ -41,6 +41,9 @@
 //! - [`screens`]: what an agent's terminal shows at a usage limit.
 //! - [`owner_team`]: an owner with sessions bound to it, for the tests of what is written into
 //!   an owner.
+//! - [`test_provider`]: switches that give the test-only provider a trust screen (one that waits
+//!   for bracketed paste, or any of a test's own), an interrupt and a hook interpreter, for the
+//!   tests of what generic code does with what a provider declares.
 
 use std::time::Duration;
 
@@ -66,13 +69,19 @@ pub(crate) mod scratch;
 pub(crate) mod screens;
 pub(crate) mod sessions;
 pub(crate) mod stand_in;
+pub(crate) mod test_provider;
 
 pub(crate) use app::*;
 pub(crate) use background::Background;
 pub(crate) use clock::*;
 pub(crate) use closed_port::ClosedPort;
 pub(crate) use git::*;
-pub(crate) use port_probe::{accept_unprobed, is_port_probe, probe_port};
+#[cfg(unix)]
+pub(crate) use port_probe::{accept_from, accepted_from};
+pub(crate) use port_probe::{
+    accept_past_probes, accepted_past_probes, answered_as_probe, assert_only_probes_connected,
+    is_port_probe, probe_port,
+};
 pub(crate) use processes::*;
 pub(crate) use scratch::*;
 pub(crate) use sessions::*;
@@ -142,3 +151,11 @@ pub(crate) fn param_of(err: &anyhow::Error, name: &str) -> String {
 /// shell can take well over ten seconds to start, and a wait returns as soon as its condition
 /// holds, so a generous value costs a passing test nothing.
 pub(crate) const PATIENCE: Duration = Duration::from_secs(30);
+
+/// How long a test watches a child process for something it must not do, where nothing else can
+/// say it did not: the child runs in a process of its own and tells nothing of what it did not do
+/// (a stand-in CLI that would write a file only if it were answered), so no state, counter or event
+/// in the daemon can stand in for the wait (`docs/conventions/tests.md`, "Daemon tests"). A test
+/// that waits it out passes either way where the machine stalls the child; it can only miss a
+/// defect, never report a false one.
+pub(crate) const UNPROMPTED_WINDOW: Duration = Duration::from_millis(300);

@@ -10,7 +10,7 @@ import { nextResetCredit, expiryLine, exhaustedQuotaWindow, knownQuotaWindows, o
 const t: Translate = translatorFor("en");
 const MINUTE = 60_000;
 const NOW = 1_000_000_000;
-const named = (agent: "claude" | "codex", windows: QuotaWindow[] = []) => quotaNaming({ agent, windows }, TEST_PROVIDERS);
+const named = (agent: "claude" | "codex" | "copilot", windows: QuotaWindow[] = []) => quotaNaming({ agent, windows }, TEST_PROVIDERS);
 const claude = named("claude");
 const codex = named("codex");
 
@@ -64,6 +64,13 @@ describe("naming a window as the agent's own interface does", () => {
     expect(quotaWindowPhrase(t, claude, window())).toBe("session limit");
     expect(quotaWindowLabel(t, codex, window())).toBe("5h");
     expect(quotaWindowPhrase(t, codex, window())).toBe("5h limit");
+  });
+
+  it("names Copilot's credit period Plan in the meter and in a sentence", () => {
+    const credit = window({ kind: "credit_period", window_minutes: 30 * 24 * 60 });
+    const copilot = named("copilot", [credit]);
+    expect(quotaWindowLabel(t, copilot, credit)).toBe("Plan");
+    expect(quotaWindowPhrase(t, copilot, credit)).toBe("plan limit");
   });
 
   it("names Claude's weekly window for all models only beside a model's own weekly window", () => {

@@ -449,6 +449,17 @@ fn credit_pools_are_named_after_their_period() {
 }
 
 #[test]
+fn the_credit_pool_can_use_the_providers_own_name() {
+    let blocked = exhausted_of(vec![QuotaWindow {
+        window_minutes: Some(30 * 24 * 60),
+        ..window(QuotaWindowKind::CreditPeriod, 100.0, None)
+    }])
+    .expect("a used-up window");
+    assert_eq!(blocked.named_for(AgentId::COPILOT), "Plan");
+    assert_eq!(blocked.named_for(AgentId::GROK), "Monthly");
+}
+
+#[test]
 fn the_session_window_is_named_as_each_agents_own_interface_names_it() {
     let exhausted =
         |kind| exhausted_of(vec![window(kind, 100.0, Some(NOW + 1))]).expect("a used-up window");

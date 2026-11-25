@@ -1608,13 +1608,21 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(back, b"hi");
+            // The window's port carries whatever connects to it, each connection by a proxy run
+            // (reading the key again once none is open), so what follows reaching the host is
+            // those commands and no other, the proxy at least once.
+            let commands = server.commands();
             assert_eq!(
-                server.commands(),
-                vec![
-                    octoboardd::SHELL_PROBE.to_owned(),
-                    address,
-                    remote.proxy_command(),
-                ]
+                commands[..2],
+                [octoboardd::SHELL_PROBE.to_owned(), address.clone()]
+            );
+            let proxy = remote.proxy_command();
+            assert!(commands[2..].contains(&proxy), "{commands:?}");
+            assert!(
+                commands[2..]
+                    .iter()
+                    .all(|command| *command == proxy || *command == address),
+                "{commands:?}"
             );
             let _ = stop.send(true);
         }
@@ -2125,16 +2133,13 @@ mod tests {
         assert!(!*over.borrow());
         let waiting = connecting.wait_and_begin("ssh:u@h:22");
         tokio::pin!(waiting);
-        // Still waiting while the first is under way.
-        assert!(
-            tokio::time::timeout(Duration::from_millis(50), &mut waiting)
-                .await
-                .is_err()
-        );
+        // Still waiting while the first is under way: asked once, it has not begun.
+        let mut asked = std::task::Context::from_waker(std::task::Waker::noop());
+        assert!(std::future::Future::poll(waiting.as_mut(), &mut asked).is_pending());
         drop(first);
         assert!(*over.borrow_and_update());
         // Once the first is over, the second goes ahead, and holds the daemon in turn.
-        let second = tokio::time::timeout(Duration::from_secs(5), waiting)
+        let second = tokio::time::timeout(crate::test_support::PATIENCE, waiting)
             .await
             .expect("the second goes ahead once the first is over");
         assert!(connecting.begin("ssh:u@h:22").is_err());

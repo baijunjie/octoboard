@@ -610,6 +610,37 @@ pub enum AfterReply {
     Killed { after: Duration, why: &'static str },
 }
 
+/// How a program's messages are delimited on its stdin and stdout.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Framing {
+    /// One message per line.
+    #[default]
+    Lines,
+    /// Each message after a header block that gives its length in bytes
+    /// (`Content-Length: <n>`, a blank line, then the message), both ways.
+    ContentLength,
+}
+
+/// What a conversation's listener makes of one message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Heard {
+    /// Passed over.
+    Nothing,
+    /// The answer the next step of the input waits for: that step is written now.
+    Next,
+    /// The reply the run is for.
+    Reply,
+}
+
+/// What [`run_conversation_traced`] writes and how: `steps[0]` at the start, and each later step
+/// once the listener hears [`Heard::Next`], for a program that answers its requests in no fixed
+/// order, so that a request building on an earlier answer cannot be written ahead of it.
+#[derive(Debug, Clone, Copy)]
+pub struct Conversation<'a> {
+    pub framing: Framing,
+    pub steps: &'a [Vec<String>],
+}
+
 /// What [`run_exchange_traced`] observed of the child, for a caller that logs how a run went.
 #[derive(Debug, Default)]
 pub struct ExchangeTrace {
@@ -682,27 +713,63 @@ pub fn run_exchange_traced(
     trace: &mut ExchangeTrace,
     mut is_reply: impl FnMut(&str) -> bool,
 ) -> std::result::Result<String, ExchangeFailure> {
+    run_conversation_traced(
+        command,
+        Conversation {
+            framing: Framing::Lines,
+            steps: &[input.to_vec()],
+        },
+        bounds,
+        cancel,
+        reply_grace,
+        trace,
+        |line| {
+            if is_reply(line) {
+                Heard::Reply
+            } else {
+                Heard::Nothing
+            }
+        },
+    )
+}
+
+/// [`run_exchange_traced`] for a conversation whose messages are framed as `conversation.framing`
+/// says and whose input is written in steps: the first at the start, each later one when `heard`
+/// answers [`Heard::Next`] to a message. The message `heard` answers [`Heard::Reply`] to is
+/// returned; a [`Heard::Next`] with no step left is passed over.
+pub fn run_conversation_traced(
+    command: &mut Command,
+    conversation: Conversation<'_>,
+    bounds: &Bounds,
+    cancel: &std::sync::atomic::AtomicBool,
+    reply_grace: Duration,
+    trace: &mut ExchangeTrace,
+    mut heard: impl FnMut(&str) -> Heard,
+) -> std::result::Result<String, ExchangeFailure> {
+    let framing = conversation.framing;
     let Spawned {
-        mut leader,
+        leader,
         stdin,
         stdout: stdout_rx,
         stderr: stderr_rx,
     } = spawn_bounded(command, bounds, true).map_err(ExchangeFailure::Failed)?;
+    // From here to the stop below the listener, which is the caller's code, runs between reads:
+    // if it panics, the unwind still stops the child and sweeps what it reaches.
+    let mut leader = StoppedOnUnwind(leader);
     trace.pid = Some(leader.child.id());
     let started = Instant::now();
     // Held until the reply is in, or the run is stopped below: closing it early is what makes such
     // a program exit.
-    let mut stdin = stdin.expect("stdin was piped");
+    let mut input = Input {
+        stdin: stdin.expect("stdin was piped"),
+        framing,
+        steps: conversation.steps.iter(),
+    };
     let stdout_limit = bounds.stdout_limit;
 
     let deadline = Instant::now() + bounds.timeout;
     // A child that is already gone fails the write; the read below then reports how it ended.
-    for line in input {
-        if writeln!(stdin, "{line}").is_err() {
-            break;
-        }
-    }
-    let _ = stdin.flush();
+    input.write_next();
 
     let mut pending: Vec<u8> = Vec::new();
     // The leading bytes of `pending` known to hold no newline; see `take_reply`.
@@ -720,8 +787,22 @@ pub fn run_exchange_traced(
         match stdout_rx.recv_timeout(left.min(BOUNDED_POLL)) {
             Ok(BoundedChunk::Data(bytes)) => {
                 pending.extend_from_slice(&bytes);
-                if let Some(reply) = take_reply(&mut pending, &mut scanned, &mut is_reply) {
+                if let Some(reply) =
+                    take_reply(&mut pending, &mut scanned, framing, &mut |message| {
+                        let what = heard(message);
+                        if what == Heard::Next {
+                            input.write_next();
+                        }
+                        what == Heard::Reply
+                    })
+                {
                     break Ok(reply);
+                }
+                // A message that announces more than the run may print can never arrive whole.
+                if framing == Framing::ContentLength
+                    && announces_past(&pending, scanned, stdout_limit)
+                {
+                    break Err(ExchangeFailure::StdoutExceeded(stdout_limit));
                 }
             }
             Ok(BoundedChunk::Exceeded) => break Err(ExchangeFailure::StdoutExceeded(stdout_limit)),
@@ -732,9 +813,13 @@ pub fn run_exchange_traced(
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => {
-                // The last line may come without its newline.
-                pending.push(b'\n');
-                break match take_reply(&mut pending, &mut scanned, &mut is_reply) {
+                // The last line may come without its newline. Nothing is left to write to.
+                if framing == Framing::Lines {
+                    pending.push(b'\n');
+                }
+                break match take_reply(&mut pending, &mut scanned, framing, &mut |message| {
+                    heard(message) == Heard::Reply
+                }) {
                     Some(reply) => Ok(reply),
                     None => Err(ExchangeFailure::ClosedWithoutReply {
                         status: None,
@@ -746,7 +831,7 @@ pub fn run_exchange_traced(
     };
     if outcome.is_ok() && !reply_grace.is_zero() {
         // Closing stdin is what tells the program its input has ended.
-        drop(stdin);
+        drop(input);
         let until = (Instant::now() + reply_grace).min(deadline);
         trace.after_reply = Some(await_exit(&leader.handle, &stdout_rx, until, cancel));
     }
@@ -784,28 +869,183 @@ pub fn run_exchange_traced(
     }
 }
 
-/// Removes the complete lines from the front of `pending` one at a time and returns the first
-/// that `is_reply` accepts; what follows it, and any partial line, stays. The first `scanned`
-/// bytes of `pending` are known to hold no newline and are not searched again; it is left
-/// covering what this call searched, so the cost of a line stays linear in its length however
-/// many chunks it arrives in.
+/// The leader of a conversation, stopped if the run unwinds before it stops it itself: a panic in
+/// the caller's listener would otherwise leave the child running, unreaped and unswept. A stop
+/// repeated on a child already stopped finds nothing to do.
+struct StoppedOnUnwind(Leader);
+
+impl std::ops::Deref for StoppedOnUnwind {
+    type Target = Leader;
+
+    fn deref(&self) -> &Leader {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for StoppedOnUnwind {
+    fn deref_mut(&mut self) -> &mut Leader {
+        &mut self.0
+    }
+}
+
+impl Drop for StoppedOnUnwind {
+    fn drop(&mut self) {
+        if thread::panicking() {
+            self.0.stop(&std::sync::atomic::AtomicBool::new(false));
+        }
+    }
+}
+
+/// The input side of a conversation: the program's stdin, and the steps not yet written to it.
+struct Input<'a, W: Write> {
+    stdin: W,
+    framing: Framing,
+    steps: std::slice::Iter<'a, Vec<String>>,
+}
+
+impl<W: Write> Input<'_, W> {
+    /// Writes the next step, if one is left.
+    fn write_next(&mut self) {
+        if let Some(step) = self.steps.next() {
+            write_step(&mut self.stdin, self.framing, step);
+        }
+    }
+}
+
+/// Writes the messages of one step to the program, each framed as `framing` says. A failed write
+/// is left to the read that follows, which reports how the program ended.
+fn write_step(stdin: &mut impl Write, framing: Framing, step: &[String]) {
+    for message in step {
+        let written = match framing {
+            Framing::Lines => writeln!(stdin, "{message}"),
+            Framing::ContentLength => {
+                write!(stdin, "Content-Length: {}\r\n\r\n{message}", message.len())
+            }
+        };
+        if written.is_err() {
+            break;
+        }
+    }
+    let _ = stdin.flush();
+}
+
+/// Removes the complete messages from the front of `pending` one at a time and returns the first
+/// that `is_reply` accepts; what follows it, and any partial message, stays. The first `scanned`
+/// bytes of `pending` are known to hold no newline (for lines) or no end of a header block (for
+/// length framing) and are not searched again; it is left covering what this call searched, so
+/// the cost of a message stays linear in its length however many chunks it arrives in.
 fn take_reply(
     pending: &mut Vec<u8>,
     scanned: &mut usize,
+    framing: Framing,
     is_reply: &mut impl FnMut(&str) -> bool,
 ) -> Option<String> {
-    while let Some(offset) = pending[*scanned..].iter().position(|byte| *byte == b'\n') {
-        let end = *scanned + offset;
-        *scanned = 0;
-        let line: Vec<u8> = pending.drain(..=end).collect();
-        let line = String::from_utf8_lossy(&line);
-        let line = line.trim();
-        if !line.is_empty() && is_reply(line) {
-            return Some(line.to_string());
+    match framing {
+        Framing::Lines => {
+            while let Some(offset) = pending[*scanned..].iter().position(|byte| *byte == b'\n') {
+                let end = *scanned + offset;
+                *scanned = 0;
+                let line: Vec<u8> = pending.drain(..=end).collect();
+                let line = String::from_utf8_lossy(&line);
+                let line = line.trim();
+                if !line.is_empty() && is_reply(line) {
+                    return Some(line.to_string());
+                }
+            }
+            *scanned = pending.len();
+        }
+        Framing::ContentLength => {
+            while let Some(message) = take_framed(pending, scanned) {
+                let message = String::from_utf8_lossy(&message);
+                if is_reply(&message) {
+                    return Some(message.into_owned());
+                }
+            }
         }
     }
-    *scanned = pending.len();
     None
+}
+
+/// The end of a header block: the blank line after its last header.
+const HEADERS_END: &[u8] = b"\r\n\r\n";
+
+/// Where the header block at the front of `pending` ends, searched from `from`: the offset of its
+/// blank line. `None` while the block has not arrived whole.
+fn headers_end(pending: &[u8], from: usize) -> Option<usize> {
+    // The end may straddle what was searched before and what has arrived since.
+    let from = from
+        .saturating_sub(HEADERS_END.len() - 1)
+        .min(pending.len());
+    pending[from..]
+        .windows(HEADERS_END.len())
+        .position(|window| window == HEADERS_END)
+        .map(|offset| from + offset)
+}
+
+/// The length a header block gives its message: the value of its `Content-Length` header. A run
+/// of digits too long for a `usize` reads as the largest, so that it is refused as a length
+/// rather than passed over as no length at all. `None` when the block has no such header or its
+/// value is not a number.
+fn announced_length(headers: &[u8]) -> Option<usize> {
+    String::from_utf8_lossy(headers).lines().find_map(|header| {
+        let (name, value) = header.split_once(':')?;
+        let value = value.trim();
+        if !name.trim().eq_ignore_ascii_case("content-length")
+            || value.is_empty()
+            || !value.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return None;
+        }
+        Some(value.parse::<usize>().unwrap_or(usize::MAX))
+    })
+}
+
+/// Whether the header block at the front of `pending` announces a message that, counted from the
+/// front of `pending` alone, ends past `limit` bytes, or whose end cannot be counted at all: one
+/// that can never arrive whole, which [`take_framed`] leaves in place. What the run printed before
+/// `pending` is not counted, so a message this passes may still take the run's output past the
+/// limit; the bounded reader ends the run then. `scanned` is as [`take_framed`] left it.
+fn announces_past(pending: &[u8], scanned: usize, limit: usize) -> bool {
+    let Some(headers_len) = headers_end(pending, scanned) else {
+        return false;
+    };
+    announced_length(&pending[..headers_len]).is_some_and(|length| {
+        (headers_len + HEADERS_END.len())
+            .checked_add(length)
+            .is_none_or(|end| end > limit)
+    })
+}
+
+/// Removes one length-framed message from the front of `pending` and returns its body, once the
+/// whole of it has arrived. A header block that gives no length is dropped, since nothing says
+/// where its message would end. A length whose end cannot be counted is left in place, as a
+/// message still arriving is: [`announces_past`] is what refuses it. `scanned` is as
+/// [`take_reply`] says.
+fn take_framed(pending: &mut Vec<u8>, scanned: &mut usize) -> Option<Vec<u8>> {
+    loop {
+        let Some(headers_len) = headers_end(pending, *scanned) else {
+            *scanned = pending.len();
+            return None;
+        };
+        let body_at = headers_len + HEADERS_END.len();
+        let Some(length) = announced_length(&pending[..headers_len]) else {
+            pending.drain(..body_at);
+            *scanned = 0;
+            continue;
+        };
+        let end = body_at
+            .checked_add(length)
+            .filter(|end| *end <= pending.len());
+        let Some(end) = end else {
+            // The block's end is found again at once when more has arrived.
+            *scanned = headers_len;
+            return None;
+        };
+        let body = pending[body_at..end].to_vec();
+        pending.drain(..end);
+        *scanned = 0;
+        return Some(body);
+    }
 }
 
 #[cfg(test)]
@@ -1626,9 +1866,12 @@ mod tests {
         let mut taken = Vec::new();
         for chunk in chunks {
             pending.extend_from_slice(chunk);
-            taken.push(take_reply(&mut pending, &mut scanned, &mut |line| {
-                line.starts_with("reply")
-            }));
+            taken.push(take_reply(
+                &mut pending,
+                &mut scanned,
+                Framing::Lines,
+                &mut |line| line.starts_with("reply"),
+            ));
         }
         (taken, pending, scanned)
     }
@@ -1668,20 +1911,23 @@ mod tests {
         let mut accept = |line: &str| line.starts_with("reply");
 
         assert_eq!(
-            take_reply(&mut pending, &mut scanned, &mut accept),
+            take_reply(&mut pending, &mut scanned, Framing::Lines, &mut accept),
             Some("reply one".to_string())
         );
         assert_eq!(pending, b"reply two\npartial");
         assert_eq!(scanned, 0);
 
         assert_eq!(
-            take_reply(&mut pending, &mut scanned, &mut accept),
+            take_reply(&mut pending, &mut scanned, Framing::Lines, &mut accept),
             Some("reply two".to_string())
         );
         assert_eq!(pending, b"partial");
         assert_eq!(scanned, 0);
 
-        assert_eq!(take_reply(&mut pending, &mut scanned, &mut accept), None);
+        assert_eq!(
+            take_reply(&mut pending, &mut scanned, Framing::Lines, &mut accept),
+            None
+        );
         assert_eq!(pending, b"partial");
         assert_eq!(scanned, pending.len());
     }
@@ -1691,7 +1937,7 @@ mod tests {
         let mut pending = b"noise\nmore noise\nreply ok\nreply later\n".to_vec();
         let mut scanned = 0;
         let mut seen = Vec::new();
-        let reply = take_reply(&mut pending, &mut scanned, &mut |line| {
+        let reply = take_reply(&mut pending, &mut scanned, Framing::Lines, &mut |line| {
             seen.push(line.to_string());
             line.starts_with("reply")
         });
@@ -1736,7 +1982,7 @@ mod tests {
         let mut pending = b"\n   \r\n  reply padded \r\n".to_vec();
         let mut scanned = 0;
         let mut seen = Vec::new();
-        let reply = take_reply(&mut pending, &mut scanned, &mut |line| {
+        let reply = take_reply(&mut pending, &mut scanned, Framing::Lines, &mut |line| {
             seen.push(line.to_string());
             true
         });
@@ -1768,7 +2014,7 @@ mod tests {
         let mut taken = None;
         for chunk in input.chunks(8 * 1024) {
             pending.extend_from_slice(chunk);
-            taken = take_reply(&mut pending, &mut scanned, &mut |_| {
+            taken = take_reply(&mut pending, &mut scanned, Framing::Lines, &mut |_| {
                 judged += 1;
                 true
             });
@@ -1783,5 +2029,293 @@ mod tests {
         assert_eq!(taken.as_deref(), Some(line.as_str()));
         assert_eq!(judged, 1);
         assert!(pending.is_empty());
+    }
+
+    /// Runs `script` under bash through [`run_conversation_traced`] with no time to exit after
+    /// the reply, answering each message through `heard`.
+    fn conversation_of(
+        script: &str,
+        framing: Framing,
+        steps: &[Vec<String>],
+        heard: impl FnMut(&str) -> Heard,
+    ) -> std::result::Result<String, ExchangeFailure> {
+        let mut command = Command::new(crate::test_support::bash());
+        command.arg("-c").arg(script);
+        run_conversation_traced(
+            &mut command,
+            Conversation { framing, steps },
+            &exchange_bounds(PATIENCE),
+            &AtomicBool::new(false),
+            Duration::ZERO,
+            &mut ExchangeTrace::default(),
+            heard,
+        )
+    }
+
+    fn step(messages: &[&str]) -> Vec<String> {
+        messages.iter().map(|message| message.to_string()).collect()
+    }
+
+    #[test]
+    fn a_later_step_is_written_only_when_it_is_asked_for() {
+        let steps = [step(&["one", "two"]), step(&["three"])];
+        let mut input = Input {
+            stdin: Vec::new(),
+            framing: Framing::Lines,
+            steps: steps.iter(),
+        };
+        assert!(
+            input.stdin.is_empty(),
+            "nothing is written before the start"
+        );
+        input.write_next();
+        assert_eq!(input.stdin, b"one\ntwo\n");
+        input.write_next();
+        assert_eq!(input.stdin, b"one\ntwo\nthree\n");
+        // With no step left there is nothing to write.
+        input.write_next();
+        assert_eq!(input.stdin, b"one\ntwo\nthree\n");
+    }
+
+    #[test]
+    fn a_step_is_framed_by_the_length_of_each_message_in_bytes() {
+        let steps = [step(&["{\"a\":\"é\"}"])];
+        let mut input = Input {
+            stdin: Vec::new(),
+            framing: Framing::ContentLength,
+            steps: steps.iter(),
+        };
+        input.write_next();
+        assert_eq!(
+            String::from_utf8(input.stdin).unwrap(),
+            "Content-Length: 10\r\n\r\n{\"a\":\"é\"}"
+        );
+    }
+
+    #[test]
+    fn a_conversation_in_steps_writes_the_second_once_the_first_is_answered() {
+        let script = "read first; echo \"answer $first\"; read second; echo \"reply $second\"";
+        let mut order = Vec::new();
+        let reply = conversation_of(
+            script,
+            Framing::Lines,
+            &[step(&["one"]), step(&["two"])],
+            |message| {
+                order.push(message.to_string());
+                match message {
+                    "answer one" => Heard::Next,
+                    _ if message.starts_with("reply") => Heard::Reply,
+                    _ => Heard::Nothing,
+                }
+            },
+        );
+        assert_eq!(reply.expect("a reply"), "reply two");
+        assert_eq!(order, ["answer one", "reply two"]);
+    }
+
+    #[test]
+    fn an_answer_heard_with_no_step_left_is_passed_over() {
+        let reply = conversation_of(
+            "read first; echo more; echo \"reply $first\"",
+            Framing::Lines,
+            &[step(&["one"])],
+            |message| match message {
+                "more" => Heard::Next,
+                _ => Heard::Reply,
+            },
+        );
+        assert_eq!(reply.expect("a reply"), "reply one");
+    }
+
+    #[test]
+    fn a_length_framed_conversation_writes_and_reads_messages_under_their_headers() {
+        // Reads one framed request (the header, the blank line, then exactly the bytes the header
+        // counts) and answers with a framed message that spans lines, after one that is not the
+        // reply.
+        let script = "IFS=': ' read -r name length; read -r blank; length=${length%$'\\r'}; \
+                      body=$(dd bs=1 count=\"$length\" 2>/dev/null); \
+                      printf 'Content-Length: 5\\r\\n\\r\\nnoise'; \
+                      reply=\"reply to $body\"$'\\n'\"second line\"; \
+                      printf 'Content-Length: %d\\r\\nContent-Type: x\\r\\n\\r\\n%s' \"${#reply}\" \"$reply\"";
+        let mut passed = Vec::new();
+        let reply = conversation_of(
+            script,
+            Framing::ContentLength,
+            &[step(&["{\"id\":1}"])],
+            |message| {
+                if message.starts_with("reply") {
+                    Heard::Reply
+                } else {
+                    passed.push(message.to_string());
+                    Heard::Nothing
+                }
+            },
+        );
+        assert_eq!(reply.expect("a reply"), "reply to {\"id\":1}\nsecond line");
+        assert_eq!(passed, ["noise"]);
+    }
+
+    #[test]
+    fn a_framed_message_is_taken_once_all_of_it_has_arrived() {
+        let mut pending = b"Content-Length: 5\r\n\r\nhel".to_vec();
+        let mut scanned = 0;
+        assert_eq!(take_framed(&mut pending, &mut scanned), None);
+        pending.extend_from_slice(b"loContent-Le");
+        assert_eq!(
+            take_framed(&mut pending, &mut scanned),
+            Some(b"hello".to_vec())
+        );
+        assert_eq!(pending, b"Content-Le");
+        assert_eq!(scanned, 0);
+        assert_eq!(take_framed(&mut pending, &mut scanned), None);
+    }
+
+    #[test]
+    fn a_header_block_that_gives_no_length_is_dropped() {
+        let mut pending = b"X-Other: 1\r\n\r\ncontent-length: 2\r\n\r\nok".to_vec();
+        assert_eq!(take_framed(&mut pending, &mut 0), Some(b"ok".to_vec()));
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn a_header_block_arriving_in_pieces_is_searched_once_and_found_across_the_pieces() {
+        let mut pending = Vec::new();
+        let mut scanned = 0;
+        // The blank line is split over three chunks, each of which leaves nothing to take.
+        for chunk in [&b"Content-Length: 2\r"[..], b"\n\r", b"\n", b"o"] {
+            pending.extend_from_slice(chunk);
+            assert_eq!(take_framed(&mut pending, &mut scanned), None);
+        }
+        // The block's end is known, so the wait for the body searches nothing again.
+        assert_eq!(scanned, b"Content-Length: 2".len());
+        pending.push(b'k');
+        assert_eq!(
+            take_framed(&mut pending, &mut scanned),
+            Some(b"ok".to_vec())
+        );
+    }
+
+    #[test]
+    fn a_long_run_with_no_header_end_is_not_searched_again() {
+        let mut pending = vec![b'x'; 64 * 1024];
+        let mut scanned = 0;
+        assert_eq!(take_framed(&mut pending, &mut scanned), None);
+        assert_eq!(scanned, pending.len());
+    }
+
+    #[test]
+    fn a_length_that_cannot_be_counted_is_left_in_place_and_refused() {
+        for length in [
+            "18446744073709551615",
+            "99999999999999999999999999",
+            "70000",
+        ] {
+            let frame = format!("Content-Length: {length}\r\n\r\nx");
+            let mut pending = frame.clone().into_bytes();
+            assert_eq!(take_framed(&mut pending, &mut 0), None, "{length}");
+            assert_eq!(pending, frame.as_bytes(), "{length}");
+            assert!(announces_past(&pending, 0, 64 * 1024), "{length}");
+        }
+    }
+
+    #[test]
+    fn a_length_within_the_limit_is_not_refused_while_it_arrives() {
+        assert!(!announces_past(
+            b"Content-Length: 100\r\n\r\nx",
+            0,
+            64 * 1024
+        ));
+        assert!(!announces_past(b"Content-Length: 99999999", 0, 64 * 1024));
+        assert!(!announces_past(b"X-Other: 99999999\r\n\r\n", 0, 64 * 1024));
+    }
+
+    /// Runs `script` under bash as a length-framed conversation of no input, the script recording
+    /// its pid first; `None` when the run ended before it did (see [`until_the_shell_ran`]).
+    fn framed_conversation_of(
+        script: &str,
+        heard: impl FnMut(&str) -> Heard,
+    ) -> Option<(std::result::Result<String, ExchangeFailure>, i32)> {
+        let pid_file = ScratchFile::new("env-shell-conversation", "pid");
+        let mut command = Command::new(crate::test_support::bash());
+        command.args([
+            "-c",
+            &format!(
+                "echo {} > '{}'; {script}",
+                crate::test_support::SHELL_PID,
+                pid_file.display()
+            ),
+        ]);
+        let outcome = run_conversation_traced(
+            &mut command,
+            Conversation {
+                framing: Framing::ContentLength,
+                steps: &[],
+            },
+            &exchange_bounds(PATIENCE),
+            &AtomicBool::new(false),
+            Duration::ZERO,
+            &mut ExchangeTrace::default(),
+            heard,
+        );
+        Some((outcome, read_pid_file(&pid_file)?))
+    }
+
+    #[test]
+    fn a_length_that_overflows_fails_the_run_and_leaves_nothing_behind() {
+        let script =
+            "printf 'Content-Length: 18446744073709551615\\r\\n\\r\\nx'; exec /bin/sleep 300";
+        let (outcome, pid) =
+            until_the_shell_ran(|| framed_conversation_of(script, |_| Heard::Reply));
+        assert!(
+            matches!(outcome, Err(ExchangeFailure::StdoutExceeded(limit)) if limit == 64 * 1024),
+            "{outcome:?}"
+        );
+        assert_gone_by(pid, Instant::now() + PATIENCE);
+    }
+
+    #[test]
+    fn a_length_past_the_output_limit_fails_the_run_and_leaves_nothing_behind() {
+        let script = "printf 'Content-Length: 70000\\r\\n\\r\\nx'; exec /bin/sleep 300";
+        let (outcome, pid) =
+            until_the_shell_ran(|| framed_conversation_of(script, |_| Heard::Reply));
+        assert!(
+            matches!(outcome, Err(ExchangeFailure::StdoutExceeded(limit)) if limit == 64 * 1024),
+            "{outcome:?}"
+        );
+        assert_gone_by(pid, Instant::now() + PATIENCE);
+    }
+
+    #[test]
+    fn a_listener_that_panics_still_leaves_no_child_behind() {
+        let script = "printf 'Content-Length: 2\\r\\n\\r\\nhi'; exec /bin/sleep 300";
+        let pid = until_the_shell_ran(|| {
+            let pid_file = ScratchFile::new("env-shell-conversation-panic", "pid");
+            let mut command = Command::new(crate::test_support::bash());
+            command.args([
+                "-c",
+                &format!(
+                    "echo {} > '{}'; {script}",
+                    crate::test_support::SHELL_PID,
+                    pid_file.display()
+                ),
+            ]);
+            let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                run_conversation_traced(
+                    &mut command,
+                    Conversation {
+                        framing: Framing::ContentLength,
+                        steps: &[],
+                    },
+                    &exchange_bounds(PATIENCE),
+                    &AtomicBool::new(false),
+                    Duration::ZERO,
+                    &mut ExchangeTrace::default(),
+                    |_| panic!("the listener panics on the first message"),
+                )
+            }));
+            // A run that ended some other way (a stalled exec) never reached the listener.
+            unwound.is_err().then(|| read_pid_file(&pid_file)).flatten()
+        });
+        assert_gone_by(pid, Instant::now() + PATIENCE);
     }
 }

@@ -64,6 +64,7 @@ fn wait_for_unreaped_exit(child: &ChildHandle) {
 ///
 /// - `park`: waits to be ended.
 /// - `park_deaf`: waits to be ended, and does not take a polite request to terminate.
+/// - `exit_ok`: exits at once, successfully.
 /// - `lead_same_group` and `lead_own_group`: starts a `park` helper, in its own process group for
 ///   the second and not for the first, writes its pid, and waits to be ended.
 /// - `lead_detached`: starts a `park` helper apart from itself ([`detach`]), writes its pid, and
@@ -92,6 +93,10 @@ fn a_helper_process() {
             ignore_terminate();
             write_pid(pid_file, std::process::id());
             None
+        }
+        "exit_ok" => {
+            write_pid(pid_file, std::process::id());
+            return;
         }
         "lead_same_group" | "lead_own_group" => {
             let own_group = role == "lead_own_group";
@@ -497,6 +502,32 @@ fn a_group_kill_reaches_what_the_leader_started() {
     assert_gone_by(helper, Instant::now() + PATIENCE);
     assert!(!wait_for_exit(&mut leader).success());
     guard.0.clear();
+}
+
+/// How a child ended is read while the caller holds it unreaped, and not at all while it runs.
+#[test]
+fn how_a_child_ended_is_read_without_reaping_it() {
+    let dir = ScratchDir::new("proc-exit-status");
+    let mut parked = start("park", &dir.join("parked"), |command| {
+        Reach::Group.lead(command)
+    });
+    let parked_handle = handle_of(&parked, Reach::Group);
+    let mut guard = KillOnDrop(vec![parked.id() as i32]);
+    wait_for_pid(&dir.join("parked"));
+    assert_eq!(parked_handle.exited_successfully(), None);
+    assert!(parked_handle.kill().delivered());
+    wait_for_unreaped_exit(&parked_handle);
+    assert_eq!(parked_handle.exited_successfully(), Some(false));
+    wait_for_exit(&mut parked);
+    guard.0.clear();
+
+    let mut done = start("exit_ok", &dir.join("done"), |command| {
+        Reach::Group.lead(command)
+    });
+    let done_handle = handle_of(&done, Reach::Group);
+    wait_for_unreaped_exit(&done_handle);
+    assert_eq!(done_handle.exited_successfully(), Some(true));
+    assert!(wait_for_exit(&mut done).success());
 }
 
 /// A helper moved to a group of its own is out of the reach of a group kill and in that of the

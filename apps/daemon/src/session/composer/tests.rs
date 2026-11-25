@@ -5,8 +5,9 @@ use std::time::{Duration, Instant};
 
 use super::super::BoxIs;
 use super::*;
+use crate::adapter::test_provider::TestScreen;
 use crate::session::paste_apart::NotSubmitted;
-use crate::session::term::{self, CommandNotRecognised, Shape};
+use crate::session::term::{self, CommandNotFound, CommandNotRecognised, Shape};
 use crate::test_support::composer_agent::{agent, agent_with, Agent, AgentOptions};
 use crate::test_support::PATIENCE;
 
@@ -161,6 +162,144 @@ fn a_command_whose_completion_is_another_is_cleared_and_refused() {
         agent.live.input_box(&agent.live.screen_text_undimmed()),
         Some(String::new())
     );
+}
+
+/// The test provider's made-up input box, read by a provider that writes a lone command with a
+/// space after it.
+struct SpacedLoneCommand;
+
+impl crate::session::screen::ScreenReader for SpacedLoneCommand {
+    fn input_box_rows(&self, screen: &str) -> Option<Vec<String>> {
+        TestScreen.input_box_rows(screen)
+    }
+    fn command_completion(&self, screen: &str) -> Option<String> {
+        TestScreen.command_completion(screen)
+    }
+    fn clears_input_box_with_ctrl_u(&self) -> bool {
+        TestScreen.clears_input_box_with_ctrl_u()
+    }
+    fn list_shown(&self, screen: &str) -> Option<bool> {
+        TestScreen.list_shown(screen)
+    }
+    fn writes_lone_command_with_trailing_space(&self) -> bool {
+        true
+    }
+}
+
+static SPACED_LONE_COMMAND: SpacedLoneCommand = SpacedLoneCommand;
+
+/// [`SpacedLoneCommand`], reading its list as `shown` whatever the screen.
+struct SpacedListReadAs {
+    shown: Option<bool>,
+}
+
+impl crate::session::screen::ScreenReader for SpacedListReadAs {
+    fn input_box_rows(&self, screen: &str) -> Option<Vec<String>> {
+        TestScreen.input_box_rows(screen)
+    }
+    fn command_completion(&self, screen: &str) -> Option<String> {
+        TestScreen.command_completion(screen)
+    }
+    fn clears_input_box_with_ctrl_u(&self) -> bool {
+        TestScreen.clears_input_box_with_ctrl_u()
+    }
+    fn list_shown(&self, _screen: &str) -> Option<bool> {
+        self.shown
+    }
+    fn writes_lone_command_with_trailing_space(&self) -> bool {
+        true
+    }
+}
+
+static LIST_STAYS_UP: SpacedListReadAs = SpacedListReadAs { shown: Some(true) };
+static LIST_UNREAD: SpacedListReadAs = SpacedListReadAs { shown: None };
+
+/// The space after a lone command goes in only over its list read up: with no list drawn, or one
+/// the provider cannot tell of, the command is left in the box unsent, no space typed, its failure
+/// counting the paste alone.
+#[test]
+fn a_lone_command_gets_no_space_without_its_list_read_up() {
+    for (name, reader) in [
+        (
+            "composer-spaced-no-list",
+            &SPACED_LONE_COMMAND as &dyn crate::session::screen::ScreenReader,
+        ),
+        ("composer-spaced-unread", &LIST_UNREAD),
+    ] {
+        let _reader = crate::test_support::test_provider::declaring_screen(reader);
+        let agent = agent(name, "yes", "0", "");
+        let failure = agent
+            .live
+            .write_command_with("m", "/status", false, QUICK)
+            .unwrap_err();
+        assert!(
+            failure
+                .error
+                .get_ref()
+                .is_some_and(|error| error.is::<NotSubmitted>()),
+            "{name}"
+        );
+        let paste = crate::platform::term::encode(&[Input::Paste("/status".to_string())]).len();
+        assert_eq!(failure.written, paste, "{name}");
+        assert_eq!(agent.logged(), ["PASTE /status"], "{name}");
+        assert_eq!(
+            agent.live.input_box(&agent.live.box_screen()).as_deref(),
+            Some("/status"),
+            "{name}"
+        );
+    }
+}
+
+/// The Enter after a lone command's space follows only once the list is read closed: a list still
+/// up leaves the command with its space in the box unsent, its failure counting the paste and the
+/// space.
+#[test]
+fn a_lone_commands_enter_waits_for_its_list_to_be_read_closed() {
+    let _reader = crate::test_support::test_provider::declaring_screen(&LIST_STAYS_UP);
+    let agent = agent("composer-spaced-stays", "yes", "0", "");
+    let failure = agent
+        .live
+        .write_command_with("m", "/status", false, QUICK)
+        .unwrap_err();
+    assert!(failure
+        .error
+        .get_ref()
+        .is_some_and(|error| error.is::<NotSubmitted>()));
+    let paste = crate::platform::term::encode(&[Input::Paste("/status".to_string())]).len();
+    assert_eq!(failure.written, paste + 1);
+    assert_eq!(agent.logged(), ["PASTE /status"]);
+}
+
+/// A provider that takes a lone command with a space after it has `/name` pasted, the space typed
+/// once the completion is looked at and the list read up, and `/name ` run by its Enter; a command
+/// with arguments is pasted as it is and gets no space.
+#[test]
+fn a_lone_command_gets_a_space_typed_after_it_where_the_provider_declares_it() {
+    let _reader = crate::test_support::test_provider::declaring_screen(&SPACED_LONE_COMMAND);
+    // A completion offering the command itself is closed by the space before the Enter.
+    let agent = self::agent("composer-spaced-same", "yes", "0", "status");
+    agent.live.write_command("m", "/status", false).unwrap();
+    assert_eq!(agent.logged(), ["PASTE /status", "SENT /status "]);
+    let agent = self::agent("composer-spaced-args", "yes", "0", "");
+    agent.live.write_command("m", "/model fast", false).unwrap();
+    assert_eq!(agent.logged(), ["PASTE /model fast", "SENT /model fast"]);
+}
+
+/// The completion is looked at before the space: one that offers another command is cleared and the
+/// command refused under the name written, with no space typed.
+#[test]
+fn a_lone_command_whose_completion_is_another_is_refused_before_its_space() {
+    let _reader = crate::test_support::test_provider::declaring_screen(&SPACED_LONE_COMMAND);
+    let agent = agent("composer-spaced-other", "yes", "0", "probecmd");
+    let failure = agent.live.write_command("m", "/probe", false).unwrap_err();
+    let refused = failure
+        .error
+        .get_ref()
+        .and_then(|error| error.downcast_ref::<CommandNotRecognised>())
+        .expect("a command not recognised");
+    assert_eq!(refused.command, "/probe");
+    assert_eq!(refused.offered, "/probecmd");
+    assert_eq!(agent.logged(), ["PASTE /probe", "CLEARED"]);
 }
 
 /// A server of the session's own that takes images, and keeps what it was offered with them.
@@ -598,4 +737,157 @@ fn only_a_box_showing_the_message_itself_is_taken_for_an_unsent_one() {
         assert!(started.elapsed() < PATIENCE, "the message was not seen");
         std::thread::sleep(Duration::from_millis(20));
     }
+}
+
+/// The test provider's made-up input box, read by a provider with no Ctrl-U of its own that
+/// declares Ctrl-U as the key emptying its whole box at the idle prompt, as the stand-in's Ctrl-U
+/// does.
+struct ClearsWithKey;
+
+impl crate::session::screen::ScreenReader for ClearsWithKey {
+    fn input_box_rows(&self, screen: &str) -> Option<Vec<String>> {
+        TestScreen.input_box_rows(screen)
+    }
+    fn command_completion(&self, screen: &str) -> Option<String> {
+        TestScreen.command_completion(screen)
+    }
+    fn input_box_clearing_key(&self) -> Option<Input> {
+        Some(Input::Ctrl('u'))
+    }
+}
+
+static CLEARS_WITH_KEY: ClearsWithKey = ClearsWithKey;
+
+/// A provider whose box is cleared by a key of its own at the idle prompt has a wrong completion
+/// cleared with that key while the session is at its idle prompt, and never while a turn runs,
+/// where such a key may interrupt it.
+#[test]
+fn a_providers_clearing_key_clears_a_wrong_completion_only_at_the_idle_prompt() {
+    let _reader = crate::test_support::test_provider::declaring_screen(&CLEARS_WITH_KEY);
+    assert!(crate::session::screen::clears_input_box(&CLEARS_WITH_KEY));
+    for (name, status, logged) in [
+        (
+            "composer-key-idle",
+            crate::protocol::SessionStatus::Idle,
+            &["PASTE /probe", "CLEARED"][..],
+        ),
+        (
+            "composer-key-working",
+            crate::protocol::SessionStatus::Working,
+            &["PASTE /probe"][..],
+        ),
+    ] {
+        let agent = agent(name, "yes", "0", "probecmd");
+        let (state, dir) = crate::test_support::app_state(name);
+        crate::state::test_support::insert_record(&state, &dir, &agent.live.id, status);
+        state.register_live(agent.live.clone());
+        let failure = agent.live.write_command("m", "/probe", false).unwrap_err();
+        assert!(
+            failure
+                .error
+                .get_ref()
+                .is_some_and(|error| error.is::<CommandNotRecognised>()),
+            "{name}"
+        );
+        assert_eq!(agent.logged(), logged, "{name}");
+    }
+}
+
+/// A provider's clearing key is pressed only while the box still holds text, read again under the
+/// input lock: a box that empties between the read the clear starts from and the press is left
+/// alone, since the key may mean something else on an empty box.
+#[test]
+fn a_providers_clearing_key_is_not_pressed_on_a_box_emptied_before_the_press() {
+    let _reader = crate::test_support::test_provider::declaring_screen(&CLEARS_WITH_KEY);
+    let name = "composer-key-emptied";
+    let agent = agent_with(
+        name,
+        AgentOptions {
+            forget: "2",
+            ..AgentOptions::default()
+        },
+    );
+    let (state, dir) = crate::test_support::app_state(name);
+    crate::state::test_support::insert_record(
+        &state,
+        &dir,
+        &agent.live.id,
+        crate::protocol::SessionStatus::Idle,
+    );
+    state.register_live(agent.live.clone());
+    draft(&agent, "hello");
+    let live = &agent.live;
+    let mut writes = live.input_writes();
+    // Called under the input lock: holds the press back until the agent has emptied its box.
+    let allowed = || {
+        crate::session::wait::wait_for(PATIENCE, || {
+            live.input_box(&live.box_screen()).as_deref() == Some("")
+        })
+    };
+
+    let (cleared, presses, ..) = crate::session::input_box_clear::clear_input_box(
+        live,
+        &mut writes,
+        PATIENCE,
+        crate::session::input_box_clear::clear_allowance(),
+        allowed,
+    );
+
+    assert_eq!((cleared, presses), (Cleared::Refused, 0));
+    assert_eq!(agent.logged(), ["FORGOT"]);
+}
+
+/// [`SpacedLoneCommand`], whose list says no command matches while the stand-in's completion
+/// line reads `none`: it offers no completion then, as OpenCode's `No matching items` does.
+struct ListsNoCommand;
+
+impl crate::session::screen::ScreenReader for ListsNoCommand {
+    fn input_box_rows(&self, screen: &str) -> Option<Vec<String>> {
+        TestScreen.input_box_rows(screen)
+    }
+    fn command_completion(&self, screen: &str) -> Option<String> {
+        TestScreen
+            .command_completion(screen)
+            .filter(|offered| offered != "none")
+    }
+    fn list_offers_no_command(&self, screen: &str) -> bool {
+        TestScreen.command_completion(screen).as_deref() == Some("none")
+    }
+    fn clears_input_box_with_ctrl_u(&self) -> bool {
+        TestScreen.clears_input_box_with_ctrl_u()
+    }
+    fn list_shown(&self, screen: &str) -> Option<bool> {
+        TestScreen.list_shown(screen)
+    }
+    fn writes_lone_command_with_trailing_space(&self) -> bool {
+        true
+    }
+}
+
+static LISTS_NO_COMMAND: ListsNoCommand = ListsNoCommand;
+
+/// A lone command the agent's list says it has no command for is refused as not found, with no
+/// command offered, its box cleared, and gets neither its space nor its Enter; a command with
+/// arguments is not looked at so, and goes in.
+#[test]
+fn a_lone_command_the_list_offers_nothing_for_is_refused_and_cleared() {
+    let _reader = crate::test_support::test_provider::declaring_screen(&LISTS_NO_COMMAND);
+    let agent = agent("composer-no-command", "yes", "0", "none");
+    let failure = agent.live.write_command("m", "/zzz", false).unwrap_err();
+    let refused = failure
+        .error
+        .get_ref()
+        .and_then(|error| error.downcast_ref::<CommandNotFound>())
+        .expect("a command not found");
+    assert_eq!(refused.command, "/zzz");
+    assert!(refused.cleared);
+    assert!(
+        refused.reason.contains("has no command /zzz"),
+        "{}",
+        refused.reason
+    );
+    assert_eq!(agent.logged(), ["PASTE /zzz", "CLEARED"]);
+    let agent = self::agent("composer-no-command-args", "yes", "0", "none");
+    agent.live.write_command("m", "/zzz now", false).unwrap();
+    assert_eq!(agent.logged(), ["PASTE /zzz now", "SENT /zzz now"]);
 }

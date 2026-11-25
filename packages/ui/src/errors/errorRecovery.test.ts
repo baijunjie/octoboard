@@ -15,6 +15,10 @@ it.each([
   expect(retryCanHelp(new CodedError("Rejected configuration", code, {}))).toBe(false);
 });
 
+it("does not offer a retry for something the agent's provider does not offer, which no retry changes", () => {
+  expect(retryCanHelp(new CodedError("Test Agent does not offer a list of its MCP servers and connectors", "provider_unsupported", { agent: "test_agent", operation: "mcp_inventory" }))).toBe(false);
+});
+
 it("keeps a connection failure and unknown failures retryable", () => {
   expect(retryCanHelp(new CodedError("Connection closed", "connection_closed", {}))).toBe(true);
   expect(retryCanHelp(new CodedError("Future failure", "a_future_code", {}))).toBe(true);
@@ -40,7 +44,7 @@ it.each([
   ["sharing_resume_failed", "none"], ["message_acceptance_unconfirmed", "none"], ["message_refused", "none"], ["terminal_input_lost", "none"], ["trust_not_carried_over", "none"], ["account_sharing_repair_failed", "none"],
   ["provider.codex.relocation_config_unreadable", "provider.codex.relocation_config_unreadable.remedy"],
   ["provider.codex.relocation_home_unlocatable", "provider.codex.relocation_home_unlocatable.remedy"],
-  ["provider.codex.login_busy", "none"], ["provider_unsupported", "none"], ["login_already_running", "none"], ["login_not_running", "none"],
+  ["provider.codex.login_busy", "none"], ["provider_unsupported", "none"], ["login_already_running", "none"], ["login_not_running", "none"], ["login_question_not_open", "none"],
   ["reset_credit_in_progress", "none"], ["reset_credit_timed_out", "none"], ["reset_credit_failed", "resetCredit"], ["reset_credit_not_signed_in", "resetCreditLogin"],
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {
   const error = new CodedError("localized text", code, { session: "s1" });

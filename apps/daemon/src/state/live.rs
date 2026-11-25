@@ -204,6 +204,12 @@ impl AppState {
             let process = Arc::downgrade(&session);
             let (held_state, held_id) = (state.clone(), id.clone());
             let (released_state, released_id) = (state.clone(), id.clone());
+            let (returned_state, returned_id) = (state.clone(), id.clone());
+            transport.on_returned(Box::new(move |logical_id| {
+                if let Some(state) = returned_state.upgrade() {
+                    state.message_returned(&returned_id, logical_id);
+                }
+            }));
             transport.attach(crate::session::term::TransportEvents {
                 // Off the caller's thread: the write blocks, and this can be called on the runtime.
                 ready: Box::new(move || {
@@ -228,6 +234,7 @@ impl AppState {
                         state.broadcast(crate::protocol::Event::SessionNoticeWithdrawn {
                             session: released_id.clone(),
                             code,
+                            detail: None,
                         });
                     }
                 }),
@@ -354,5 +361,31 @@ impl AppState {
             .sharing_locks
             .values()
             .any(|entry| entry.restarting.contains(id))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::protocol::SessionStatus;
+    use crate::state::test_support::insert_record;
+    use crate::test_support::{app_state, idle_stand_in};
+
+    /// A session at its prompt with a message queued for it is not idle, unless the message is one
+    /// held until the next is written, which no drain takes: with only that queued it reads idle.
+    #[test]
+    fn a_held_message_alone_leaves_a_session_idle() {
+        let (state, dir) = app_state("state-idle-held-alone");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = idle_stand_in("s");
+        state.register_live(live.clone());
+        let record = state.session_record("s").unwrap();
+        assert_eq!(state.activity_of(&record), Some(false));
+
+        state.outbox.queue_held("s", "given back");
+        assert_eq!(state.outbox.len("s"), 1);
+        assert_eq!(state.activity_of(&record), Some(false));
+
+        state.queue_message("s", "next");
+        assert_eq!(state.activity_of(&record), Some(true));
     }
 }

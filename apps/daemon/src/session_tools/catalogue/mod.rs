@@ -3,7 +3,7 @@
 //! they cannot drift apart. The console session's instruction file is held to it by a test in
 //! [`super::console_instructions`], which fails when a tool it names is not in the catalogue. The
 //! names an agent actually shows the model are prefixed per agent — `mcp__octoboard__x` on Claude
-//! Code and Codex, `octoboard__x` on Grok (see "Across the three agents" in
+//! Code and Codex, `octoboard__x` on Grok (see "Across the agents" in
 //! `docs/agent-cli-reference.md`), which is why [`qualified_tool_name`] exists rather than the role
 //! text spelling a prefix out.
 //!
@@ -143,13 +143,14 @@ pub fn tool_by_name(kind: SessionKind, worker: bool, name: &str) -> Option<&'sta
         .find(|tool| tool.name == name)
 }
 
-/// How the agent presents one of these tools to its model. Only the prefix its descriptor names
-/// differs between the agents, but a role description that names the wrong one sends the model
-/// looking for a tool it cannot see.
+/// How the agent presents one of these tools to its model. Only the prefix and the separator its
+/// descriptor names differ between the agents, but a role description that names the wrong one
+/// sends the model looking for a tool it cannot see.
 pub fn qualified_tool_name(agent: AgentId, tool: &str) -> String {
+    let descriptor = agent.descriptor();
     format!(
-        "{}{SERVER_KEY}__{tool}",
-        agent.descriptor().tool_name_prefix
+        "{}{SERVER_KEY}{}{tool}",
+        descriptor.tool_name_prefix, descriptor.tool_name_separator
     )
 }
 

@@ -1,0 +1,30 @@
+[>4;2m[?u[?2026$p[?1049h[?2004h[?1004h[?1003h[?1006h[?25l[?12$p[?1007$p[c[H[2J[>q[14t]10;?\]11;?\]4;0;?\]4;1;?\]4;2;?\]4;3;?\]4;4;?\]4;5;?\]4;6;?\]4;7;?\]4;8;?\]4;9;?\]4;10;?\]4;11;?\]4;12;?\]4;13;?\]4;14;?\]4;15;?\[?25l[22;0t]0;GitHub Copilot]7501;state=idle:app=copilot\[H[2J [1;97;44m[Current][m  Sessions  [2m Issues [m [2m Pull requests [m  Gists[?996n
+
+[2;90m╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│[116C│
+│[m [34m ╭─╮╭─╮[5;39H[2;90m│[m  [1;34mGetting started[61C[0;2;90m│
+│[m [34m ╰─╯╰─╯[m  Copilot v1.0.114 uses AI.  [2;90m│[m  Use the tabs above to explore your sessions and pull requests[15C[2;90m│
+│[m [35m █ [96m▘▝[35m █[m  Check for mistakes.[7;39H[2;90m│[m  /model — Switch models across providers, or use Auto[24C[2;90m│
+│[m [35m  ▔▔▔▔ [8;39H[2;90m│[78C│
+│[116C│
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[m[36;2H/private/tmp/copilot-probe/s120[36;73HRun on: This computer [1mctrl+e[m change environment
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[m❯
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[C[0;94m●[m [94mL[34moading:[101C[mstandin[38;3H[?25h[?25l[40;12H[34m 3 skills[m[38;3H[?25h[?25l[26A[33m![m Model "standin" is not in the built-in catalog. Using defaults for: prompt tokens
+   (COPILOT_PROVIDER_MAX_PROMPT_TOKENS), output tokens (COPILOT_PROVIDER_MAX_OUTPUT_TOKENS). Run [37m copilot help 
+[3Cproviders [m for configuration details.[40;2H[1m←[m open sidebar · Interactive · Manual Approval · [1m/[m commands · [1m?[m help · [1mtab[m next tab[38;3H[?25h[?25l[7;6H[96m╴╶[35m [m[38;3H[?25h[?25l[7;6H[96m  [35m [m[38;3H[?25h[?25l[7;6H[96m╴╶[35m [m[38;3H[?25h[?25l[7;6H[96m▘▝[35m [m[38;3H[?25h[?25l[7;6H[96m╴╶[35m [m[38;3H[?25h[?25l[7;6H[96m  [35m [m[38;3H[?25h[?25l[7;6H[96m╴╶[35m [m[38;3H[?25h[?25l[7;6H[96m▘▝[35m [m[38;3H[?25h[?25l[7;6H[96m╴╶[35m [m[38;3H[?25h[?25l[7;6H[96m  [35m [m[38;3H[?25h[?25l[7;6H[96m╴╶[35m [m[38;3H[?25h[?25l[7;6H[96m▘▝[35m [m[38;3H[?25h[?25l[5;6H[34m─╮╭╮
+[5C─╯╰╯
+[4C[35m█ [96m▘▝[35m▐
+[4C ▔[m[38;3H[?25h[?25l[H  ←   +                             [90m│[m [1;97;44m[Current][m  Sessions  [2m Issues [m [2m Pull requests [m  Gists
+ Sorted: [1mRecent[2;37H[0;90m│[B[m[1K [90m│[2m╭[79C───
+[m [44m [32m●[39m  [1;97mSession 1[0;44m                     [m [90m│[2m──────────────────────────────────╮[m[K
+ [44m    [97m/private/tmp/copilot-probe/s…[39m [m [90m│[2m│[m[K
+ [44m                                  [m [90m│[m                                  [2;90m│[m[K[7;36H[1K [90m│[2m│[m [34m ╭──╮╭╮[m                             [2;90m│[m  [1;34mGetting started[m[K[8;36H[1K [90m│[m  [8;72H[2;90m│[m[K[9;36H[1K [90m│[2m│[m [34m ╰──╯╰╯[m  Copilot v1.0.114 uses AI.  [2;90m│[m  Use the tabs above to explore your[K[10;36H[1K [90m│[msessions and pull requests               [2;90m│[m[K[11;37H[90m│[2m│[m [35m ██ [96m▘▝[35m▐[m  Check for mistakes.[11;76H[2;90m│[m  /model — Switch models across providers,[12;36H[1K [90m│[mor use Auto                        [2;90m│[m[K[13;36H[1K [90m│[2m│[m [35m   ▔▔▔ [m                             [2;90m│[m[K[14;36H[1K [90m│[m   [14;72H[2;90m│[15;37H[22m│[2m│[B[22m│[16;72H[2m│[17;37H[22m│[2m╰──────────────────────────────────────────────────────────────────────────────────[18;37H[22m│[2m──────────────────────────────────╯[19;37H[22m│[B│[m [33m![m Model "standin" is not in the built-in catalog. Using defaults for: prompt[21;37H[90m│[mtokens[22;37H[90m│[m   (COPILOT_PROVIDER_MAX_PROMPT_TOKENS), output tokens[23;37H[90m│[m(COPILOT_PROVIDER_MAX_OUTPUT_TOKENS). Run [37m copilot help [24;37H[90m│[m   [37mproviders [m for configuration details.[25;37H[90m│[B│[B│[B│[B│[B│[B│[B│[B│[B│[B│[B[m[1K [90m│[m /private/tmp/copilot-probe/s120[37;36H[1K [90m│[B[m[1K [90m│[m❯
+[35C[1K [90m│[B[m[1K [90m│[m [1;36m←[22m use sidebar[m · [1m→[m close sidebar · [1m?[m sidebar help[38;40H[?25h[?25l[3;118H[2;90m╮[m  [4;38H[2;90m│[m                                  [45C[2;90m│[5;40H[0;34m ╭──╮╭╮[5;76H[2;90m│[m  [1;34mGetting started[24C[0;2;90m│[6;38H│[m [34m ╰──╯╰╯[m  Copilot v1.0.114 uses AI.  [2;90m│[m  Use the tabs above to explore your se… [2;90m│[7;40H[0;35m ██ [96m▘▝[35m▐[m  Check for mistakes.[7;79H/model — Switch models across provide… [2;90m│[8;38H│[m [35m   ▔▔▔ [8;72H[m    [2;90m│[41C│[9;40H[m                                                                              [2;90m│[10;38H╰───────────────────────────────────────────────────────────────────────────────╯[11;38H[m[K[B [33m![m Model "standin" is not in the built-in catalog. Using defaults for: prompt[13;38H   tokens (COPILOT_PROVIDER_MAX_PROMPT_TOKENS), output tokens[14;41H(COPILOT_PROVIDER_MAX_OUTPUT_TOKENS). Run [37m copilot help providers [m for[15;38H   configuration details.[16;72H [17;38H[K[B[K[2B [K[B[K
+[40C[K
+[37C[K
+[40C[K[38;40H[?25h[?25l[5;43H[34m╮╭─╮
+[42C╯╰─╯
+[41C[35m [96m▘▝[35m █
+[41C▔▔[m[38;40H[?25h

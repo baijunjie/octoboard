@@ -168,6 +168,8 @@ async fn a_running_sessions_terminal_is_adopted_with_its_token_scratch_directory
     let live = state.live_session("s1").expect("the session is live");
     assert_eq!(live.launch_id, "launch-s1");
     assert!(live.resolves_approvals_itself);
+    // A meta from a build that recorded neither names no configuration directory.
+    assert_eq!(live.config_dir(), None);
     assert_eq!(live.process_id().0 as i32, pids[0]);
     assert!(is_running(pids[0]));
     // Its token works again, and it was not interrupted.
@@ -2057,4 +2059,48 @@ async fn a_gone_holders_companion_is_stopped_while_a_persisted_kept_member_survi
         kept.is_running(),
         "the persisted keep was stopped with its job"
     );
+}
+
+/// A launch's meta says whether its messages go through its extension channel, which the adopting
+/// daemon then makes again; the meta of a build that predates the channel reads as having none.
+#[test]
+fn a_session_meta_names_its_channel_and_one_without_reads_as_having_none() {
+    let channel_of = |channel: Option<bool>| {
+        let mut meta = json!({
+            "session_id": "s",
+            "launch_id": "l",
+            "agent": crate::protocol::AgentId::TEST,
+        });
+        if let Some(channel) = channel {
+            meta["channel"] = channel.into();
+        }
+        serde_json::from_value::<SessionMeta>(meta)
+            .expect("a session's meta")
+            .channel
+    };
+    assert!(!channel_of(None));
+    assert!(channel_of(Some(true)));
+    let (transport, is_channel) = crate::session::channel::transport_of(None, channel_of(None));
+    assert!(transport.is_none() && !is_channel);
+}
+
+/// What a launch recorded of its status source, of whether its cancel drops held messages and of
+/// its configuration directory is read back for the daemon that adopts it, and a meta from a
+/// build that recorded none of them reads as none: the provider's own answers then decide.
+#[test]
+fn a_launchs_status_source_cancel_and_configuration_directory_are_read_from_its_meta() {
+    let dir = std::path::Path::new("/run/s1");
+    let earlier: SessionMeta = serde_json::from_value(session_meta("s1", dir)).unwrap();
+    assert_eq!(earlier.status_from_reports, None);
+    assert_eq!(earlier.cancel_drops, None);
+    assert_eq!(earlier.config_dir, None);
+
+    let mut meta = session_meta("s1", dir);
+    meta["status_from_reports"] = json!(true);
+    meta["cancel_drops"] = json!(false);
+    meta["config_dir"] = json!("/accounts/work");
+    let recorded: SessionMeta = serde_json::from_value(meta).unwrap();
+    assert_eq!(recorded.status_from_reports, Some(true));
+    assert_eq!(recorded.cancel_drops, Some(false));
+    assert_eq!(recorded.config_dir.as_deref(), Some("/accounts/work"));
 }

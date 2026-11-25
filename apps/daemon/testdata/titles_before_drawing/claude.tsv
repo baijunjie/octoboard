@@ -1,0 +1,12 @@
+# capture<TAB>title<TAB>glyph (U+XXXX, or nothing); a title of * is every title of the capture.
+# Claude Code sets `✳ Claude Code` as it starts, before it draws anything; its title captures keep
+# only the title sequences.
+claude_input_placeholder.bin	Claude Code	U+2733
+claude_input_queued.bin	Claude Code	U+2733
+claude_input_queued_draft.bin	Claude Code	U+2733
+claude_input_restored.bin	Claude Code	U+2733
+claude_interaction_composer.bin	Claude Code	U+2733
+claude_title_cancel.bin	*
+claude_title_idle.bin	*
+claude_title_permission.bin	*
+claude_trust_dismissed.bin	*

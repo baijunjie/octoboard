@@ -134,6 +134,7 @@ pub(super) fn for_run(
     };
     Ok(RunHome {
         dir,
+        work_in_home: false,
         after_run,
         env: login_store_env(account_dir, shell_env)
             .into_iter()

@@ -86,6 +86,12 @@ whether or not that setting is on, with these left out:
 No minimum of quota left is asked for. When no account qualifies, nothing is switched and nobody is told; the
 session waits as described below.
 
+**An agent whose quota Octoboard does not read** (see "Agents whose quota Octoboard does not read" in
+`docs/product/account-quotas.md`) has no quota to rank its accounts by: its session is switched to the first account
+in the saved display order (see "Reordering accounts" in `docs/product/agent-accounts.md`) that is not one of the first
+two left out above and that is usable: not turned off, not found not logged in by its sign-in reading, and with no
+change of its sharing running. An account whose sign-in reading cannot tell, or that has not been read yet, is not left out for that.
+
 **A reset that is about to happen is waited for.** A switch relaunches the agent and carries the conversation over,
 which costs more than waiting a few minutes. So when the window that keeps the session's own account from running a
 turn (the one that resets last, if several are used up) resets within **5 minutes** (exactly 5 included), going by the

@@ -157,7 +157,7 @@ pub(in crate::mcp) async fn get_session(
         describe_session_shown(state, &target, caller, &branches, &owned)?;
     // Interrupted or archived: no process, and its conversation to be resumed.
     if status.has_no_process() {
-        let resumable = resumable_of(vec![target.clone()]).await?;
+        let resumable = resumable_of(state, vec![target.clone()]).await?;
         description["resumable"] = json!(resumable[&target.id]);
     }
     description["recent_output"] = json!(output);
@@ -227,9 +227,13 @@ async fn recent_output(state: &Arc<AppState>, id: &str, tail: usize) -> Option<S
 /// which relaunches into a fresh one), `Some(false)` when it is proven gone, so that
 /// `resume_session` refuses it, and `None` when that cannot be told, which `resume_session` lets
 /// through. Looks through the account's records directories, so it runs on the blocking pool.
-async fn resumable_of(sessions: Vec<Session>) -> Result<HashMap<String, Option<bool>>> {
+async fn resumable_of(
+    state: &Arc<AppState>,
+    sessions: Vec<Session>,
+) -> Result<HashMap<String, Option<bool>>> {
+    let state = Arc::clone(state);
     Ok(tokio::task::spawn_blocking(move || {
-        let locator = Locator::default();
+        let locator = Locator::default().with_store(&state.store);
         sessions
             .into_iter()
             .map(|session| {
@@ -403,7 +407,7 @@ pub(in crate::mcp) async fn list_archived_sessions(
     };
     let owned = owned_counts_of(state)?;
     let resumable = if check_resumable {
-        Some(resumable_of(archived.clone()).await?)
+        Some(resumable_of(state, archived.clone()).await?)
     } else {
         None
     };

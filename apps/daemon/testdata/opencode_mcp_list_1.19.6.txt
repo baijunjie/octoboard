@@ -1,0 +1,10 @@
+┌  MCP Servers
+│
+●  ○ disabled_example [90mdisabled
+│      [90m/usr/bin/false
+│
+●  ✗ failed_example [90mfailed
+│      MCP error -32000: Connection closed
+│      [90m/usr/bin/false
+│
+└  2 server(s)

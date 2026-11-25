@@ -1,29 +1,22 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { type Agent, type AgentAvailability } from "../../protocol";
-import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
+import { FIXTURE_PROVIDERS } from "../../fixtures/fixtureProviders";
 import type { Scenario } from "../scenario";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Welcome";
 
-/** Detection has resolved; supported tools can differ in availability. */
-const DETECTED_AGENTS = new Map<Agent, AgentAvailability>([
-  ["claude", { agent: "claude", availability: "available", default_account_dir: "/Users/dev/.claude" }],
-  ["codex", { agent: "codex", availability: "unavailable", default_account_dir: "/Users/dev/.codex" }],
-  ["grok", { agent: "grok", availability: "available", default_account_dir: "/Users/dev/.grok" }],
-]);
+function agentsOnPath(installed: readonly Agent[]): Map<Agent, AgentAvailability> {
+  return new Map(FIXTURE_PROVIDERS.map(({ id, default_config_dir }) => [
+    id,
+    { agent: id, availability: installed.includes(id) ? "available" : "unavailable", default_account_dir: `/Users/dev/${default_config_dir}` },
+  ]));
+}
 
-/** Nothing on the machine's PATH to run a session with. */
-const NO_AGENTS = new Map<Agent, AgentAvailability>([
-  ["claude", { agent: "claude", availability: "unavailable", default_account_dir: "/Users/dev/.claude" }],
-  ["codex", { agent: "codex", availability: "unavailable", default_account_dir: "/Users/dev/.codex" }],
-  ["grok", { agent: "grok", availability: "unavailable", default_account_dir: "/Users/dev/.grok" }],
-]);
-
-/** Every agent is on the machine's PATH. */
-const ALL_INSTALLED = new Map<Agent, AgentAvailability>(
-  FIXTURE_AGENTS.map((agent) => [agent, { agent, availability: "available", default_account_dir: `/Users/dev/.${agent}` }]),
-);
+const DETECTED_AGENTS = agentsOnPath(["claude", "grok"]);
+const NO_AGENTS = agentsOnPath([]);
+const ALL_INSTALLED = agentsOnPath(FIXTURE_PROVIDERS.map(({ id }) => id));
+const UNDETECTED_TOOLS = FIXTURE_PROVIDERS.length - 2;
 
 /** A console with a project and a leftover console session, every agent installed and none added. */
 export const noneAddedState = {
@@ -42,7 +35,7 @@ export const emptyScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Fresh install, detected supported tools",
-    description: "New console is the primary action beside the secondary Import configuration button, in a centred row that wraps on narrow windows. The Supported CLI tools card lists only the detected tools, Claude Code and Grok Build, each with its provider icon and a soft success Installed badge with a check. Between the card and the PATH hint, a small muted ghost button, centred, reads \"1 tool not detected\" with a chevron, collapsed, standing for Codex. Narrow or shorten the window to inspect wrapping and scrolling: with no console there is no sidebar drawer to bring the rail in, so at 768px and narrower it stays in the row beside the content as the way to New console and Settings, and the content panel keeps its rounded top corner at the rail.",
+    description: "New console is the primary action beside the secondary Import configuration button, in a centred row that wraps on narrow windows. The Supported CLI tools card lists only the detected tools, Claude Code and Grok Build, each with its provider icon and a soft success Installed badge with a check. Between the card and the PATH hint, a small muted ghost button, centred, shows how many tools were not detected, with its chevron collapsed. Narrow or shorten the window to inspect wrapping and scrolling: with no console there is no sidebar drawer to bring the rail in, so at 768px and narrower it stays in the row beside the content as the way to New console and Settings, and the content panel keeps its rounded top corner at the rail.",
     state: { ...snapshotState({}), agentAvailability: DETECTED_AGENTS },
   },
   {
@@ -50,9 +43,9 @@ export const emptyScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Fresh install, tools not detected unfolded",
-    description: "The \"1 tool not detected\" button is pressed and its chevron turned: a second card opens under it, between the button and the PATH hint, listing Codex with its provider icon and a neutral Not detected badge. The card above still lists only the installed tools.",
+    description: "The count of undetected tools is expanded. A second card lists each of those tools with its provider icon and a neutral Not detected badge. The card above still lists only the installed tools.",
     state: { ...snapshotState({}), agentAvailability: DETECTED_AGENTS },
-    steps: [(ui) => ui.press(ui.t("welcome.notDetectedTools", { count: 1 }))],
+    steps: [(ui) => ui.press(ui.t("welcome.notDetectedTools", { count: UNDETECTED_TOOLS }))],
   },
   {
     id: "empty-no-consoles-no-agent",

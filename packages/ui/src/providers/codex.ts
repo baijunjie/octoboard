@@ -764,7 +764,7 @@ const zhTWMessages = {
 
 /** Codex. The mark is taken from LobeHub's icon set (`@lobehub/icons-static-svg`, MIT), monochrome in the text colour as
  * its maker draws it. The colour is a blue that keeps 3:1 against every quota track it is drawn on (see
- * `.quota-meter--provider` in `style.css`). */
+ * `.quota-meter--provider` in `quota/QuotaMeter.css`). */
 export const codex = {
   id: "codex",
   mark: {

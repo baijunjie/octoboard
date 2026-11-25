@@ -456,7 +456,7 @@ mod tests {
         arm(&live, now_millis());
         state.queue_message("s", "waits");
         state.turn_started("s", Some("typed"));
-        crate::adapter::codex::rollout_watch::end_failed_turn(
+        crate::adapter::codex::rollout_watch::end_failed_turn_or_retry(
             &state,
             "s",
             Some("Selected model is at capacity. Please try a different model.".to_string()),

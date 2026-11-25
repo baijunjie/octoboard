@@ -56,3 +56,12 @@ it("follows the agent's turned-off default account the same way", () => {
   expect(sessionQuotaBarOf(session({ status: "interrupted" }), disabled)).toBeUndefined();
   expect(sessionQuotaBarOf(session({ status: "interrupted" }), source({ disabledDefaultAccounts: ["codex"] }))).toMatchObject({ main: window });
 });
+
+it("draws nothing for a session of an agent whose provider declares no plan quota, whatever its account reads", () => {
+  const own = (patch: Partial<AccountQuota> = {}) => reading(null, { agent: "test_agent", ...patch });
+  const available = new Map<Agent, AgentAvailability>([["test_agent", { agent: "test_agent", availability: "available", default_account_dir: null }]]);
+  const none = (accountQuotas: AccountQuota[]) => sessionQuotaBarOf(session({ agent: "test_agent" }), source({ agentAvailability: available, accountQuotas }));
+  expect(none([own()])).toBeUndefined();
+  expect(none([own({ windows: [], email: "dev@example.com" })])).toBeUndefined();
+  expect(none([])).toBeUndefined();
+});

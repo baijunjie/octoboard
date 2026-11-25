@@ -1,0 +1,83 @@
+[?25lCALL call_mcp_tool {"ServerName":"octoboard","ToolName":"ping","Arguments":{}}
+
+[19C[1K [2mG[m[2A[3Z[?25h[?25l]7501;state=idle:app=antigravity[78D[K[?25h[?25l[36A[K
+[32m●[m [1;33mRan[m [37m([m[37mecho octo > made.txt[m[37m)[m [37m(ctrl+o to expand)[m[K
+[?5W]7501;state=working:app=antigravity[J
+  Stub: tool finished.
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL run_command {"CommandLine":"echo octo > other.txt","toolSummary":"make another","WaitMsBeforeAsync":5000}[m
+
+[31m●[m [33;1mRan[m [37m(echo octo > other.txt)[m [37mfailed[m [37m(ctrl+o to expand)[m
+
+[34;1mCommand[m
+[34;1m  ⎿  [37;22mUser declined the tool call[m
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL write_file {"Path":"/scratch/project/note.txt","Content":"hi"}[m
+
+[32m●[m [33;1mEdited[m 1 file [37m(note.txt)[m [37m(ctrl+o to expand)[m
+
+  Stub: tool finished.
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL edit_file {"Path":"/scratch/project/note.txt","Target":"hi","Replacement":"ho"}[m
+
+[32m●[m [33;1mEdited[m 1 file [37m(note.txt)[m [37m(ctrl+o to expand)[m
+
+  Stub: tool finished.
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL ask_question {"questions":[{"question":"Which target?","options":["Alpha","Beta"],"is_multi_select":false}]}[m
+
+[33;1m?[m Which target?
+[34;1m> Alpha[m
+
+  Stub: tool finished.
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL call_mcp_tool {"ServerName":"octoboard","ToolName":"ping","Arguments":{}}[m
+⢿  [90mG[94menera[90mting...[m
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[94m>[m
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l[2A⣻  [90mGe[94mnerat[m
+
+[8D[?25h[?25l
+
+
+
+[?5W[6A[K
+[33m●[m [33;1mCalling[m 1 MCP tool [37m(octoboard/ping)[m [37m(ctrl+o to expand)[m[K
+⣻  [90mCalling M[94mCP to[90mol...[m
+
+[94m>[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l[2A⣽ 
+
+[?25h[?25l[2A[10C[90mC[94mP too[m
+
+[16D[?25h[?25l[3A[32m●[m [33;1mCalled[m [P
+⣾ 
+
+[?25h[?25l[2A[11C[90mP[94m tool[m
+
+[17D[?25h[?25l[2A⣷  [90mCalling MCP [94mtool.[m
+
+[18D[?25h[?25l
+
+
+
+[?5W[6A[K
+  Stub: tool finished.[K
+⣷  [90mCalling MCP [94mtool.[90m..[m
+
+[94m>[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l[2A⣯  [90mCalling MCP t[94mool..[m
+
+[19D[?25h[?25l]7501;state=done:app=antigravity:msg=U3R1YjogdG9vbCBmaW5pc2hlZC4=[2A[K
+
+
+
+[90m? for shortcuts[m[2A[13D[?25h

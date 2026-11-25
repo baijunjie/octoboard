@@ -1,7 +1,6 @@
 import { Plug, RefreshCw, Server } from "lucide-react";
 import React, { createContext, useContext, useId, useLayoutEffect, useRef } from "react";
 
-import { AlertButton } from "../../components/alerts/AlertButton";
 import { DiagnosticBlock } from "../../components/alerts/DiagnosticBlock";
 import { ErrorAlert } from "../../components/alerts/ErrorAlert";
 import { FailureAlert } from "../../components/alerts/FailureAlert";
@@ -72,7 +71,7 @@ export function McpInventory({ agent, state, refreshButton }: { agent: Agent; st
     if (failedBefore.current && !failed) focusHandoffTarget(refreshButton.current);
     failedBefore.current = failed;
   });
-  // What the body shows, as a key: a change of it is a new subtree, whose removal hands on the focus it held.
+  // Changes of body hand off focus at this level. An Alert that stays mounted handles changes to its own controls.
   const shown = !answer ? "reading" : "error" in answer ? "failure" : answer.inventory.unavailable ? `unavailable:${answer.inventory.unavailable.reason}` : "inventory";
   const scope = `${bodyId}:${shown}`;
   return (
@@ -80,13 +79,13 @@ export function McpInventory({ agent, state, refreshButton }: { agent: Agent; st
       <AttendedStatusAnnouncer text={state.announcement} />
       <div key={shown} ref={body} data-mcp-body={scope} className="contents">
         {handoffFrom(`[data-mcp-body="${CSS.escape(scope)}"]`)}
-        <McpInventoryBody agent={agent} state={state} />
+        <McpInventoryBody agent={agent} state={state} focusFallback={() => refreshButton.current} />
       </div>
     </>
   );
 }
 
-function McpInventoryBody({ agent, state }: { agent: Agent; state: McpInventoryState }): React.ReactElement {
+function McpInventoryBody({ agent, state, focusFallback }: { agent: Agent; state: McpInventoryState; focusFallback: () => HTMLButtonElement | null }): React.ReactElement {
   const t = useT();
   const { answer } = state;
   if (!answer) {
@@ -98,10 +97,10 @@ function McpInventoryBody({ agent, state }: { agent: Agent; state: McpInventoryS
     );
   }
   if ("error" in answer) {
-    return <FailureAlert title={t("settings.accounts.mcp.failedTitle")} message={answer.error} onRetry={state.refresh} pending={state.reading} announce attempt={state.attempt} announceDelayMs={state.announceDelayMs} />;
+    return <FailureAlert title={t("settings.accounts.mcp.failedTitle")} message={answer.error} onRetry={state.refresh} pending={state.reading} focusFallback={focusFallback} announce attempt={state.attempt} announceDelayMs={state.announceDelayMs} />;
   }
   const { inventory } = answer;
-  if (inventory.unavailable) return <UnavailableAlert agent={agent} unavailable={inventory.unavailable} state={state} />;
+  if (inventory.unavailable) return <UnavailableAlert agent={agent} unavailable={inventory.unavailable} state={state} focusFallback={focusFallback} />;
   return (
     <div className="flex flex-col gap-5">
       {(providerConnectorPlatform(agent) || inventory.connectors.length > 0) && <ConnectorGroup agent={agent} connectors={inventory.connectors} />}
@@ -110,33 +109,28 @@ function McpInventoryBody({ agent, state }: { agent: Agent; state: McpInventoryS
   );
 }
 
-const isInventoryFailure = knownValues<McpInventoryFailure>({ not_signed_in: true, cli_missing: true, timed_out: true, unsupported_agent: true, failed: true });
+const isInventoryFailure = knownValues<McpInventoryFailure>({ not_signed_in: true, cli_missing: true, timed_out: true, failed: true });
 const isConnectorState = knownValues<ConnectorState>({ connected: true, not_connected: true, unknown: true });
 const isSignInState = knownValues<McpSignInState>({ signed_in: true, needs_sign_in: true, not_needed: true, unknown: true });
 const isRuntimeState = knownValues<McpRuntimeState>({ running: true, failed: true, unknown: true });
 
 /** Why the inventory could not be read, in the application's words per reason, with what the agent or the daemon said
- * behind Details. A reason no retry can change (the provider lists nothing) has no Try again. A reason of a newer
- * daemon is read as `failed`, with the daemon's `detail`. */
-function UnavailableAlert({ agent, unavailable, state }: { agent: Agent; unavailable: McpInventoryUnavailable; state: McpInventoryState }): React.ReactElement {
-  const t = useT();
+ * behind Details, and Try again, since a retry can change any of these answers. A reason of a newer daemon is read as
+ * `failed`, with the daemon's `detail`. */
+function UnavailableAlert({ agent, unavailable, state, focusFallback }: { agent: Agent; unavailable: McpInventoryUnavailable; state: McpInventoryState; focusFallback: () => HTMLButtonElement | null }): React.ReactElement {
   const agentName = <ProviderName agent={agent} />;
   const { detail } = unavailable;
   const reason = isInventoryFailure(unavailable.reason) ? unavailable.reason : "failed";
-  const retry = reason !== "unsupported_agent";
   return (
     <ErrorAlert
       announce
       announceKey={state.attempt}
       announceDelayMs={state.announceDelayMs}
       title={<Message id={`settings.accounts.mcp.unavailable.${reason}.title`} params={{ agent: agentName }} />}
-      remedy={retry ? <Message id={`settings.accounts.mcp.unavailable.${reason}.remedy`} params={{ agent: agentName }} /> : undefined}
+      remedy={<Message id={`settings.accounts.mcp.unavailable.${reason}.remedy`} params={{ agent: agentName }} />}
       details={detail ? <DiagnosticBlock>{detail}</DiagnosticBlock> : undefined}
-      actions={retry && (
-        <AlertButton kind="action" size="sm" focusOnPress={false} pending={state.reading} onPress={state.refresh}>
-          {t("error.tryAgain")}
-        </AlertButton>
-      )}
+      retry={{ onPress: state.refresh, pending: state.reading }}
+      focusFallback={focusFallback}
     >
       {reason === "failed" ? undefined : <Message id={`settings.accounts.mcp.unavailable.${reason}.summary`} params={{ agent: agentName }} />}
     </ErrorAlert>

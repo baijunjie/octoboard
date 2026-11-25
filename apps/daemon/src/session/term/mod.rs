@@ -26,8 +26,13 @@ pub struct Launch {
     /// The agent's own session id when the adapter could pre-allocate it. Codex cannot, and learns
     /// it from its first hook payload instead.
     pub agent_session_id: Option<String>,
-    /// Something about this launch the user has to be told; see `adapter::LaunchPlan::notice`.
-    pub notice: Option<Notice>,
+    /// What the user has to be told about this launch, in the order to tell it: the plan's notice
+    /// (`adapter::LaunchPlan::notice`), then the provider's further ones
+    /// (`adapter::AgentProvider::further_launch_notices`).
+    pub notices: Vec<Notice>,
+    /// The first task, to be queued as the session's first message; see
+    /// `adapter::LaunchPlan::first_message`.
+    pub first_message: Option<String>,
 }
 
 /// One agent process to start. Owned rather than borrowed: launching snapshots the user's shell
@@ -92,6 +97,27 @@ pub struct LaunchRequest {
     /// What every process of this launch carries, whatever the agent and the session's kind; see
     /// `crate::processes::ledger`.
     pub process_tag: crate::processes::ledger::ProcessTag,
+}
+
+/// The environment an agent's process is launched with: the shell snapshot, then what the
+/// provider's plan sets, what a project session's git reports with, the launch's process tag,
+/// the terminal's `TERM` and what the plan's private server gave for its terminal, a later one
+/// winning. All of it is set for this session alone, so it is laid through
+/// `env_shell::session_environment`, which records it: a daemon started inside the session then
+/// gets the snapshot's own values back instead of taking the session's for the user's.
+/// `command_environment` is what the provider declares its CLI sets for the commands it runs
+/// (`ProviderDescriptor::command_environment`), recorded beside it and not set.
+fn launch_environment(
+    shell_env: &HashMap<String, String>,
+    plan_env: &[(String, String)],
+    hooks_env: &[(String, String)],
+    tag_env: &[(String, String)],
+    server_env: &[(String, String)],
+    command_environment: &[(&str, &str)],
+) -> HashMap<String, String> {
+    let term = [("TERM".to_string(), pty::TERM.to_string())];
+    let overlay = [plan_env, hooks_env, tag_env, &term, server_env].concat();
+    env_shell::session_environment_with(shell_env, &overlay, command_environment)
 }
 
 /// Starts one agent process. A resume assembles the full injection just as a fresh launch does,
@@ -185,6 +211,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
             process_tag.launch_id(),
             helpers.port,
             &key_file,
+            None,
         )
         .context("writing the session's hook script")?
     } else {
@@ -237,14 +264,18 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         model: model.as_deref(),
         effort: effort.as_deref(),
         terminal_appearance,
+        // The version the session's account runs, which for some agents is the account's own.
         agent_version: binary.as_ref().ok().and_then(|binary| {
-            adapter
-                .installed_version(&binary.program.to_string_lossy())
-                .or_else(|| {
-                    adapter::version_from_output(&crate::platform::shell::probe_version(
-                        binary, &shell_env,
-                    )?)
-                })
+            adapter::version_for_account(
+                agent,
+                &binary.program.to_string_lossy(),
+                &adapter::account_dir(agent, config_dir.as_deref(), &shell_env),
+            )
+            .or_else(|| {
+                adapter::version_from_output(&crate::platform::shell::probe_version(
+                    binary, &shell_env,
+                )?)
+            })
         }),
         self_exe: &helpers.exe,
         daemon_port: helpers.port,
@@ -262,25 +293,45 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         memory_enabled,
     };
     let plan = adapter.plan(&spec)?;
+    // Asked once, of the launch as planned, and kept with the terminal for a daemon that adopts it.
+    let status_from_reports = !adapter.launch_has_status_integration(&spec, &plan);
+    let cancel_drops = adapter.launch_cancel_drops_held_messages(&spec, &plan);
+    let further_notices = adapter.further_launch_notices(&spec, &plan);
+    let tool_listing_wait = adapter.awaits_tool_listing(&spec, &plan);
+    let declares_channel = adapter.extension_channel(&spec, &plan);
     // A stash key is used only where the provider says this launch was measured to take it.
     let native_stash = adapter.screen().native_stash(&spec, &plan);
 
-    let binary = binary?;
+    let binary = adapter.terminal_binary(binary?, &shell_env)?;
 
-    let mut environment = shell_env.clone();
-    environment.extend(plan.env.iter().cloned());
-    adapter.before_launch(&spec, &binary, &environment);
-    if kind == SessionKind::Project {
-        environment.extend(session_git_hooks::session_env(
+    {
+        let mut planned = shell_env.clone();
+        planned.extend(plan.env.iter().cloned());
+        adapter.before_launch(&spec, &binary, &planned);
+    }
+    let hooks_env = if kind == SessionKind::Project {
+        session_git_hooks::session_env(
             &shell_env,
             &install_exe,
             session_id,
             helpers.port,
             &key_file,
-        ));
-    }
-    process_tag.containment().prepare(&mut environment);
-    environment.insert("TERM".to_string(), pty::TERM.to_string());
+        )
+    } else {
+        Vec::new()
+    };
+    let mut tag_env = HashMap::new();
+    process_tag.containment().prepare(&mut tag_env);
+    let tag_env: Vec<(String, String)> = tag_env.into_iter().collect();
+    let command_environment = adapter.descriptor().command_environment;
+    let mut environment = launch_environment(
+        &shell_env,
+        &plan.env,
+        &hooks_env,
+        &tag_env,
+        &[],
+        command_environment,
+    );
     // Where the plan's private server runs: none where the holder that is to run the terminal
     // runs no companions, and the launch is then the ordinary one.
     let host = helpers.server_host(
@@ -292,7 +343,14 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         (Some(server), Some(host)) => {
             match server.start(&binary, &environment, cwd, &**host, process_tag.launch_id()) {
                 Ok(started) => {
-                    environment.extend(started.env);
+                    environment = launch_environment(
+                        &shell_env,
+                        &plan.env,
+                        &hooks_env,
+                        &tag_env,
+                        &started.env,
+                        command_environment,
+                    );
                     (started.args, Some(started.transport), host.companion())
                 }
                 // The ordinary launch stands on its own: a server that does not come up costs the
@@ -318,6 +376,8 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         }
         (None, _) => (plan.args.clone(), None, false),
     };
+    let (transport, has_channel) =
+        crate::session::channel::transport_of(transport, declares_channel);
     // It borrows the launch's credentials, which the spawn takes.
     drop(host);
     let mut cmd = host_term::Command::new(&binary.program);
@@ -334,7 +394,11 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
 
     // What a holder keeps of the session, so that a daemon that starts later can tell what the
     // terminal is and rebuild the session around it (`crate::coordinator::adopt`).
-    let launch_prompt = task.as_deref().and_then(launch_prompt);
+    let launch_prompt = command_line_prompt(
+        plan.first_message.as_deref(),
+        plan.shaped_prompt.as_deref(),
+        task.as_deref(),
+    );
     let meta = serde_json::json!({
         "kind": "session",
         "session_id": session_id,
@@ -347,6 +411,12 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         "native_stash": native_stash,
         "launch_prompt": launch_prompt,
         "adoption": plan.adoption,
+        // The channel helper reaches whichever daemon runs, so one that adopts the launch makes
+        // the channel again.
+        "channel": has_channel,
+        "status_from_reports": status_from_reports,
+        "cancel_drops": cancel_drops,
+        "config_dir": config_dir.as_ref().map(|dir| dir.to_string_lossy()),
     });
     let spawned = backend::start(Launching {
         command: cmd,
@@ -380,18 +450,48 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         carried_trust: plan.carried_trust,
         before_scratch_removal: before_scratch_removal(transport, plan.after_exit),
         display,
+        status_from_reports: Some(status_from_reports),
+        cancel_drops: Some(cancel_drops),
+        config_dir,
     }));
     live.enable_native_stash(native_stash);
+    if let Some(bound) = tool_listing_wait {
+        live.await_tool_listing(bound);
+    }
     if let Some(prompt) = launch_prompt {
         live.note_launch_prompt(prompt);
+        // Only a launch: a daemon that adopts it finds the turn long started or over.
+        live.await_launch_turn();
     }
     session::spawn_reader_thread(live.clone(), pty::READ_BUF);
 
+    let notices = plan.notice.into_iter().chain(further_notices).collect();
     Ok(Launch {
         session: live,
         agent_session_id,
-        notice: plan.notice,
+        notices,
+        first_message: plan.first_message,
     })
+}
+
+/// The prompt a launch's command line gives the agent, which the session records as submitted at
+/// launch, exactly as the plan's arguments carry it, since it is matched against the prompt the
+/// agent reports sending: the `task` as given, or as the plan `shaped` it for its CLI
+/// (`adapter::LaunchPlan::shaped_prompt`). None where nothing but whitespace is left of it, or
+/// where the plan writes it as the session's first message instead
+/// (`adapter::LaunchPlan::first_message`).
+pub(crate) fn command_line_prompt(
+    first_message: Option<&str>,
+    shaped: Option<&str>,
+    task: Option<&str>,
+) -> Option<String> {
+    match first_message {
+        Some(_) => None,
+        None => shaped
+            .or(task)
+            .filter(|prompt| !is_blank_once_stripped(prompt))
+            .map(str::to_string),
+    }
 }
 
 /// A server of the provider's own that a session's automatic messages go through instead of its
@@ -414,6 +514,14 @@ pub trait MessageTransport: Send + Sync {
     /// Connects the server's events to the running session, once it is registered; an event that
     /// came before is passed on then.
     fn attach(&self, events: TransportEvents);
+    /// Takes what the session does with a message the agent gives back, once, beside
+    /// [`Self::attach`]. `returned` is called with the `logical_id` of a message [`Self::send`]
+    /// answered [`Sent::Queued`] for, once the agent has dropped it unsent (an agent that holds a
+    /// message for a running turn drops it when the turn is cancelled) and nothing of it is left
+    /// where the agent would send it by itself, its input box included: the session's queue then
+    /// writes it again (`crate::messaging::cleared_messages`), so one still there would go in
+    /// twice. The default is a server that never gives a message back, which keeps nothing.
+    fn on_returned(&self, _returned: Box<GivenBack>) {}
     /// Has the server run the messages it took that wait in its queue, as it does not by itself
     /// after a turn the user or an owner cancelled, and says what came of it.
     fn start_queue(&self) -> QueueStart;
@@ -427,7 +535,16 @@ pub trait MessageTransport: Send + Sync {
     fn command_host(&self) -> Option<crate::platform::proc::ProcessIdentity> {
         None
     }
+    /// The session's extension channel, where this is one: what the route its helper polls
+    /// (`POST /channel/<session>`) serves. `None` for a server of the provider's own.
+    fn channel(&self) -> Option<&crate::session::channel::Channel> {
+        None
+    }
 }
+
+/// What a session does with a message its agent gave back, by the `logical_id` it was sent under
+/// ([`MessageTransport::on_returned`]).
+pub type GivenBack = dyn Fn(&str) + Send + Sync;
 
 /// What came of a [`MessageTransport::send`] that did not fail.
 #[derive(Debug, PartialEq, Eq)]
@@ -518,6 +635,26 @@ impl std::fmt::Display for CommandNotRecognised {
 }
 
 impl std::error::Error for CommandNotRecognised {}
+
+/// The command a message written as a slash command names none of the agent's: its list says it
+/// has no such command (`ScreenReader::list_offers_no_command`), so an Enter would send it to the
+/// model as a prompt. Cleared and refused as [`CommandNotRecognised`] is.
+#[derive(Debug)]
+pub struct CommandNotFound {
+    /// The command as written.
+    pub command: String,
+    /// Whether the command was cleared from the input box.
+    pub cleared: bool,
+    pub reason: String,
+}
+
+impl std::fmt::Display for CommandNotFound {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.reason)
+    }
+}
+
+impl std::error::Error for CommandNotFound {}
 
 /// The session's own server holds a message back for now, for the reason given: nothing of it was
 /// taken, and it is written again later, by the server or, failing it, the terminal.
@@ -886,24 +1023,35 @@ fn guarded(text: &str, guard: &str) -> String {
 /// A message as the command line of an agent launch takes it, or `None` when nothing is left of it.
 /// It gets [`shaped`] (the invisible-character strip and the slash guard) but not the image-path
 /// guard of `frame_message`, which is for a paste: argv is not one. A prompt that began with `/`
-/// would run a slash command, as a pasted one would, and one that began with `-` would be read as
-/// a flag; a leading space keeps either as text.
+/// would run a slash command, as a pasted one would; a leading space keeps it as text.
+///
+/// This shapes the instruction a resume is launched with (`crate::coordinator::launch`), not a
+/// new session's first task, which reaches the plan as it was given. Keeping the agent's CLI from
+/// reading the argument as something else than a prompt (a leading `-` as an option, a word as a
+/// subcommand) is the provider's plan's, where it places the argument, for a task and an
+/// instruction alike (`docs/conventions/daemon-processes-and-io.md`, "Processes"), so a leading
+/// `-` is left as it is here.
 pub(crate) fn launch_prompt(text: &str) -> Option<String> {
     if is_blank_once_stripped(text) {
         return None;
     }
-    let text = shaped(text);
-    Some(if text.starts_with('-') {
-        format!(" {text}")
-    } else {
-        text
-    })
+    Some(shaped(text))
 }
 
 /// Whether nothing but whitespace is left of a message once its control and invisible characters
-/// are stripped. Such a message would be written as an empty prompt, which no agent sends.
+/// are stripped. Such a message would be written as an empty prompt, which no agent sends. The
+/// window's check before it saves a scheduled task (`isBlankPrompt` in
+/// `packages/ui/src/scheduledTasks/blankPrompt.ts`) is the same rule, and the cases in
+/// `apps/daemon/testdata/blank_prompt_cases.json` pin the two together.
 pub(crate) fn is_blank_once_stripped(text: &str) -> bool {
     stripped(text).trim().is_empty()
+}
+
+/// `text` without the characters Claude Code's prompt removes as invisible, as `frame_message`
+/// takes them out of a message (see `invisible`): the one definition of them, for a provider
+/// that has to hand its agent a prompt already clean of them.
+pub(crate) fn without_invisible(text: &str) -> String {
+    invisible::strip_invisible(text)
 }
 
 /// The text of a message with what `frame_message` strips taken out.
@@ -922,6 +1070,124 @@ fn strip_control_chars(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The rule the window's check of a scheduled task's prompt implements too, with the cases
+    /// both run.
+    #[test]
+    fn a_prompt_is_blank_by_the_cases_the_window_shares() {
+        #[derive(serde::Deserialize)]
+        struct Case {
+            name: String,
+            text: String,
+            blank: bool,
+        }
+        #[derive(serde::Deserialize)]
+        struct Cases {
+            cases: Vec<Case>,
+        }
+        let cases: Cases =
+            serde_json::from_str(include_str!("../../../testdata/blank_prompt_cases.json"))
+                .unwrap();
+        assert!(!cases.cases.is_empty());
+        for case in cases.cases {
+            assert_eq!(
+                is_blank_once_stripped(&case.text),
+                case.blank,
+                "{}",
+                case.name
+            );
+        }
+    }
+
+    /// Everything a launch lays over the snapshot reaches the agent, a later layer winning, and is
+    /// recorded: the environment a daemon started inside the session makes of it is the snapshot
+    /// again, with the value of the user's that the plan replaced.
+    #[test]
+    fn a_launchs_environment_is_recorded_so_that_a_nested_daemon_gets_the_snapshot_back() {
+        let pair = |name: &str, value: &str| (name.to_string(), value.to_string());
+        let shell_env = HashMap::from([
+            pair("HOME", &crate::test_support::host_path("/Users/snapshot")),
+            pair("PLAN_VAR", "the user's own"),
+        ]);
+        let environment = launch_environment(
+            &shell_env,
+            &[pair("PLAN_VAR", "the plan's"), pair("PLAN_ONLY", "1")],
+            &[pair("HOOKS_VAR", "hooks")],
+            &[pair("TAG_VAR", "tag")],
+            &[
+                pair("PLAN_ONLY", "the server's"),
+                pair("SERVER_VAR", "server"),
+            ],
+            &[("COMMAND_VAR", "the program's")],
+        );
+        assert!(!environment.contains_key("COMMAND_VAR"));
+        for (name, value) in [
+            ("PLAN_VAR", "the plan's"),
+            ("PLAN_ONLY", "the server's"),
+            ("HOOKS_VAR", "hooks"),
+            ("TAG_VAR", "tag"),
+            ("SERVER_VAR", "server"),
+            ("TERM", pty::TERM),
+        ] {
+            assert_eq!(environment[name], value, "{name}");
+        }
+        // Inherited from a command the program ran, which has what the program sets for it.
+        let mut inherited = environment;
+        inherited.insert("COMMAND_VAR".to_string(), "the program's".to_string());
+        assert_eq!(env_shell::outside_session(inherited), shell_env);
+    }
+
+    /// A first task goes on the command line as a launch prompt unless the plan writes it as the
+    /// session's first message, in which case no prompt is submitted at launch.
+    #[test]
+    fn a_first_task_written_as_a_message_is_no_command_line_prompt() {
+        assert_eq!(
+            command_line_prompt(None, None, Some("do the thing")).as_deref(),
+            Some("do the thing")
+        );
+        assert_eq!(
+            command_line_prompt(Some("do the thing"), None, Some("do the thing")),
+            None
+        );
+        assert_eq!(command_line_prompt(None, None, None), None);
+        assert_eq!(command_line_prompt(Some("do the thing"), None, None), None);
+    }
+
+    /// The prompt recorded as submitted at launch is the argument the agent got: the task
+    /// untouched, whatever it starts with, or what the plan says it passed in its place. A task
+    /// of nothing but whitespace records nothing.
+    #[test]
+    fn the_recorded_launch_prompt_is_the_argument_the_plan_passed() {
+        for task in ["- update deps", "--help me", "/clear it", "  padded  "] {
+            assert_eq!(
+                command_line_prompt(None, None, Some(task)).as_deref(),
+                Some(task)
+            );
+        }
+        assert_eq!(
+            command_line_prompt(None, Some(" update"), Some("update")).as_deref(),
+            Some(" update")
+        );
+        assert_eq!(command_line_prompt(None, None, Some("\u{1} ")), None);
+        assert_eq!(
+            command_line_prompt(Some("update"), Some(" update"), Some("update")),
+            None
+        );
+    }
+
+    /// A resume's instruction is stripped and slash-guarded as a written message is, and one that
+    /// begins with `-` is left as it is, for the plan that places it; nothing is left of a blank
+    /// one.
+    #[test]
+    fn a_launch_prompt_is_shaped_as_a_message_and_keeps_a_leading_dash() {
+        assert_eq!(
+            launch_prompt("\u{1}/clear it").as_deref(),
+            Some(" /clear it")
+        );
+        assert_eq!(launch_prompt("- item").as_deref(), Some("- item"));
+        assert_eq!(launch_prompt("carry on").as_deref(), Some("carry on"));
+        assert_eq!(launch_prompt("\u{1} "), None);
+    }
 
     /// The bracketed paste around a message and the Enter after it, as the bytes a Unix terminal
     /// receives them in.

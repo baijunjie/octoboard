@@ -1,18 +1,23 @@
 //! Signing an account in, with the agent's own CLI run in the background against the account's
 //! configuration directory: no terminal and no window. Octoboard never reads or writes the
 //! credential; the CLI does, and the daemon only starts it, relays what it says the user has to do
-//! (the page to authorize on, and for a device-code flow the code) and learns how it ended. How
-//! each CLI is driven is its provider's ([`flows::LoginFlow`]), measured in
-//! `docs/agent-cli-reference.md` ("Signing in a config directory without a terminal"); this module
-//! keeps the logins running and decides how each one ends.
+//! (the page to authorize on, and for a device-code flow the code), carries a yes/no question of
+//! the agent's own to the user and the answer back, and learns how it ended. The daemon never
+//! answers such a question, and the time one stays open is not counted against the login's
+//! timeout: a question nobody answers keeps its login waiting until the user cancels it or the
+//! flow ends by itself. How each CLI is driven is its provider's ([`flows::LoginFlow`]), measured
+//! in `docs/agent-cli-reference.md` ("Signing in a config directory without a terminal"); this
+//! module keeps the logins running and decides how each one ends.
 //!
 //! Logins are runtime state: held in [`AccountLogins`], one per account, never stored. Every change
 //! is broadcast as `account_login_updated`, and the ones still running replay in a `snapshot`. A
 //! login ends in one of four ways: signed in (the account's quota is then read at once), failed,
 //! cancelled by the user, or given up on by the daemon after [`LOGIN_TIMEOUT`], since Claude Code
-//! has no timeout of its own. A login that is ended while its CLI still runs (cancelled, given up
-//! on, or cut short by the daemon's exit) kills the CLI's whole session; a CLI that exits by
-//! itself is not followed into whatever it forked.
+//! has no timeout of its own, or after the time the provider's flow declares
+//! ([`flows::LoginFlow::timeout`]), neither counting the time a question waits on the user. A
+//! login that is ended while its CLI still runs (cancelled, given up on, or cut short by the
+//! daemon's exit) kills the CLI's whole session; a CLI that exits by itself is not followed into
+//! whatever it forked.
 
 pub(crate) mod flows;
 
@@ -22,19 +27,20 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::Result;
-use tokio::sync::Notify;
+use tokio::sync::{oneshot, Notify};
 use tokio::task::JoinHandle;
 
 use crate::accounts::quotas;
 use crate::adapter::{provider, Unstartable};
 use crate::protocol::{
-    error_code, login_failure_code, AccountLogin, AgentId, Code, CodedError, Event, LoginFailure,
-    LoginStatus, ProviderOperation,
+    error_code, login_failure_code, AccountLogin, AgentId, Code, CodedError, Event, LoginAnswer,
+    LoginFailure, LoginQuestion, LoginStatus, ProviderOperation,
 };
 use crate::state::AppState;
 use flows::{Flow, Outcome};
 
-/// How long a login may wait for the user to authorize before the daemon gives up. Codex's own
+/// How long a login may wait for the user to authorize before the daemon gives up, where the
+/// provider's flow declares no time of its own ([`flows::LoginFlow::timeout`]). Codex's own
 /// browser flow gives up at the same ten minutes (its login server reports it as a timeout); Claude
 /// Code and Grok Build do not time out on their own.
 pub(crate) const LOGIN_TIMEOUT: Duration = Duration::from_secs(10 * 60);
@@ -50,7 +56,30 @@ struct Running {
     login: AccountLogin,
     /// Wakes the flow to cancel itself.
     cancel: Arc<Notify>,
+    /// The flow waiting on the question the login shows; `None` while no question is open.
+    asker: Option<Asker>,
+    /// How many questions the login has asked, the last one's serial.
+    asked: u64,
     task: JoinHandle<()>,
+}
+
+/// The flow that asked the question a login waits on.
+struct Asker {
+    /// Which of the login's questions it asked, so that an asker that stops waiting takes back its
+    /// own question and never a later one.
+    serial: u64,
+    /// Takes the user's answer to it.
+    answer: oneshot::Sender<LoginAnswer>,
+}
+
+/// What became of a flow's wish to ask a question.
+pub(crate) enum Asked {
+    /// The question is open on the login, under this serial.
+    Open(u64),
+    /// The login already waits on a question: a login asks one at a time.
+    AlreadyAsking,
+    /// The login has ended.
+    Ended,
 }
 
 /// The logins running now.
@@ -145,6 +174,109 @@ impl AccountLogins {
         }
     }
 
+    /// Opens `question` on the login of `key`, which then waits for the user: `answer` is where
+    /// their answer goes. A login asks one question at a time: while one is open another is
+    /// refused, and the open one stays as it is. Nothing once the login has ended.
+    fn ask(
+        &self,
+        state: &AppState,
+        key: &Key,
+        question: LoginQuestion,
+        answer: oneshot::Sender<LoginAnswer>,
+    ) -> Asked {
+        let mut running = self.lock();
+        let Some(entry) = running.get_mut(key) else {
+            return Asked::Ended;
+        };
+        if entry.asker.is_some() {
+            return Asked::AlreadyAsking;
+        }
+        entry.asked += 1;
+        entry.login.status = LoginStatus::Waiting;
+        entry.login.question = Some(question);
+        entry.asker = Some(Asker {
+            serial: entry.asked,
+            answer,
+        });
+        state.broadcast(Event::AccountLoginUpdated {
+            login: entry.login.clone(),
+        });
+        Asked::Open(entry.asked)
+    }
+
+    /// Takes the question `serial` of the login of `key` back, unanswered: its asker has stopped
+    /// waiting. Says whether it was the one open; a question answered already, or one asked since,
+    /// is left alone. Nothing is broadcast here: an asker stops waiting as its login ends too, and
+    /// the ending is then the only update ([`Self::announce`] is for the login that goes on).
+    fn withdraw_question(&self, key: &Key, serial: u64) -> bool {
+        let mut running = self.lock();
+        let Some(entry) = running.get_mut(key) else {
+            return false;
+        };
+        if entry.asker.as_ref().map(|asker| asker.serial) != Some(serial) {
+            return false;
+        }
+        entry.asker = None;
+        entry.login.question = None;
+        true
+    }
+
+    /// Broadcasts the login of `key` as it stands. Nothing once the login has ended.
+    fn announce(&self, state: &AppState, key: &Key) {
+        if let Some(entry) = self.lock().get(key) {
+            state.broadcast(Event::AccountLoginUpdated {
+                login: entry.login.clone(),
+            });
+        }
+    }
+
+    /// Brings the user's `answer` to the question `question` the login of an account waits on,
+    /// and the login goes on with it. This is the only way a question is answered. Refused when
+    /// the account has no login running, or its login is not waiting on that question: another
+    /// question is open, none is, or the flow that asked has stopped waiting for the answer.
+    pub fn answer(
+        &self,
+        state: &AppState,
+        agent: AgentId,
+        account: Option<String>,
+        question: &str,
+        answer: LoginAnswer,
+    ) -> Result<()> {
+        let mut running = self.lock();
+        let Some(entry) = running.get_mut(&Key { agent, account }) else {
+            return Err(not_running(agent));
+        };
+        let open = entry
+            .login
+            .question
+            .as_ref()
+            .is_some_and(|open| open.id == question && open.accepts(&answer));
+        // An asker that has stopped waiting is about to take its question back: an answer taken
+        // now would be acknowledged and reach nobody.
+        let waiting = entry
+            .asker
+            .as_ref()
+            .is_some_and(|asker| !asker.answer.is_closed());
+        let Some(asker) = (open && waiting).then(|| entry.asker.take()).flatten() else {
+            return Err(CodedError::raised(
+                error_code::LOGIN_QUESTION_NOT_OPEN,
+                format!(
+                    "The sign-in of this {} account is not waiting on that question.",
+                    agent.label()
+                ),
+                &[("agent", agent.label())],
+            ));
+        };
+        entry.login.question = None;
+        state.broadcast(Event::AccountLoginUpdated {
+            login: entry.login.clone(),
+        });
+        // Not received only by an asker that stops waiting between the check above and here; its
+        // flow then goes on, or ends, without an answer.
+        let _ = asker.answer.send(answer);
+        Ok(())
+    }
+
     /// Ends the login of `key` with `outcome`: the last update is broadcast and the account's
     /// quota is made due, since even a login that did not finish may have created the directory;
     /// for a success it is read again at once.
@@ -163,6 +295,7 @@ impl AccountLogins {
             let login = AccountLogin {
                 status,
                 failure,
+                question: None,
                 ..entry.login
             };
             state.broadcast(Event::AccountLoginUpdated {
@@ -217,19 +350,39 @@ impl AccountLogins {
     }
 
     /// [`Self::start`] over a shell environment already taken, with the directory its scratch files
-    /// go under and the time it may wait for the user.
+    /// go under and the time a flow that declares none may wait for the user.
     fn start_with(
         state: &Arc<AppState>,
         start: Start,
         shell_env: HashMap<String, String>,
         scratch_root: PathBuf,
-        timeout: Duration,
+        undeclared_timeout: Duration,
+    ) -> Result<()> {
+        let login = offered_login(start.agent)?;
+        Self::start_flow(
+            state,
+            start,
+            login,
+            shell_env,
+            scratch_root,
+            undeclared_timeout,
+        )
+    }
+
+    /// [`Self::start_with`] over the provider's flow, already found.
+    fn start_flow(
+        state: &Arc<AppState>,
+        start: Start,
+        login: &'static dyn flows::LoginFlow,
+        shell_env: HashMap<String, String>,
+        scratch_root: PathBuf,
+        undeclared_timeout: Duration,
     ) -> Result<()> {
         let key = Key {
             agent: start.agent,
             account: start.account.clone(),
         };
-        let login = offered_login(start.agent)?;
+        let timeout = login.timeout().unwrap_or(undeclared_timeout);
         let logins = &state.account_logins;
         let mut running = logins.lock();
         // Judged under the logins' lock, which `end` takes as well: an account whose removal is
@@ -283,6 +436,7 @@ impl AccountLogins {
             authorization_url: None,
             device_code: None,
             opened_by_agent: false,
+            question: None,
             failure: None,
         };
         let cancel = Arc::new(Notify::new());
@@ -291,10 +445,11 @@ impl AccountLogins {
             tokio::spawn(async move {
                 let progress = flows::Progress::new(state.clone(), key.clone());
                 let mut ending = Ending::new(state.clone(), key.clone());
+                let clock = login_clock(timeout, progress.question_open());
                 // Dropping the flow when the time is up kills the CLI's whole session.
                 ending.outcome = Some(tokio::select! {
                     outcome = flow.run(&progress, &cancel) => outcome,
-                    () = tokio::time::sleep(timeout) => Outcome::TimedOut,
+                    () = clock => Outcome::TimedOut,
                 });
             })
         };
@@ -306,6 +461,8 @@ impl AccountLogins {
             Running {
                 login,
                 cancel,
+                asker: None,
+                asked: 0,
                 task,
             },
         );
@@ -318,11 +475,7 @@ impl AccountLogins {
     pub fn cancel(&self, agent: AgentId, account: Option<String>) -> Result<()> {
         let running = self.lock();
         let Some(entry) = running.get(&Key { agent, account }) else {
-            return Err(CodedError::raised(
-                error_code::LOGIN_NOT_RUNNING,
-                format!("{} is not being signed in for this account.", agent.label()),
-                &[("agent", agent.label())],
-            ));
+            return Err(not_running(agent));
         };
         entry.cancel.notify_one();
         Ok(())
@@ -361,6 +514,42 @@ impl AccountLogins {
             let _ = task.await;
         }
     }
+}
+
+/// Runs out once a login has waited `timeout` for the user with no question open: the time a
+/// question of the flow's stays open (`question_open`) is not counted, since
+/// [`flows::Progress::ask`] waits for the user's answer however long it takes, and the clock goes
+/// on with what was left once the question is answered or taken back.
+async fn login_clock(
+    timeout: Duration,
+    mut question_open: tokio::sync::watch::Receiver<Option<u64>>,
+) {
+    let mut left = timeout;
+    loop {
+        // The flow's progress has gone, and nothing can open a question any more: the rest runs.
+        if question_open.wait_for(Option::is_none).await.is_err() {
+            return tokio::time::sleep(left).await;
+        }
+        let counting = tokio::time::Instant::now();
+        tokio::select! {
+            () = tokio::time::sleep(left) => return,
+            // Only whether it failed is kept: the value it borrows is not held across a wait.
+            gone = async { question_open.wait_for(Option::is_some).await.is_err() } => {
+                left = left.saturating_sub(counting.elapsed());
+                if gone {
+                    return tokio::time::sleep(left).await;
+                }
+            }
+        }
+    }
+}
+
+fn not_running(agent: AgentId) -> anyhow::Error {
+    CodedError::raised(
+        error_code::LOGIN_NOT_RUNNING,
+        format!("{} is not being signed in for this account.", agent.label()),
+        &[("agent", agent.label())],
+    )
 }
 
 /// The sign-in flow `agent`'s provider offers, or its refusal as `provider_unsupported`.

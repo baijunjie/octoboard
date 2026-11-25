@@ -60,6 +60,97 @@ fn a_pinned_account_dir_wins_over_the_default_one() {
     );
 }
 
+/// For a provider whose variable names the parent of its configuration directory, the default
+/// account's directory is the entry of the default directory's own name inside the exported
+/// value, and an account's own directory stays the directory it names.
+#[test]
+fn a_variable_naming_the_parent_gives_the_directory_inside_it() {
+    let _declared = crate::providers::test_provider::config_dir_naming_parent();
+    let layout = crate::providers::layout::layout(AgentId::TEST);
+    let name = Path::new(layout.default_dir).file_name().unwrap();
+    let home = HashMap::from([("HOME".to_string(), "/home/user".to_string())]);
+    assert_eq!(
+        default_account_dir(AgentId::TEST, &home),
+        PathBuf::from("/home/user").join(layout.default_dir)
+    );
+    let mut exported = home.clone();
+    exported.insert(layout.config_dir_var.to_string(), String::new());
+    assert_eq!(
+        default_account_dir(AgentId::TEST, &exported),
+        PathBuf::from("/home/user").join(layout.default_dir)
+    );
+    exported.insert(layout.config_dir_var.to_string(), "/elsewhere".to_string());
+    assert_eq!(
+        default_account_dir(AgentId::TEST, &exported),
+        PathBuf::from("/elsewhere").join(name)
+    );
+    assert_eq!(
+        account_dir(AgentId::TEST, Some(Path::new("/pinned/dir")), &exported),
+        PathBuf::from("/pinned/dir")
+    );
+}
+
+/// A short query of an account of such a provider exports the account directory's parent under the
+/// provider's variable, which the CLI reads as the account's directory again.
+#[cfg(unix)]
+#[test]
+fn a_query_exports_the_parent_for_a_variable_naming_the_parent() {
+    let _declared = crate::providers::test_provider::config_dir_naming_parent();
+    let layout = crate::providers::layout::layout(AgentId::TEST);
+    let dir = ScratchDir::new("cli-run-parent");
+    let var = layout.config_dir_var;
+    let env = crate::test_support::fake_agent(
+        &dir,
+        AgentId::TEST.descriptor().binary,
+        &format!("echo \"${var}\" > '{d}/exported'", d = dir.display()),
+    );
+    let parent = dir.join("accounts");
+    let account = parent.join(Path::new(layout.default_dir).file_name().unwrap());
+    std::fs::create_dir_all(&account).unwrap();
+    let mut run = admitted_command(AgentId::TEST, &env, Some(&account), &[]).expect("admitted");
+    run.run(crate::test_support::PATIENCE, 4096, None)
+        .expect("ran");
+    let exported = std::fs::read_to_string(dir.join("exported")).unwrap();
+    assert_eq!(Path::new(exported.trim()), parent);
+    assert_eq!(
+        layout.config_dir_of_export(Path::new(exported.trim())),
+        account
+    );
+}
+
+/// For a provider whose variable names the parent, an account directory of another name is not run
+/// as the account: exporting its parent would make the CLI use a different directory, so the query
+/// is refused with the name the directory has to have.
+#[cfg(unix)]
+#[test]
+fn a_directory_of_another_name_is_refused_for_a_variable_naming_the_parent() {
+    let _declared = crate::providers::test_provider::config_dir_naming_parent();
+    let layout = crate::providers::layout::layout(AgentId::TEST);
+    let dir = ScratchDir::new("cli-run-other-name");
+    let ran = dir.join("ran");
+    let env = crate::test_support::fake_agent(
+        &dir,
+        AgentId::TEST.descriptor().binary,
+        &format!("touch '{}'", ran.display()),
+    );
+    let account = dir.join("accounts").join("other");
+    std::fs::create_dir_all(&account).unwrap();
+    let refused = admitted_command(AgentId::TEST, &env, Some(&account), &[])
+        .err()
+        .expect("refused");
+    assert!(
+        matches!(&refused, NotRun::DirNotExportable(AgentId::TEST, refused_dir) if *refused_dir == account),
+        "{refused:?}"
+    );
+    let name = layout.required_dir_name().unwrap().to_string_lossy();
+    assert!(
+        refused.detail().contains(&format!("`{name}`")),
+        "{}",
+        refused.detail()
+    );
+    assert!(!ran.exists(), "the CLI was not run");
+}
+
 /// A shell environment whose `PATH` holds no agent binary.
 fn no_agents(dir: &Path) -> HashMap<String, String> {
     HashMap::from([

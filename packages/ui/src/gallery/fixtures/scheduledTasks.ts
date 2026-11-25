@@ -139,6 +139,24 @@ const RUNS: ScheduledTaskRun[] = [
   ),
 ];
 
+/** A launch Grok Build's sandbox refused, as the daemon records it: the code is the provider's own, with the file that sets
+ * the sandbox and its profile, and the run stands in a Grok task's history (the one a launch of that agent could refuse). */
+const SANDBOX_RUN = scheduledRunOf(
+  "r-sandbox",
+  "t-deps",
+  60 * 76,
+  {
+    kind: "failed",
+    code: "provider.grok.sandbox_unsupported",
+    params: { source: "/Users/dev/Accounts/grok-work/.grok/config.toml", profile: "strict" },
+    message:
+      "Octoboard's per-session Grok home is incompatible with Grok's sandbox (profile `strict`, set by /Users/dev/Accounts/grok-work/.grok/config.toml): to launch this session through Octoboard, turn the sandbox off where it is set, or ask whoever manages that setting to. A conversation started under the sandbox keeps it, so continue that one in Grok itself",
+  },
+  { trigger: "scheduled", due_at: minutesAgo(60 * 76) },
+);
+
+/** `TASKS` with the first, whose runs the page shows, on Grok Build. */
+const GROK_TASKS: ScheduledTask[] = TASKS.map((task) => (task.id === "t-deps" ? { ...task, launch: { ...task.launch, agent: "grok" } } : task));
 /** The plain task's schedule is Monday, Wednesday and Friday at 9:30: when it last came due and the time before, so its
  * runs agree with it. */
 const onPlainDay = (weekday: number) => weekday === 1 || weekday === 3 || weekday === 5;
@@ -481,6 +499,18 @@ export const scheduledTasksScenarios: Scenario[] = [
       "The Details button of a failed run in the Run history was pressed, and its popover opens by it: the reason in the application's own words, here that the account is not logged in, with the account and the agent as chips. The row itself carries only Could not start a session.",
     state,
     scheduledTasks: { tasks: TASKS, runs: { "t-deps": [runOf("r-started"), runOf("r-signed-out")] } },
+    steps: [showPage, closeDrawer, (ui) => ui.press(ui.t("scheduledTasks.view.runs")), (ui) => ui.press(ui.t("error.details"))],
+  },
+
+  {
+    id: "scheduled-tasks-run-details-provider",
+    group: GROUP,
+    category: "exceptional",
+    title: "Failed run whose reason is the agent's own, in its Details",
+    description:
+      "The Details button of a run that failed for a reason only one agent has, here Grok Build's sandbox, was pressed: its popover says the reason with the sandbox's profile and the file that sets it as chips, then, as its own paragraph, what to do about it, in the agent's wording with its names as chips. Check that the long path wraps inside the popover and neither paragraph overflows it.",
+    state,
+    scheduledTasks: { tasks: GROK_TASKS, runs: { "t-deps": [runOf("r-started"), SANDBOX_RUN] } },
     steps: [showPage, closeDrawer, (ui) => ui.press(ui.t("scheduledTasks.view.runs")), (ui) => ui.press(ui.t("error.details"))],
   },
 

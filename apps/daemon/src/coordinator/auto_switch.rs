@@ -725,13 +725,15 @@ async fn wait_for_claim(state: &Arc<AppState>, id: &str) {
     }
 }
 
-/// The account `session` would be moved to, if any qualifies: the one a new session would be given,
+/// The account `session` would be moved to, if any qualifies: for a provider with a quota window
+/// the one automatic selection would rank first, for one without the first usable account in the
+/// saved order (a new session takes its console's or project's account first), in both cases
 /// without the account it is on and the ones it was moved off for a limit lately. The outer
 /// `Option` is whether one qualifies, the inner one the account (`None` the default account).
 fn pick_target(state: &Arc<AppState>, session: &Session) -> Result<Option<Option<String>>> {
     let mut except = state.recently_left_for_limit(&session.id, LEFT_FOR_LIMIT_FOR);
     except.push(session.account_id.clone());
-    crate::accounts::choice::preferred_weekly_account_except(state, session.agent, &except, true)
+    crate::accounts::choice::switch_target_except(state, session.agent, &except, true)
 }
 
 /// The session `id` as it stands if it is in a state to be switched now: a process at its prompt or

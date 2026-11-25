@@ -2,12 +2,13 @@ import { LogIn } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { ICON_TRIGGER_BASE_CLASS, ICON_TRIGGER_CLASS } from "../../components/controls/iconTrigger";
+import { offersLoginFlow } from "../../agents/providers";
 import { isolate } from "../../i18n/isolate";
 import { useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
 import type { QuotaReading } from "../../quota/useAccountQuota";
 import { loginStateOf } from "../../accounts/quotaFormat";
-import { useDaemonStore } from "../../store";
+import { useDaemonStore, useProviders } from "../../store";
 import { afterFrames } from "../../components/focus/afterFrames";
 import { canTakeFocus } from "../../components/focus/regionFocus";
 import { useLatest } from "../../components/hooks/useLatest";
@@ -83,7 +84,8 @@ function useLoginFocusReturn(
 
 /** The Log in button of an account: an icon with a tooltip and a name that says whose account, looking as the row's
  * actions menu button does, shown in the table row's Status cell while the account reads as not logged in and is not
- * turned off (`turnedOff`, where the cell says "Disabled" instead), and nothing otherwise. While a login of the account
+ * turned off (`turnedOff`, where the cell says "Disabled" instead) and its provider has a login flow
+ * (`offersLoginFlow`; `AccountSignInHelp` stands in otherwise), and nothing otherwise. While a login of the account
  * runs it is unavailable, not natively disabled: it keeps focus, is marked `aria-disabled`, takes no hover tint or
  * press shrink, gives "Logging in…" as its tooltip and its description (its name stays the action), and a press does
  * nothing (see "Buttons" in `docs/conventions/ui-standard.md`). Focus comes back after the login dialog closes as
@@ -98,11 +100,12 @@ export function AccountLoginButton({ agent, account, name, quota, turnedOff, onL
   fallback: () => HTMLElement | null | undefined;
 }): React.ReactElement | null {
   const t = useT();
+  const logsIn = offersLoginFlow(useProviders(), agent);
   const login = useDaemonStore((s) => accountLoginOf(s.accountLogins, agent, account));
   const active = loginIsActive(login);
   const button = useRef<HTMLButtonElement>(null);
   const returnFocus = useLoginFocusReturn(button, fallback, { active, succeeded: login?.status === "succeeded" });
-  if (turnedOff || loginStateOf(quota) !== "out") return null;
+  if (turnedOff || !logsIn || loginStateOf(quota) !== "out") return null;
   return (
     <Button
       ref={button}

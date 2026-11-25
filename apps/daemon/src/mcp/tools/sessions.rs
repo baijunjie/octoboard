@@ -135,7 +135,8 @@ fn session_in(
         .get("goal")
         .and_then(Value::as_str)
         .map(str::trim)
-        .filter(|goal| !goal.is_empty())
+        // Blank as a launch reads a prompt: control and invisible characters are no goal.
+        .filter(|goal| !term::is_blank_once_stripped(goal))
         .ok_or_else(|| anyhow!("`brief.goal` is required"))?;
     let task = texts::render_brief(
         goal,

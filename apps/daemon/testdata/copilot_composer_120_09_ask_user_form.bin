@@ -1,0 +1,94 @@
+]7501;state=working:app=copilot\[22A[2;90m╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮[m  
+[2C                            [4;39H                                                       [26C 
+[2C[34m ╭─╮╭─╮[5;42H[1mGetting started[63C[m 
+[2C[34m ╰─╯╰─╯[m  Copilot v1.0.114 uses AI.  [2;90m│[m  Use the tabs above to explore your sessions and pull requests[17C 
+[2;90m│[m [35m █ [96m▘▝[35m █[m  Check for mistakes.        [2;90m│[m  /model — Switch models across providers, or use Auto                        [2;90m│[m  
+[2;90m│[m [35m  ▔▔▔▔ [8;39H[2;90m│[78C│[m  
+[2;90m│[m                                                                                   [33C[2;90m│[m  
+[2;90m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[m  
+[K
+ [33m![m Model "standin" is not in the built-in catalog. Using defaults for: prompt tokens[K
+   (COPILOT_PROVIDER_MAX_PROMPT_TOKENS), output tokens (COPILOT_PROVIDER_MAX_OUTPUT_TOKENS). Run [37m copilot help [m[K
+   [37mproviders [m for configuration details.[K
+[K
+ ❯ CMD:slow[102C02:36  
+[K
+ [34m●[m slow slow slow slow[K
+[K
+   └ [33mIncomplete response[m[K
+[K
+ [34m●[m Operation cancelled by user[K
+[K
+ ❯ CMD:tool bash {"command":"touch made-by-probe","description":"make a file"}[35C02:36  
+[119C 
+ ○ [1mShell [mmake a file[K
+   touch made-by-probe[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+ /private/tmp/copilot-probe/w120[K
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[m❯[K
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[m [34m●[m [34mWorking[m · 65 B [1mctrl+c[m interrupt                                                                              standin[?7l [?7h[38;3H[?25h]7501;state=idle:app=copilot\[?25l[12A[31m✗[26;21H Operation aborted by user
+
+[3C[0;1mApproval check 
+[5C[m└ - Confirmation cancelled for shell command (touch)
+
+ [34m●[m Operation cancelled by user[9B [1m←[m open sidebar · Interactive · Manual Approval · [1m/[m commands · [1m?[m help · [1mtab[m next tab[38;3H[?25h[?25l[32;38r[38;1H
+[r[37;3HCMD:tool ask_user {"message":"Pick
+  one?","requestedSchema":{"properties":{"choice":{"type":"string","enum":["alpha","beta"]}},"required":["choice"]}}
+
+ Interactive · Manual Approval · [1m@[m files/sessions · [1m#[m issues                        [38;117H[?25h[?25l[32;38r[32;1HM[r[38;3H[K
+
+ [94m●[m [94mW[34morking[m [1mctrl+c[m interrupt                                 [38;3H[?25h]7501;state=working:app=copilot\[?25l[5A❯ CMD:tool ask_user {"message":"Pick one?","requestedSchema":{"properties":{"choice":{"type":"string","enum":[" 02:36
+   alpha","beta"]}},"required":["choice"]}}[38;3H[?25h]7501;state=blocked:app=copilot:kind=question\[?25l[H
+
+[2;90m│[m                                                                                                                    [2;90m│[m ┃
+[2;90m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[m ┃
+[118C[1K ┃
+ [33m![m Model "standin" is not in the built-in catalog. Using defaults for: prompt tokens                  [15C  ┃
+   (COPILOT_PROVIDER_MAX_PROMPT_TOKENS), output tokens (COPILOT_PROVIDER_MAX_OUTPUT_TOKENS). Run [37m copilot help [6C[m  [37m┃
+[m   [37mproviders [m for configuration details.[77C  [37m┃
+[118C[m[1K [37m┃
+[m ❯ CMD:slow                                                                                                      02:36 [37m┃
+[119C┃
+[C[34m●[m slow slow slow slow                                                              [35C[37m┃
+[118C[m[1K [37m┃
+[3C[m└ [33mIncomplete response[m                [79C[37m┃
+[119C┃
+[C[34m●[m Operation cancelled by user[83C      [37m┃
+[119C┃
+[C[m❯ CMD:tool bash {"command":"touch made-by-probe","description":"make a file"}[35C02:36 [37m┃
+[119C┃
+[C[31m✗[m [1mShell [mmake a file[31m Operation aborted by user[73C[37m┃
+[3C[mtouch made-by-probe[97C[37m┃
+[C[m  [1mApproval check [m            [89C[37m┃
+[5C[m└ - Confirmation cancelled for shell command (touch)[62C[37m┃
+[118C[m[1K [37m┃
+[C[34m●[m Operation cancelled by user[89C[37m┃
+[118C[m[1K [37m┃
+[C[m❯ CMD:tool ask_user {"message":"Pick one?","requestedSchema":{"properties":{"choice":{"type":"string","enum":[" 02:36 [37m┃
+[3C[malpha","beta"]}},"required":["choice"]}}[76C[37m┃
+[118C[m[1K [37m┃
+[m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ [1mCopilot needs information.[m   
+ Pick one?
+[K
+ [1mchoice:[m[K
+ [1;36m❯ alpha
+[C[m  beta[K
+   Other (type your answer)[K
+[K
+ [1m↑/↓[m select · [1menter[m accept · [1mctrl+d[m decline · [1mesc[m cancel[K
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[?7l─[?7h[3;29r[29;1H
+
+[r[5;120H┃
+[119C┃
+[119C┃[21B ○ [1mAsking user [mPick one?[95C[37m┃
+[119C┃[m

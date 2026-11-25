@@ -318,7 +318,8 @@ function ChangesView({
   // than falling to `<body>`; with nothing chosen in a
   // repository that has no branches the selector is disabled, and focus leaves for the top bar as
   // it does from any pane with nothing to hold it.
-  const handoff = useFocusHandoff(() => selectorsRef.current?.querySelector<HTMLElement>("button:not([disabled])")?.focus());
+  const selectorButton = () => selectorsRef.current?.querySelector<HTMLElement>("button:not([disabled])");
+  const handoff = useFocusHandoff(() => selectorButton()?.focus());
   const listed = branches.state === "loaded" ? branches.branches : [];
   // Nothing chosen in a repository that has no branches: the selector has nothing to offer, and the
   // panel below says so.
@@ -424,7 +425,7 @@ function ChangesView({
                     warning about the worktree, a mark at the end of its line above.) */}
                 {uncommittedFailure && (
                   <div className="shrink-0 px-(--pane-inset) py-2">
-                    <FailureAlert title={t(uncommittedFailure.title)} message={uncommittedFailure.message} announce={false} onRetry={retryAll} />
+                    <FailureAlert title={t(uncommittedFailure.title)} message={uncommittedFailure.message} announce={false} onRetry={retryAll} focusFallback={selectorButton} />
                   </div>
                 )}
                 <ChangeList headingMarks={headingMarks} items={items} selected={selectedChange} label={t("git.changes.list.label")} onOpen={onOpen} listRef={listRef} changeView={changeView} />

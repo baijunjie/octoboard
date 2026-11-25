@@ -20,4 +20,5 @@ moment.
 A dispatcher running several agents at once that edit code or commit gives each its own branch and worktree, and
 merges them one by one, even where their files do not overlap: in one worktree each agent's half-finished edits break
 the others' builds and tests, not only their commits. Sharing a worktree is for an agent and its dispatcher, or agents
-that work one after another.
+that work one after another. Its brief says to run git only as `git -C <worktree>`, never after a `cd`: a `cd` that
+fails leaves the next command in the main checkout, and a `git merge` has landed there that way.

@@ -8,10 +8,11 @@ import { errorText } from "../errors/errorText";
 import type { Language } from "../i18n/languages";
 import type { Event } from "../protocol";
 
-/** A notification in the window: an error, which the user acknowledges in the shared error alert, or a notice, shown as
- * a timed toast. */
+/** A notification in the window: an error, which the user acknowledges in the shared error alert; a notice to
+ * acknowledge, no failure, which is shown in that alert too and stays until dismissed; or a notice, shown as a timed
+ * toast. */
 export interface NotificationRequest {
-  kind: "error" | "notice";
+  kind: "error" | "acknowledged" | "notice";
   message: string;
   /** Optional markup; `message` stays plain for deduplication and text-only consumers. */
   content?: ReactNode;
@@ -39,11 +40,13 @@ export interface NotificationRequest {
 }
 
 /** The withdrawal of a daemon notice shown earlier: it shows nothing, and takes back the notice with `code` about
- * `session`, which no longer holds. It travels the same channel as the notice it withdraws, so it never overtakes it. */
+ * `session`, which no longer holds; with `detail`, only such a notice whose `detail` param is this (one message among
+ * several). It travels the same channel as the notice it withdraws, so it never overtakes it. */
 export interface NoticeWithdrawal {
   kind: "withdrawn";
   session: string;
   code: string;
+  detail?: string;
 }
 
 /** What the window's notification channel carries: a notification to show, or the withdrawal of one. */
@@ -87,7 +90,9 @@ export type WithdrawnBroadcast = Extract<Event, { type: "session_notice_withdraw
  * `error` reply carries its request id and reaches its caller as a rejected promise instead, so it is no broadcast and
  * is left to the caller to filter out. Pure, so that the gallery's daemon routes its fixtures through the same code. */
 export function broadcastNotification(event: NotifiedBroadcast | WithdrawnBroadcast, records: RecordNames, language: Language): WindowNotification {
-  if (event.type === "session_notice_withdrawn") return { kind: "withdrawn", session: event.session, code: event.code };
+  if (event.type === "session_notice_withdrawn") {
+    return { kind: "withdrawn", session: event.session, code: event.code, ...(event.detail === undefined ? {} : { detail: event.detail }) };
+  }
   const message = daemonMessage(language, event.code, event.params, event.message, records);
   if (event.type === "error") {
     return { kind: "error", daemonError: new CodedError(event.message, event.code, event.params), message };

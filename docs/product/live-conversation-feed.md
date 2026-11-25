@@ -47,6 +47,17 @@ A user or Octoboard entry opens a turn, turns counting from 1; the entries after
 the first of them belong to turn 0. The agent's reasoning is not an entry, and a subagent's own conversation is not
 followed: only the call that started the subagent is.
 
+For an agent whose record is a tree (see "What the history lists" in `docs/product/session-history.md`), the
+conversation is its current branch only: what the user went back on holds no entry.
+
+For an agent that keeps its conversations as rows of a database of its own (see "What the history lists" in
+`docs/product/session-history.md`), the conversation is read whole through the agent's own means: when it is first
+followed, whenever the agent reports an event of the session (a turn starting or ending, a prompt opening or being
+answered), and when the session's process starts or ends. It is not read on a timer, so what the agent writes between
+two of its events shows at the next one, and there are no pending entries. Rows added since the last reading are
+appended; anything else (a row changed or removed, the conversation forking off) replaces the conversation. A reading
+that fails changes nothing and is made again at the next event.
+
 A client ignores an entry of a kind it does not know, since a later daemon of the same protocol generation may add
 kinds; a tool call's category it does not know reads as other, and a status it does not know as running (a later
 daemon may add a state in which a call has not ended yet).
@@ -107,6 +118,8 @@ replacement as it is. This happens when:
 
 - the agent went back to an earlier point of the conversation (a Claude Code rewind, a Grok Build rewind) or rewrote its
   record (a Grok Build compaction);
+- a record that is a tree gained a line that does not carry on from the one before it, the conversation forking off an
+  earlier point: the replacement holds the branch that line is on;
 - the agent started another file for the conversation (a Codex thread that had a turn reverted continues in a new
   file);
 - the record was replaced;
@@ -146,3 +159,9 @@ part-way through, once the file has changed. A connection's own unsubscribing is
   The update log is written a few tens of milliseconds after the record, so pending entries show only in that short
   interval, if at all. A compaction leaves Grok's record holding only what followed it, so a compacted session's
   conversation starts at the compaction.
+- **Pi**: dated turns, tool calls, results and compaction on the latest persisted branch.
+- **Qwen Code**: messages and tool calls with their recorded outcomes on the active chat branch.
+- **GitHub Copilot CLI**: prompts, replies, tool starts and results as Copilot records them.
+- **Antigravity CLI**: dated messages and tool calls from the full transcript. A new turn after rewind replaces the
+  reused steps in the feed.
+- **OpenCode**: the recorded conversation. An assistant message appears once it completes.

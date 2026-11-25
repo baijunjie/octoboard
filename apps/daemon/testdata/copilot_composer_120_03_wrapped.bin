@@ -1,0 +1,14 @@
+[?25l❯ [K
+
+ [1m←[m open sidebar · Interactive · Manual Approval · [1m/[m commands · [1m?[m help · [1mtab[m next tab[38;3H[?25h[?25l[15;38r[38;1H
+[r[37;3Hfirst line of a longer draft that keeps going well past the right edge of the window so that the composer has to
+  wrap it onto another row
+
+ Interactive · Manual Approval · [1m@[m files/sessions · [1m#[m issues                        [38;27H[?25h[?25l[15;38r[38;1H
+[r[38;3H[?25h[?25l[5;6H[34m─╮╭╮
+[5C─╯╰╯
+[4C[35m█ [96m▘▝[35m▐
+[4C ▔[m[38;3H[?25h[?25lsecond line[?25h[?25l[5;6H[34m╮╭─╮
+[5C╯╰─╯
+[4C[35m [96m▘▝[35m █
+[4C▔▔[m[38;14H[?25h

@@ -40,22 +40,33 @@
 //! adapter has to generate beyond the event name itself.
 
 pub(crate) mod account_cli;
+pub mod antigravity;
 pub mod claude;
 pub mod codex;
 mod compatibility_offer;
+pub mod copilot;
 pub(crate) mod files;
 pub mod grok;
+pub(crate) mod helper;
 mod hooks;
+pub mod opencode;
+mod patch;
+pub mod pi;
+pub mod qwen;
 #[cfg(test)]
 pub(crate) mod test_provider;
+pub(crate) mod user_json;
 
+pub use crate::providers::AgentVersion;
 pub(crate) use account_cli::snapshot_home;
 pub use account_cli::{
     account_command_of, account_dir, default_account_dir, resolve_account_binary, Unstartable,
 };
+pub use helper::helper_command;
 pub use hooks::{
     add_guard_group, guard_command, hook_command, hook_script_path, hook_url, write_guard_script,
-    write_hook_script, COMMAND_HOOK_TIMEOUT_SECS, GUARD_HOOK_TIMEOUT_SECS, HTTP_HOOK_TIMEOUT_SECS,
+    write_hook_script, COMMAND_HOOK_TIMEOUT_SECS, GUARD_HOOK_TIMEOUT_SECS, HOOK_ROUND_TRIP_TIMEOUT,
+    HTTP_HOOK_TIMEOUT_SECS,
 };
 
 use std::collections::{BTreeMap, HashMap};
@@ -71,7 +82,7 @@ use crate::protocol::{
     error_code, AgentId, CodedError, GitWorkflowSettings, Notice, Session, SessionKind,
     TerminalAppearance,
 };
-use crate::providers::{ProviderDescriptor, ProviderSettings};
+use crate::providers::{NativeMemory, ProviderDescriptor, ProviderSettings};
 use crate::records::{NoRecords, RecordStore};
 use crate::session::screen::{NoScreen, ScreenReader};
 use crate::session_tools::Owner;
@@ -176,8 +187,8 @@ pub struct LaunchSpec<'a> {
     pub guard: Option<GuardHook<'a>>,
     /// Whether this launch turns the agent's own memory across sessions off. Set by generic code
     /// through [`turns_native_memory_off`], never by an adapter; a provider whose descriptor
-    /// declares `native_memory_switch` applies its own switch when it is set, and every other
-    /// provider never sees it set.
+    /// declares its memory `NativeMemory::Switchable` applies its own switch when it is set, and
+    /// every other provider never sees it set.
     pub native_memory_off: bool,
     /// The index of the session's Octoboard memory at this launch, the most recently updated
     /// first: a project session's place's, which its role description carries as a launch
@@ -198,7 +209,7 @@ pub struct LaunchSpec<'a> {
 /// would compete with it. While Octoboard's memory is off, the agent's own memory is left as the
 /// agent and the user set it.
 pub fn turns_native_memory_off(descriptor: &ProviderDescriptor, memory_enabled: bool) -> bool {
-    memory_enabled && descriptor.native_memory_switch
+    memory_enabled && descriptor.native_memory == NativeMemory::Switchable
 }
 
 /// What a guard's hook command is built from: the installation's entry point, which an update
@@ -311,6 +322,29 @@ pub fn pinned_config_dir<'a>(spec: &LaunchSpec<'a>, agent: AgentId) -> Result<Op
     }
 }
 
+/// The variable a launch exports to run `agent`'s CLI on the session's pinned account, as
+/// `(name, value)` for [`LaunchPlan::env`]: nothing for the default account, which leaves the
+/// shell snapshot's own value standing. Refused as [`pinned_config_dir`] refuses a pinned
+/// directory that has gone, and where the directory is one the agent's variable cannot name
+/// ([`Unstartable::DirNotExportable`]).
+pub fn pinned_config_dir_export(
+    spec: &LaunchSpec<'_>,
+    agent: AgentId,
+) -> Result<Option<(String, String)>> {
+    let Some(dir) = pinned_config_dir(spec, agent)? else {
+        return Ok(None);
+    };
+    let (var, value) = agent
+        .descriptor()
+        .layout
+        .config_dir_export(dir)
+        .ok_or_else(|| Unstartable::DirNotExportable(agent, dir.to_path_buf()).into_error())?;
+    Ok(Some((
+        var.to_string(),
+        value.to_string_lossy().into_owned(),
+    )))
+}
+
 #[derive(Default)]
 pub struct LaunchPlan {
     pub args: Vec<String>,
@@ -327,8 +361,22 @@ pub struct LaunchPlan {
     /// observed separately.
     pub resolves_approvals_itself: bool,
     /// Something about this launch the user has to be told, because the agent will not tell them
-    /// in a way they can act on. Surfaced once, when the session starts.
+    /// in a way they can act on. Surfaced once, when the session starts. A launch with more to
+    /// tell gives the rest through [`AgentProvider::further_launch_notices`].
     pub notice: Option<Notice>,
+    /// The launch's first task, for a launch that cannot give it to the agent on its command line
+    /// (an agent that would run it before a startup screen of its own is answered, or that takes
+    /// no prompt there): the launch queues it as the session's first message instead, ahead of
+    /// anything else queued for the session and kept in the store until it is written
+    /// (`AppState::queue_first_task`), which is once the agent is past its startup
+    /// (`crate::session::trust`). No prompt is taken to have been submitted at launch, and the
+    /// session reads as idle until the message is in. The provider leaves the task out of `args`.
+    pub first_message: Option<String>,
+    /// The prompt `args` give the agent, where the provider had to change the task for its CLI to
+    /// take it as a prompt; `None` where `args` carry the task as it was given, or no prompt. The
+    /// session records it as the prompt submitted at launch, which is matched against what the
+    /// agent reports sending, so it is exactly the argument.
+    pub shaped_prompt: Option<String>,
     /// Where the agent records the trust its confirmation grants when that record cannot reach the
     /// user's own configuration by itself, and so has to be carried there once the confirmation is
     /// accepted, by Octoboard's press or in the terminal. Only Grok, whose trust store lives in the
@@ -483,6 +531,72 @@ pub trait AgentProvider: Send + Sync {
         false
     }
 
+    /// [`Self::has_status_integration`] for one launch, as planned: for a provider whose status
+    /// integration a launch can be without (its hooks switched off by the user's own settings,
+    /// which the launch does not override), so that such a launch takes its whole status from the
+    /// program's reports, turns opened and closed included, as a provider with no integration
+    /// does. Asked once per launch, after `plan`, and kept for the launch's whole life, a daemon
+    /// that adopts it included. By default the provider's answer for all its launches.
+    fn launch_has_status_integration(&self, _spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> bool {
+        self.has_status_integration()
+    }
+
+    /// [`ScreenReader::cancel_drops_held_messages`] for one launch, as planned: for a provider a
+    /// launch of which can be without what that declaration relies on, a report of each held
+    /// message the turn takes, as a prompt sent with its text (its hooks switched off by the
+    /// user's own settings, say). Such a launch has nothing queued again at a cancel, since a
+    /// message the turn took before it could not be told from one the cancel dropped, and would
+    /// be written twice. Asked once per launch, after `plan`, and kept for the launch's whole
+    /// life, a daemon that adopts it included. By default the reader's declaration, for all the
+    /// provider's launches.
+    fn launch_cancel_drops_held_messages(
+        &self,
+        _spec: &LaunchSpec<'_>,
+        _plan: &LaunchPlan,
+    ) -> bool {
+        self.screen().cancel_drops_held_messages()
+    }
+
+    /// How long the launch's first message, and anything else written into the session, waits
+    /// for the session's MCP server to have answered a listing of its tools: for a provider
+    /// whose agent offers Octoboard's tools to its model only from then on, so that a message
+    /// written the moment its input box is up would run a turn without them. The wait ends with
+    /// the listing or after the time given, whichever comes first, so a server that is never
+    /// asked holds nothing for good. Asked once per launch, after `plan`; a daemon that adopts
+    /// the launch does not wait. `None` by default: nothing waits.
+    fn awaits_tool_listing(&self, _spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> Option<Duration> {
+        None
+    }
+
+    /// What else the user has to be told about this launch, beside [`LaunchPlan::notice`]: for a
+    /// provider with more than one thing to say of one launch (two files of the user's it does
+    /// not read, say), each a notice of its own, shown in this order after the plan's. Asked once
+    /// per launch, after `plan`, like the plan's notice surfaced once, when the session starts.
+    /// None by default.
+    fn further_launch_notices(&self, _spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> Vec<Notice> {
+        Vec::new()
+    }
+
+    /// What the provider's OSC 7501 reports say beside its status integration
+    /// ([`Self::has_status_integration`]): that a `blocked` report is its wait on the user, that
+    /// `idle` straight after `working` is a cancelled turn (`crate::session::program_status`).
+    /// Neither, by default: the reports of a provider with a status integration then say only
+    /// whether a turn runs. Not read for a provider whose status the reports give.
+    fn reported_signals(&self) -> crate::session::ReportedSignals {
+        crate::session::ReportedSignals::NONE
+    }
+
+    /// For a launch whose status its OSC 7501 reports give: that a `done` straight after `working`
+    /// may be a gap between two model calls of one turn rather than the turn's end, and how long
+    /// such a gap lasts at most, as measured for its agent. The reports path then holds that
+    /// `done` for this long: a `working` within it passes the `done` over, as if the agent had
+    /// never left the turn, and anything else, or the bound running out, has the `done` end the
+    /// turn (`crate::session::program_status`, "A `done` inside a turn"). `None` by default: a
+    /// `done` ends the turn at once. Not read for a launch whose hooks give the status.
+    fn reported_done_gap(&self) -> Option<Duration> {
+        None
+    }
+
     /// How the provider's own records of a session are found, read and watched.
     fn records(&self) -> &'static dyn RecordStore {
         &NoRecords
@@ -524,6 +638,14 @@ pub trait AgentProvider: Send + Sync {
         None
     }
 
+    /// Runs this provider's helper `name`, a command its launch names for the agent to run
+    /// ([`helper_command`]), with `args`, the helper's own arguments: it reads what the agent
+    /// writes on stdin and prints what the agent reads, and returns the exit status to leave with.
+    /// `None` for a helper the provider does not have, which runs nothing.
+    fn run_helper(&self, _name: &str, _args: &[String]) -> Option<i32> {
+        None
+    }
+
     /// What the provider offers a provider made compatible with it; `Some` exactly when its
     /// descriptor declares `compatibility_source`.
     fn compatibility_source(&self) -> Option<&'static dyn CompatibilitySource> {
@@ -531,6 +653,23 @@ pub trait AgentProvider: Send + Sync {
     }
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan>;
+
+    /// A version that exercises the provider's launch features in tests with no installed CLI.
+    #[cfg(test)]
+    fn launch_fixture_version(&self) -> Option<AgentVersion> {
+        None
+    }
+
+    /// Whether the agent this launch starts runs an extension of the provider's that opens the
+    /// session's channel (`crate::session::channel`). The plan names the helper to the extension
+    /// and the session's automatic messages go through the channel wherever no
+    /// [`LaunchPlan::private_server`] took its place. The extension starts the helper, sends each
+    /// line of its standard output as a user message and writes what came of it to its standard
+    /// input (`apps/daemon/PROTOCOL.md`, "`POST /channel/:session`"); it holds no key, speaks no
+    /// HTTP and prints nothing. A provider whose agent runs no such extension has none.
+    fn extension_channel(&self, _spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> bool {
+        false
+    }
 
     /// Work the agent's own CLI does before the session's terminal starts, run with the resolved
     /// `binary` in the launch's `environment` (the shell snapshot with the plan's entries): freeing
@@ -574,6 +713,15 @@ pub trait AgentProvider: Send + Sync {
         None
     }
 
+    /// The version the account whose directory is `home` runs of the resolved `binary`, for an
+    /// agent whose accounts can run different versions of one install (each updating itself in
+    /// its own directory), read from the files as [`Self::installed_version`] is. `None` where the
+    /// agent's version does not depend on the account, or nothing tells it; the caller then takes
+    /// the install's version.
+    fn account_version(&self, _binary: &str, _home: &Path) -> Option<AgentVersion> {
+        None
+    }
+
     /// How the provider's CLI is installed and updated, which `crate::agents::cli` reads to tell
     /// an install's method and to run its update. A provider that does not say gets
     /// [`CliPackaging::NONE`]: its CLI's install is not recognised and no update of it is offered.
@@ -586,6 +734,16 @@ pub trait AgentProvider: Send + Sync {
     /// error is a launcher whose native program cannot be found.
     fn native_binary(&self, _binary: &ResolvedBinary) -> Result<Option<ResolvedBinary>> {
         Ok(None)
+    }
+
+    /// The command for an interactive terminal whose arguments cannot pass through the ordinary
+    /// launcher. Install detection and background queries still use the ordinary launcher.
+    fn terminal_binary(
+        &self,
+        binary: ResolvedBinary,
+        _shell_env: &HashMap<String, String>,
+    ) -> Result<ResolvedBinary> {
+        Ok(binary)
     }
 
     /// The task title a raw terminal title carries, or `None` when it carries none: agents decorate
@@ -634,6 +792,11 @@ static PROVIDERS: &[(AgentId, &dyn AgentProvider)] = &[
     (AgentId::CLAUDE, &claude::ClaudeProvider),
     (AgentId::CODEX, &codex::CodexProvider),
     (AgentId::GROK, &grok::GrokProvider),
+    (AgentId::ANTIGRAVITY, &antigravity::AntigravityProvider),
+    (AgentId::COPILOT, &copilot::CopilotProvider),
+    (AgentId::OPENCODE, &opencode::OpenCodeProvider),
+    (AgentId::QWEN, &qwen::QwenProvider),
+    (AgentId::PI, &pi::PiProvider),
     #[cfg(test)]
     (AgentId::TEST, &test_provider::TestProvider),
 ];
@@ -645,6 +808,17 @@ pub fn provider(agent: AgentId) -> &'static dyn AgentProvider {
         .find(|(id, _)| *id == agent)
         .map(|(_, provider)| *provider)
         .expect("every registered provider has a behavior")
+}
+
+/// The version of `agent`'s resolved `binary` that the account whose directory is `home` runs,
+/// read without running it: the account's own ([`AgentProvider::account_version`]), else the
+/// install's ([`AgentProvider::installed_version`]). `None` where neither tells it; the caller
+/// then asks the binary.
+pub fn version_for_account(agent: AgentId, binary: &str, home: &Path) -> Option<AgentVersion> {
+    let provider = provider(agent);
+    provider
+        .account_version(binary, home)
+        .or_else(|| provider.installed_version(binary))
 }
 
 /// What starts `agent`'s CLI: the binary its name resolves to on `shell_env`'s `PATH`, or the
@@ -690,16 +864,28 @@ pub fn compatibility_sources_of(
 pub struct CliPackaging {
     /// Directory names, outermost first, that mark the layout the CLI's own installer leaves, each
     /// layout a run of consecutive components of the binary's path once its links are followed,
-    /// matched ignoring case (`.local/share/claude/versions`).
+    /// matched ignoring case (`.local/share/claude/versions`). An installer whose directory can
+    /// have any name is told by a file it leaves instead
+    /// (`native_markers`).
     pub native_layouts: &'static [&'static [&'static str]],
+    /// Files that mark an install the CLI's own installer made where that install's directory can
+    /// have any name, so no run of directory names (`native_layouts`) tells it: each a path from
+    /// the directory holding the binary, once its links are followed, `..` naming a parent. A
+    /// binary beside an existing regular file of one of them is a native install, updated as one
+    /// of those layouts is.
+    pub native_markers: &'static [&'static [&'static str]],
     /// The arguments that make a CLI of that layout update itself, after its binary; empty where
     /// it does not.
     pub native_update: &'static [&'static str],
     /// How a CLI of that layout reports the latest version itself, when it can.
     pub native_latest: Option<NativeLatest>,
-    /// The CLI's package on the npm registry, which names what an npm install is updated to and
-    /// what the latest version is read from.
-    pub npm_package: Option<&'static str>,
+    /// Where the CLI's maker publishes the latest version of a CLI of that layout, read where the
+    /// CLI has no check of its own (`native_latest`).
+    pub native_manifest: Option<ManifestLatest>,
+    /// The top-level packages that ship the CLI. An npm install uses the package its binary
+    /// resolves under. A native install without its own version source can use the registry
+    /// when there is exactly one package.
+    pub npm_packages: &'static [&'static str],
     /// The Homebrew formula and the cask that install the CLI, each when one exists.
     pub homebrew_formula: Option<&'static str>,
     pub homebrew_cask: Option<&'static str>,
@@ -714,13 +900,50 @@ pub struct NativeLatest {
     pub version_field: &'static str,
 }
 
+/// A manifest the CLI's maker publishes for its own installer and updater: a JSON object, fetched
+/// over HTTPS, holding the latest version for one platform.
+#[derive(Debug)]
+pub struct ManifestLatest {
+    /// The manifest of each platform it is published for. A platform with none has no latest
+    /// version read.
+    pub urls: &'static [ManifestUrl],
+    /// The field of the JSON object that holds the version.
+    pub version_field: &'static str,
+}
+
+/// The manifest of one platform, named as Rust names the platform the daemon runs on
+/// (`std::env::consts::OS` and `ARCH`: `macos`, `linux`, `windows`; `aarch64`, `x86_64`).
+#[derive(Debug)]
+pub struct ManifestUrl {
+    pub os: &'static str,
+    pub arch: &'static str,
+    pub url: &'static str,
+}
+
+impl ManifestLatest {
+    /// The manifest of the platform the daemon runs on, if one is published for it.
+    pub fn url_here(&self) -> Option<&'static str> {
+        self.url_for(std::env::consts::OS, std::env::consts::ARCH)
+    }
+
+    /// The manifest of the platform `os` and `arch` name.
+    pub fn url_for(&self, os: &str, arch: &str) -> Option<&'static str> {
+        self.urls
+            .iter()
+            .find(|manifest| manifest.os == os && manifest.arch == arch)
+            .map(|manifest| manifest.url)
+    }
+}
+
 impl CliPackaging {
     /// A provider whose install is not recognised and whose CLI is not updated.
     pub const NONE: CliPackaging = CliPackaging {
         native_layouts: &[],
+        native_markers: &[],
         native_update: &[],
         native_latest: None,
-        npm_package: None,
+        native_manifest: None,
+        npm_packages: &[],
         homebrew_formula: None,
         homebrew_cask: None,
     };
@@ -728,14 +951,12 @@ impl CliPackaging {
     /// Whether this says nothing about how the CLI is installed.
     pub fn is_none(&self) -> bool {
         self.native_layouts.is_empty()
-            && self.npm_package.is_none()
+            && self.native_markers.is_empty()
+            && self.npm_packages.is_empty()
             && self.homebrew_formula.is_none()
             && self.homebrew_cask.is_none()
     }
 }
-
-/// An agent's version as major, minor, patch.
-pub type AgentVersion = (u32, u32, u32);
 
 /// The version a binary's `--version` output names: the first word that is a version, with or
 /// without a leading `v` (`2.1.318 (Claude Code)`, `codex-cli 0.166.0`).
@@ -764,18 +985,47 @@ pub mod tests {
     use crate::protocol::TerminalAppearance;
     use crate::session_tools::Owner;
 
+    /// Asserts that `agent` says its session has started with the hook event `announcing` and no
+    /// other, whatever the payload holds.
+    pub(crate) fn only_announces_session_start(agent: crate::protocol::AgentId, announcing: &str) {
+        let hooks = super::provider(agent).hooks();
+        let payload = serde_json::json!({"source": "startup"});
+        assert!(hooks.announces_session_start(announcing, &payload));
+        assert!(hooks.announces_session_start(announcing, &serde_json::Value::Null));
+        for event in [
+            "UserPromptSubmit",
+            "Stop",
+            "PreToolUse",
+            "PostToolUse",
+            "Notification",
+            "sessionstart",
+            "SessionStarted",
+            "",
+        ] {
+            if event == announcing {
+                continue;
+            }
+            assert!(
+                !hooks.announces_session_start(event, &payload),
+                "{agent:?} {event:?}"
+            );
+        }
+    }
+
     /// While Octoboard's memory is on, every session's launch turns the agent's own memory off,
     /// console and project alike, for a provider that declares a per-launch switch for it; while
     /// it is off, no launch does. Which provider it is decides nothing else.
     #[test]
     fn a_launch_turns_native_memory_off_only_while_memory_is_on_and_a_switch_is_declared() {
         use crate::protocol::AgentId;
+        use crate::providers::NativeMemory;
 
         let mut declaring = 0;
         for descriptor in crate::providers::descriptors() {
+            let switchable = descriptor.native_memory == NativeMemory::Switchable;
             assert_eq!(
                 super::turns_native_memory_off(descriptor, true),
-                descriptor.native_memory_switch,
+                switchable,
                 "{}",
                 descriptor.id
             );
@@ -784,11 +1034,14 @@ pub mod tests {
                 "{}",
                 descriptor.id
             );
-            declaring += usize::from(descriptor.native_memory_switch);
+            declaring += usize::from(switchable);
         }
         // Both sides are covered: a provider with the switch and one without it.
         assert!(declaring > 0);
-        assert!(!AgentId::TEST.descriptor().native_memory_switch);
+        assert_ne!(
+            AgentId::TEST.descriptor().native_memory,
+            NativeMemory::Switchable
+        );
     }
 
     /// The MCP server is told whether Octoboard's memory was on at the launch, which decides
@@ -1006,6 +1259,102 @@ pub mod tests {
         }
     }
 
+    /// The environment of a session launched over `shell_env` with `plan`, as far as the plan
+    /// sets it, recorded as the launch records it.
+    pub fn launched(
+        shell_env: &HashMap<String, String>,
+        plan: &super::LaunchPlan,
+    ) -> HashMap<String, String> {
+        crate::env_shell::session_environment(shell_env, &plan.env)
+    }
+
+    /// The shell environment of a daemon started inside the session `launched` gives: what its
+    /// snapshot makes of the environment it inherits.
+    pub fn nested_shell_env(
+        shell_env: &HashMap<String, String>,
+        plan: &super::LaunchPlan,
+    ) -> HashMap<String, String> {
+        crate::env_shell::outside_session(launched(shell_env, plan))
+    }
+
+    /// Whatever a registered provider's plan sets for a session, on a pinned account that shares
+    /// the default one's directory and with the agent's own memory off, a daemon started inside
+    /// that session inherits none of it: its shell environment is the user's again. A provider
+    /// that declares the default account only (`Capabilities::owned_accounts` off) is planned on
+    /// that account, with no directory of an account's own and none to share.
+    #[test]
+    fn nothing_any_providers_plan_sets_reaches_a_daemon_started_inside_the_session() {
+        for agent in crate::protocol::AgentId::ALL {
+            let mut fixture = spec_fixture();
+            let home = fixture.scratch.join("home");
+            let layout = agent.descriptor().layout;
+            let account = fixture
+                .scratch
+                .join("accounts/work")
+                .join(layout.required_dir_name().unwrap_or_default());
+            let shared = fixture.scratch.join("shared");
+            // With the records directory a provider may take as the sign of a directory in use.
+            let records = account.join(layout.records().unwrap_or_default());
+            for dir in [&home, &records, &shared] {
+                std::fs::create_dir_all(dir).expect("directory");
+            }
+            fixture.shell_env = HashMap::from([
+                ("HOME".to_string(), home.to_string_lossy().into_owned()),
+                ("FOO".to_string(), "bar".to_string()),
+            ]);
+            if agent.descriptor().capabilities.owned_accounts {
+                fixture.config_dir = Some(account);
+                fixture.shared_default_dir = Some(shared);
+            }
+            let provider = super::provider(agent);
+            fixture.agent_version = provider.launch_fixture_version();
+            let mut spec = fixture.spec();
+            spec.native_memory_off = true;
+            let plan = provider
+                .plan(&spec)
+                .unwrap_or_else(|err| panic!("{agent:?}: {err:#}"));
+
+            let session = launched(&fixture.shell_env, &plan);
+            for (name, value) in &plan.env {
+                assert_eq!(&session[name], value, "{agent:?}: {name}");
+            }
+            assert_eq!(
+                nested_shell_env(&fixture.shell_env, &plan),
+                fixture.shell_env,
+                "{agent:?}"
+            );
+
+            // What the provider declares its CLI sets for the commands it runs: a daemon started
+            // from such a command holds each at its declared value, and gets the user's shell
+            // back, a value of the user's own that the CLI replaced included; a value the
+            // variable was given since is kept.
+            let declared = agent.descriptor().command_environment;
+            let mut shell = fixture.shell_env.clone();
+            if let Some((name, _)) = declared.first() {
+                shell.insert(name.to_string(), "the user's own".to_string());
+            }
+            let session = crate::env_shell::session_environment_with(&shell, &plan.env, declared);
+            let mut command = session.clone();
+            for (name, value) in declared {
+                assert_eq!(session.get(*name), shell.get(*name), "{agent:?}: {name}");
+                command.insert(name.to_string(), value.to_string());
+            }
+            assert_eq!(
+                crate::env_shell::outside_session(command.clone()),
+                shell,
+                "{agent:?}"
+            );
+            if let Some((name, _)) = declared.last() {
+                command.insert(name.to_string(), "set since".to_string());
+                assert_eq!(
+                    crate::env_shell::outside_session(command)[*name],
+                    "set since",
+                    "{agent:?}"
+                );
+            }
+        }
+    }
+
     /// Every registered provider's behavior is registered under the descriptor of its own agent.
     #[test]
     fn every_registered_provider_answers_with_its_own_descriptor() {
@@ -1015,21 +1364,21 @@ pub mod tests {
         }
     }
 
-    /// Every registered provider that keeps records reads them through a store of its own: each
-    /// names the share of a full context window used, which the store of a provider without
-    /// records (`NoRecords`) does not, and the test-only provider is the one that has none.
+    /// A provider whose store recognises no record (`RecordStore::recognises_records`) names no
+    /// share of a context window, like the store of a provider without records (`NoRecords`); one
+    /// that recognises its records may or may not, as its own tests pin.
     #[test]
-    fn every_registered_provider_reads_its_records_through_its_own_store() {
+    fn a_store_that_recognises_no_records_names_no_context_share() {
         use crate::records::RecordStore;
         assert_eq!(crate::records::NoRecords.used_percent(1_000, 1_000), None);
         for agent in crate::protocol::AgentId::ALL {
-            let share = super::provider(agent)
-                .records()
-                .used_percent(1_000_000, 1_000_000);
-            if agent == crate::protocol::AgentId::TEST {
-                assert_eq!(share, None, "{agent:?}");
-            } else {
-                assert_eq!(share, Some(100), "{agent:?}");
+            let records = super::provider(agent).records();
+            if !records.recognises_records() {
+                assert_eq!(
+                    records.used_percent(1_000_000, 1_000_000),
+                    None,
+                    "{agent:?}"
+                );
             }
         }
     }
@@ -1068,9 +1417,9 @@ pub mod tests {
         assert!(super::provider(test).compatibility_source().is_none());
     }
 
-    /// A provider with only a launch plan launches with nothing of the optional kinds: no private
-    /// server, no carried trust, no work after its exit, no notice, no status line and no hook
-    /// script.
+    /// A provider with only a launch plan and a sign-in reading launches with nothing of the
+    /// optional kinds: no private server, no carried trust, no work after its exit, no notice, no
+    /// status line and no hook script.
     #[test]
     fn the_test_provider_launches_without_any_optional_part() {
         let fixture = spec_fixture();
@@ -1083,12 +1432,19 @@ pub mod tests {
         assert!(plan.notice.is_none());
         assert!(!plan.resolves_approvals_itself);
         assert!(test.status_line().is_none());
-        assert!(test.accounts().is_none());
+        let accounts = test.accounts().expect("accounts that only read a sign-in");
+        assert!(accounts.quota_probe().is_none() && accounts.login().is_none());
+        assert!(accounts.kick_command().is_none() && accounts.shared_items().is_empty());
         assert!(!test.has_status_integration());
         assert!(test
             .refuse_unlaunchable_account(Some(Path::new("/nowhere")))
             .is_ok());
         assert_eq!(test.installed_version("octoboard-test-agent"), None);
+        assert_eq!(
+            test.account_version("octoboard-test-agent", Path::new("/h")),
+            None
+        );
+        assert_eq!(test.run_helper("title", &[]), None);
         assert_eq!(
             test.task_title("  a title ", &[]).as_deref(),
             Some("a title")
@@ -1096,14 +1452,92 @@ pub mod tests {
         assert_eq!(test.task_title("   ", &[]), None);
     }
 
-    /// Every real agent's status comes from its hooks and signals, which win over OSC 7501.
+    /// A launch has the status integration its provider has, for every registered provider and
+    /// the launch the fixture plans: a provider answers otherwise only for a launch it found
+    /// without (the test-only provider, when a test has it say so).
     #[test]
-    fn every_real_agent_has_a_status_integration() {
-        for agent in crate::protocol::AgentId::ALL {
-            if agent != crate::protocol::AgentId::TEST {
-                assert!(super::provider(agent).has_status_integration());
+    fn a_launch_has_its_providers_status_integration_unless_the_provider_says_otherwise() {
+        let fixture = spec_fixture();
+        let plan = super::LaunchPlan::default();
+        for (agent, provider) in super::PROVIDERS.iter() {
+            assert_eq!(
+                provider.launch_has_status_integration(&fixture.spec(), &plan),
+                provider.has_status_integration(),
+                "{agent:?}"
+            );
+        }
+        let test = super::provider(crate::protocol::AgentId::TEST);
+        let _integration = crate::test_support::test_provider::declaring_reported_signals(
+            crate::session::ReportedSignals::NONE,
+        );
+        assert!(test.launch_has_status_integration(&fixture.spec(), &plan));
+        let _without =
+            crate::test_support::test_provider::declaring_launch_without_status_integration();
+        assert!(test.has_status_integration());
+        assert!(!test.launch_has_status_integration(&fixture.spec(), &plan));
+    }
+
+    /// A launch's cancel drops held messages as its provider's reader declares, for every
+    /// registered provider and the launch the fixture plans: a provider answers otherwise only for
+    /// a launch it found without the reports the declaration relies on (the test-only provider,
+    /// when a test has its launch go without its status integration).
+    #[test]
+    fn a_launch_drops_held_messages_as_its_reader_declares_unless_the_provider_says_otherwise() {
+        static DROPPING: Dropping = Dropping;
+        struct Dropping;
+        impl crate::session::screen::ScreenReader for Dropping {
+            fn cancel_drops_held_messages(&self) -> bool {
+                true
             }
         }
+        let fixture = spec_fixture();
+        let plan = super::LaunchPlan::default();
+        for (agent, provider) in super::PROVIDERS.iter() {
+            assert_eq!(
+                provider.launch_cancel_drops_held_messages(&fixture.spec(), &plan),
+                provider.screen().cancel_drops_held_messages(),
+                "{agent:?}"
+            );
+        }
+        let test = super::provider(crate::protocol::AgentId::TEST);
+        let _reader = crate::test_support::test_provider::declaring_screen(&DROPPING);
+        assert!(test.launch_cancel_drops_held_messages(&fixture.spec(), &plan));
+        let _without =
+            crate::test_support::test_provider::declaring_launch_without_status_integration();
+        assert!(test.screen().cancel_drops_held_messages());
+        assert!(!test.launch_cancel_drops_held_messages(&fixture.spec(), &plan));
+    }
+
+    /// The provider can add notices and hold messages while tools are listed.
+    #[test]
+    fn a_launch_tells_and_waits_for_nothing_more_unless_its_provider_says_so() {
+        use std::time::Duration;
+
+        use crate::protocol::{AgentId, Notice};
+        let fixture = spec_fixture();
+        let plan = super::LaunchPlan::default();
+        let test = super::provider(AgentId::TEST);
+        assert!(test
+            .further_launch_notices(&fixture.spec(), &plan)
+            .is_empty());
+        assert_eq!(test.awaits_tool_listing(&fixture.spec(), &plan), None);
+        let _wait =
+            crate::test_support::test_provider::declaring_tool_listing_wait(Duration::from_secs(7));
+        let _notices = crate::test_support::test_provider::declaring_further_launch_notices(|| {
+            vec![
+                Notice::new(crate::protocol::notice_code::DRAFT_DISCARDED, "one", &[]),
+                Notice::new(
+                    crate::protocol::notice_code::MESSAGE_WAITS_ON_INPUT,
+                    "two",
+                    &[],
+                ),
+            ]
+        });
+        assert_eq!(
+            test.awaits_tool_listing(&fixture.spec(), &plan),
+            Some(Duration::from_secs(7))
+        );
+        assert_eq!(test.further_launch_notices(&fixture.spec(), &plan).len(), 2);
     }
 
     /// The two registries list the same providers in the same order.
@@ -1151,7 +1585,8 @@ pub mod tests {
     fn no_providers_arguments_hold_the_key() {
         for agent in crate::protocol::AgentId::ALL {
             let mut fixture = spec_fixture();
-            fixture.agent_version = Some((2, 1, 306));
+            let provider = super::provider(agent);
+            fixture.agent_version = provider.launch_fixture_version();
             let home = fixture.scratch.join("home");
             std::fs::create_dir_all(&home).expect("home");
             for variable in ["HOME", "CODEX_HOME"] {
@@ -1159,9 +1594,7 @@ pub mod tests {
                     .shell_env
                     .insert(variable.to_string(), home.to_string_lossy().into_owned());
             }
-            let plan = super::provider(agent)
-                .plan(&fixture.spec())
-                .expect("a plan");
+            let plan = provider.plan(&fixture.spec()).expect("a plan");
             for arg in &plan.args {
                 assert!(
                     arg != "--key" && !arg.contains("feedface"),
@@ -1201,5 +1634,131 @@ pub mod tests {
         spec.agent_version = Some((9, 9, 9));
         super::provider(crate::protocol::AgentId::TEST).before_launch(&spec, &binary, &environment);
         assert!(!dir.join("ran").exists(), "the CLI ran");
+    }
+
+    /// A pinned account's directory is exported under the layout's variable, and the default
+    /// account exports nothing, so the shell snapshot's own value stands.
+    #[test]
+    fn a_pinned_directory_is_exported_and_the_default_account_exports_nothing() {
+        let test = crate::protocol::AgentId::TEST;
+        let mut fixture = spec_fixture();
+        assert_eq!(
+            super::pinned_config_dir_export(&fixture.spec(), test).expect("the default account"),
+            None
+        );
+
+        let pinned = fixture.scratch.join("account");
+        std::fs::create_dir_all(&pinned).expect("the account's directory");
+        fixture.config_dir = Some(pinned.clone());
+        let var = test.descriptor().layout.config_dir_var.to_string();
+        let exported = Some((var, pinned.to_string_lossy().into_owned()));
+        assert_eq!(
+            super::pinned_config_dir_export(&fixture.spec(), test).expect("a pinned account"),
+            exported
+        );
+        // Resuming a conversation in a directory that is there exports the same.
+        let mut spec = fixture.spec();
+        spec.resume_agent_session_id = Some("conversation");
+        assert_eq!(
+            super::pinned_config_dir_export(&spec, test).expect("a resume"),
+            exported
+        );
+    }
+
+    /// Where the layout's variable names the directory's parent, the parent is what is exported,
+    /// and a directory the variable cannot name refuses the launch instead of exporting another.
+    #[test]
+    fn a_layout_that_names_the_parent_exports_the_parent_or_refuses() {
+        let test = crate::protocol::AgentId::TEST;
+        let _parent = crate::providers::test_provider::config_dir_naming_parent();
+        let layout = test.descriptor().layout;
+        let mut fixture = spec_fixture();
+
+        let named = fixture.scratch.join("home").join(layout.default_dir);
+        std::fs::create_dir_all(&named).expect("the account's directory");
+        fixture.config_dir = Some(named.clone());
+        let home = fixture.scratch.join("home").to_string_lossy().into_owned();
+        assert_eq!(
+            super::pinned_config_dir_export(&fixture.spec(), test).expect("a pinned account"),
+            Some((layout.config_dir_var.to_string(), home))
+        );
+        assert_eq!(
+            Some(named.as_path()),
+            super::pinned_config_dir_export(&fixture.spec(), test)
+                .expect("a pinned account")
+                .map(|(_, value)| layout.config_dir_of_export(Path::new(&value)))
+                .as_deref()
+        );
+
+        let other = fixture.scratch.join("home").join("another-name");
+        std::fs::create_dir_all(&other).expect("a directory of another name");
+        fixture.config_dir = Some(other);
+        let refused = super::pinned_config_dir_export(&fixture.spec(), test)
+            .expect_err("a directory the variable cannot name");
+        let message = refused.to_string();
+        assert!(message.contains("another-name"), "{message}");
+        assert!(message.contains(layout.default_dir), "{message}");
+    }
+
+    /// A pinned directory that has gone refuses resuming a conversation there, as
+    /// `pinned_config_dir` does, and is exported for a launch with none to resume, which the agent
+    /// creates it for.
+    #[test]
+    fn a_pinned_directory_that_has_gone_refuses_a_resume_and_is_exported_otherwise() {
+        let test = crate::protocol::AgentId::TEST;
+        let mut fixture = spec_fixture();
+        let missing = fixture.scratch.join("missing");
+        fixture.config_dir = Some(missing.clone());
+        assert_eq!(
+            super::pinned_config_dir_export(&fixture.spec(), test).expect("nothing to resume"),
+            Some((
+                test.descriptor().layout.config_dir_var.to_string(),
+                missing.to_string_lossy().into_owned()
+            ))
+        );
+
+        let mut spec = fixture.spec();
+        spec.resume_agent_session_id = Some("conversation");
+        let refused = super::pinned_config_dir_export(&spec, test).expect_err("the directory");
+        let coded = refused
+            .downcast_ref::<crate::protocol::CodedError>()
+            .expect("a coded refusal");
+        assert_eq!(
+            coded.code,
+            crate::protocol::error_code::CONFIG_DIR_UNREACHABLE
+        );
+        assert_eq!(coded.params["path"], missing.to_string_lossy());
+    }
+
+    /// The helper exports what the launch plans that still write the block out export: the same
+    /// variable and value for a pinned account, and nothing of the variable for the default one.
+    #[test]
+    fn the_export_helper_agrees_with_the_plans_that_write_the_block_out() {
+        use crate::protocol::AgentId;
+        for agent in [AgentId::QWEN, AgentId::COPILOT, AgentId::PI] {
+            let var = agent.descriptor().layout.config_dir_var;
+            let of_plan = |spec: &LaunchSpec<'_>| -> Vec<(String, String)> {
+                let plan = super::provider(agent).plan(spec).expect("a plan");
+                plan.env
+                    .into_iter()
+                    .filter(|(name, _)| name == var)
+                    .collect()
+            };
+            let mut fixture = spec_fixture();
+            let default = super::pinned_config_dir_export(&fixture.spec(), agent).expect("default");
+            assert_eq!(default, None, "{agent:?}");
+            assert_eq!(of_plan(&fixture.spec()), Vec::new(), "{agent:?}");
+
+            let pinned = fixture.scratch.join("account");
+            std::fs::create_dir_all(&pinned).expect("the account's directory");
+            fixture.config_dir = Some(pinned);
+            let exported = super::pinned_config_dir_export(&fixture.spec(), agent).expect("pinned");
+            assert!(exported.is_some(), "{agent:?}");
+            assert_eq!(
+                of_plan(&fixture.spec()),
+                exported.into_iter().collect::<Vec<_>>(),
+                "{agent:?}"
+            );
+        }
     }
 }

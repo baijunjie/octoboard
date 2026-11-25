@@ -10,6 +10,11 @@ import { isUncataloguedFailure } from "./uncataloguedFailure";
  * (`provider.<id>.<code>.remedy`, `<code>` being a code's own name), whose `{agent}` is the provider's name. */
 export type ProviderRemedy = `provider.${string}.${string}.remedy`;
 
+/** Whether `recovery` is worded by a provider's module (`provider.<id>.<code>.remedy`). */
+export function isProviderRemedy(recovery: ErrorRecovery): recovery is ProviderRemedy {
+  return recovery.startsWith("provider.");
+}
+
 export type ErrorRecovery =
   | ProviderRemedy
   | "diskSpace" | "access" | "connection" | "path" | "account" | "tool" | "installGit" | "installGitNoRetry" | "shell"
@@ -241,20 +246,22 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
     if (isProjectBranchesWithoutGit(error)) return { kind: "actionable", recovery: "installGitNoRetry" };
     const domain = code ? codeRecord(code)?.recovery : undefined;
     if (domain) return { kind: "actionable", recovery: domain };
+    // A notice to acknowledge is no failure: with no remedy of its own, its sentence is all there is to it.
+    if (code && codeRecord(code)?.acknowledgedNotice) return { kind: "actionable", recovery: "none" };
     const relocation = code === CODE.relocation_failed ? RELOCATION_CAUSE_RECOVERY[relocationCause(error.params.cause)] : undefined;
     if (relocation) return { kind: "actionable", recovery: relocation };
   }
   return { kind: "unexpected" };
 }
 
-/** The failures whose answer is the state of what was asked about — branches with no shared history,
- * not a repository, outside the project, too large, not a valid path or configuration document — so asking again gives the same
- * answer and no Try again is offered. Whether asking again can change the answer to `error`: false for such a
- * failure, where a Try again would only fail the same way. */
+/** The failures whose answer is the state of what was asked about — branches with no shared history, not a repository,
+ * outside the project, too large, not a valid path or configuration document, something the agent's provider does not
+ * offer — so asking again gives the same answer and no Try again is offered. Whether asking again can change the answer
+ * to `error`: false for such a failure, where a Try again would only fail the same way. */
 export function retryCanHelp(error: unknown): boolean {
   if (!(error instanceof CodedError)) return true;
   const recovery = codeRecord(error.code)?.recovery;
-  return !(recovery === "gitHistory" || recovery === "repository" || recovery === "scope" || recovery === "limit" || recovery === "configuration" || error.code === CODE.invalid_path);
+  return !(recovery === "gitHistory" || recovery === "repository" || recovery === "scope" || recovery === "limit" || recovery === "configuration" || error.code === CODE.invalid_path || error.code === CODE.provider_unsupported);
 }
 
 /** The remedy for a file or folder an action on the project's files no longer finds: it is found again in the project's

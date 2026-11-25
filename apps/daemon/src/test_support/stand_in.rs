@@ -595,9 +595,19 @@ pub(crate) fn fake_live_session_running(
     rows: u16,
     program: &crate::test_support::programs::Program,
 ) -> StandIn {
-    let live = stand_in_of(id, agent, cols, rows, program.term_command(), None, None);
+    let live = watched_live_session_running(id, agent, cols, rows, program);
     live.trust.end_watch();
     live
+}
+
+pub(crate) fn watched_live_session_running(
+    id: &str,
+    agent: AgentId,
+    cols: u16,
+    rows: u16,
+    program: &crate::test_support::programs::Program,
+) -> StandIn {
+    stand_in_of(id, agent, cols, rows, program.term_command(), None, None)
 }
 
 /// What a stand-in launch was asked for: the session, its owner and its opening prompt.
@@ -718,7 +728,8 @@ fn launch_with(
         Ok(crate::session::term::Launch {
             session: process,
             agent_session_id: None,
-            notice: None,
+            notices: Vec::new(),
+            first_message: None,
         })
     }
 }
@@ -830,7 +841,7 @@ fn stand_in_launched(
         tag.map(|tag| tag.containment().as_ref()),
     )
     .expect("the stand-in");
-    StandIn(Arc::new(LiveSession::new(NewSession {
+    let live = Arc::new(LiveSession::new(NewSession {
         id: id.to_string(),
         agent,
         launch_id: tag.map_or_else(
@@ -845,7 +856,19 @@ fn stand_in_launched(
         carried_trust,
         before_scratch_removal: None,
         display: Default::default(),
-    })))
+        // A stand-in is launched as the test-only provider answers for a launch on this thread.
+        status_from_reports: super::test_provider::declares_launch_without_status_integration()
+            .then_some(true),
+        // Nor, then, can its cancel be told to drop what the turn took.
+        cancel_drops: super::test_provider::declares_launch_without_status_integration()
+            .then_some(false),
+        config_dir: None,
+    }));
+    // As the launch does with what the provider answers for it.
+    if let Some(bound) = super::test_provider::declared_tool_listing_wait() {
+        live.await_tool_listing(bound);
+    }
+    StandIn(live)
 }
 
 /// The one executable every fake agent CLI is a symlink to, written once per test binary. A
@@ -967,6 +990,26 @@ fn compiled(label: &str, source: &str) -> std::path::PathBuf {
 #[cfg(windows)]
 pub(crate) fn fake_agent(dir: &Path, binary: &str, body: &str) -> HashMap<String, String> {
     std::fs::write(dir.join(format!("{binary}.body")), body).expect("write fake agent body");
+    install_fake_agent(dir, binary)
+}
+
+#[cfg(windows)]
+pub(crate) fn fake_native_agent(
+    dir: &Path,
+    binary: &str,
+    steps: super::fixture::Steps,
+) -> HashMap<String, String> {
+    let (exe, args) = steps.program(binary).command_line_args();
+    std::fs::write(
+        dir.join(format!("{binary}.fixture")),
+        format!("{exe}\n{args}"),
+    )
+    .expect("write fake agent launch");
+    install_fake_agent(dir, binary)
+}
+
+#[cfg(windows)]
+fn install_fake_agent(dir: &Path, binary: &str) -> HashMap<String, String> {
     let program = dir.join(format!("{binary}.exe"));
     std::fs::remove_file(&program).ok();
     let dispatcher = fake_agent_dispatcher();

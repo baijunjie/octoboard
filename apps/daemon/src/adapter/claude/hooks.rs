@@ -49,7 +49,12 @@ fn task_ids(prompt: &str) -> Vec<String> {
 }
 
 impl HookInterpreter for ClaudeHooks {
-    fn starts_conversation(&self, event: &str) -> bool {
+    /// Claude Code runs no hook before its trust screen is answered.
+    fn past_startup(&self, _event: &str, _payload: &Value) -> bool {
+        true
+    }
+
+    fn starts_conversation(&self, event: &str, _payload: &Value) -> bool {
         event == "UserPromptSubmit"
     }
 
@@ -75,6 +80,12 @@ impl HookInterpreter for ClaudeHooks {
         Some(serde_json::json!({"hookSpecificOutput": {
             "hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason
         }}))
+    }
+
+    /// Claude Code runs no hook before its trust confirmation has been answered, and
+    /// `SessionStart` is the one a launch or a resume with no prompt sends.
+    fn announces_session_start(&self, event: &str, _payload: &Value) -> bool {
+        event == "SessionStart"
     }
 
     fn status(&self, event: &str, payload: &Value) -> Option<SessionStatus> {
@@ -137,6 +148,10 @@ impl HookInterpreter for ClaudeHooks {
     /// measured).
     fn is_self_sent(&self, prompt: &str) -> bool {
         self.is_completion_notice(prompt) || prompt.contains("<agent-message from=")
+    }
+
+    fn agent_session_id(&self, payload: &Value) -> Option<String> {
+        crate::hooks::agent_session_id(payload)
     }
 
     /// Any non-empty `agent_id` marks a subagent too, at any depth: the internal helper agent that
@@ -279,7 +294,8 @@ impl HookInterpreter for ClaudeHooks {
         match status {
             SessionStatus::WaitingUser => Some(RecordWatch::Decline { record: transcript }),
             SessionStatus::Working
-                if self.starts_conversation(event) || previous != Some(SessionStatus::Working) =>
+                if self.starts_conversation(event, payload)
+                    || previous != Some(SessionStatus::Working) =>
             {
                 Some(RecordWatch::Interrupt {
                     record: transcript,

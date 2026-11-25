@@ -131,6 +131,10 @@
           "type": "boolean",
           "description": "The agent's CLI opens the page in the browser by itself and cannot be stopped from it (Grok\nBuild), so a client must not open it again, only offer to reopen it."
         },
+        "question": {
+          "description": "A question the login waits on. The login goes on once\n`answer_account_login_question` brings the user's answer.",
+          "$ref": "#/$defs/LoginQuestion"
+        },
         "failure": {
           "anyOf": [
             {
@@ -282,7 +286,7 @@
           "items": {
             "$ref": "#/$defs/QuotaWindow"
           },
-          "description": "Empty when the account has never been read. After a failed re-read, the last good windows\nstay (with their `fetched_at`) and `unavailable` says why the newer attempt failed."
+          "description": "Empty when the account has never been read, and always for a provider that declares no\nquota window. After a failed re-read, the last good windows stay (with their `fetched_at`)\nand `unavailable` says why the newer attempt failed."
         },
         "unavailable": {
           "anyOf": [
@@ -292,7 +296,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Why the reading is missing or stale, or that the account is not signed in or its directory\nis missing. For a provider that declares no quota window, `None` does not by itself mean\nsigned in: the provider may not be able to tell, and says nothing then."
         },
         "reset_credits": {
           "description": "The account's usable rate limit reset credits (Codex only); absent when it has none or the\nagent says nothing of them. Kept, like the windows, over a failed re-read.",
@@ -308,7 +313,7 @@
         "windows",
         "unavailable"
       ],
-      "description": "The plan quota of one account as the agent's own CLI last reported it. Runtime state of the\ndaemon: never stored and never part of an exported configuration."
+      "description": "The plan quota of one account as the agent's own CLI last reported it. For a provider that\ndeclares no quota window (`QuotaWindowNaming::kinds` empty) it is instead a reading of the\naccount's sign-in: no plan, no windows, the email when signed in, and the not-signed-in state\nin `unavailable` when signed out. Runtime state of the daemon: never stored and never part of\nan exported configuration."
     },
     "AccountSharing": {
       "type": "object",
@@ -517,6 +522,10 @@
         },
         "install_method": {
           "$ref": "#/$defs/CliInstallMethod"
+        },
+        "npm_package": {
+          "type": "string",
+          "description": "The package that installed the CLI when `install_method` is `npm`."
         },
         "latest_version": {
           "type": [
@@ -840,6 +849,14 @@
           "type": "boolean",
           "description": "Its accounts can share the default account's configuration."
         },
+        "owned_accounts": {
+          "type": "boolean",
+          "description": "Its accounts beyond the default can each be given a directory of their own, the agent's\nconfiguration directory for that account. False for an agent that cannot be pointed at a\nsecond one without changing something every program it starts would inherit: it has the\ndefault account only, and the daemon refuses to add, import or point another."
+        },
+        "login_flow": {
+          "type": "boolean",
+          "description": "Can sign an account in without a terminal (`AccountOps::login`); otherwise the user signs\nin with the agent's own CLI, and a login request is refused."
+        },
         "mcp_inventory": {
           "type": "boolean",
           "description": "Can list an account's MCP servers and platform connectors (`read_account_mcp_inventory`)."
@@ -857,7 +874,7 @@
         },
         "message_images": {
           "type": "boolean",
-          "description": "Takes images attached to a message (`send_message`'s `images`)."
+          "description": "Takes an image file as an attached image: images attached to a message (`send_message`'s\n`images`), and the path of an image saved for its session (`save_pasted_image`,\n`create_pasted_image_upload`), which a client pastes or drops into the session's terminal.\nWhere it does not, each of those requests is refused."
         },
         "slash_commands": {
           "type": "boolean",
@@ -872,6 +889,8 @@
         "native_app_scheme",
         "per_session_trust",
         "config_sharing",
+        "owned_accounts",
+        "login_flow",
         "mcp_inventory",
         "ends_command_groups_on_exit",
         "delivery",
@@ -2715,6 +2734,16 @@
         }
       ],
       "description": "Where a conversation is held, as `locate_conversation_to_resume` reports it."
+    },
+    "CreditPeriodName": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "plan",
+          "description": "\"Plan\"."
+        }
+      ],
+      "description": "A native name for a provider's credit pool."
     },
     "DaemonUpdateAvailable": {
       "type": "object",
@@ -4782,6 +4811,9 @@
             "code": {
               "type": "string"
             },
+            "detail": {
+              "type": "string"
+            },
             "type": {
               "type": "string",
               "const": "session_notice_withdrawn"
@@ -4792,7 +4824,7 @@
             "session",
             "code"
           ],
-          "description": "The `session_notice` with `code` about `session` that was broadcast last no longer holds: a\n`message_not_sent` whose message the agent has since reported sending. A client still\nshowing that notice drops it; one that is not ignores this."
+          "description": "The `session_notice` with `code` about `session` that was broadcast last no longer holds: a\n`message_not_sent` whose message the agent has since reported sending. A client still\nshowing that notice drops it; one that is not ignores this. With `detail`, only the notices\nof that code whose `detail` param is this no longer hold: a `message_not_taken` or\n`message_not_delivered` about one message among several, which the agent has since reported\nsending after all."
         },
         {
           "type": "object",
@@ -8513,6 +8545,13 @@
       ],
       "description": "An MCP server configured for the account."
     },
+    "LoginAnswerKind": {
+      "type": "string",
+      "enum": [
+        "secret_text"
+      ],
+      "description": "The input a login question asks the user for."
+    },
     "LoginFailure": {
       "type": "object",
       "properties": {
@@ -8536,6 +8575,36 @@
       ],
       "description": "Why a login failed."
     },
+    "LoginQuestion": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Which of the provider's questions this is, in the provider's own vocabulary."
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The values the question's wording names (a path, say), by name."
+        },
+        "message": {
+          "type": "string",
+          "description": "The question in English, for the log; not for display."
+        },
+        "answer_kind": {
+          "description": "When present, the question takes masked text. The default is a yes/no question.",
+          "$ref": "#/$defs/LoginAnswerKind"
+        }
+      },
+      "required": [
+        "id",
+        "params",
+        "message"
+      ],
+      "description": "A question an agent's sign-in puts to the user. A client words it from its own copy for the\nprovider's `id` and shows it only if it supports that question and answer kind."
+    },
     "LoginStatus": {
       "oneOf": [
         {
@@ -8546,7 +8615,7 @@
         {
           "type": "string",
           "const": "waiting",
-          "description": "Waiting for the user to authorize in a browser: `authorization_url` and `device_code` say\nwhere and with what."
+          "description": "Waiting for the user: to authorize in a browser, where `authorization_url` and\n`device_code` say where and with what, or, while `question` is there, to answer it."
         },
         {
           "type": "string",
@@ -8607,11 +8676,6 @@
           "type": "string",
           "const": "timed_out",
           "description": "The CLI did not answer in time."
-        },
-        {
-          "type": "string",
-          "const": "unsupported_agent",
-          "description": "The agent has no way of listing its MCP servers."
         },
         {
           "type": "string",
@@ -8956,6 +9020,26 @@
         "message"
       ],
       "description": "Why `list_agent_models` has no list, as a coded message of the same shape as an `error`. It\ntravels inside a reply because failing to ask the agent must never fail the form that asked."
+    },
+    "NativeMemory": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "absent",
+          "description": "The agent keeps no memory of its own."
+        },
+        {
+          "type": "string",
+          "const": "switchable",
+          "description": "The agent keeps a memory of its own, which one launch can turn off."
+        },
+        {
+          "type": "string",
+          "const": "unswitchable",
+          "description": "The agent keeps a memory of its own, which no launch can turn off: it stays as the agent\nand the user set it."
+        }
+      ],
+      "description": "Whether an agent keeps a memory of its own across sessions, and whether one launch can turn\nit off without a change to the agent's or the user's configuration."
     },
     "OffersUnderCloneDir": {
       "type": "object",
@@ -9700,6 +9784,10 @@
           "$ref": "#/$defs/ModelDisplay",
           "description": "How a model id of the provider is shown."
         },
+        "native_memory": {
+          "$ref": "#/$defs/NativeMemory",
+          "description": "Whether the agent keeps a memory of its own across sessions, and whether one launch can\nturn it off: a client names, beside the memory setting, the agents whose own memory a\nsession launched while it is on has turned off and those whose own memory such a session\nleaves as the user set it in the agent, unable to turn it off."
+        },
         "settings": {
           "type": "array",
           "items": {
@@ -9718,6 +9806,7 @@
         "capabilities",
         "quota_windows",
         "model_display",
+        "native_memory",
         "settings"
       ],
       "description": "One registered provider, as `snapshot` carries it."
@@ -9959,7 +10048,7 @@
           "items": {
             "$ref": "#/$defs/QuotaWindowKind"
           },
-          "description": "The kinds of window the provider reports at all."
+          "description": "The kinds of window the provider reports at all. Empty: Octoboard reads no plan quota for\nthe provider (`AccountOps::quota_probe` is `None`), and its accounts show none."
         },
         "session_window": {
           "$ref": "#/$defs/SessionWindowName",
@@ -9968,6 +10057,10 @@
         "weekly_all_models": {
           "type": "boolean",
           "description": "Whether an account-wide weekly window beside a model's own is named \"Weekly · all models\"."
+        },
+        "credit_period": {
+          "description": "A native name for the credit pool. When absent, its period determines the name.",
+          "$ref": "#/$defs/CreditPeriodName"
         }
       },
       "required": [

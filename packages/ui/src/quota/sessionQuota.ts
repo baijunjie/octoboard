@@ -1,6 +1,6 @@
 import { accountDisabled } from "../accounts/choiceEntries";
 import { defaultAccountName } from "../agents/agents";
-import { providerLabel } from "../agents/providers";
+import { hasPlanQuota, providerLabel } from "../agents/providers";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { type Account, type AccountQuota, type Agent, type AgentAvailability, type ProviderInfo, type Session, type Settings } from "../protocol";
@@ -20,11 +20,11 @@ export interface SessionQuotaSource {
 
 /** Sessions retain their launch directory when an account is edited or removed. Its current
  * reading then belongs to another sign-in and cannot represent that session's quota. The result is
- * what a compact bar draws: the 5-hour window with the weekly one beneath it, or the account's one
+ * what a compact bar draws (none for a provider that declares no plan quota, `hasPlanQuota`): the 5-hour window with the weekly one beneath it, or the account's one
  * primary window (`usageBarWindows`). An account the user turned off has a bar only while the session is running
  * on it, as the quota panel lists it only then. */
 export function sessionQuotaBarOf(session: Session | undefined, source: SessionQuotaSource): QuotaBar | undefined {
-  if (!session || source.agentAvailability.get(session.agent)?.availability !== "available") return undefined;
+  if (!session || source.agentAvailability.get(session.agent)?.availability !== "available" || !hasPlanQuota(source.providers, session.agent)) return undefined;
   if (session.account_id) {
     const account = source.accounts.find((account) => account.id === session.account_id);
     if (account?.agent !== session.agent || (session.config_dir && session.config_dir !== account.config_dir)) return undefined;

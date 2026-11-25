@@ -12,13 +12,16 @@ pub(crate) struct Screen {
     /// Only complete first drawings are accepted, including across CLI versions. Empty for a
     /// screen that has not been measured, which is then never looked for.
     pub(crate) first_draw: &'static [&'static [&'static str]],
-    /// The option that trusts the folder and the options that decline it: both for reading where a
-    /// cursor is, and for telling whether the screen is still drawn after a key the person typed
-    /// ([`Self::replaced_in`]); only the one that trusts after Octoboard's own key
-    /// ([`Self::gone_in`]), since a later screen can say the same words as the one that declines.
-    /// `None` for a screen that has not been measured.
+    /// The option Octoboard presses, which trusts the folder, and the screen's other options,
+    /// whatever each of them does: decline, or trust in a way Octoboard does not choose (for one
+    /// session only, or a parent folder). Both are for reading where a cursor is, and for telling
+    /// whether the screen is still drawn after a key the person typed ([`Self::replaced_in`]);
+    /// only the one pressed after Octoboard's own key ([`Self::gone_in`]), since a later screen
+    /// can say the same words as another option. A cursor is read against the other options
+    /// first, so one whose text begins with the pressed option's is not taken for it. `None` for
+    /// a screen that has not been measured.
     pub(crate) accept: Option<&'static str>,
-    pub(crate) decline: &'static [&'static str],
+    pub(crate) others: &'static [&'static str],
     /// The glyph in front of the option the cursor is on, for a screen that has a cursor.
     pub(crate) cursor: Option<char>,
     pub(crate) press: Press,
@@ -38,6 +41,8 @@ pub(crate) struct Screen {
     /// after the launch its messages stay held for a hook before they are let through anyway,
     /// provided no screen has been sighted ([`super::release_when_no_hook_comes`]); a screen that
     /// has been is held until it is seen to go ([`super::release_when_the_sighted_screen_goes`]).
+    /// For a [`StartSignal::InputBox`] agent, the same bound on the wait for its input box, for a
+    /// box the reader may fail to recognise; a sighted screen is then held until the box or a hook.
     /// `None` holds them for as long as the session runs.
     pub(crate) hook_fallback: Option<Duration>,
     /// Whether the hook alone is not enough to say the agent reads its input: it must also have
@@ -63,15 +68,25 @@ pub(crate) enum StartSignal {
     /// the watch ending with none sighted. The launch fixes the title's items
     /// ([`crate::adapter::codex`]), so no configuration switches the title off.
     TerminalTitle,
+    /// Neither a hook nor its title marks the end of its startup: it runs no hook until its first
+    /// prompt, or runs one before its screen is answered
+    /// ([`crate::hooks::HookInterpreter::past_startup`]), and writes its title before the screen.
+    /// Its input box drawn on the parsed screen with the screen not up does
+    /// ([`super::release_when_the_input_box_comes`]), which its screen reader has to read
+    /// ([`crate::session::screen::ScreenReader::input_box_rows`]). Its messages are held until
+    /// then, through a sighted screen and whatever follows the answer: an agent that starts over
+    /// once its screen is accepted draws its box again only when it reads its input. Only for an
+    /// agent that never draws its input box before its screen.
+    InputBox,
 }
 
 /// The keys that accept a screen, and what is checked around them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Press {
-    /// The cursor starts on the decline option: a Down, then an Enter once the cursor is seen on
-    /// the accept option.
+    /// The cursor starts on another option, the one right above the option to press: a Down, then
+    /// an Enter once the cursor is seen on the option to press.
     DownThenEnter,
-    /// The cursor starts on the accept option: an Enter once it is seen still there.
+    /// The cursor starts on the option to press: an Enter once it is seen still there.
     Enter,
     /// No cursor; one key accepts.
     Yes,
@@ -83,7 +98,7 @@ pub(crate) enum Press {
 pub(crate) const NO_SCREEN: Screen = Screen {
     first_draw: &[],
     accept: None,
-    decline: &[],
+    others: &[],
     cursor: None,
     press: Press::Yes,
     next_screen: None,
@@ -111,7 +126,9 @@ pub(super) const WINDOW: usize = 16 * 1024;
 /// Which option holds the cursor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Cursor {
-    Decline,
+    /// On one of the screen's other options ([`Screen::others`]).
+    Other,
+    /// On the option Octoboard presses ([`Screen::accept`]).
     Accept,
 }
 
@@ -222,7 +239,7 @@ impl Screen {
     }
 
     /// Where in `text` the screen's own text was last drawn: the option that trusts the folder, or
-    /// any piece of the first drawing. The decline option is not looked for on its own, since a
+    /// any piece of the first drawing. The other options are not looked for on their own, since a
     /// later screen can hold the same words ("No, exit" in Claude Code's warnings), while every
     /// redraw of the screen that matters — the cursor moved, the whole screen again — holds the
     /// option that trusts.
@@ -250,7 +267,7 @@ impl Screen {
         };
         text.contains(marker)
             && self.last_drawn(&text).is_none()
-            && !self.decline.iter().any(|piece| text.contains(piece))
+            && !self.others.iter().any(|piece| text.contains(piece))
     }
 
     /// Whether this output, printed since the screen was sighted and then typed at by the person,
@@ -260,7 +277,7 @@ impl Screen {
     /// over everything printed since the sighting rather than after the latest key, so that a
     /// person typing on into the next screen does not hide that it came; and nothing says what
     /// their key was, so a frame that merely lacks the screen's text is not enough. A later screen
-    /// that repeats the decline option's words only keeps the hold, which is the safe side.
+    /// that repeats another option's words only keeps the hold, which is the safe side.
     pub(super) fn replaced_in(&self, raw: &[u8]) -> bool {
         let text = normalise(raw);
         let Some(marker) = self.next_screen else {
@@ -271,7 +288,7 @@ impl Screen {
         };
         self.last_drawn(&text)
             .max(
-                self.decline
+                self.others
                     .iter()
                     .filter_map(|piece| text.rfind(piece))
                     .max(),
@@ -287,13 +304,19 @@ impl Screen {
         let glyph = self.cursor?;
         let text = normalise(raw);
         let after = &text[text.rfind(glyph)? + glyph.len_utf8()..];
-        if self.decline.iter().any(|piece| after.starts_with(piece)) {
-            Some(Cursor::Decline)
+        if self.others.iter().any(|piece| after.starts_with(piece)) {
+            Some(Cursor::Other)
         } else if self.accept.is_some_and(|accept| after.starts_with(accept)) {
             Some(Cursor::Accept)
         } else {
             None
         }
+    }
+
+    pub(super) fn cursor_in_region(&self, rendered: &str, bounds: (&str, &str)) -> Option<Cursor> {
+        let (_, after_heading) = rendered.rsplit_once(bounds.0)?;
+        let (options, _) = after_heading.split_once(bounds.1)?;
+        self.cursor_on(options.as_bytes())
     }
 
     /// Which option the cursor is on, read off the cells drawn in inverse video (`inverse`, the
@@ -303,10 +326,10 @@ impl Screen {
     pub(super) fn cursor_in_inverse(&self, inverse: &[u8]) -> Option<Cursor> {
         self.cursor?;
         let text = normalise(inverse);
-        let decline = self.decline.iter().any(|piece| text.contains(piece));
+        let other = self.others.iter().any(|piece| text.contains(piece));
         let accept = self.accept.is_some_and(|accept| text.contains(accept));
-        match (decline, accept) {
-            (true, false) => Some(Cursor::Decline),
+        match (other, accept) {
+            (true, false) => Some(Cursor::Other),
             (false, true) => Some(Cursor::Accept),
             _ => None,
         }
@@ -344,6 +367,12 @@ pub(super) struct HookNoted {
     pub(super) carry: bool,
 }
 
+/// What the agent's input box seen with its screen not up ended ([`TrustState::start_at_input_box`]).
+pub(super) struct Started {
+    /// A sighted screen went with no press of Octoboard's having succeeded.
+    pub(super) answered_in_terminal: bool,
+}
+
 /// The rendezvous of a carry's outcome between the hook that carries and Octoboard's press, which
 /// waits for it to know whether the press succeeded.
 #[derive(Default)]
@@ -372,6 +401,10 @@ pub struct TrustState {
     /// The watch has ended without a sighting: the agent's terminal title came, or, where the
     /// parsed screen is read, its input box. Never set for an agent that runs a hook at start.
     pub(super) expired: AtomicBool,
+    /// The agent's input box has been seen with its screen not up, for an agent whose start signal
+    /// that is ([`StartSignal::InputBox`], [`Self::start_at_input_box`]): its startup is behind it,
+    /// whether or not its screen was sighted on the way.
+    at_input_box: AtomicBool,
     /// The agent's hook fallback ([`Screen::hook_fallback`]) has let its messages through with no
     /// hook seen. Outranked by a sighting of the screen after it.
     pub(super) released_without_hook: AtomicBool,
@@ -435,6 +468,7 @@ impl TrustState {
             reads_screen: AtomicBool::new(term::facts().host_renders),
             window: Mutex::new(Vec::new()),
             expired: AtomicBool::new(false),
+            at_input_box: AtomicBool::new(false),
             released_without_hook: AtomicBool::new(false),
             sighted: AtomicBool::new(false),
             needs_user: AtomicBool::new(false),
@@ -502,10 +536,14 @@ impl TrustState {
 
     /// Whether the screen is still looked for.
     fn looking(&self) -> bool {
-        self.screen.can_be_sighted()
-            && !self.hook_seen.load(Ordering::Acquire)
+        self.screen.can_be_sighted() && self.start_watch_open()
+    }
+
+    fn start_watch_open(&self) -> bool {
+        !self.hook_seen.load(Ordering::Acquire)
             && !self.sighted.load(Ordering::Acquire)
             && !self.expired.load(Ordering::Acquire)
+            && !self.at_input_box.load(Ordering::Acquire)
     }
 
     /// Looks at one more chunk of the session's output; called from the PTY reader thread for
@@ -540,7 +578,8 @@ impl TrustState {
         input_writes: u64,
         output_total: u64,
     ) {
-        if !self.looking() {
+        let reads_start_from_box = self.screen.start_signal == StartSignal::TerminalTitle;
+        if !self.start_watch_open() || !(self.screen.can_be_sighted() || reads_start_from_box) {
             return;
         }
         // Read before the window's lock is taken, as the parsed screen has a lock of its own.
@@ -548,7 +587,7 @@ impl TrustState {
         let _watched = self.window.lock().expect("trust window mutex poisoned");
         if self.screen.is_shown_in(text.as_bytes()) {
             self.note_sighting(input_writes, output_total);
-        } else if self.screen.start_signal == StartSignal::TerminalTitle
+        } else if reads_start_from_box
             && crate::session::input_box::input_box_rows(self.agent, &text).is_some()
         {
             self.expired.store(true, Ordering::Release);
@@ -628,12 +667,24 @@ impl TrustState {
     /// or, where the parsed screen is read, the agent's input box on it after its `SessionStart`
     /// hook, with no time limit, like a hook that never comes.
     ///
+    /// For an agent whose start signal is its input box ([`StartSignal::InputBox`]) they are held
+    /// until the box is seen with the screen not up ([`Self::start_at_input_box`]) or a hook
+    /// arrives, whatever became of a sighted screen meanwhile; an agent with a
+    /// [`Screen::hook_fallback`] has them let through after it while no screen has been sighted.
+    ///
     /// For a session adopted from a holder the previous daemon left running, whose agent will not
     /// run its start hook again, its input box shown with no trust screen up stands in for both
     /// ([`Self::stand_in_for_start`]).
     pub fn holds_writes(&self) -> bool {
         if self.hook_seen.load(Ordering::Acquire) {
             return self.awaits_paste_mode();
+        }
+        if self.screen.start_signal == StartSignal::InputBox {
+            if self.at_input_box.load(Ordering::Acquire) {
+                return false;
+            }
+            return !self.released_without_hook.load(Ordering::Acquire)
+                || self.sighted.load(Ordering::Acquire);
         }
         if self.screen.hook_at_start() {
             // For an agent whose hook may never come, a sighted screen seen to go is as good as
@@ -759,6 +810,40 @@ impl TrustState {
         self.hook_seen.store(true, Ordering::Release);
         *watched = Vec::new();
         true
+    }
+
+    /// Whether the parsed `screen` shows the agent at its input box (`shows_input_box`) with its
+    /// trust screen not up.
+    pub(super) fn shows_start(&self, screen: &str, shows_input_box: bool) -> bool {
+        shows_input_box && !self.screen.is_up_in(screen.as_bytes())
+    }
+
+    /// For an agent whose start signal is its input box ([`StartSignal::InputBox`]): records that
+    /// the parsed `screen` shows it there ([`Self::shows_start`]), which ends the watch for its
+    /// screen and the hold on its messages, and says whether it did; not once a hook has come,
+    /// which has ended both already. Says too whether that ends a sighted screen nobody was seen
+    /// to answer (the person answered it in the terminal), for the caller to lower the hand a
+    /// failed press may have raised. Checked under the window's lock a sighting is made under.
+    pub(super) fn start_at_input_box(
+        &self,
+        screen: &str,
+        shows_input_box: bool,
+    ) -> Option<Started> {
+        let mut watched = self.window.lock().expect("trust window mutex poisoned");
+        if self.hook_seen.load(Ordering::Acquire) || !self.shows_start(screen, shows_input_box) {
+            return None;
+        }
+        self.at_input_box.store(true, Ordering::Release);
+        *watched = Vec::new();
+        let answered_in_terminal =
+            self.sighted.load(Ordering::Acquire) && !self.pressed.load(Ordering::Acquire);
+        if answered_in_terminal {
+            self.dismissed.store(true, Ordering::Release);
+            self.needs_user.store(false, Ordering::Release);
+        }
+        Some(Started {
+            answered_in_terminal,
+        })
     }
 
     /// Lets through what is held for an agent whose hook has not come ([`Screen::hook_fallback`]),

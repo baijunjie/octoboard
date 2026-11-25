@@ -15,6 +15,10 @@
 //!   at a time, each seen on the screen, and an empty or unread composer gets one Ctrl-U. Ctrl-C at
 //!   an idle Grok asks to be pressed again to quit.
 //!
+//! A provider measured later names its key the same way (`InterruptKey`): one Esc, Esc pressed twice
+//! where the first press only arms the interrupt, one Ctrl-C where it leaves a draft alone, or a
+//! Ctrl-C after the input box is cleared.
+//!
 //! So a key goes in only while the session reads `Working` by its hooks and its terminal shows the
 //! turn running, by its title or by the status the agent reports through OSC 7501
 //! ([`crate::session::title_activity::TitleActivity::shows_running`]),
@@ -42,6 +46,7 @@ use anyhow::{anyhow, Result};
 
 use crate::platform::term::Input;
 use crate::protocol::{error_code, AgentId, CodedError, Session, SessionStatus};
+use crate::session::dialogs::DialogKind;
 use crate::session::input_box_clear::{clear_allowance, clear_input_box, press_timeout, Cleared};
 use crate::session::screen::{Interrupt, InterruptKey};
 use crate::session::wait::wait_quiet;
@@ -73,13 +78,81 @@ fn settle() -> Duration {
     SETTLE
 }
 
+/// The pause between the two Esc presses of [`InterruptKey::EscTwice`]: [`BETWEEN_KEYS`], except in
+/// a test that plays the agent between the presses, where it ends when the test says the agent has
+/// done what it does about the first (`BETWEEN_ESCS`), since how long a stand-in takes to see a key
+/// is the machine's to say. Taken on the caller's thread, before the press moves onto a blocking
+/// one.
+struct EscPause {
+    #[cfg(test)]
+    acted: Option<std::sync::mpsc::Receiver<()>>,
+}
+
+impl EscPause {
+    fn take() -> Self {
+        Self {
+            #[cfg(test)]
+            acted: BETWEEN_ESCS.with(|acted| acted.borrow_mut().take()),
+        }
+    }
+
+    /// **Blocks.**
+    fn wait(&self) {
+        #[cfg(test)]
+        if let Some(acted) = &self.acted {
+            // A stand-in that never says so has failed its own wait; the test fails on what
+            // follows.
+            let _ = acted.recv_timeout(crate::test_support::PATIENCE);
+            return;
+        }
+        std::thread::sleep(BETWEEN_KEYS);
+    }
+}
+
+/// What follows the first reading of a box that shows what the agent put back, before the wait for
+/// the rest of it to be drawn: nothing, except in a test that plays an agent drawing it in two
+/// bursts, which draws the second here (`AFTER_FIRST_READING`), since nothing a stand-in sees
+/// tells it that the first reading has been made. Taken on the caller's thread, before the press
+/// moves onto a blocking one.
+struct FirstReading {
+    #[cfg(test)]
+    then: std::cell::RefCell<Option<Box<dyn FnOnce() + Send>>>,
+}
+
+impl FirstReading {
+    fn take() -> Self {
+        Self {
+            #[cfg(test)]
+            then: std::cell::RefCell::new(
+                AFTER_FIRST_READING.with(|then| then.borrow_mut().take()),
+            ),
+        }
+    }
+
+    fn made(&self) {
+        #[cfg(test)]
+        if let Some(then) = self.then.borrow_mut().take() {
+            then();
+        }
+    }
+}
+
 #[cfg(test)]
 thread_local! {
+    /// What the next interrupt runs once it has first read text in the box the agent put its
+    /// prompt back in ([`FirstReading`]).
+    static AFTER_FIRST_READING: std::cell::RefCell<Option<Box<dyn FnOnce() + Send>>> =
+        const { std::cell::RefCell::new(None) };
+    /// What the next interrupt's pause between two Esc presses waits on in place of
+    /// [`BETWEEN_KEYS`]: a message, or the sender dropped.
+    static BETWEEN_ESCS: std::cell::RefCell<Option<std::sync::mpsc::Receiver<()>>> =
+        const { std::cell::RefCell::new(None) };
     static SETTLE_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
     static RESTORE_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
 }
 
-/// The pause between Grok's Ctrl-U and its Ctrl-C, so the two are read as two keys.
+/// The pause between Grok's Ctrl-U and its Ctrl-C, and between two Esc presses, so the two are read
+/// as two keys.
 const BETWEEN_KEYS: Duration = Duration::from_millis(100);
 
 /// How long the screen may take to settle before the agent's input box is read.
@@ -130,8 +203,8 @@ const NOTHING_TO_INTERRUPT: &str = "Nothing to interrupt: the session is not in 
      turn. It is awaiting instructions; send it the next step with `instruct_session`.";
 
 const NOT_SHOWN_RUNNING: &str = "No key was sent: the session reads as working, but its terminal \
-     does not show a turn running (neither its title nor the status it reports says one runs), so \
-     a key could land on something other than a turn. Check it with `get_session`.";
+     does not show a turn running, so a key could land on something other than a turn. Check it \
+     with `get_session`.";
 
 /// What the session is waiting on: a dialog of its own, or the title `agent`'s provider shows
 /// when only the user can act, where it has one.
@@ -207,10 +280,22 @@ pub async fn interrupt_session(state: &Arc<AppState>, id: &str) -> Result<Interr
     let restore = restore_timeout();
     let shown = press_timeout();
     let allowance = clear_allowance();
+    let esc_pause = EscPause::take();
+    let first_reading = FirstReading::take();
     let pressed = {
         let state = state.clone();
         tokio::task::spawn_blocking(move || {
-            press(&state, &live, interrupt, settle, restore, shown, allowance)
+            press(
+                &state,
+                &live,
+                interrupt,
+                settle,
+                restore,
+                shown,
+                allowance,
+                &esc_pause,
+                &first_reading,
+            )
         })
         .await?
     }?;
@@ -240,6 +325,7 @@ pub async fn interrupt_session(state: &Arc<AppState>, id: &str) -> Result<Interr
     let (interrupted, note) = match pressed {
         Pressed::Nothing(why) => (false, nothing_sent(why, agent)),
         Pressed::OnlyCtrlU { draft, why } => (false, only_ctrl_u(agent, interrupt, draft, why)),
+        Pressed::OnlyFirstEsc(why) => (false, only_first_esc(agent, why)),
         Pressed::Keys {
             draft,
             ended: false,
@@ -299,13 +385,7 @@ fn only_ctrl_u(agent: AgentId, interrupt: &Interrupt, draft: Draft, why: CtrlCHe
         }
     };
     let why = match why {
-        CtrlCHeld::Held(Held::TurnOver) => "the turn ended first",
-        CtrlCHeld::Held(Held::NotShownRunning) => "its terminal stopped showing the turn running",
-        CtrlCHeld::Held(Held::Touched) => "something else wrote into its terminal first",
-        CtrlCHeld::Held(Held::WaitingForUser) => {
-            "its agent began showing something only the user can answer"
-        }
-        CtrlCHeld::Held(Held::DraftUnread) => "its composer could no longer be read",
+        CtrlCHeld::Held(held) => second_key_held(held),
         CtrlCHeld::DraftLeft => {
             "the draft would not clear, and a Ctrl-C would only have cleared it"
         }
@@ -318,6 +398,30 @@ fn only_ctrl_u(agent: AgentId, interrupt: &Interrupt, draft: Draft, why: CtrlCHe
         } else {
             undo_note(agent, interrupt)
         }
+    )
+}
+
+/// Why the key that stops the turn did not follow the one sent ahead of it, as the end of a
+/// sentence about the session.
+fn second_key_held(why: Held) -> &'static str {
+    match why {
+        Held::TurnOver => "the turn ended first",
+        Held::NotShownRunning => "its terminal stopped showing the turn running",
+        Held::Touched => "something else wrote into its terminal first",
+        Held::WaitingForUser => "its agent began showing something only the user can answer",
+        Held::DraftUnread => "its composer could no longer be read",
+    }
+}
+
+/// What the caller is told when the first of two Esc presses ([`InterruptKey::EscTwice`]) went in
+/// and the second did not.
+fn only_first_esc(agent: AgentId, why: Held) -> String {
+    format!(
+        "Only the first of the two Esc presses that interrupt a turn of {} was sent, which by \
+         itself only arms the interrupt; the second was not sent, because {}. Check the session \
+         with `get_session`.",
+        agent.label(),
+        second_key_held(why)
     )
 }
 
@@ -371,8 +475,8 @@ fn interrupted_note(
     note.push_str(&draft_note(agent, interrupt, draft));
     if prompt == Restored::Left {
         note.push_str(&format!(
-            " {}'s input box still holds text after the interrupt (the interrupted prompt it put \
-             back, or text that was there before) and it could not be cleared, so a message \
+            " {}'s input box still holds text after the interrupt (what it put back there at \
+             the cancel, or text that was there before) and it could not be cleared, so a message \
              written now would be sent together with it: ask the user to clear the session's \
              input box first.",
             agent.label()
@@ -401,8 +505,8 @@ fn judge(state: &Arc<AppState>, session: &Session) -> Result<Option<Arc<LiveSess
     match state.write_hold(id) {
         Some(WriteHold::Starting) => return Err(not_running(id, STILL_STARTING)),
         Some(WriteHold::TrustConfirmation) => return Err(trust_pending(id)),
-        Some(WriteHold::AgentDialog(dialog)) => return Err(waiting(id, dialog.is_agents_view())),
-        Some(WriteHold::AgentAction) => return Err(waiting(id, false)),
+        Some(WriteHold::AgentDialog(dialog)) => return Err(waiting(id, Some(dialog.kind))),
+        Some(WriteHold::AgentAction) => return Err(waiting(id, None)),
         Some(WriteHold::Handoff | WriteHold::SharingChange) => return Err(busy(id)),
         // A session held only for these is at its prompt or in a turn like any other.
         Some(
@@ -421,7 +525,7 @@ fn judge(state: &Arc<AppState>, session: &Session) -> Result<Option<Arc<LiveSess
     // The record carries the hand of a hook (the agent's own prompt or question) and of a session
     // request alike; the agent's status reads through a request's hand to what is under it.
     if session.status == SessionStatus::WaitingUser {
-        return Err(waiting(id, false));
+        return Err(waiting(id, None));
     }
     Ok((state.agent_status(session) == SessionStatus::Working).then_some(live))
 }
@@ -450,14 +554,22 @@ fn busy(id: &str) -> anyhow::Error {
     )
 }
 
-/// The refusal for a session held up by the user, or, with `agents_view`, by the view of its
-/// background agents the user is in (shown dormant), which a key would go to as well.
-fn waiting(id: &str, agents_view: bool) -> anyhow::Error {
-    let message = if agents_view {
-        "the user is in this session's background-agents view, and a key sent now would go there"
-    } else {
-        "this session is waiting for the user, who alone can answer what it is showing; an \
-         interrupt key would answer it in their place"
+/// The refusal for a session held up by the user, or, with the kind of a dialog that is a view,
+/// by the view of its background agents the user is in (shown dormant) or a view of the agent's
+/// own the user opened, which a key would go to as well.
+fn waiting(id: &str, dialog: Option<DialogKind>) -> anyhow::Error {
+    let message = match dialog {
+        Some(DialogKind::AgentsView) => {
+            "the user is in this session's background-agents view, and a key sent now would go there"
+        }
+        Some(DialogKind::OwnView) => {
+            "the user has a view of the agent's own open in this session's terminal, and a key \
+             sent now would go there"
+        }
+        Some(DialogKind::Question | DialogKind::UsageLimit) | None => {
+            "this session is waiting for the user, who alone can answer what it is showing; an \
+             interrupt key would answer it in their place"
+        }
     };
     CodedError::raised(
         error_code::SESSION_WAITING_FOR_USER,
@@ -508,6 +620,8 @@ enum Pressed {
     Nothing(Held),
     /// Grok's composer was cleared with Ctrl-U and its Ctrl-C was not sent.
     OnlyCtrlU { draft: Draft, why: CtrlCHeld },
+    /// The first of two Esc presses went in and the second did not.
+    OnlyFirstEsc(Held),
     /// The interrupt key went in; `ended` says whether the turn ended within the [`settle`] window.
     Keys {
         draft: Draft,
@@ -532,7 +646,9 @@ enum Restored {
 /// clearing a prompt the agent restores meanwhile, which is watched for `restore`
 /// ([`restore_timeout`]) after the title goes back to the prompt; each Ctrl-U is given `shown`
 /// ([`press_timeout`]) to show, and a run of them `allowance` ([`clear_allowance`]) for each press
-/// it plans. **Blocks.**
+/// it plans; `esc_pause` is what the pause between two Esc presses waits on, and `first_reading`
+/// what follows the first reading of a prompt put back. **Blocks.**
+#[allow(clippy::too_many_arguments)]
 fn press(
     state: &Arc<AppState>,
     live: &Arc<LiveSession>,
@@ -541,6 +657,8 @@ fn press(
     restore: Duration,
     shown: Duration,
     allowance: Duration,
+    esc_pause: &EscPause,
+    first_reading: &FirstReading,
 ) -> Result<Pressed> {
     // Read before anything is looked at: a write by anyone else after this point means what was
     // looked at may no longer be true.
@@ -552,7 +670,7 @@ fn press(
     // permission to clear here could erase a user's pending edit.
     let mut input_before = interrupt
         .restores_prompt
-        .then(|| live.input_box(&live.screen_text_undimmed()))
+        .then(|| live.input_box(&live.box_screen()))
         .flatten();
     // A prompt the agent's hooks report after this point is a turn it has started. A hook writes
     // `Working` before it counts its prompt, so the interrupted turn's own prompt can land on the
@@ -631,9 +749,33 @@ fn press(
             }
         }
     } else {
-        match key(live, writes, ESC)? {
+        let keys = if interrupt.key == InterruptKey::CtrlC {
+            CTRL_C
+        } else {
+            ESC
+        };
+        match key(live, writes, keys)? {
             Some(next) => writes = next,
             None => return Ok(Pressed::Nothing(held(writes))),
+        }
+        if interrupt.key == InterruptKey::EscTwice {
+            esc_pause.wait();
+            // The second press makes the interrupt, so it goes only into the turn the first one
+            // armed it for: not once that turn has ended, nor into one the agent has started since,
+            // which the status and the title alone would read as the same turn still running.
+            let same_turn = || {
+                state.turn_ends(&live.id) == before.ends && live.prompts_sent() == before.prompts
+            };
+            match key_if(live, writes, ESC, || turn_running(live) && same_turn())? {
+                Some(next) => writes = next,
+                None => {
+                    return Ok(Pressed::OnlyFirstEsc(match held(writes) {
+                        Held::Touched => Held::Touched,
+                        _ if !same_turn() => Held::TurnOver,
+                        why => why,
+                    }))
+                }
+            }
         }
     }
     let deadline = Instant::now() + settle;
@@ -659,8 +801,15 @@ fn press(
                     prompt = Some(left_in_input_box(live));
                 }
                 Some(text) if text.is_empty() && back_at.is_some() => {
-                    match clear_restored_prompt(state, live, &mut writes, shown, allowance, before)
-                    {
+                    match clear_restored_prompt(
+                        state,
+                        live,
+                        &mut writes,
+                        shown,
+                        allowance,
+                        before,
+                        first_reading,
+                    ) {
                         Restoring::Done(restored) => prompt = Some(restored),
                         Restoring::Waiting { unreadable: gone } => unreadable = gone,
                     }
@@ -708,7 +857,17 @@ fn press(
 /// Writes one interrupt key while the turn is still running and nobody has written since the count
 /// read `writes`, and returns the count past it, or `None` when nothing was written.
 fn key(live: &Arc<LiveSession>, writes: u64, keys: &[Input]) -> Result<Option<u64>> {
-    match live.write_keys_if(writes, || turn_running(live), keys) {
+    key_if(live, writes, keys, || turn_running(live))
+}
+
+/// [`key`], with `gate`, run under the input lock, in place of the turn still running.
+fn key_if(
+    live: &Arc<LiveSession>,
+    writes: u64,
+    keys: &[Input],
+    gate: impl FnOnce() -> bool,
+) -> Result<Option<u64>> {
+    match live.write_keys_if(writes, gate, keys) {
         Ok(true) => Ok(Some(writes + 1)),
         Ok(false) => Ok(None),
         Err(err) => Err(anyhow!(
@@ -718,8 +877,8 @@ fn key(live: &Arc<LiveSession>, writes: u64, keys: &[Input]) -> Result<Option<u6
     }
 }
 
-/// Whether the session is in a turn by both its hooks and its terminal (its title or the status it
-/// reports), with nothing of the agent's own up that a key would answer. Called under the input
+/// Whether the session is in a turn by both its hooks and its terminal, with nothing of the
+/// agent's own up that a key would answer. Called under the input
 /// lock, right before a key.
 ///
 /// The status a hook reported is held only in the store, so the record is read here, under the
@@ -786,30 +945,41 @@ fn clear_restored_prompt(
     shown: Duration,
     allowance: Duration,
     before: BeforeKey,
+    first_reading: &FirstReading,
 ) -> Restoring {
-    match live.input_box(&live.screen_text_undimmed()) {
-        Some(text) if !text.is_empty() => {}
+    let text = match live.input_box(&live.box_screen()) {
+        Some(text) if !text.is_empty() => text,
         read => {
             return Restoring::Waiting {
                 unreadable: read.is_none(),
             }
         }
-    }
-    // The text may be drawn over several bursts, and the presses are counted from what the box
-    // shows at the first.
+    };
+    // The text may be drawn over several bursts: the box is read again once the screen is quiet,
+    // so that what was put back, and the presses that clear it, are told from the whole of it.
+    first_reading.made();
     wait_quiet(live, QUIET_TIMEOUT);
-    Restoring::Done(
-        match clear_input_box(live, writes, shown, allowance, || {
-            live.title_activity()
-                .at_prompt_since(before.stops)
-                .is_some()
-                && !next_turn_started(state, live, before)
-        }) {
-            (Cleared::Empty, 0, ..) => Restored::None,
-            (Cleared::Empty, ..) => Restored::Cleared,
-            _ => Restored::Left,
-        },
-    )
+    let text = live
+        .input_box(&live.box_screen())
+        .filter(|whole| !whole.is_empty())
+        .unwrap_or(text);
+    let (cleared, presses, changed, _) = clear_input_box(live, writes, shown, allowance, || {
+        live.title_activity()
+            .at_prompt_since(before.stops)
+            .is_some()
+            && !next_turn_started(state, live, before)
+    });
+    // A message the agent held and gave back at this cancel is not lost with the box: it is
+    // written again after whichever message goes into the session next, so the agent stays
+    // stopped meanwhile.
+    if presses > 0 && (changed || cleared == Cleared::Empty) {
+        live.given_back_cleared_by_interrupt(&text, presses, cleared);
+    }
+    Restoring::Done(match (cleared, presses) {
+        (Cleared::Empty, 0) => Restored::None,
+        (Cleared::Empty, _) => Restored::Cleared,
+        _ => Restored::Left,
+    })
 }
 
 /// Whether the agent's input box holds text once the screen has settled after the interrupt key,
@@ -822,7 +992,7 @@ fn left_in_input_box(live: &LiveSession) -> Restored {
 /// Whether the agent's input box holds text as the screen shows it now; a box that cannot be found
 /// counts as holding some.
 fn text_in_input_box(live: &LiveSession) -> Restored {
-    match live.input_box(&live.screen_text_undimmed()) {
+    match live.input_box(&live.box_screen()) {
         Some(text) if text.is_empty() => Restored::None,
         _ => Restored::Left,
     }

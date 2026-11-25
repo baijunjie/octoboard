@@ -30,7 +30,7 @@ presentation, with these exceptions:
   `docs/product/projects.md`).
 
 Errors never use timed toasts or a failure line inside the dialog that started the operation. Notices that are not
-errors may use toasts; see `docs/product/toasts.md`. Background states that are not reported as errors, such as the
+errors use toasts (see `docs/product/toasts.md`), except a notice to acknowledge (see "Notices to acknowledge" below). Background states that are not reported as errors, such as the
 daemon's reconnecting banner, keep their own status and recovery presentation (see "Losing the daemon connection" in
 `docs/product/application-lifecycle.md`).
 
@@ -116,8 +116,8 @@ is running (`handoff_move_failed`, `handoff_archive_failed`) has neither line: i
 and refers to the original session by its role, the two usually sharing a name. The
 rest of the body is in Octoboard's own words — what happened, the next step, any further explanation — and holds no raw
 text: that is only under the collapsed **Error details** disclosure at the body's end (see "Names and diagnostic
-details" below). The one exception is text the user wrote that a failure hands back, such as the draft a
-`draft_discarded` notice carries: it is shown in a block of its own after the explanation and the next step, and before
+details" below). The one exception is text a failure hands back for the user to keep or send again, such as the
+draft a `draft_discarded` notice carries or the message a `message_cleared_after_cancel`, `message_given_back_unsent`, `message_dropped_at_cancel`, `message_maybe_dropped_at_cancel`, `message_not_taken` or `message_not_delivered` notice carries: it is shown in a block of its own after the explanation and the next step, and before
 the disclosure (see "Names and diagnostic details" below). The body's opening sentence (after any session and location lines) is optional: it is there only for
 what the title leaves unexplained, such as a cause or what the failure left as it was, and never says the title again in
 other words; when the title says it all, the body starts with the next step. It has one acknowledgement button, and a
@@ -160,10 +160,17 @@ The error alert announces the failure it shows; nothing else announces that fail
 A failure the daemon answers with carries a code, which the window words the failure by. A code raised whichever agent
 the failure concerns is a plain name, such as `unknown_account`; a code only one agent's provider raises is named
 `provider.<agent>.<code>`, such as `provider.grok.home_not_initialized` or `provider.codex.login_busy`, and is worded in
-that agent's own terms. A request for something the agent's provider does not offer is refused with
+that agent's own terms. Where such a code has a remedy of its own, that remedy is the failure's next step wherever a
+failure's remedy is shown — an error alert, a failure alert in a dialog or a pane, a mark's popover, a submenu item's
+status, a scheduled task run's details — once, and it is filled with the values the failure came with (a path, a
+version), drawn as references as in the failure's message. A request for something the agent's provider does not offer is refused with
 `provider_unsupported`, naming the agent and the operation — `sign_in` (logging an account in from Octoboard), `kick`
-(starting a usage window), `reset_credit` (redeeming a usage limit reset) or `config_sharing` (sharing the default
-account's configuration). The window does not offer such an action for such an agent; where the refusal is shown
+(starting a usage window), `reset_credit` (redeeming a usage limit reset), `config_sharing` (sharing the default
+account's configuration), `cli_update` (updating the agent's CLI), `mcp_sign_in` (signing an account in to or out of
+an MCP server), `owned_accounts` (an account beyond the default one), `interactions` (answering the agent's prompts
+outside its terminal), `message_images` (images attached to a message, or an image pasted or dropped into its
+terminal), `slash_commands` (slash commands sent as commands), `mcp_inventory` (listing an account's connectors and
+MCP servers) or `native_app` (a desktop application to open a conversation in). The window does not offer such an action for such an agent; where the refusal is shown
 anyway, its sentence says what the agent does not offer, with no remedy and no request to report an issue.
 
 ## The failure modal
@@ -503,8 +510,9 @@ lets the tail of a line be brought clear of the button. It copies the complete o
 indentation, and leading and trailing whitespace. It is available before the daemon connects too. A successful copy
 and a failed copy follow "Copy buttons" in `docs/product/labels-and-tooltips.md`.
 
-**Text the user wrote** that a failure hands back — today the draft Octoboard cleared from a session's input box
-(`draft_discarded`) and what the input box held when Octoboard's message was sent together with it
+**Text handed back to keep or send again** — today the draft Octoboard cleared from a session's input box
+(`draft_discarded`), a message of Octoboard's that the agent gave back at a cancel and Octoboard cleared, unsent,
+and could not write again (`message_cleared_after_cancel`), a message the agent took through its own server or extension's channel and gave back without acting on it, and that Octoboard could not write again (`message_given_back_unsent`), a message the agent was holding for a turn and dropped when the turn was cancelled, and that Octoboard could not write again (`message_dropped_at_cancel`; for both, `docs/product/message-delivery.md`, "Messages held until a session can take them"), and what the input box held when Octoboard's message was sent together with it
 (`message_sent_with_draft`; see "The draft and typing notices" in `docs/product/draft-preservation.md`) — is not raw text and
 not part of a sentence either. In an error alert it is shown in the body, after the explanation and the next step and
 outside Error details, under a label of its own that also names its scrolling region, in a block like a diagnostic
@@ -519,6 +527,25 @@ it accompanies an error. Unrecognized daemon messages retain the daemon's own re
 the sentence of an uncatalogued failure (see "Failures shown on the screen" above). These rules hold wherever the
 failure is shown: in an error alert, where such output is under Error details, in a compact alert, where it is behind
 Details, in an empty-state failure, where it is on the details surface, or in a mark's popover, where it comes last.
+
+## Notices to acknowledge
+
+A notice about a session that is no failure, but that the user has to have read before going on, is shown in the error
+alert instead of a toast, and stays until the user dismisses it with its acknowledgement button or its close button. It
+is for a notice a toast that closes after five seconds would lose: one of two or three sentences with paths, saying, for
+instance, that the user's own settings, permission rules among them, are not in force for a launch.
+
+- **Which notices**: only those the agent's provider marks so, on the notice's own code. A notice that is not marked is
+  a toast, exactly as before, for every agent; no notice of Octoboard's own and none of Claude Code, Codex or Grok Build
+  is marked.
+- **Its alert** is the error alert, with the same acknowledgement and close buttons and no dismissal by Escape, an
+  outside press or time, but drawn as what it is, no failure: the warning icon in place of the danger one, and its
+  acknowledgement button in the accent colour, not the danger one. It is titled "Session notice" unless the notice has a title of its own, names the
+  session and where it is first, then says the notice's own sentence; a notice with a next step of its own says it
+  after the sentence. It is never presented as unexpected, and offers no **Report issue**.
+- **Several of one launch are each shown**: each is queued as an alert of its own, in the order the daemon sent them,
+  one shown at a time, none replacing another. Only an identical copy of one still waiting (the same session, notice
+  and parameters) is not queued again, as for any alert.
 
 ## Recovery and unexpected errors
 
@@ -711,7 +738,7 @@ acknowledgement button, instead of the step naming where to go:
 | The agent is not added (`agent_not_added`) | **Add agent** | Settings on Agent accounts, with the Add agent dialog in front (see "Adding an agent" in `docs/product/agent-accounts.md`) |
 | An account problem (`unknown_account`, `provider.grok.home_not_initialized`) | **Manage accounts** | Settings on Agent accounts |
 | An account that is turned off (`account_disabled`) | **Manage accounts** | Settings on Agent accounts, where it can be turned back on (see "Turning an account off" in `docs/product/agent-accounts.md`) |
-| An account that is not logged in (`account_not_signed_in`) | **Manage accounts** | Settings on Agent accounts, where it can be logged in to (see "An account that is not logged in" in `docs/product/account-quotas.md`) |
+| An account that is not logged in (`account_not_signed_in`), of an agent Octoboard can log in (for any other the alert says how to log in instead and has no button; see "Agents Octoboard cannot log in" in `docs/product/logging-accounts-in.md`) | **Manage accounts** | Settings on Agent accounts, where it can be logged in to (see "An account that is not logged in" in `docs/product/account-quotas.md`) |
 | A usage limit reset refused because the account is not logged in (`reset_credit_not_signed_in`) | **Manage accounts** | Settings on Agent accounts, where it can be logged in to before the reset is redeemed again (see "How a redeem ends" in `docs/product/usage-limit-resets.md`) |
 | The added agents not being as the change expected (`agent_already_added`, `agent_order_invalid`) | **Manage accounts** | Settings on Agent accounts |
 
@@ -760,7 +787,9 @@ dropped (see "While the terminals are handed over" in `docs/product/planned-rest
 second push of a project whose push is still running (`push_in_progress`; see "Pushing the current branch" in
 `docs/product/project-git-actions.md`), and it is the form of every failure modal (see "The failure modal" above). A
 switch confirmed onto an account turned off, or found not logged in, after the confirmation opened is not a plain alert:
-it has the remedy and the **Manage accounts** button above.
+it has the remedy and the **Manage accounts** button above, except an account found not logged in of an agent
+Octoboard cannot log in, whose alert says how to log in instead, with no button (see "Agents Octoboard cannot log in"
+in `docs/product/logging-accounts-in.md`).
 
 **An unexpected failure** explains that it may be a bug the user cannot resolve in the current interface. The alert
 keeps the error explanation and offers expandable diagnostic details, **Error details**, when the original message or

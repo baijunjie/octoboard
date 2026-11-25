@@ -299,6 +299,18 @@ These stay after every installation is uninstalled, on the machine the daemon ra
 only, so an agent run on its own afterwards starts without them (see "What Octoboard never modifies" in
 `docs/product/launching-agents.md`).
 
+**Native data for Antigravity CLI, GitHub Copilot CLI, OpenCode, Qwen Code and Pi stays with the agent.**
+Antigravity CLI keeps its conversation database, transcripts and system credential, and any standard
+`antigravity-cli` and `config/projects` directories created for a launch under `~/.gemini`. Copilot keeps its
+session directories and index and the sign-in it saved. Copilot may also have synced history to GitHub.
+OpenCode keeps its native conversation database and provider credentials. Qwen Code keeps its chats, title and
+runtime sidecars and saved provider sign-in. Pi keeps its session JSONL, including records in a separate directory
+set by `PI_CODING_AGENT_SESSION_DIR`, and the credentials it saved. The per-agent rules for explicit record cleanup
+before uninstalling are in "Moving the agent's own records to the Trash" in `docs/product/deleting-sessions.md`.
+
+Pi, Qwen Code and GitHub Copilot CLI can leave conversation records in the default account through sharing, or
+copies in another account through account switching, as described below.
+
 - **Entries for consoles' directories in the agents' trust lists**: the entry Claude Code records for a console's
   directory, `~/.octoboard/consoles/<console id>`, and, only where a git repository holds that directory, the entry
   Codex records for the repository's root. They stay; Claude Code's names only a directory of Octoboard's own and has

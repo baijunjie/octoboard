@@ -1,12 +1,12 @@
 <script setup lang="ts">
+import { heroAgents } from "../../seo/page-outline";
 defineProps<{ feature: string }>();
 const { t } = useSiteCopy();
 const { locale } = useI18n();
 const appViews = ["managedAccounts", "usageMonitor", "startUsageWindows", "keepAwake", "sessionIntervention", "scheduledTasks", "nativeProjectSessions", "reviewChanges", "processMonitoring", "openAgentApp", "sharedMemory"];
 const sharingTools = [["code", "featureVisualSkills"], ["coordinator", "featureVisualPlugins"], ["branch", "featureVisualMcp"]] as const;
 const ids = ["A", "B", "C"];
-const providers = ["Claude Code", "Codex", "Grok Build"];
-const agents = ["claude", "codex", "grok"] as const;
+const projectPaths = ["web/", "api/", "docs/", "mobile/", "worker/", "admin/", "search/", "tools/"];
 const account = (id: string) => t("featureVisualAccount", { id: `\u2068${id}\u2069` });
 const percent = (value: number) => new Intl.NumberFormat(locale.value, { style: "percent", maximumFractionDigits: 0 }).format(value / 100);
 </script>
@@ -72,7 +72,7 @@ const percent = (value: number) => new Intl.NumberFormat(locale.value, { style: 
         </div>
       </div>
       <div class="network-trunk" /><div class="network-branches" />
-      <div class="network-leaves"><div v-for="(provider, index) in providers" :key="provider" class="network-leaf visual-node"><AgentMark :agent="agents[index]!" /><b>{{ provider }}</b><code>{{ ['web/', 'api/', 'docs/'][index] }}</code></div></div>
+      <div class="network-leaves"><div v-for="(agent, index) in heroAgents" :key="agent.icon" class="network-leaf visual-node"><AgentMark :agent="agent.icon" /><b>{{ agent.name }}</b><code>{{ projectPaths[index] }}</code></div></div>
     </div>
 
   </div>
@@ -147,10 +147,10 @@ const percent = (value: number) => new Intl.NumberFormat(locale.value, { style: 
 .network-root { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 14px; text-align: center; }
 .network-root b { font-size: 11px; }
 .network-trunk { width: 1px; height: 17px; margin-inline: auto; background: #946d5f; }
-.network-branches { height: 12px; width: 69%; margin-inline: auto; border: 1px solid #806153; border-bottom: 0; border-radius: 5px 5px 0 0; position: relative; }
-.network-branches::after { content: ''; position: absolute; top: 0; left: 50%; width: 1px; height: 12px; background: #806153; }
-.network-leaves { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
-.network-leaf { display: grid; justify-items: center; align-content: center; gap: 8px; padding: 13px 3px 11px; text-align: center; }
+.network-branches { height: 12px; width: 75%; margin-inline: auto; border: 1px solid #806153; border-bottom: 0; border-radius: 5px 5px 0 0; position: relative; }
+.network-branches::after { content: ''; position: absolute; inset: 0; background: linear-gradient(#806153, #806153) 33% 0 / 1px 100% no-repeat, linear-gradient(#806153, #806153) 67% 0 / 1px 100% no-repeat; }
+.network-leaves { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.network-leaf { display: grid; justify-items: center; align-content: center; gap: 4px; padding: 6px 3px; text-align: center; }
 .network-leaf b { font-size: 11px; }
 .network-leaf code { font-size: 9px; color: #a58e97; }
 .flow-arrow { display: block; width: 100%; min-width: 12px; height: 20px; color: #bc897d; }
@@ -163,12 +163,13 @@ const percent = (value: number) => new Intl.NumberFormat(locale.value, { style: 
   .network-trunk { height: 10px; }
   .network-branches { width: calc(50% - 10px); height: 10px; margin-inline-start: 10px; margin-inline-end: auto; border-inline-end: 0; border-start-end-radius: 0; }
   .network-branches::after { display: none; }
-  .network-leaves { grid-template-columns: minmax(0, 1fr); gap: 6px; padding-inline-start: 12px; margin-inline-start: 10px; border-inline-start: 1px solid #806153; }
-  .network-leaf { position: relative; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 1px 8px; padding: 6px 8px; text-align: start; justify-items: start; }
-  .network-leaf::before { content: ''; position: absolute; inset-inline-start: -13px; top: 50%; width: 12px; height: 1px; background: #806153; }
+  .network-leaves { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding-inline-start: 12px; margin-inline-start: 10px; border-inline-start: 1px solid #806153; }
+  .illustration-crossProjectWork { height: auto; }
+  .network-leaf { position: relative; grid-template-columns: 20px minmax(0, 1fr); gap: 1px 6px; padding: 6px; text-align: start; justify-items: start; }
+  .network-leaf:nth-child(odd)::before { content: ''; position: absolute; inset-inline-start: -13px; top: 50%; width: 12px; height: 1px; background: #806153; }
   .network-leaf .agent-mark { align-self: center; width: 18px; height: 18px; }
   .network-leaf > b { grid-column: 2; align-self: center; }
-  .network-leaf code { grid-column: 3; }
+  .network-leaf code { grid-column: 2; }
 }
 @media (max-width: 380px) { .feature-illustration { padding: 20px 16px; } .has-app-view { padding: 12px; } }
 </style>

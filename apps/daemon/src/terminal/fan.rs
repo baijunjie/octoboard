@@ -10,7 +10,7 @@ use tokio::sync::Notify;
 
 use crate::terminal::activity::Activity;
 use crate::terminal::display::{DisplayFacts, DisplaySeed};
-use crate::terminal::program_status::ReportedState;
+use crate::terminal::program_status::RootMove;
 use crate::terminal::queries::Query;
 use crate::terminal::query_log::{self, QueryLog};
 use crate::terminal::reply_route::ReplyRoute;
@@ -148,7 +148,7 @@ struct State {
     queries: Option<QueryLog>,
     /// The moves of the program's root status record not yet taken; see
     /// [`Fan::take_program_status`].
-    program_status: Vec<Option<ReportedState>>,
+    program_status: Vec<RootMove>,
     /// The tail being replayed after a handover, while it lasts; see [`Fan::begin_replay`].
     replay: Option<Replay>,
 }
@@ -247,13 +247,20 @@ impl Fan {
     }
 
     /// The state of the program's root status record as it stands, moves not yet taken included.
-    pub fn program_status_root(&self) -> Option<ReportedState> {
+    pub fn program_status_root(&self) -> RootMove {
         self.lock().terminal.program_status_root()
+    }
+
+    pub(crate) fn record_program_status(
+        &self,
+        record: crate::terminal::program_status::Record,
+    ) -> Option<RootMove> {
+        self.lock().terminal.record_program_status(record)
     }
 
     /// The states the program's root status record moved to since the last call, in order;
     /// `None` where it went. See [`Self::keep_program_status`].
-    pub fn take_program_status(&self) -> Vec<Option<ReportedState>> {
+    pub fn take_program_status(&self) -> Vec<RootMove> {
         std::mem::take(&mut self.lock().program_status)
     }
 

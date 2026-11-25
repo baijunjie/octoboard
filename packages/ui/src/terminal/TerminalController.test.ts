@@ -870,7 +870,7 @@ describe("pasting an image", () => {
   /** Controller with the image handlers `pasting` over a session `s-img` that is open to input. */
   async function mountPasting(pasting: Partial<NonNullable<TerminalControllerHandlers["pasteImage"]>> | undefined) {
     controller.dispose();
-    await mountController(BROWSER_HOST, pasting && { pasteImage: { save: vi.fn(async () => PATH), ...pasting } });
+    await mountController(BROWSER_HOST, pasting && { pasteImage: { takes: () => true, save: vi.fn(async () => PATH), ...pasting } });
     reachedXterm = [];
     term.element!.addEventListener("paste", (event) => reachedXterm.push(event));
     controller.attach("s-img", url("s-img"), false);
@@ -898,6 +898,19 @@ describe("pasting an image", () => {
     expect(reachedXterm).toHaveLength(0);
     await vi.waitFor(() => expect(sentText()).toEqual([bracketed(PATH)]));
     expect(save).toHaveBeenCalledExactlyOnceWith(image, "s-img");
+  });
+
+  it("leaves an image paste to xterm for a session whose agent takes no images, as in a terminal that is no agent's", async () => {
+    const save = vi.fn(async () => PATH);
+    const read = vi.fn(async () => new Blob(["x"], { type: "image/png" }));
+    await mountPasting({ takes: () => false, save, read });
+    const event = nativePaste({ files: [png()] });
+    term.element!.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(reachedXterm).toEqual([event]);
+    await afterQueuedWork();
+    expect(save).not.toHaveBeenCalled();
+    expect(read).not.toHaveBeenCalled();
   });
 
   it("leaves a paste with text to xterm, whatever else the clipboard holds", async () => {
@@ -1055,6 +1068,18 @@ describe("pasting an image", () => {
       await mountPasting(undefined);
       controller.pasteImage("s-img");
       await vi.waitFor(() => expect(sentText()).toEqual([bracketed("")]));
+    });
+
+    it("pastes an empty paste for a session whose agent takes no images, reading and saving nothing", async () => {
+      const save = vi.fn(async () => PATH);
+      const read = vi.fn(async () => new Blob(["x"], { type: "image/png" }));
+      const takes = vi.fn(() => false);
+      await mountPasting({ takes, save, read });
+      controller.pasteImage("s-img", new Blob(["x"], { type: "image/png" }));
+      await vi.waitFor(() => expect(sentText()).toEqual([bracketed("")]));
+      expect(takes).toHaveBeenCalledWith("s-img");
+      expect(read).not.toHaveBeenCalled();
+      expect(save).not.toHaveBeenCalled();
     });
   });
 });

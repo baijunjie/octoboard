@@ -205,8 +205,32 @@ pub enum RelayRoute {
     ContextWindow,
     RevertGate,
     Mcp,
+    /// A poll of a session's extension channel (`crate::session::channel`). A daemon that
+    /// predates it reads it as [`Self::Unknown`] and answers `404`, as a holder that predates it
+    /// answers the path itself: the helper then ends, and the launch's messages go to its
+    /// terminal.
+    Channel,
     #[serde(other)]
     Unknown,
+}
+
+/// The query of the hook route, `/hook/<session>`, beside the key every request carries: shared by
+/// the daemon's route and the holder's, which relays the event on.
+#[derive(Debug, Default, Deserialize)]
+pub struct HookQuery {
+    /// The name of the event, for a payload that names none. A name in the payload wins.
+    pub event: Option<String>,
+}
+
+impl HookQuery {
+    /// The event name a route reads from its query, if there is one: a query that cannot be read
+    /// (a duplicated `event`, say) has none, and an empty name is none. The hook route answers
+    /// `200` whatever it is sent, so a bad query is never an error.
+    pub fn event(query: Option<axum::extract::Query<Self>>) -> Option<String> {
+        query
+            .and_then(|axum::extract::Query(query)| query.event)
+            .filter(|event| !event.is_empty())
+    }
 }
 
 /// Daemon to holder.
@@ -623,6 +647,11 @@ pub enum FromHolder {
         #[serde(with = "base64_bytes")]
         body: Vec<u8>,
         waits: bool,
+        /// The hook route's `event` query parameter ([`HookQuery`]); no other route has one. A
+        /// holder of an earlier build drops it, so a payload that names no event is then applied
+        /// with no name, which is logged and ignored.
+        #[serde(default)]
+        event: Option<String>,
     },
     /// The helper that sent the relayed request `req` is gone, so its answer is not wanted.
     RelayGone {
@@ -765,6 +794,56 @@ mod tests {
                 bytes: back,
             } => {
                 assert_eq!((id.as_str(), req, back), ("t", 7, bytes));
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// A relayed report carries the hook route's event name, and a frame an earlier holder sent,
+    /// which has no `event`, is read as one with none rather than refused.
+    #[test]
+    fn a_relay_frame_carries_the_hook_event_and_reads_without_it() {
+        let relay = |event: Option<&str>| FromHolder::Relay {
+            req: 3,
+            route: RelayRoute::Hook,
+            param: "s".into(),
+            body: b"{}".to_vec(),
+            waits: false,
+            event: event.map(str::to_string),
+        };
+        for event in [None, Some("PreToolUse"), Some("a b/c\u{e9}")] {
+            match round_trip(&relay(event)) {
+                FromHolder::Relay {
+                    req,
+                    route,
+                    param,
+                    body,
+                    waits,
+                    event: back,
+                } => {
+                    assert_eq!(
+                        (req, route, param.as_str(), body.as_slice(), waits),
+                        (3, RelayRoute::Hook, "s", &b"{}"[..], false)
+                    );
+                    assert_eq!(back.as_deref(), event);
+                }
+                other => panic!("{other:?}"),
+            }
+        }
+        assert!(serde_json::to_string(&relay(Some("PreToolUse")))
+            .unwrap()
+            .contains(r#""event":"PreToolUse""#));
+
+        let mut earlier = serde_json::to_value(relay(Some("PreToolUse"))).unwrap();
+        earlier
+            .as_object_mut()
+            .expect("an object")
+            .remove("event")
+            .expect("the event field");
+        match serde_json::from_value(earlier).expect("an earlier frame reads") {
+            FromHolder::Relay { event, body, .. } => {
+                assert_eq!(event, None);
+                assert_eq!(body, b"{}");
             }
             other => panic!("{other:?}"),
         }
@@ -1297,6 +1376,25 @@ mod tests {
         assert!(
             decode_bulk(&[1, 0, 1, 0xff]).is_none(),
             "an id that is not text"
+        );
+    }
+
+    /// The channel route's name on the wire, and what a build reads a route it does not know
+    /// as: a daemon that predates the channel answers `404` for it, which leaves the launch on
+    /// its terminal.
+    #[test]
+    fn the_channel_route_is_named_channel_and_an_unknown_route_reads_as_unknown() {
+        assert_eq!(
+            serde_json::to_string(&RelayRoute::Channel).unwrap(),
+            r#""channel""#
+        );
+        assert_eq!(
+            serde_json::from_str::<RelayRoute>(r#""channel""#).unwrap(),
+            RelayRoute::Channel
+        );
+        assert_eq!(
+            serde_json::from_str::<RelayRoute>(r#""a_later_route""#).unwrap(),
+            RelayRoute::Unknown
         );
     }
 

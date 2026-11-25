@@ -79,16 +79,28 @@ public static class FakeAgentDispatcher
         startup.StdInput = Inherited(-10);
         startup.StdOutput = Inherited(-11);
         startup.StdError = Inherited(-12);
-        StringBuilder command = new StringBuilder(Quoted(Bash) + " " + Quoted(body));
-        foreach (string arg in args)
+        string program = Bash;
+        StringBuilder command;
+        string fixture = Path.ChangeExtension(self, ".fixture");
+        if (File.Exists(fixture))
         {
-            command.Append(' ').Append(Quoted(arg));
+            string[] launch = File.ReadAllLines(fixture);
+            program = launch[0];
+            command = new StringBuilder("\"" + program + "\" " + launch[1]);
+        }
+        else
+        {
+            command = new StringBuilder(Quoted(Bash) + " " + Quoted(body));
+            foreach (string arg in args)
+            {
+                command.Append(' ').Append(Quoted(arg));
+            }
         }
         ProcessInformation started;
-        if (!CreateProcessW(Bash, command, IntPtr.Zero, IntPtr.Zero, true, 0, IntPtr.Zero, null,
+        if (!CreateProcessW(program, command, IntPtr.Zero, IntPtr.Zero, true, 0, IntPtr.Zero, null,
             ref startup, out started))
         {
-            Console.Error.WriteLine("the fake agent could not start Bash: error "
+            Console.Error.WriteLine("the fake agent could not start its program: error "
                 + Marshal.GetLastWin32Error());
             return 127;
         }

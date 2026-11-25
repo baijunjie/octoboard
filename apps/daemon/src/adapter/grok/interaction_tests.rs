@@ -499,3 +499,14 @@ fn a_call_is_kept_from_the_probes_pre_tool_use_lines() {
         .call_started("PostToolUse", &line["payload"])
         .is_none());
 }
+
+/// Grok Build's cards are read off the screen with faint cells blanked, as the captures here are
+/// replayed and as its composer is read: read as drawn, what it draws faint would be a card's
+/// text.
+#[test]
+fn a_card_is_not_read_with_its_faint_text() {
+    assert_eq!(
+        GrokInteractions.prompt_screen(),
+        crate::session::screen::ScreenText::FaintBlanked
+    );
+}

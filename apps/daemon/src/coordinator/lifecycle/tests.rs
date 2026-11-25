@@ -557,6 +557,89 @@ async fn deleting_an_archived_console_session_deletes_its_archived_bound_session
     );
 }
 
+/// A deleted session's conversation that its agent keeps as rows is removed by the provider
+/// itself, from the session's own account: nothing of it goes through the trash function, and one
+/// a remaining session still refers to is left.
+#[test]
+fn the_rows_of_a_deleted_session_are_removed_by_its_provider_unless_shared() {
+    use crate::records::fixtures::{row_database, ROW_ID, ROW_TURNS};
+    use SessionStatus::{Archived, Interrupted};
+    let _declared = crate::providers::test_provider::with_row_records();
+    let (state, dir) = console_with_project_and_accounts("coordinator-delete-remove-rows");
+    let account = dir.join("row-account");
+    row_database(&account, &[(ROW_ID, ROW_TURNS), ("row_shared", ROW_TURNS)]);
+    let native = |id: &str, native: &str, status| Session {
+        agent_session_id: Some(native.to_owned()),
+        config_dir: Some(account.to_string_lossy().into_owned()),
+        ..project_session(id, AgentId::TEST, status)
+    };
+    for session in [
+        native("solo", ROW_ID, Archived),
+        native("copy-a", "row_shared", Archived),
+        native("copy-b", "row_shared", Interrupted),
+    ] {
+        state.store.insert_session(&session).unwrap();
+    }
+    let trashed = std::sync::Mutex::new(Vec::new());
+    let trash = |path: &Path| {
+        trashed.lock().unwrap().push(path.to_path_buf());
+        Ok(())
+    };
+    let locator = || records::Locator::with_shell(HashMap::new());
+    let held = |id: &str| locator().holds_conversation(&native("asked", id, Archived));
+
+    let deleted = delete_archived_sessions(&state, "console-1", Some("project-1"), None).unwrap();
+    assert_eq!(deleted.len(), 2);
+    trash_agent_records_of(&state, &deleted, locator(), trash);
+
+    assert_eq!(held(ROW_ID), Some(false), "the deleted session's rows");
+    assert_eq!(
+        held("row_shared"),
+        Some(true),
+        "rows a remaining session refers to"
+    );
+    assert!(trashed.lock().unwrap().is_empty());
+}
+
+/// Two deleted sessions that name one conversation kept as rows (an original and its resumed
+/// copy) have the provider asked to remove it once, not once for each.
+#[test]
+fn rows_two_deleted_sessions_name_are_removed_once() {
+    use crate::adapter::test_provider::row_removals;
+    use crate::records::fixtures::{row_database, ROW_ID, ROW_TURNS};
+    let _declared = crate::providers::test_provider::with_row_records();
+    let (state, dir) = console_with_project_and_accounts("coordinator-delete-remove-rows-once");
+    let account = dir.join("row-account");
+    row_database(&account, &[(ROW_ID, ROW_TURNS), ("row_other", ROW_TURNS)]);
+    let native = |id: &str, native: &str| Session {
+        agent_session_id: Some(native.to_owned()),
+        config_dir: Some(account.to_string_lossy().into_owned()),
+        ..project_session(id, AgentId::TEST, SessionStatus::Archived)
+    };
+    for session in [
+        native("original", ROW_ID),
+        native("resumed", ROW_ID),
+        native("other", "row_other"),
+    ] {
+        state.store.insert_session(&session).unwrap();
+    }
+    let locator = || records::Locator::with_shell(HashMap::new());
+
+    let deleted = delete_archived_sessions(&state, "console-1", Some("project-1"), None).unwrap();
+    assert_eq!(deleted.len(), 3);
+    let before = row_removals();
+    trash_agent_records_of(&state, &deleted, locator(), |_: &Path| Ok(()));
+
+    assert_eq!(row_removals(), before + 2, "one for each conversation");
+    for id in [ROW_ID, "row_other"] {
+        assert_eq!(
+            locator().holds_conversation(&native("asked", id)),
+            Some(false),
+            "{id}"
+        );
+    }
+}
+
 /// The agent's records of the sessions a delete removed go through the trash function, Claude's
 /// subagent directory with the transcript when there is one, unless a remaining session refers
 /// to the same agent session; a missing record never reaches it and a failing move is not an

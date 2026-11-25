@@ -21,7 +21,12 @@ use crate::protocol::SessionStatus;
 pub(super) struct CodexHooks;
 
 impl HookInterpreter for CodexHooks {
-    fn starts_conversation(&self, event: &str) -> bool {
+    /// Codex runs no hook around its trust confirmation, and none before the first prompt.
+    fn past_startup(&self, _event: &str, _payload: &Value) -> bool {
+        true
+    }
+
+    fn starts_conversation(&self, event: &str, _payload: &Value) -> bool {
         event == "UserPromptSubmit"
     }
 
@@ -64,6 +69,13 @@ impl HookInterpreter for CodexHooks {
         Some(serde_json::json!({"hookSpecificOutput": {
             "hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason
         }}))
+    }
+
+    /// Codex runs no hook around its trust confirmation, and defers `SessionStart` to the first
+    /// prompt submission (see [`Self::status`]), which still comes only once the session is past
+    /// its start-up screens.
+    fn announces_session_start(&self, event: &str, _payload: &Value) -> bool {
+        event == "SessionStart"
     }
 
     fn status(&self, event: &str, payload: &Value) -> Option<SessionStatus> {
@@ -117,6 +129,14 @@ impl HookInterpreter for CodexHooks {
     /// breaks; the prompt is read the same way.
     fn submitted_prompt<'a>(&self, payload: &'a Value) -> Option<&'a str> {
         Some(payload.get("prompt")?.as_str()?.trim())
+    }
+
+    fn is_subagent(&self, payload: &Value) -> bool {
+        crate::hooks::is_named_subagent(payload)
+    }
+
+    fn agent_session_id(&self, payload: &Value) -> Option<String> {
+        crate::hooks::agent_session_id(payload)
     }
 
     /// The only cancellation signal Claude Code, Codex or Grok Build gives. A declined approval

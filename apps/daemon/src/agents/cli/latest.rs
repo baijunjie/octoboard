@@ -1,7 +1,8 @@
 //! The latest version published for an agent's CLI, read from the source its install method
-//! names: the CLI's own check where it has one, the npm registry for an npm install and for a CLI
-//! whose own installer is published there too, Homebrew's own record for a Homebrew install. An
-//! install the daemon does not recognise has no source.
+//! names: for a CLI its own installer put there, the CLI's own check where it has one, else its
+//! maker's manifest where it has one, else the npm registry where that installer is published
+//! there too; the npm registry for an npm install; Homebrew's own record for a Homebrew install.
+//! An install the daemon does not recognise has no source.
 //!
 //! The lookup is best-effort: it is a read of something outside the machine, so a failure is told
 //! as the [`Failure`] it was and never raised as an error of the request that asked. The registry
@@ -48,13 +49,22 @@ impl Failure {
     }
 }
 
-/// The npm registry, as far as the daemon reads it: the latest version of a package. A seam so
-/// that a test makes no request.
-pub(crate) trait Registry: Sync {
+/// The network sources of a latest version, as far as the daemon reads them: the npm registry's
+/// latest version of a package, and a maker's manifest. A seam so that a test makes no request.
+pub(crate) trait VersionSources: Sync {
     /// The latest version of `package`, asked as `shell_env` would reach the network.
     fn latest_version(
         &self,
         package: &str,
+        shell_env: &HashMap<String, String>,
+    ) -> Result<String, Failure>;
+
+    /// `field` of the JSON object served at `url`, as a version, asked as `shell_env` would reach
+    /// the network.
+    fn manifest_version(
+        &self,
+        url: &str,
+        field: &str,
         shell_env: &HashMap<String, String>,
     ) -> Result<String, Failure>;
 }
@@ -62,43 +72,77 @@ pub(crate) trait Registry: Sync {
 /// The host of the registry, which `NO_PROXY` is matched against.
 const REGISTRY_HOST: &str = "registry.npmjs.org";
 
-/// The public npm registry, over HTTPS. A custom registry in the user's `.npmrc` is not read.
-#[cfg_attr(
-    test,
-    allow(dead_code, reason = "the tests use a registry of their own")
-)]
-pub(crate) struct NpmRegistry;
+/// The network as the daemon reads it: the public npm registry and the makers' manifests, over
+/// HTTPS alone, a redirect included. A custom registry in the user's `.npmrc` is not read.
+pub(crate) struct Network {
+    https_only: bool,
+}
 
-impl Registry for NpmRegistry {
+impl Network {
+    /// The network as it is read outside the tests.
+    pub(crate) const PUBLIC: Network = Network { https_only: true };
+
+    /// The network with plain HTTP allowed, for a test's server on the loopback.
+    #[cfg(test)]
+    pub(crate) const LOCAL: Network = Network { https_only: false };
+}
+
+impl VersionSources for Network {
     fn latest_version(
         &self,
         package: &str,
         shell_env: &HashMap<String, String>,
     ) -> Result<String, Failure> {
         let url = format!("https://{REGISTRY_HOST}/{package}/latest");
-        let agent: ureq::Agent = ureq::Agent::config_builder()
-            .timeout_global(Some(LOOKUP_TIMEOUT))
-            .proxy(proxy_of(shell_env)?)
-            .tls_config(
-                ureq::tls::TlsConfig::builder()
-                    .root_certs(ureq::tls::RootCerts::PlatformVerifier)
-                    .build(),
-            )
-            .build()
-            .into();
-        let mut response = agent
-            .get(&url)
-            .header("Accept", "application/json")
-            .call()
-            .map_err(|err| Failure::Failed(err.to_string()))?;
-        let body = response
-            .body_mut()
-            .with_config()
-            .limit(REPLY_LIMIT as u64)
-            .read_to_string()
-            .map_err(|err| Failure::Failed(err.to_string()))?;
+        let body = self.get_json(&url, proxy_of(shell_env)?)?;
         version_field(&body, "version")
     }
+
+    fn manifest_version(
+        &self,
+        url: &str,
+        field: &str,
+        shell_env: &HashMap<String, String>,
+    ) -> Result<String, Failure> {
+        let proxy = crate::env_shell::proxy_for_url(shell_env, url).map_err(Failure::Failed)?;
+        let body = self.get_json(url, proxy)?;
+        version_field(&body, field)
+    }
+}
+
+impl Network {
+    /// The body served at `url`, asked for as JSON through `proxy`, trusting the system's
+    /// certificate store and bounded in time and size.
+    fn get_json(&self, url: &str, proxy: Option<ureq::Proxy>) -> Result<String, Failure> {
+        get_json(url, proxy, self.https_only)
+    }
+}
+
+/// The body served at `url`, asked for as JSON through `proxy`, over HTTPS alone, a redirect
+/// included, where `https_only`.
+fn get_json(url: &str, proxy: Option<ureq::Proxy>, https_only: bool) -> Result<String, Failure> {
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(LOOKUP_TIMEOUT))
+        .https_only(https_only)
+        .proxy(proxy)
+        .tls_config(
+            ureq::tls::TlsConfig::builder()
+                .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                .build(),
+        )
+        .build()
+        .into();
+    let mut response = agent
+        .get(url)
+        .header("Accept", "application/json")
+        .call()
+        .map_err(|err| Failure::Failed(err.to_string()))?;
+    response
+        .body_mut()
+        .with_config()
+        .limit(REPLY_LIMIT as u64)
+        .read_to_string()
+        .map_err(|err| Failure::Failed(err.to_string()))
 }
 
 /// The proxy `shell_env` names for the registry, `None` when it names none or `NO_PROXY` exempts
@@ -116,14 +160,24 @@ pub(crate) fn latest_version(
     packaging: &CliPackaging,
     install: &Install,
     shell_env: &HashMap<String, String>,
-    registry: &dyn Registry,
+    sources: &dyn VersionSources,
 ) -> Option<Result<String, Failure>> {
     match install.method {
-        CliInstallMethod::Native => match &packaging.native_latest {
-            Some(check) => Some(own_check(agent, check, shell_env)),
-            None => Some(registry.latest_version(packaging.npm_package?, shell_env)),
+        CliInstallMethod::Native => match (&packaging.native_latest, &packaging.native_manifest) {
+            (Some(check), _) => Some(own_check(agent, check, shell_env)),
+            (None, Some(manifest)) => Some(sources.manifest_version(
+                manifest.url_here()?,
+                manifest.version_field,
+                shell_env,
+            )),
+            (None, None) => {
+                let [package] = packaging.npm_packages else {
+                    return None;
+                };
+                Some(sources.latest_version(package, shell_env))
+            }
         },
-        CliInstallMethod::Npm => Some(registry.latest_version(packaging.npm_package?, shell_env)),
+        CliInstallMethod::Npm => Some(sources.latest_version(install.npm_package()?, shell_env)),
         CliInstallMethod::Homebrew => {
             let command = install.homebrew_info_command(shell_env)?;
             Some(homebrew_record(&command, shell_env))

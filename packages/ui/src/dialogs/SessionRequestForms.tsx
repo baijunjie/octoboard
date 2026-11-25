@@ -6,6 +6,7 @@ import { applyCompatibility, changedCompatibility } from "../agents/launchCompat
 import { accountDisabledUnavailable, incompleteAccount, sharingChangeRuns } from "../accounts/choiceEntries";
 import { handoffBlock, switchEntries, switchEntryBlock } from "../accounts/switchEntries";
 import { providerModelDisplay } from "../agents/providers";
+import { accountConfigDir } from "../accounts/accountDir";
 import { quotaNaming } from "../accounts/quotaFormat";
 import { inheritedSessionLaunch, launchWithOverrides } from "../agents/agents";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
@@ -108,6 +109,7 @@ export function SwitchRequestForm({ request, onReport }: { request: SwitchReques
   const parentConsole = useDaemonStore((s) => s.consoles.get(request.console));
   const project = useDaemonStore((s) => (request.project ? s.projects.get(request.project) : undefined));
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const quotas = useDaemonStore((s) => s.accountQuotas);
   const providers = useProviders();
@@ -147,7 +149,7 @@ export function SwitchRequestForm({ request, onReport }: { request: SwitchReques
       : chosenDisabled
         ? accountRefusalMessage("accountChoice.disabled.description", chosen.name)
         : chosenSignedOut
-          ? accountRefusalMessage("accountChoice.signedOut.description", chosen.name)
+          ? accountRefusalMessage("accountChoice.signedOut.description", chosen.name, { providers, agent: session.agent, dir: accountConfigDir(accounts, agentAvailability, providers, session.agent, chosen.account) })
           : chosen && chosen.exhaustedBy && chosen.quota
             ? quotaUsedUpMessage(t, quotaNaming(chosen.quota, providers), chosen.name, chosen.exhaustedBy, now)
             : sharingBlock;

@@ -20,13 +20,13 @@ pub(super) fn supported(spec: &LaunchSpec<'_>, plan: &LaunchPlan) -> bool {
     if !spec.agent_version.is_some_and(|version| version >= MINIMUM) {
         return false;
     }
-    let variable = layout(AgentId::CLAUDE).config_dir_var;
+    let layout = layout(AgentId::CLAUDE);
     let directory = plan
         .env
         .iter()
         .rev()
-        .find(|(key, _)| key == variable)
-        .map(|(_, value)| std::path::PathBuf::from(value))
+        .find(|(key, _)| key == layout.config_dir_var)
+        .map(|(_, value)| layout.config_dir_of_export(std::path::Path::new(value)))
         .unwrap_or_else(|| adapter::account_dir(AgentId::CLAUDE, spec.config_dir, spec.shell_env));
     if directory.as_os_str().is_empty() {
         return false;

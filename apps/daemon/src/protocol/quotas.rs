@@ -97,8 +97,11 @@ impl QuotaUnavailable {
     }
 }
 
-/// The plan quota of one account as the agent's own CLI last reported it. Runtime state of the
-/// daemon: never stored and never part of an exported configuration.
+/// The plan quota of one account as the agent's own CLI last reported it. For a provider that
+/// declares no quota window (`QuotaWindowNaming::kinds` empty) it is instead a reading of the
+/// account's sign-in: no plan, no windows, the email when signed in, and the not-signed-in state
+/// in `unavailable` when signed out. Runtime state of the daemon: never stored and never part of
+/// an exported configuration.
 #[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AccountQuota {
@@ -113,9 +116,13 @@ pub struct AccountQuota {
     /// whether or not the quota could be; `None` for an account that is not signed in or whose
     /// configuration directory is missing.
     pub email: Option<String>,
-    /// Empty when the account has never been read. After a failed re-read, the last good windows
-    /// stay (with their `fetched_at`) and `unavailable` says why the newer attempt failed.
+    /// Empty when the account has never been read, and always for a provider that declares no
+    /// quota window. After a failed re-read, the last good windows stay (with their `fetched_at`)
+    /// and `unavailable` says why the newer attempt failed.
     pub windows: Vec<QuotaWindow>,
+    /// Why the reading is missing or stale, or that the account is not signed in or its directory
+    /// is missing. For a provider that declares no quota window, `None` does not by itself mean
+    /// signed in: the provider may not be able to tell, and says nothing then.
     pub unavailable: Option<QuotaUnavailable>,
     /// The account's usable rate limit reset credits (Codex only); absent when it has none or the
     /// agent says nothing of them. Kept, like the windows, over a failed re-read.

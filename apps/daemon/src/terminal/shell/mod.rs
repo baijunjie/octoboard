@@ -325,17 +325,15 @@ pub async fn create(
 }
 
 /// The environment a shell starts in: the snapshot of the user's shell as it is, or, when none
-/// could be taken, `inherited` (the daemon's own) without the variables that mark an agent
-/// session, as the snapshot is filtered. `TERM` is the terminal the UI renders with either way.
+/// could be taken, `inherited` (the daemon's own) as it stands outside the agent session the
+/// daemon may have been started in, as the snapshot is (`env_shell::outside_session`). `TERM` is
+/// the terminal the UI renders with either way.
 fn shell_environment(
     snapshot: Option<HashMap<String, String>>,
     inherited: impl Iterator<Item = (String, String)>,
 ) -> HashMap<String, String> {
-    let mut env = snapshot.unwrap_or_else(|| {
-        inherited
-            .filter(|(key, _)| !crate::env_shell::is_filtered(key))
-            .collect()
-    });
+    let mut env =
+        snapshot.unwrap_or_else(|| crate::env_shell::outside_session(inherited.collect()));
     env.insert("TERM".to_string(), pty::TERM.to_string());
     env
 }

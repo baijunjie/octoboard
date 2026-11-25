@@ -1,8 +1,12 @@
-import React from "react";
+import React, { useId, useRef, useState } from "react";
 
-import { AlertStatusContext } from "./AlertButton";
+import { useT } from "../../i18n/react";
+import { AlertButton, AlertStatusContext } from "./AlertButton";
 import { AlertFrame, type AlertStatus } from "./AlertFrame";
 import { DetailsButton } from "./DetailsButton";
+import { RecoveryLink, type RecoveryAction } from "./ErrorGuidance";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
+import { useHandoffAfterRemoval } from "../focus/HandoffOnUnmount";
 import { useAlertAnnouncement } from "../announce/useAlertAnnouncement";
 import { AlertContent, AlertDescription, AlertIndicator, AlertTitle } from "../../primitives";
 
@@ -57,6 +61,7 @@ function AlertMessage({ textId, title, announce, announceKey, announceDelayMs, i
  * an alert after the delay (`AFTER_FOCUS_MOVE_DELAY_MS`), and until then the text is only shown. Like `announce`, it is
  * read as the Alert mounts. `delayEachAttempt` also restarts that delay for each new `announceKey`, for a retry whose
  * own state feedback or focus handover would otherwise mask the next failure; recovery controls stay mounted.
+ * A change to the set of failure controls also waits out the focus feedback before announcing.
  * `insideAlertDialog` is for an Alert in an alert dialog (a warning modal), which WebKit exposes as an assertive live
  * region that speaks what is inserted into it: while the delay runs, the announcing part is hidden from assistive
  * technology, so the one insertion the dialog sees is the alert after the delay, and the failure is spoken once.
@@ -74,6 +79,9 @@ export function ErrorAlert({
   remedy,
   details,
   actions,
+  recoveryLink,
+  retry,
+  focusFallback,
   children,
   className = "",
 }: {
@@ -91,25 +99,55 @@ export function ErrorAlert({
   remedy?: React.ReactNode;
   details?: React.ReactNode;
   actions?: React.ReactNode;
+  recoveryLink?: Extract<RecoveryAction, { kind: "link" }>;
+  retry?: { onPress: () => void; pending?: boolean };
+  /** The view's named control to focus if a focused failure control goes away and there is no Try again. */
+  focusFallback?: () => HTMLElement | null | undefined;
   children?: React.ReactNode;
   className?: string;
 }): React.ReactElement {
+  const t = useT();
+  const controlsId = useId();
+  const detailsId = `${controlsId}-details`;
+  const linkId = `${controlsId}-link`;
+  const retryId = `${controlsId}-retry`;
+  const retryRef = useRef<HTMLButtonElement>(null);
+  const handoffFrom = useHandoffAfterRemoval(() => retryRef.current ?? focusFallback?.());
+  const hasDetails = Boolean(details && (focusFallback || retry || recoveryLink));
+  const hasLink = Boolean(recoveryLink);
+  const hasRetry = Boolean(retry);
+  const [controls, setControls] = useState({ hasDetails, hasLink, hasRetry, changes: 0 });
+  if (controls.hasDetails !== hasDetails || controls.hasLink !== hasLink || controls.hasRetry !== hasRetry) {
+    setControls({ hasDetails, hasLink, hasRetry, changes: controls.changes + 1 });
+  }
+  // Only the announcement restarts. The recovery controls keep their DOM identity across answers.
+  const delay = announce && controls.changes > 0 ? Math.max(announceDelayMs ?? 0, AFTER_FOCUS_MOVE_DELAY_MS) : announceDelayMs;
+  const announcementKey = `${controls.changes}:${delayEachAttempt ? announceKey : ""}`;
   return (
     <div id={id} className={`min-w-0 shrink-0 text-start ${className}`}>
       <AlertFrame status={status} className="flex-wrap">
         <AlertIndicator />
         <AlertContent className="min-w-40 basis-0">
-          <AlertMessage key={delayEachAttempt ? announceKey : undefined} textId={textId} title={title} announce={announce} announceKey={announceKey} announceDelayMs={announceDelayMs} insideAlertDialog={insideAlertDialog}>
+          <AlertMessage key={announcementKey} textId={textId} title={title} announce={announce} announceKey={announceKey} announceDelayMs={delay} insideAlertDialog={insideAlertDialog}>
             {children}
           </AlertMessage>
           {remedy && <AlertDescription>{remedy}</AlertDescription>}
         </AlertContent>
-        {(actions || details) && (
+        {(actions || details || recoveryLink || retry) && (
           <div className="ms-auto flex max-w-full flex-wrap items-center justify-end gap-2">
             <AlertStatusContext.Provider value={status}>
               {/* The recovery action is the primary one, so it takes the trailing edge, as a dialog's
                   confirming button does; Details stands before it. */}
-              {details && <DetailsButton>{details}</DetailsButton>}
+              {hasDetails && handoffFrom(`#${CSS.escape(detailsId)}`)}
+              {recoveryLink && handoffFrom(`#${CSS.escape(linkId)}`)}
+              {retry && handoffFrom(`#${CSS.escape(retryId)}`)}
+              {details && <DetailsButton id={hasDetails ? detailsId : undefined}>{details}</DetailsButton>}
+              {recoveryLink && <RecoveryLink id={linkId} action={recoveryLink} size="sm" />}
+              {retry && (
+                <AlertButton id={retryId} ref={retryRef} kind="action" size="sm" focusOnPress={false} pending={retry.pending} onPress={retry.onPress}>
+                  {t("error.tryAgain")}
+                </AlertButton>
+              )}
               {actions}
             </AlertStatusContext.Provider>
           </div>

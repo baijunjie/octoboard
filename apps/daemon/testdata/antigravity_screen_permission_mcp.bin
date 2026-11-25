@@ -1,0 +1,77 @@
+[>q[c[?2026$p[?2027$p]11;?[>4m[?1049h[?25l[?5W[?2004h[>4;2m[>5u[?u]7501;state=blocked:kind=auth:app=antigravity:msg=U2lnbiBpbiByZXF1aXJlZA==[H[2J
+[6G[38;5;179m▄[38;5;208;48;5;208m▀[38;5;203;48;5;209m▀[49m▄[m
+[5G[38;5;149;48;5;113m▀[38;5;143;48;5;107m▀[38;5;173;48;5;173m▀[38;5;209;48;5;209m▀[38;5;203;48;5;167m▀▀[m
+[4G[38;5;107;48;5;113m▀[38;5;71;48;5;72m▀[38;5;72;48;5;68m▀[38;5;67;49m▀[38;5;103m▀[38;5;98;48;5;68m▀[38;5;97;48;5;62m▀[38;5;132;48;5;97m▀[m
+  [38;5;78m▄[48;5;74m▀[38;5;73m▀[m    [38;5;68;48;5;69m▀▀[49m▄[m
+ [38;5;75m▄[38;5;79;48;5;75m▀[38;5;75;49m▀[m      [38;5;69m▀[48;5;69m▀[49m▄[m
+
+ Welcome to the [38;5;69mAntigravity CLI[m. You are currently not signed in.
+
+ ⣷  Signing in...[>4m[<1u[?1049l[>4;2m[>5u[?u[0 q]7501;state=idle:app=antigravity[J
+[6C[38;5;179m▄[38;5;208;48;5;208m▀[38;5;203;48;5;209m▀[49m▄[m
+[5D[38;5;149;48;5;113m▀[38;5;143;48;5;107m▀[38;5;173;48;5;173m▀[38;5;209;48;5;209m▀[38;5;203;48;5;167m▀▀[m
+[7D[38;5;107;48;5;113m▀[38;5;71;48;5;72m▀[38;5;72;48;5;68m▀[38;5;67;49m▀[38;5;103m▀[38;5;98;48;5;68m▀[38;5;97;48;5;62m▀[38;5;132;48;5;97m▀[m
+[9D[38;5;78m▄[48;5;74m▀[38;5;73m▀[m    [38;5;68;48;5;69m▀▀[49m▄[m
+  [38;5;75m▄[38;5;79;48;5;75m▀[38;5;75;49m▀[m      [38;5;69m▀[48;5;69m▀[49m▄[m
+
+  [94;1mAntigravity CLI 1.5.14[m
+  [90mGemini API key[m
+  [90mGemini 3.1 Pro (Low)[m
+  [90m/scratch/project[m
+
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[94m>[m
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90m? for shortcuts[m[85X[85C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25ltool call_mcp_tool {"ServerName":"probe","ToolName":"slow","Arguments":{"seconds":0.1}}
+
+	   [1K [2mG[m[2A[12D[?25h[?25l[87D[K
+
+[90m? for shortcuts[m[2A[13D[?25h[?25l]7501;state=working:app=antigravityM[58C[K
+[34;1m> tool call_mcp_tool {"ServerName":"probe","ToolName":"slow","Arguments":{"seconds":0.1}}[m
+⣾  [90mGenerating...[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[94m>[m
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l[2A⣷ 
+
+[?25h[?25l[2A⣯ 
+
+[?25h[?25l[2A⣟ 
+
+[?25h[?25l[2A⡿ 
+
+[?25h[?25l[2A⢿ 
+
+[?25h[?25l[2A⣻ 
+
+[?25h[?25l[2A⣽  [94mGe[m
+
+[?25h[?25l[2A⣾  [94mGen[m
+
+[4D[?25h[?25l[2A⣷  [94mGene[m
+
+[5D[?25h[?25l[2A[K
+[33m●[m [33;1mCalling[m 1 MCP tool [37m(probe/slow)[m [37m(ctrl+o to expand)[m[K
+⣷  [94mCalli[90mng MCP tool...[m
+
+[94m>[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l[2A⣯ 
+
+[?25h[?25l[0 q]7501;state=blocked:kind=permission:app=antigravity:msg=QXBwcm92ZSBNY3BUb29sOiBwcm9iZS9zbG93[3A[4C[33;1med[m [P
+[K
+[33;1mMCP[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[K
+[37mprobe/slow[m[K
+
+[1mAllow calling this tool?[m
+[94m> 1. Yes, allow tool call[K[m
+  2. Yes, and always allow tool 'probe/slow' in this conversation
+  3. Yes, and always allow tool 'probe/slow' (Persist to settings.json)
+  4. No, deny tool call
+  5. No, and always deny tool 'probe/slow' in this conversation
+  6. No, and always deny tool 'probe/slow' (Persist to settings.json)
+
+  [94;1m↑/↓[90;22m Navigate · [94;1mtab[90;22m Amend[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m

@@ -37,7 +37,7 @@ export function ErrorAlertBody({ alert, issueGuidance, descriptionId }: { alert:
           {issueGuidance && <p>{issueGuidance}</p>}
           {alert.details === undefined && diagnostics.length > 0 && <DetailsDisclosure><DiagnosticBlock>{[...new Set(diagnostics)].join("\n\n")}</DiagnosticBlock></DetailsDisclosure>}
         </>
-        : !alert.failures?.length && !alert.remedyInBody && alert.classification.recovery !== "none" && <p><RecoveryGuidance recovery={alert.classification.recovery} /></p>}
+        : !alert.failures?.length && !alert.remedyInBody && alert.classification.recovery !== "none" && <p><RecoveryGuidance recovery={alert.classification.recovery} error={alert.error} /></p>}
       {/* Said even for an unexpected failure, since a failed handoff's line is about what it left behind (an original
         still open, both sessions running), not a remedy of the failure. */}
       {!alert.failures?.length && also && (alert.classification.kind === "unexpected" || also !== alert.classification.recovery) && <p><RecoveryGuidance recovery={also} /></p>}

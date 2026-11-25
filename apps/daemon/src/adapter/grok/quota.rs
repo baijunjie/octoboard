@@ -10,14 +10,20 @@ use crate::accounts::quotas::diagnostics::redact;
 use crate::accounts::quotas::kick::{
     strings, KickCommand, KICK_PROMPT, KICK_SYSTEM_PROMPT, REPLY_TOKEN_CAP,
 };
+#[cfg(test)]
+use crate::accounts::quotas::probe::ProbeFixture;
 use crate::accounts::quotas::probe::{
-    is_second_response, reading, refusal_problem, QuotaProbe, Reading, ReplyProblem,
+    is_second_response, marks_error, reading, refusal_problem, QuotaProbe, Reading, ReplyProblem,
 };
 use crate::agents::json_rpc;
 use crate::protocol::{AgentId, QuotaWindow, QuotaWindowKind};
 use crate::time::parse_rfc3339_millis;
 
 pub(super) struct GrokQuota;
+
+/// The reply the tests read, which the probe's fixture hands out too.
+#[cfg(test)]
+const REPLY: &str = include_str!("../../../testdata/grok_billing_reply.json");
 
 impl QuotaProbe for GrokQuota {
     fn args(&self) -> &'static [&'static str] {
@@ -33,6 +39,10 @@ impl QuotaProbe for GrokQuota {
         .iter()
         .map(Value::to_string)
         .collect()
+    }
+
+    fn is_error_like(&self, line: &Value) -> bool {
+        marks_error(line)
     }
 
     fn is_reply(&self, value: &Value) -> bool {
@@ -62,6 +72,18 @@ impl QuotaProbe for GrokQuota {
         match reply.and_then(json_rpc::error_detail) {
             Some(detail) => format!("the billing request was refused: {}", redact(&detail)),
             None => "the billing request was refused".to_string(),
+        }
+    }
+
+    #[cfg(test)]
+    fn test_fixture(&self) -> ProbeFixture {
+        ProbeFixture {
+            request_marker: Some("_x.ai/billing"),
+            reply: REPLY,
+            unreadable_reply: r#"{"jsonrpc":"2.0","id":2,"result":{}}"#,
+            error_line: Some(
+                r#"{"jsonrpc":"2.0","id":9,"error":{"code":-32603,"message":"refresh failed for me@example.com"}}"#,
+            ),
         }
     }
 }
@@ -177,3 +199,6 @@ pub(crate) fn read_grok(
     };
     reading(result.get("subscription_tier"), vec![window], false)
 }
+
+#[cfg(test)]
+mod tests;

@@ -68,7 +68,7 @@ impl Stub {
             let Some((request_line, _)) = read_request(&mut reader) else {
                 return;
             };
-            let answer = if request_line.starts_with("HEAD ") {
+            let answer = if crate::test_support::is_port_probe(&request_line) {
                 NOT_FOUND.to_owned()
             } else {
                 asked.send(request_line).ok();

@@ -4,7 +4,9 @@
 //! it stands ([`super::InteractionReader::next_key`]), written alone and only while, under the
 //! input lock, the screen still calls for that key and nothing else has written into the session
 //! since the prompt was published, and each is waited on, for a bounded time, to change the screen
-//! before the next is chosen. The only text written is the user's own answer, as a bracketed paste
+//! before the next is chosen. Keys a provider chooses together, where the screen between them
+//! tells nothing ([`super::NextKey::PressAll`]), are written as one write under the same rules and
+//! waited on as one key. The only text written is the user's own answer, as a bracketed paste
 //! the provider puts in a field the prompt opened for it.
 
 use std::sync::Arc;
@@ -57,7 +59,7 @@ thread_local! {
 
 /// Why a press stopped.
 #[derive(Debug, PartialEq, Eq)]
-enum Stopped {
+pub(super) enum Stopped {
     /// The prompt is not the one answered any more, or someone else has it in hand.
     NotWaiting,
     /// The keys could not be pressed, or did not take.
@@ -127,7 +129,7 @@ pub fn answer(
 }
 
 /// The keys of `answer`, each given `patience` to take.
-fn press(
+pub(super) fn press(
     live: &LiveSession,
     reader: &dyn InteractionReader,
     published: &Published,
@@ -166,17 +168,24 @@ fn press(
             }
             _ => {}
         }
-        if pressed == MOST_KEYS {
-            return Err(Stopped::Failed(format!(
-                "the prompt was still up after {MOST_KEYS} keys"
-            )));
-        }
-        let key = match reader.next_key(&screen, call, answer) {
-            NextKey::Press(key) => key,
+        let chosen = reader.next_key(&screen, call, answer);
+        let keys = match &chosen {
+            NextKey::Press(key) => std::slice::from_ref(key),
+            NextKey::PressAll(keys) if !keys.is_empty() => keys.as_slice(),
+            NextKey::PressAll(_) => {
+                return Err(Stopped::Failed("the provider chose no key".to_string()))
+            }
             NextKey::Stuck(reason) => return Err(Stopped::Failed(reason.to_string())),
         };
+        // Keys chosen together count one each, and are not written at all when they would take
+        // the answer past the most it may take.
+        if pressed + keys.len() > MOST_KEYS {
+            return Err(Stopped::Failed(format!(
+                "the prompt was still up after {pressed} keys, and the next would pass {MOST_KEYS}"
+            )));
+        }
         let still = |now: &str| {
-            reader.next_key(now, call, answer) == NextKey::Press(key.clone())
+            reader.next_key(now, call, answer) == chosen
                 && match reader.read(now, &live.interaction.calls()) {
                     Reading::Gone | Reading::Unknown => false,
                     Reading::Shown { call: index, .. } => same_call(live, index, call),
@@ -184,10 +193,10 @@ fn press(
                 }
         };
         let gate = || still(&screen_of(live, reader));
-        match live.write_keys_if(expected, gate, std::slice::from_ref(&key)) {
+        match live.write_keys_if(expected, gate, keys) {
             Ok(true) => {
                 expected += 1;
-                pressed += 1;
+                pressed += keys.len();
             }
             // Someone typed into the terminal: the prompt is theirs.
             Ok(false) if live.input_writes() != expected => return Err(Stopped::NotWaiting),

@@ -9,13 +9,19 @@ use crate::accounts::quotas::diagnostics::{redact, truncate, LINE_LIMIT};
 use crate::accounts::quotas::kick::{
     strings, KickCommand, KICK_PROMPT, KICK_SYSTEM_PROMPT, REPLY_TOKEN_CAP,
 };
+#[cfg(test)]
+use crate::accounts::quotas::probe::ProbeFixture;
 use crate::accounts::quotas::probe::{
-    reading, QuotaProbe, Reading, ReplyProblem, SESSION_MINUTES, WEEK_MINUTES,
+    marks_error, reading, QuotaProbe, Reading, ReplyProblem, SESSION_MINUTES, WEEK_MINUTES,
 };
 use crate::protocol::{QuotaWindow, QuotaWindowKind};
 use crate::time::parse_rfc3339_millis;
 
 pub(super) struct ClaudeQuota;
+
+/// The reply the tests read, which the probe's fixture hands out too.
+#[cfg(test)]
+const REPLY: &str = include_str!("../../../testdata/claude_get_usage_reply.json");
 
 impl QuotaProbe for ClaudeQuota {
     fn args(&self) -> &'static [&'static str] {
@@ -48,6 +54,10 @@ impl QuotaProbe for ClaudeQuota {
         .iter()
         .map(Value::to_string)
         .collect()
+    }
+
+    fn is_error_like(&self, line: &Value) -> bool {
+        marks_error(line)
     }
 
     fn is_reply(&self, value: &Value) -> bool {
@@ -100,6 +110,18 @@ impl QuotaProbe for ClaudeQuota {
             ));
         }
         reason
+    }
+
+    #[cfg(test)]
+    fn test_fixture(&self) -> ProbeFixture {
+        ProbeFixture {
+            request_marker: Some("get_usage"),
+            reply: REPLY,
+            unreadable_reply: r#"{"type":"control_response","response":{"subtype":"success","request_id":"r2","response":{}}}"#,
+            error_line: Some(
+                r#"{"type":"auth_status","isAuthenticating":false,"error":"refresh failed for me@example.com"}"#,
+            ),
+        }
     }
 }
 
@@ -268,3 +290,6 @@ fn claude_fallback(limits: &Value) -> Vec<QuotaWindow> {
     }
     windows
 }
+
+#[cfg(test)]
+mod tests;

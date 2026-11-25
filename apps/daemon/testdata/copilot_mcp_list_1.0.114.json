@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "computer-use": {
+      "source": "builtin",
+      "type": "stdio",
+      "enabled": true,
+      "sourcePlugin": "computer-use"
+    },
+    "example": {
+      "source": "user",
+      "type": "http",
+      "enabled": false,
+      "url": "https://example.org/mcp"
+    },
+    "local": {
+      "source": "user",
+      "type": "local",
+      "enabled": true
+    },
+    "github-mcp-server": {
+      "source": "builtin",
+      "type": "http",
+      "enabled": true,
+      "url": "https://api.individual.githubcopilot.com/mcp/readonly"
+    }
+  }
+}

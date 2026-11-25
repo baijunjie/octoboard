@@ -18,6 +18,7 @@ use crate::time::now_millis;
 
 use super::super::accounts::AccountGate;
 use super::super::open::{open_session_with, resolve_open_with, OpenRequest};
+use super::super::validate::field_required;
 
 /// What starts a run's agent: `term::launch` outside the tests, which cannot start an agent.
 pub(crate) type Launcher =
@@ -105,6 +106,12 @@ async fn start_session(
     task: &ScheduledTask,
     launch: &Launcher,
 ) -> Result<(Session, bool)> {
+    // A task saved before a prompt of nothing but control and invisible characters was refused
+    // can still hold one. Opening its session would hand the agent no task, so the run fails with
+    // what saving such a prompt is refused with instead of starting a session that sits idle.
+    if term::is_blank_once_stripped(&task.prompt) {
+        return Err(field_required("prompt"));
+    }
     let mut request = open_request(task);
     let mut independent = false;
     if let Some(owner) = &request.bound_to {

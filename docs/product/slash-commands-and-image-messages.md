@@ -12,11 +12,15 @@ shows the failure notices below.
 ## Which agents take them
 
 Each provider declares, in its descriptor's capabilities, whether it takes images attached to a message
-(`message_images`) and whether it runs a slash command sent as one (`slash_commands`). Claude Code, Codex and Grok
-Build declare both. A provider that does not is refused the request with `provider_unsupported` (operation
+(`message_images`) and whether it runs a slash command sent as one (`slash_commands`). All eight supported agents declare both, including OpenCode. A provider that does not is refused the request with `provider_unsupported` (operation
 `message_images` or `slash_commands`), and nothing is written. So is a slash command with no arguments for a provider
-whose input box Octoboard has no measured key to clear, since a wrong completion could not be taken back (see below);
-the three agents all have one.
+whose input box Octoboard has no measured way to clear, since a wrong completion could not be taken back (see below):
+Ctrl-U pressed a line at a time, or a key the provider declares that empties the whole box at once at its idle prompt
+(GitHub Copilot CLI's Ctrl-C, whose Ctrl-U empties only one line of a draft). Such a key is pressed once, only while
+the session reads at its idle prompt with text in the box, and never mid-turn, where it may interrupt the turn; a clear
+needed mid-turn falls back to Ctrl-U where the provider has it, and otherwise leaves the box as it stands. Saving the image a message would name is refused the same way for a session of a
+provider without `message_images` (see "The request" in `docs/product/pasting-images.md`), so such a session has no
+image to send.
 
 ## Sending a slash command
 
@@ -38,9 +42,17 @@ with `ack` once the command is written.
   Code ran `/probecmd` for a pasted `/probe`, Codex runs `/status` for a typed `/sta`, and Grok Build only completed a
   pasted prefix and sent nothing. Where the completion offers another command than the one written, the command is
   cleared from the input box and not sent, and the request is refused with `command_not_recognised` (`agent`,
-  `command`, `offered`: the command offered, with its slash and without arguments). Where the clearing keys were refused
-  or did not show, the command may be left in the box. A completion shows only for a lone `/name`, so a command with
+  `command`, `offered`: the command offered, with its slash and without arguments). Where the agent's list says no
+  command matches what was written (OpenCode's `No matching items`), the command is cleared and refused with a code of
+  its own, `command_not_found` (`agent`, `command`): an Enter would have sent it to the model as a prompt. Where the clearing keys were refused or did
+  not show, the command may be left in the box. A completion shows only for a lone `/name`, so a command with
   arguments has nothing to be checked against.
+- **A space after a lone command, where the agent needs one.** A provider whose first Enter on a lone `/name` takes its
+  completion into the box rather than running it (OpenCode) has a space typed after the command, as a key of its own,
+  once the completion has been looked at and only while the provider reads its list up; the Enter follows only once
+  the provider reads that list closed, which shows the space landed. No list read up before the space leaves the
+  command in the box unsent, with no space typed; a list still up after it, or one the provider cannot tell of, leaves
+  the command and its space there; either is a command left in the box.
 - **Sent once the box empties.** An agent's own command reports no prompt, so its Enter is confirmed by the input box
   emptying, not by a hook. A command left in the box is a message left unsent, with its notice and the hold on later
   messages (see "A message written but not sent" in `docs/product/message-delivery.md`); its Enter is not pressed again.
@@ -93,5 +105,8 @@ code; every client is sent the notice about the session in any case.
   session could not be written, so it was not sent, and that later messages are still sent, with the reason
   (`detail`, English) under its details.
 - **`command_not_recognised`** (`agent`, `command`, `offered`): the agent would have run `offered` instead of the
-  command written. The window shows it as an error alert titled "Command not sent", saying so, and to clear the command
-  from the input box if it is still there.
+  command written. The window shows it as an error alert titled "Command not sent", saying which command would have
+  run, and to clear the command from the input box if it is still there.
+- **`command_not_found`** (`agent`, `command`): the agent has no such command. The window shows it as an error alert
+  titled "Command not sent", saying the agent has no command of that name, and to clear the command from the input
+  box if it is still there. A window older than this code shows the daemon's English message.

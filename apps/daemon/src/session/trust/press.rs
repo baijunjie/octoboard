@@ -120,10 +120,16 @@ fn shown(live: &LiveSession, screen: &Screen, terminal: &[u8]) -> bool {
     }
 }
 
-/// Which option the cursor is on in `terminal`, as [`recent`] or [`since`] read it: by its glyph,
-/// and, on the parsed screen only, by the option drawn in inverse video where no glyph says
-/// ([`Screen::cursor_in_inverse`]).
+/// Which option the cursor is on. A provider can identify the part of the rendered screen that
+/// holds its options. Otherwise read the glyph from `terminal` as [`recent`] or [`since`] read it,
+/// with inverse video as a fallback on a host that renders the screen.
 fn cursor(live: &LiveSession, screen: &Screen, terminal: &[u8]) -> Option<Cursor> {
+    if let Some(bounds) = crate::adapter::provider(live.agent)
+        .screen()
+        .trust_cursor_bounds()
+    {
+        return screen.cursor_in_region(&live.screen_text(), bounds);
+    }
     screen.cursor_on(terminal).or_else(|| {
         live.trust
             .reads_screen()
@@ -211,7 +217,7 @@ pub(super) fn press_down_then_enter(
         return Err(screen_gone(agent));
     }
     // A Down from the second option wraps round to the first, where the Enter would then exit.
-    if cursor(live, screen, &output) != Some(Cursor::Decline) {
+    if cursor(live, screen, &output) != Some(Cursor::Other) {
         return Err(cursor_not_at_start(agent));
     }
 
@@ -254,7 +260,7 @@ pub(super) fn press_enter(
     if !shown(live, screen, &output) {
         return Err(screen_gone(agent));
     }
-    // An Enter on the decline option quits or returns to the command center.
+    // An Enter on another option quits or returns to the command center.
     if cursor(live, screen, &output) != Some(Cursor::Accept) {
         return Err(cursor_not_at_start(agent));
     }

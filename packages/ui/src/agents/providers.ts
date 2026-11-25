@@ -1,5 +1,5 @@
 import { isMessageKey, type MessageKey, type PlainMessageKey, type Translate } from "../i18n/catalog";
-import type { Agent, ModelDisplay, ProviderInfo, SettingDescriptor } from "../protocol";
+import type { Agent, AgentAvailability, ModelDisplay, ProviderInfo, SettingDescriptor } from "../protocol";
 import type { ProviderMessageName } from "../providers/types";
 
 /** The UI's records of the codes the providers declare (`PROVIDER_CODES`, for the code registry) and their plan names
@@ -67,10 +67,58 @@ export function providerInstallUrl(providers: readonly ProviderInfo[], id: strin
   return servedProvider(providers, id)?.install_url;
 }
 
+/** Whether provider `id` can give accounts beyond the default one a directory each (`capabilities.owned_accounts`):
+ * where it cannot, the window offers no Add account for it and its section shows the default account only. A provider
+ * the daemon does not serve offers none. A daemon that predates the capability never sends it, and every provider it
+ * serves offered owned accounts, so a missing field reads as offered: only an explicit `false` withholds them. */
+export function offersOwnedAccounts(providers: readonly ProviderInfo[], id: string): boolean {
+  const served = servedProvider(providers, id);
+  // The generated type has the field required, but a released daemon's snapshot does not carry it.
+  return served !== undefined && (served.capabilities.owned_accounts as boolean | undefined) !== false;
+}
+
+/** Whether Octoboard reads a plan quota for provider `id`: the provider declares at least one quota window kind
+ * (`quota_windows.kinds`). A provider that declares none has no usage to show anywhere, no tab in the usage panel and
+ * no bar in an account list, and its accounts are never waited on for a reading. Read from the declaration, never from
+ * a reading. A provider the daemon does not serve has none to withhold, so it reads as having one. */
+export function hasPlanQuota(providers: readonly ProviderInfo[], id: string): boolean {
+  const served = servedProvider(providers, id);
+  return served === undefined || served.quota_windows.kinds.length > 0;
+}
+
+/** Whether the window can sign an account of provider `id` in without a terminal (`capabilities.login_flow`), which is
+ * what Log in drives. Where it cannot, an account that is not logged in says how to log in with the agent's own command
+ * instead (the provider's `signInHint`). A provider the daemon does not serve offers none. A daemon that predates the
+ * capability never sends it, and every provider it serves had a flow, so a missing field reads as offered: only an
+ * explicit `false` withholds it. */
+export function offersLoginFlow(providers: readonly ProviderInfo[], id: string): boolean {
+  const served = servedProvider(providers, id);
+  // The generated type has the field required, but a released daemon's snapshot does not carry it.
+  return served !== undefined && (served.capabilities.login_flow as boolean | undefined) !== false;
+}
+
+/** Whether the agent of provider `id` takes the path of an image file pasted into its terminal as an attached image
+ * (`capabilities.message_images`), which is what pasting or dropping an image onto a session's terminal relies on.
+ * Where it does not, an image is pasted as into any terminal and a dropped image file is attached as any file. A
+ * provider the daemon does not serve takes none. A daemon that predates the capability never sends it, and every
+ * provider it serves took images, so a missing field reads as taken: only an explicit `false` withholds it. */
+export function takesMessageImages(providers: readonly ProviderInfo[], id: string): boolean {
+  const served = servedProvider(providers, id);
+  // The generated type has the field required, but a released daemon's snapshot does not carry it.
+  return served !== undefined && (served.capabilities.message_images as boolean | undefined) !== false;
+}
+
 /** The provider's usual config directory as the account form shows it, under the home directory (`~/.claude`). */
 export function providerConfigDir(providers: readonly ProviderInfo[], id: string): string | undefined {
   const served = servedProvider(providers, id);
   return served && `~/${served.default_config_dir}`;
+}
+
+/** The configuration directory of an agent's default account as the window names it: the one the daemon found
+ * (`default_account_dir` of the agent's availability), else the provider's usual one under the home directory; empty
+ * where neither is known. */
+export function defaultAccountConfigDir(agentAvailability: ReadonlyMap<string, AgentAvailability>, providers: readonly ProviderInfo[], id: string): string {
+  return agentAvailability.get(id)?.default_account_dir ?? providerConfigDir(providers, id) ?? "";
 }
 
 /** The names at a project's top level that point at some provider (`CLAUDE.md`, `.claude`), as the daemon serves them,
@@ -84,6 +132,22 @@ export function detectionMarkers(providers: readonly ProviderInfo[]): string[] {
 export function providerMessageKey(id: string, name: ProviderMessageName): MessageKey | undefined {
   const key = `provider.${id}.${name}`;
   return isMessageKey(key) ? key : undefined;
+}
+
+/** The catalog keys of provider `id`'s wording of the question `question` its login asks: the question itself
+ * (`provider.<id>.loginQuestion.<question>`) and its two answers (`.yes` and `.no`). `undefined` unless the catalogs
+ * hold all three (a provider with no presentation module, a question a newer daemon asks): a question is offered for an
+ * answer only where the window can say the whole of it. */
+export function loginQuestionKeys(id: string, question: string): { question: MessageKey; yes: PlainMessageKey; no: PlainMessageKey } | undefined {
+  const key = `provider.${id}.loginQuestion.${question}`;
+  const [yes, no] = [`${key}.yes`, `${key}.no`];
+  return isMessageKey(key) && isMessageKey(yes) && isMessageKey(no) ? { question: key, yes: yes as PlainMessageKey, no: no as PlainMessageKey } : undefined;
+}
+
+export function secretLoginQuestionKeys(id: string, question: string): { question: MessageKey; field: PlainMessageKey; submit: PlainMessageKey } | undefined {
+  const key = `provider.${id}.loginQuestion.${question}`;
+  const [field, submit] = [`${key}.field`, `${key}.submit`];
+  return isMessageKey(key) && isMessageKey(field) && isMessageKey(submit) ? { question: key, field: field as PlainMessageKey, submit: submit as PlainMessageKey } : undefined;
 }
 
 /** The label of the action that opens provider `id`'s sessions in its own desktop application

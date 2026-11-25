@@ -378,6 +378,18 @@ it("offers only Leave out for an account whose name is the problem, and words th
   expect(row("Bad").querySelector("input")!.getAttribute("placeholder")).toBe("Ex. ~/.codex-work");
 });
 
+it("offers only Leave out for an account of an agent that has the default account only, and words the mark by the agent", async () => {
+  const codex = ACCOUNTS.agents[1];
+  const refused = account({ name: "Extra", status: "invalid", error: { code: "provider_unsupported", params: { agent: "codex", operation: "owned_accounts" }, message: "unsupported" } });
+  await reviewing({ accounts: { ...ACCOUNTS, agents: [ACCOUNTS.agents[0], { ...codex, accounts: [refused] }] }, consoles: [], id: null, settings: null, settings_sections: [], settings_versions: {} });
+  await act(async () => row("Extra").querySelector<HTMLButtonElement>("button[aria-haspopup=listbox]")!.click());
+  expect(Array.from(document.body.querySelectorAll("[role=option]")).map((o) => o.textContent)).toEqual(["Leave out"]);
+  await act(async () => document.body.querySelector<HTMLElement>("[role=option]")!.click());
+  const { text } = await markPopover(row("Extra"));
+  expect(text).toContain("supports only the default account");
+  expect(text).not.toContain("another directory");
+});
+
 it("shows an account of a status this build does not know by its name alone, offering only Leave out", async () => {
   const codex = ACCOUNTS.agents[1];
   const future = account({ name: "Future", status: "from_a_newer_daemon" });

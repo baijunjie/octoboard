@@ -68,14 +68,15 @@ export async function savePastedImagePath(image: Blob, sessionId: string, { t, r
   return reply.path;
 }
 
-/** The `pasteImage` handlers of a terminal controller: `save` sends the image to the session's daemon and answers with
- * the path to paste; `read` is the platform's, where it has one. Everything comes through `latest` and `readImage`,
- * since the controller is built once. */
+/** The `pasteImage` handlers of a terminal controller: `takes` is whether the session's agent takes images; `save`
+ * sends the image to the session's daemon and answers with the path to paste; `read` is the platform's, where it has
+ * one. Everything comes through `latest` and `readImage`, since the controller is built once. */
 export function pasteImageHandlers(
-  latest: () => { t: Translate; request: RequestSender },
+  latest: () => { t: Translate; request: RequestSender; takesImages: (sessionId: string) => boolean },
   readImage: (() => Promise<Blob | undefined>) | undefined,
 ): NonNullable<TerminalControllerHandlers["pasteImage"]> {
   return {
+    takes: (sessionId) => latest().takesImages(sessionId),
     read: readImage && (() => readImage()),
     async save(image, sessionId) {
       const { t, request } = latest();

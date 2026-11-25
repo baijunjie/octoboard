@@ -161,7 +161,34 @@ pub fn write_message(
     text: &str,
     when_blocked: WhenBlocked,
 ) -> Result<Delivery> {
-    write_message_inner(state, id, text, when_blocked, Origin::Automatic, None, None)
+    write_message_from(state, id, text, when_blocked, None)
+}
+
+/// [`write_message`] for a message the session `sender` sent: the queue keeps who sent it
+/// (`crate::messaging::outbox::Outbox::note_sender`), so that where it later turns out the message
+/// may not have been carried out (a cancel that may have dropped it, a turn that ended without
+/// taking it), that session is told as well as the user.
+///
+/// **Blocks** like [`write_message`].
+pub(crate) fn write_message_from(
+    state: &Arc<AppState>,
+    id: &str,
+    text: &str,
+    when_blocked: WhenBlocked,
+    sender: Option<&str>,
+) -> Result<Delivery> {
+    write_message_inner(
+        state,
+        id,
+        text,
+        None,
+        Write {
+            when_blocked,
+            origin: Origin::Automatic,
+            shape: None,
+            sender,
+        },
+    )
 }
 
 /// Who wrote a message handed to [`write_message_inner`].
@@ -189,10 +216,13 @@ pub async fn write_users_message_off_runtime(
             &state,
             &id,
             &text,
-            WhenBlocked::Refuse,
-            Origin::User,
             None,
-            None,
+            Write {
+                when_blocked: WhenBlocked::Refuse,
+                origin: Origin::User,
+                shape: None,
+                sender: None,
+            },
         )
     })
     .await?
@@ -217,10 +247,13 @@ pub async fn write_users_shaped_off_runtime(
             &state,
             &id,
             &text,
-            WhenBlocked::Refuse,
-            Origin::User,
             None,
-            Some(shape),
+            Write {
+                when_blocked: WhenBlocked::Refuse,
+                origin: Origin::User,
+                shape: Some(shape),
+                sender: None,
+            },
         )
     })
     .await?
@@ -248,15 +281,29 @@ pub(crate) fn blank_text() -> anyhow::Error {
     )
 }
 
+/// How [`write_message_inner`] is to write a message, beside the message itself.
+struct Write<'a> {
+    when_blocked: WhenBlocked,
+    origin: Origin,
+    /// More than text, written as it says ([`Shape`]).
+    shape: Option<Shape>,
+    /// The session that sent the message, where one did ([`write_message_from`]).
+    sender: Option<&'a str>,
+}
+
 fn write_message_inner(
     state: &Arc<AppState>,
     id: &str,
     text: &str,
-    when_blocked: WhenBlocked,
-    origin: Origin,
     mut first: Option<&mut FirstMessage>,
-    shape: Option<Shape>,
+    write: Write<'_>,
 ) -> Result<Delivery> {
+    let Write {
+        when_blocked,
+        origin,
+        shape,
+        sender,
+    } = write;
     // Written, it would be an empty prompt the agent does not send, and nobody would learn why.
     // Images are a message of their own without text.
     if term::is_blank_once_stripped(text) && !matches!(shape, Some(Shape::Images(_))) {
@@ -279,7 +326,12 @@ fn write_message_inner(
                 None => state.queue_if_restarting(id, text),
             };
             match queued {
-                Some(Some(_)) => true,
+                Some(Some(ticket)) => {
+                    if let Some(sender) = sender {
+                        state.outbox.note_sender(ticket, sender);
+                    }
+                    true
+                }
                 Some(None) => return Err(outbox_saved()),
                 None => false,
             }
@@ -337,12 +389,24 @@ fn write_message_inner(
             .queue_message_unless_sealed(id, text)
             .ok_or_else(outbox_saved)?,
     };
+    // Noted before the drain: what tells the sender later finds it by ticket, whichever drain
+    // writes the message.
+    if let Some(sender) = sender {
+        state.outbox.note_sender(ticket, sender);
+    }
+    // Whichever drain meets the message gone elsewhere keeps that for this writer to answer with,
+    // rather than telling its sender apart (`HookPrompts::went_elsewhere`).
+    state.outbox.await_answer(ticket);
     let drain = state.flush_outbox(id, agent_status);
+    let went_elsewhere = state.outbox.take_answer(ticket);
     // Told first, as the flush may have stopped before it told the session; then taken by ticket,
     // whichever drain met it: one running on another thread may have.
     state.announce_refusals(id, session.agent);
     if let Some(refused) = state.outbox.take_refusal(ticket) {
         return Err(refusal_error(session.agent, refused));
+    }
+    if let Some(lost) = went_elsewhere {
+        return Err(not_delivered_error(session.agent, &lost));
     }
     // A message still on the queue is queued, whatever the drain met: the user's message goes past
     // a hold for the usage limit, so a drain that writes it can end on it while messages queued
@@ -350,7 +414,17 @@ fn write_message_inner(
     if state.outbox.is_queued(id, ticket) {
         return Ok(Delivery::Queued);
     }
-    delivery_of(drain, ticket, session.agent)
+    delivery_of(drain, ticket, session.agent, text)
+}
+
+/// The `message_not_delivered` error the writer of a message that went elsewhere gets, with the
+/// message's `text` as `detail`.
+fn not_delivered_error(agent: AgentId, text: &str) -> anyhow::Error {
+    CodedError::raised(
+        error_code::MESSAGE_NOT_DELIVERED,
+        crate::messaging::write_queue::went_elsewhere_error_text(agent),
+        &[("agent", agent.label()), ("detail", text)],
+    )
 }
 
 /// The error a sender gets for a message that failed alone ([`Refused`]).
@@ -373,6 +447,11 @@ fn refusal_error(agent: AgentId, refused: Refused) -> anyhow::Error {
                 ("command", &command),
                 ("offered", &offered),
             ],
+        ),
+        RefusalKind::NoSuchCommand(command) => CodedError::raised(
+            error_code::COMMAND_NOT_FOUND,
+            refused.reason,
+            &[("agent", agent.label()), ("command", &command)],
         ),
     }
 }
@@ -403,10 +482,13 @@ pub(crate) async fn write_first_message_off_runtime(
             &state,
             &id,
             &text,
-            WhenBlocked::Queue,
-            Origin::Automatic,
             Some(&mut first),
-            None,
+            Write {
+                when_blocked: WhenBlocked::Queue,
+                origin: Origin::Automatic,
+                shape: None,
+                sender: None,
+            },
         )
     })
     .await?
@@ -422,7 +504,7 @@ pub(crate) fn acceptance_uncertain(error: &anyhow::Error) -> bool {
 
 /// What a drain's outcome means for the message with `ticket`, queued before the drain began, in a
 /// session of `agent`.
-fn delivery_of(drain: Drain, ticket: Ticket, agent: AgentId) -> Result<Delivery> {
+fn delivery_of(drain: Drain, ticket: Ticket, agent: AgentId, text: &str) -> Result<Delivery> {
     match drain {
         // A drain that stopped at what a usage-limit hold keeps back had written every message it
         // took, and this one is off the queue (`write_message_inner` answers one still on it).
@@ -470,6 +552,11 @@ fn delivery_of(drain: Drain, ticket: Ticket, agent: AgentId) -> Result<Delivery>
         )),
         Drain::Fragmented(fragmented) if fragmented < ticket => Ok(Delivery::Queued),
         Drain::Fragmented(_) => Ok(Delivery::Written),
+        // Not delivered, and not in the input box: the sender is told so, and may send it again.
+        // A later message is still queued behind it, an earlier one was written first.
+        Drain::WentElsewhere(lost) if lost == ticket => Err(not_delivered_error(agent, text)),
+        Drain::WentElsewhere(lost) if lost < ticket => Ok(Delivery::Queued),
+        Drain::WentElsewhere(_) => Ok(Delivery::Written),
     }
 }
 
@@ -485,6 +572,21 @@ pub async fn write_message_off_runtime(
     let state = state.clone();
     let id = id.to_string();
     tokio::task::spawn_blocking(move || write_message(&state, &id, &text, when_blocked)).await?
+}
+
+/// [`write_message_from`] for a caller on the runtime, as [`write_message_off_runtime`] is.
+pub(crate) async fn write_message_from_off_runtime(
+    state: &Arc<AppState>,
+    id: &str,
+    text: String,
+    when_blocked: WhenBlocked,
+    sender: &str,
+) -> Result<Delivery> {
+    let (state, id, sender) = (state.clone(), id.to_string(), sender.to_string());
+    tokio::task::spawn_blocking(move || {
+        write_message_from(&state, &id, &text, when_blocked, Some(&sender))
+    })
+    .await?
 }
 
 /// Whether a delivery to an owner was refused for the owner being archived.
@@ -523,7 +625,7 @@ pub(crate) fn write_notice_to_owner(
     about: &Session,
     notice: &str,
 ) -> Result<Delivery> {
-    write_to_owner(state, owner, about, notice, Ownership::Any, |kept| {
+    write_to_owner(state, owner, about, notice, Ownership::Any, None, |kept| {
         format!("{notice}\n\n{kept}")
     })
 }
@@ -667,7 +769,8 @@ pub(crate) fn kept_dating() -> String {
 /// cannot take a message; an owner that is interrupted has it kept instead, built by `kept` around
 /// the line that says so, and written into it once it is resumed, in the order it came with the
 /// rest of what was kept for it, shared information included. An owner that is archived is
-/// refused.
+/// refused. `sender` is the session that sent `text` (a report's own session), where one did
+/// ([`write_message_from`]).
 ///
 /// An owner under a claim (a resume, an account switch, a handoff, a transfer of branches or a
 /// change of owner) has no process to write into and takes nothing kept either, and what is sent
@@ -688,6 +791,7 @@ pub(crate) fn write_to_owner(
     about: &Session,
     text: &str,
     ownership: Ownership,
+    sender: Option<&str>,
     kept: impl Fn(&str) -> String,
 ) -> Result<Delivery> {
     let kept_text = || {
@@ -706,12 +810,15 @@ pub(crate) fn write_to_owner(
         "this session is archived, so it takes nothing until it is reopened",
         kept_text,
         Some((about, ownership)),
+        sender,
     )
 }
 
 /// Writes `text` into the session `id`, queued while it cannot take a message: an archived session
 /// is refused with `archived` as the reason, and an interrupted one has `kept_text()` kept for it
 /// instead, to be written into it once it is resumed ([`Delivery::Kept`]).
+///
+/// `sender` is the session that sent `text`, where one did ([`write_message_from`]).
 ///
 /// `about` is the session an owner is told about, for the write into an owner: such a write waits
 /// out a claim on the owner (see [`write_to_owner`]), and what it keeps drops the notices that
@@ -728,6 +835,7 @@ pub(crate) fn write_or_keep(
     archived: &str,
     kept_text: impl Fn() -> String,
     about: Option<(&Session, Ownership)>,
+    sender: Option<&str>,
 ) -> Result<Delivery> {
     let mut waited = false;
     loop {
@@ -760,7 +868,7 @@ pub(crate) fn write_or_keep(
             waited = true;
             continue;
         }
-        return write_message(state, id, text, WhenBlocked::Queue);
+        return write_message_from(state, id, text, WhenBlocked::Queue, sender);
     }
 }
 
@@ -828,16 +936,47 @@ pub(crate) fn current_kept_messages(
 mod tests {
     use super::*;
 
+    /// A sender is answered with the command the agent offered in place of theirs, under
+    /// `command_not_recognised`; where the agent has no such command, under a code of its own,
+    /// `command_not_found`, with no `offered` param.
+    #[test]
+    fn a_refused_command_is_answered_with_the_command_offered_or_as_not_found() {
+        let coded = |error: anyhow::Error| error.downcast::<crate::protocol::CodedError>().unwrap();
+        let refused = |kind| Refused {
+            reason: "why".to_string(),
+            kind,
+        };
+        let other = coded(refusal_error(
+            AgentId::OPENCODE,
+            refused(RefusalKind::OtherCommand(
+                "/zzz".to_string(),
+                "/zzzcmd".to_string(),
+            )),
+        ));
+        assert_eq!(other.code, error_code::COMMAND_NOT_RECOGNISED);
+        assert_eq!(
+            other.params.get("offered").map(String::as_str),
+            Some("/zzzcmd")
+        );
+        let none = coded(refusal_error(
+            AgentId::OPENCODE,
+            refused(RefusalKind::NoSuchCommand("/zzz".to_string())),
+        ));
+        assert_eq!(none.code, error_code::COMMAND_NOT_FOUND);
+        assert_eq!(none.params.get("command").map(String::as_str), Some("/zzz"));
+        assert!(!none.params.contains_key("offered"), "{:?}", none.params);
+    }
+
     /// A drain that stopped at what a usage-limit hold keeps back answers a message off the queue
     /// as written; a drain left pending, which another drainer may be writing it for, does not.
     #[test]
     fn only_a_drain_that_stopped_at_the_usage_limit_hold_answers_a_message_off_the_queue() {
         assert_eq!(
-            delivery_of(Drain::HeldForUsageLimit, 7, AgentId::CLAUDE).unwrap(),
+            delivery_of(Drain::HeldForUsageLimit, 7, AgentId::CLAUDE, "message").unwrap(),
             Delivery::Written
         );
         assert_eq!(
-            delivery_of(Drain::Pending, 7, AgentId::CLAUDE).unwrap(),
+            delivery_of(Drain::Pending, 7, AgentId::CLAUDE, "message").unwrap(),
             Delivery::Queued
         );
     }
@@ -848,14 +987,14 @@ mod tests {
     #[test]
     fn a_held_fragment_is_lost_only_to_its_own_sender() {
         assert_eq!(
-            delivery_of(Drain::Fragmented(5), 6, AgentId::CODEX).unwrap(),
+            delivery_of(Drain::Fragmented(5), 6, AgentId::CODEX, "message").unwrap(),
             Delivery::Queued
         );
         assert_eq!(
-            delivery_of(Drain::Fragmented(5), 4, AgentId::CODEX).unwrap(),
+            delivery_of(Drain::Fragmented(5), 4, AgentId::CODEX, "message").unwrap(),
             Delivery::Written
         );
-        let lost = delivery_of(Drain::Fragmented(5), 5, AgentId::CODEX).unwrap_err();
+        let lost = delivery_of(Drain::Fragmented(5), 5, AgentId::CODEX, "message").unwrap_err();
         assert!(lost
             .downcast_ref::<CodedError>()
             .is_some_and(is_held_fragment));
@@ -866,20 +1005,56 @@ mod tests {
     #[test]
     fn an_uncertain_acceptance_is_coded_and_told_apart() {
         assert_eq!(
-            delivery_of(Drain::Uncertain(5), 6, AgentId::CODEX).unwrap(),
+            delivery_of(Drain::Uncertain(5), 6, AgentId::CODEX, "message").unwrap(),
             Delivery::Queued
         );
         assert_eq!(
-            delivery_of(Drain::Uncertain(5), 4, AgentId::CODEX).unwrap(),
+            delivery_of(Drain::Uncertain(5), 4, AgentId::CODEX, "message").unwrap(),
             Delivery::Written
         );
-        let uncertain = delivery_of(Drain::Uncertain(5), 5, AgentId::CODEX).unwrap_err();
+        let uncertain = delivery_of(Drain::Uncertain(5), 5, AgentId::CODEX, "message").unwrap_err();
         assert!(acceptance_uncertain(&uncertain));
         let coded = uncertain.downcast_ref::<CodedError>().unwrap();
         assert_eq!(coded.code, error_code::MESSAGE_ACCEPTANCE_UNCONFIRMED);
         assert_eq!(coded.params["agent"], "Codex");
-        let lost = delivery_of(Drain::Lost, 5, AgentId::CODEX).unwrap_err();
+        let lost = delivery_of(Drain::Lost, 5, AgentId::CODEX, "message").unwrap_err();
         assert!(!acceptance_uncertain(&lost));
+    }
+
+    /// A message that went elsewhere is a coded error naming the agent that says it was not
+    /// delivered, never "in the input box" or "do not send it again"; one queued behind it is
+    /// still queued, one before it went in.
+    #[test]
+    fn a_message_that_went_elsewhere_is_told_undelivered() {
+        assert_eq!(
+            delivery_of(Drain::WentElsewhere(5), 6, AgentId::CODEX, "message").unwrap(),
+            Delivery::Queued
+        );
+        assert_eq!(
+            delivery_of(Drain::WentElsewhere(5), 4, AgentId::CODEX, "message").unwrap(),
+            Delivery::Written
+        );
+        let lost = delivery_of(Drain::WentElsewhere(5), 5, AgentId::CODEX, "message").unwrap_err();
+        let coded = lost.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.code, error_code::MESSAGE_NOT_DELIVERED);
+        assert_eq!(coded.params["agent"], "Codex");
+        assert_eq!(coded.params["detail"], "message");
+        assert!(
+            !coded.message.contains("this session"),
+            "worded for the sender: {}",
+            coded.message
+        );
+        assert!(
+            coded.message.contains("was not delivered"),
+            "{}",
+            coded.message
+        );
+        assert!(
+            !coded.message.contains("input box holds"),
+            "{}",
+            coded.message
+        );
+        assert!(!coded.message.contains("do not send"), "{}", coded.message);
     }
 
     /// A message its agent refused outright is a coded error carrying the agent's reason.
@@ -914,9 +1089,15 @@ mod tests {
         state.store.update_session(&archived).unwrap();
         let worker = state.session_record("worker").unwrap();
 
-        let err = write_to_owner(&state, &stale, &worker, "text", Ownership::Any, |kept| {
-            kept.to_string()
-        })
+        let err = write_to_owner(
+            &state,
+            &stale,
+            &worker,
+            "text",
+            Ownership::Any,
+            None,
+            |kept| kept.to_string(),
+        )
         .expect_err("refused");
 
         let coded = err.downcast_ref::<CodedError>().expect("coded");
@@ -941,6 +1122,7 @@ mod tests {
             &worker,
             "required-while-bound",
             Ownership::Required,
+            None,
             kept_as("required-while-bound"),
         )
         .expect("kept");
@@ -959,6 +1141,7 @@ mod tests {
             &worker,
             "required-after-release",
             Ownership::Required,
+            None,
             kept_as("required-after-release"),
         )
         .expect_err("refused");
@@ -972,6 +1155,7 @@ mod tests {
             &worker,
             "any-after-release",
             Ownership::Any,
+            None,
             kept_as("any-after-release"),
         )
         .expect("kept");
@@ -997,9 +1181,15 @@ mod tests {
             .unwrap()
             .expect("released");
 
-        let err = write_to_owner(&state, &hub, &worker, "text", Ownership::Required, |kept| {
-            kept.to_string()
-        })
+        let err = write_to_owner(
+            &state,
+            &hub,
+            &worker,
+            "text",
+            Ownership::Required,
+            None,
+            |kept| kept.to_string(),
+        )
         .expect_err("refused");
 
         let refused = err

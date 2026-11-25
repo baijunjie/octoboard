@@ -21,7 +21,7 @@ has been detected on the machine.
   macOS application and a browser both can; where it cannot, New console stands alone.
 
 - Below the actions, a **supported CLI tools** heading and a card containing a list of the supported tools, in the
-  order **Claude Code**, **Codex**, **Grok Build**. Each row carries its tool's provider mark, name and status badge.
+  order in “The agents and their order” in `docs/product/supported-agents.md`. Each row carries its tool's provider mark, name and status badge.
   The card stays visible for the whole no-console state, whether detection is pending, some tools are available, or
   none has been detected.
 

@@ -119,6 +119,12 @@ export function agentCliStatusesOf(statuses: readonly AgentCliStatus[]): Map<Age
   return new Map<Agent, AgentCliStatus>(statuses.map((status) => [status.agent, status]));
 }
 
+/** `value` for every agent the fixture daemon serves, so a provider added to the registry has its entry in every
+ * per-agent group a builder lays out. */
+export function sameForEveryAgent<T>(value: T): PerAgent<T> {
+  return Object.fromEntries(FIXTURE_AGENTS.map((agent) => [agent, value])) as PerAgent<T>;
+}
+
 export function consoleOf(id: string, name: string, extra: ConsoleExtra = {}): Console {
   return consoleWith({
     id,
@@ -126,9 +132,9 @@ export function consoleOf(id: string, name: string, extra: ConsoleExtra = {}): C
     workdir: `/Users/dev/octoboard/${id}`,
     default_agent: "claude",
     project_session_agent: null,
-    accounts: { claude: null, codex: null, grok: null },
-    launch: { claude: NO_LAUNCH, codex: NO_LAUNCH, grok: NO_LAUNCH },
-    project_session_launch: { claude: NO_LAUNCH, codex: NO_LAUNCH, grok: NO_LAUNCH },
+    accounts: sameForEveryAgent(null),
+    launch: sameForEveryAgent(NO_LAUNCH),
+    project_session_launch: sameForEveryAgent(NO_LAUNCH),
     icon: null,
     console_session_prompt: null,
     created_at: minutesAgo(60 * 24 * 30),
@@ -150,8 +156,8 @@ export function projectOf(id: string, consoleId: string, name: string, extra: Pr
     pinned: false,
     tags: [],
     description: null,
-    accounts: { claude: { kind: "inherit" }, codex: { kind: "inherit" }, grok: { kind: "inherit" } },
-    launch: { claude: NO_LAUNCH, codex: NO_LAUNCH, grok: NO_LAUNCH },
+    accounts: sameForEveryAgent<Project["accounts"][Agent]>({ kind: "inherit" }),
+    launch: sameForEveryAgent(NO_LAUNCH),
     git_workflow: FOLLOWING_GIT_WORKFLOW,
     versions: PROJECT_VERSIONS,
   }, extra);

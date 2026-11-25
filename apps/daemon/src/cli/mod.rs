@@ -12,6 +12,7 @@ mod background;
 #[cfg(all(test, unix))]
 mod background_tests;
 mod browser;
+pub(crate) mod channel;
 mod cleanup;
 mod connection;
 mod holder;
@@ -301,6 +302,27 @@ pub(crate) enum Command {
         /// The owner-only file holding the key the daemon requires of every connection.
         #[arg(long)]
         key_file: std::path::PathBuf,
+        /// The name of the event, for an agent whose payload names none and whose hook command is
+        /// registered once per event. A name in the payload wins.
+        #[arg(long)]
+        event: Option<String>,
+        /// Text only the session's own agent process has on its command line: the payload is
+        /// forwarded only when the process that fired this hook has it, and dropped when it is an
+        /// agent started inside the session.
+        #[arg(long)]
+        fired_by: Option<String>,
+    },
+    /// Carry a session's messages between the daemon and an extension inside its agent's process:
+    /// one JSON line per message to send on standard output, one JSON line per outcome on standard
+    /// input. This is started by the session extension.
+    Channel {
+        #[arg(long)]
+        session: String,
+        #[arg(long)]
+        port: u16,
+        /// The owner-only file holding the key the daemon requires of every connection.
+        #[arg(long)]
+        key_file: std::path::PathBuf,
     },
     /// Decide whether a file-edit tool call may go ahead, from the list a project session's launch
     /// wrote, and print a `deny` decision when the call targets another registered project. This is
@@ -309,6 +331,25 @@ pub(crate) enum Command {
         /// The list in the session's scratch directory.
         #[arg(long)]
         list: std::path::PathBuf,
+        /// Text only the session's own agent process has on its command line: the call is decided
+        /// only when the process that fired this hook has it, and let through when it is an agent
+        /// started inside the session, as `hook --fired-by` forwards.
+        #[arg(long)]
+        fired_by: Option<String>,
+    },
+    /// Run a helper of a provider's: a command the provider's launch names for its agent to run,
+    /// reading what the agent writes on standard input and printing what it reads. This is what
+    /// such a command execs; it is not meant to be run by hand.
+    AgentHelper {
+        /// The provider whose helper it is.
+        #[arg(long)]
+        provider: String,
+        /// The helper's name.
+        #[arg(long)]
+        helper: String,
+        /// The helper's own arguments, which come last.
+        #[arg(last = true)]
+        args: Vec<String>,
     },
     /// Report the branches a session's git has just created, and whether it moved the refs a
     /// project's branch header reads. This is what the session's `reference-transaction` hook
@@ -484,15 +525,43 @@ pub(crate) fn run(command: Command) -> Result<()> {
             launch,
             port,
             key_file,
+            event,
+            fired_by,
         } => {
-            hook::run(&session, launch.as_deref(), port, &key_file);
+            hook::run(
+                &session,
+                launch.as_deref(),
+                port,
+                &key_file,
+                event.as_deref(),
+                fired_by.as_deref(),
+            );
+            Ok(())
+        }
+        // Its stdout carries the messages and nothing else, and it needs no runtime.
+        Command::Channel {
+            session,
+            port,
+            key_file,
+        } => {
+            channel::run(&session, port, &key_file);
             Ok(())
         }
         // Synchronous, and silent unless it denies: the agent reads its stdout as the decision.
-        Command::GuardHook { list } => {
-            cross_project_guard::run(&list);
+        Command::GuardHook { list, fired_by } => {
+            cross_project_guard::run(&list, || {
+                fired_by
+                    .as_deref()
+                    .is_none_or(|mark| hook::fired_by(&list.to_string_lossy(), mark))
+            });
             Ok(())
         }
+        // On the path of the agent's own command, which waits for it: no runtime.
+        Command::AgentHelper {
+            provider,
+            helper,
+            args,
+        } => std::process::exit(adapter::helper::run(&provider, &helper, &args)),
         Command::GitRef {
             session,
             port,
@@ -1034,10 +1103,74 @@ mod tests {
         assert!(parse(&["--port", "1", "verify-archive", "a.tar.gz", "a.sig"]).is_err());
     }
 
+    /// The hook mode names the event only when asked to; a name is a value of `--event`, spaces
+    /// and all, and the option takes no other form.
+    #[test]
+    fn the_hook_mode_takes_an_event_name_only_when_given_one() {
+        let event_of = |extra: &[&str]| {
+            let mut args = vec!["hook", "--session", "s", "--port", "1", "--key-file", "/k"];
+            args.extend(extra);
+            match parse(&args).unwrap().command {
+                Some(Command::Hook { event, .. }) => event,
+                _ => panic!("not the hook mode"),
+            }
+        };
+        assert_eq!(event_of(&[]), None);
+        assert_eq!(
+            event_of(&["--event", "PreToolUse"]).as_deref(),
+            Some("PreToolUse")
+        );
+        assert_eq!(
+            event_of(&["--event", "tool use"]).as_deref(),
+            Some("tool use")
+        );
+        assert!(parse(&[
+            "hook",
+            "--session",
+            "s",
+            "--port",
+            "1",
+            "--key-file",
+            "/k",
+            "--event"
+        ])
+        .is_err());
+        let fired_by = |extra: &[&str]| {
+            let mut args = vec!["hook", "--session", "s", "--port", "1", "--key-file", "/k"];
+            args.extend(extra);
+            match parse(&args).unwrap().command {
+                Some(Command::Hook { fired_by, .. }) => fired_by,
+                _ => panic!("not the hook mode"),
+            }
+        };
+        assert_eq!(fired_by(&[]), None);
+        assert_eq!(
+            fired_by(&["--fired-by", "/run/s/mcp config.json"]).as_deref(),
+            Some("/run/s/mcp config.json")
+        );
+        // The other helpers have no event of their own to name.
+        assert!(parse(&["git-ref", "--session", "s", "--event", "x"]).is_err());
+    }
+
     /// The helpers take the key's file, never the key: a key in arguments is listed by `ps` for
     /// every user of the machine.
     #[test]
     fn the_helpers_take_a_key_file_and_refuse_a_key() {
+        let channel = parse(&[
+            "channel",
+            "--session",
+            "s",
+            "--port",
+            "1",
+            "--key-file",
+            "/k",
+        ])
+        .unwrap();
+        assert!(matches!(
+            channel.command,
+            Some(Command::Channel { key_file, port: 1, .. }) if key_file == Path::new("/k")
+        ));
+        assert!(parse(&["channel", "--session", "s", "--port", "1", "--key", "k"]).is_err());
         let hook = parse(&["hook", "--session", "s", "--port", "1", "--key-file", "/k"]).unwrap();
         assert!(matches!(
             hook.command,
@@ -1235,5 +1368,57 @@ mod tests {
             ),
             (Some("claude".to_owned()), own)
         );
+    }
+
+    /// The guard mode takes a mark only when given one, as the hook mode does; one guard command
+    /// of a session launched before the mark existed still parses.
+    #[test]
+    fn the_guard_mode_takes_a_mark_only_when_given_one() {
+        let fired_by = |extra: &[&str]| {
+            let mut args = vec!["guard-hook", "--list", "/l"];
+            args.extend(extra);
+            match parse(&args).unwrap().command {
+                Some(Command::GuardHook { list, fired_by }) => {
+                    assert_eq!(list, Path::new("/l"));
+                    fired_by
+                }
+                _ => panic!("not the guard mode"),
+            }
+        };
+        assert_eq!(fired_by(&[]), None);
+        assert_eq!(
+            fired_by(&["--fired-by", "/run/s/mcp.json"]).as_deref(),
+            Some("/run/s/mcp.json")
+        );
+    }
+
+    /// A helper's command parses into its provider, its name and its own arguments after `--`,
+    /// which may look like options.
+    #[test]
+    fn an_agent_helper_command_parses_its_provider_name_and_arguments() {
+        match parse(&[
+            "agent-helper",
+            "--provider",
+            "p",
+            "--helper",
+            "title",
+            "--",
+            "/a dir",
+            "--flag",
+        ])
+        .unwrap()
+        .command
+        {
+            Some(Command::AgentHelper {
+                provider,
+                helper,
+                args,
+            }) => {
+                assert_eq!(provider, "p");
+                assert_eq!(helper, "title");
+                assert_eq!(args, ["/a dir", "--flag"]);
+            }
+            _ => panic!("not the agent-helper command"),
+        }
     }
 }

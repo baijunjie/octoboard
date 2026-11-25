@@ -21,8 +21,9 @@ export interface ErrorAlertRequest {
   /** The name to call the session by where the store does not hold it: the one a failed launch's notice carries, the
    * session being gone. */
   sessionName?: string;
-  /** The daemon notice the alert shows, which a later withdrawal of it (`errorAlerts.withdraw`) takes back. */
-  notice?: { session: string; code: string };
+  /** The daemon notice the alert shows, which a later withdrawal of it (`errorAlerts.withdraw`) takes back: by its
+   * `detail` param too, where the withdrawal names one. */
+  notice?: { session: string; code: string; detail?: string };
   error?: unknown;
   recovery?: ErrorRecovery;
   /** The failure's recovery, done from the alert's own button, which acknowledges the alert first: for a failure whose
@@ -48,6 +49,9 @@ export interface ErrorAlertRequest {
   /** The plain text of what `details` holds, for an alert that has no `error` to read it from: the issue report an
    * unexpected failure offers is built from the errors and from this, never from the rendered `details`. */
   diagnostic?: string;
+  /** The alert shows a notice to acknowledge (`acknowledgedNotice` in `codes.ts`), which is no failure: it is drawn in
+   * the warning tone, with an acknowledgement that is not a danger button. */
+  acknowledgedNotice?: boolean;
 }
 
 /** A request with what is worked out from its errors: the classification that sets the alert's guidance, the one
@@ -82,7 +86,8 @@ function viewOf(request: ErrorAlertRequest): { view: ErrorAlertView; signature: 
     classifications[index],
     source instanceof CodedError && source.code !== CODE.unexpected_error ? [source.code, source.message, Object.entries(source.params).sort(([a], [b]) => a.localeCompare(b))] : errorText(errorPresentation(source)),
   ]);
-  const signature = JSON.stringify([typeof request.title === "string" ? request.title : undefined, request.message, request.session, metadata]);
+  // A notice's `detail` sets apart notices of one code about different messages, which are told and withdrawn apart.
+  const signature = JSON.stringify([typeof request.title === "string" ? request.title : undefined, request.message, request.session, metadata, request.notice?.detail]);
   // The one remedy of every failure the alert is about, if there is one (it can carry a button for it).
   const first = classifications[0];
   const sharedRecovery = first.kind === "actionable" && classifications.every((failure) => failure.kind === "actionable" && failure.recovery === first.recovery) ? first.recovery : undefined;
@@ -115,8 +120,9 @@ export const errorAlerts = {
   },
   /** Takes back the alerts for the daemon notice of `code` about `session`, which no longer holds: one queued leaves the
    * queue, and the one shown closes as if acknowledged. Nothing happens when none is there. */
-  withdraw(session: string, code: string): void {
-    const stays = (item: QueuedAlert) => item.notice?.session !== session || item.notice.code !== code;
+  withdraw(session: string, code: string, detail?: string): void {
+    const stays = (item: QueuedAlert) =>
+      item.notice?.session !== session || item.notice.code !== code || (detail !== undefined && item.notice.detail !== detail);
     const shownLeft = queue.length > 0 && !stays(queue[0]);
     const rest = queue.filter(stays);
     if (rest.length === queue.length) return;

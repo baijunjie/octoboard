@@ -1,0 +1,3 @@
+{"hook_event_name":"agent_settled","last_assistant_message":"ANSWER[9 users; last=named plain]"}
+{"hook_event_name":"agent_settled","last_assistant_message":"400: {\"message\":\"standin refuses: bad request\",\"type\":\"invalid_request_error\"}"}
+{"hook_event_name":"agent_settled","last_assistant_message":null}

@@ -8,13 +8,50 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::items::catalogued_items;
+use super::items::{catalogued_items, ItemKind, SharedItem};
 use super::link::Dirs;
 use super::moves::resolve;
 use crate::adapter::files::LARGE_FILE_LIMIT;
 use crate::adapter::provider;
-use crate::hostfs::json_paths::{below, rewrite_paths, Select};
+use crate::hostfs::json_paths::{below, rewrite_paths, try_rewrite_paths, Select};
 use crate::protocol::{AgentId, SharingCause, SharingItemFailure, SharingLeft};
+
+type SourcePathResolver = fn(&Path) -> io::Result<Option<PathBuf>>;
+
+/// A set of path fields in a configuration file linked as one item.
+pub(crate) struct FileRegistry {
+    pub item: &'static str,
+    pub select: Select,
+    /// How the provider resolves a source that is not already an absolute path. Relative paths
+    /// use the active configuration directory. Non-filesystem sources return `None`.
+    pub source_path: Option<SourcePathResolver>,
+}
+
+fn file_registries(agent: AgentId) -> &'static [FileRegistry] {
+    provider(agent)
+        .accounts()
+        .map_or(&[], |ops| ops.file_registries())
+}
+
+pub(super) fn has_registries(agent: AgentId) -> bool {
+    !registries(agent).is_empty() || !file_registries(agent).is_empty()
+}
+
+/// Runs before linking a file registry, while relative paths still denote the default directory.
+pub(super) fn prepare_file(agent: AgentId, item: &SharedItem, dirs: &Dirs) -> io::Result<()> {
+    for registry in file_registries(agent)
+        .iter()
+        .filter(|registry| registry.item == item.name)
+    {
+        let default = dirs.default.join(item.name);
+        let Some(target) = resolve(&default)? else {
+            continue;
+        };
+        let already_linked = resolve(&dirs.account.join(item.name))?.as_ref() == Some(&target);
+        repoint_file(registry, &target, dirs, already_linked, None)?;
+    }
+    Ok(())
+}
 
 /// The registries `agent` keeps, by the shared directory item they sit in and their path inside
 /// it.
@@ -94,7 +131,114 @@ pub(super) fn keep(
             ));
         }
     }
+    for registry in file_registries(agent) {
+        each(registry.item);
+        let Some(item) = catalogued_items(agent)
+            .iter()
+            .find(|item| item.name == registry.item)
+        else {
+            continue;
+        };
+        let result = (|| {
+            let Some(target) = resolve(&dirs.default.join(item.name))? else {
+                return Ok(());
+            };
+            crate::hostfs::replace::remove_stale_staged(&target);
+            let account_target = resolve(&dirs.account.join(item.name))?;
+            if account_target.as_ref() == Some(&target) || account_gone {
+                repoint_file(
+                    registry,
+                    &target,
+                    dirs,
+                    true,
+                    account_gone.then(|| catalogued_items(agent)),
+                )?;
+            }
+            Ok(())
+        })();
+        if let Err(err) = result {
+            failures.push(SharingItemFailure::io(item, SharingLeft::Linked, err));
+        }
+    }
     failures
+}
+
+/// Resolve a source to a stable spelling without moving private data. Canonicalizing a path
+/// reached through a shared directory works even when the default item is itself a link.
+fn repoint_file(
+    registry: &FileRegistry,
+    file: &Path,
+    dirs: &Dirs,
+    active_account: bool,
+    gone_account_items: Option<&[SharedItem]>,
+) -> io::Result<()> {
+    let from = [&dirs.account, &dirs.account_real];
+    let private = |path: &Path| from.iter().any(|root| path.starts_with(root));
+    let blocked = || {
+        io::Error::other("A registry source is private to the sharing account or cannot be resolved. Move it to a shared or independent directory, then retry sharing.")
+    };
+    let in_default = |rest: &Path, items: &[SharedItem]| {
+        // A missing account can only have shared a source below a catalogued directory.
+        // An unrelated entry with the same name in the default home proves nothing.
+        if rest
+            .components()
+            .any(|part| part == std::path::Component::ParentDir)
+            || !items
+                .iter()
+                .any(|item| item.kind == ItemKind::Directory && rest.starts_with(item.name))
+        {
+            return Err(blocked());
+        }
+        Ok(below(&dirs.default, rest))
+    };
+    let moved = |path: &Path| {
+        let parsed;
+        let path = if path.is_absolute() {
+            path
+        } else if let Some(source_path) = registry.source_path {
+            parsed = source_path(path)?;
+            let Some(path) = parsed.as_deref() else {
+                return Ok(None);
+            };
+            path
+        } else {
+            return Ok(None);
+        };
+        let candidate = if path.is_absolute() {
+            let Some(rest) = from.iter().find_map(|root| path.strip_prefix(root).ok()) else {
+                if resolve(path)?.is_some_and(|target| private(&target)) {
+                    return Err(blocked());
+                }
+                return Ok(None);
+            };
+            if let Some(items) = gone_account_items {
+                in_default(rest, items)?
+            } else {
+                path.to_path_buf()
+            }
+        } else if let Some(items) = gone_account_items {
+            in_default(path, items)?
+        } else if active_account {
+            dirs.account.join(path)
+        } else {
+            dirs.default.join(path)
+        };
+        let target = resolve(&candidate)?.ok_or_else(blocked)?;
+        if private(&target) {
+            return Err(blocked());
+        }
+        Ok(Some(target))
+    };
+    let matters_unread =
+        |text: &str| registry.source_path.is_some() || from.iter().any(|root| holds(text, root));
+    try_rewrite_paths(
+        file,
+        LARGE_FILE_LIMIT,
+        registry.select,
+        &moved,
+        &matters_unread,
+    )
+    .map(|_| ())
 }
 
 /// Rewrites, in `registry`, every string that is one of `from` or lies below it to the same path

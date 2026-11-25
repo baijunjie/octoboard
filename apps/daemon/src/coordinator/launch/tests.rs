@@ -548,6 +548,38 @@ async fn a_console_session_launch_writes_its_instruction_files_without_file_link
     assert_eq!(regular_file("CLAUDE.md"), format!("@{INSTRUCTION_FILE}\n"));
 }
 
+/// Where an instruction goes follows from the provider's declaration alone: a provider that takes
+/// a resume's instruction as its launch prompt gets it there, shaped, on a launch that resumes;
+/// one that does not, and any launch that resumes nothing, has it queued as it was given.
+#[test]
+fn an_instruction_is_the_launch_prompt_only_where_the_provider_declares_it_and_the_launch_resumes()
+{
+    let plain = |resumes| route_instruction(AgentId::TEST, resumes, Some("/clear it"));
+    assert_eq!(plain(true), (None, Some("/clear it")));
+    assert_eq!(plain(false), (None, Some("/clear it")));
+    assert_eq!(route_instruction(AgentId::TEST, true, None), (None, None));
+
+    let _declared = crate::providers::test_provider::with_resume_instruction_as_launch_prompt();
+    assert_eq!(
+        route_instruction(AgentId::TEST, true, Some("/clear it")),
+        (Some(" /clear it".to_string()), None)
+    );
+    assert_eq!(
+        route_instruction(AgentId::TEST, true, Some("- a list")),
+        (Some("- a list".to_string()), None)
+    );
+    // Nothing is left of a blank one, and nothing is queued in its place.
+    assert_eq!(
+        route_instruction(AgentId::TEST, true, Some("\u{1} ")),
+        (None, None)
+    );
+    assert_eq!(
+        route_instruction(AgentId::TEST, false, Some("/clear it")),
+        (None, Some("/clear it"))
+    );
+    assert_eq!(route_instruction(AgentId::TEST, true, None), (None, None));
+}
+
 /// A Claude Code resume takes the instruction as its launch prompt, shaped as a written message
 /// is, and queues nothing: written into the session it would meet the "Resume this
 /// conversation?" dialog. Another agent has it queued, as before.
@@ -564,7 +596,8 @@ async fn a_claude_resume_takes_its_instruction_as_the_launch_prompt() {
             Some(" /clear it"),
             0,
         ),
-        ("dashed", AgentId::CLAUDE, "- item", Some(" - item"), 0),
+        // Left as written: the plan places it where the CLI cannot read it as an option.
+        ("dashed", AgentId::CLAUDE, "- item", Some("- item"), 0),
         ("blank", AgentId::CLAUDE, "\u{1} ", None, 0),
         ("codex", AgentId::CODEX, "/clear it", None, 1),
     ] {
@@ -1310,4 +1343,395 @@ async fn waiting_for_a_stopped_session_gives_up_at_the_overridden_timeout_and_en
         })
         .unwrap();
     wait_until_stopped(&state, "s").await.expect("down");
+}
+
+mod first_message {
+    use super::*;
+    use crate::test_support::{
+        project_session, watched_live_session, within, ScratchDir, StandIn, PATIENCE,
+    };
+
+    /// A launch whose process is `live`, registered under `claim`, for a plan that gave
+    /// `first_message`, with the session's record as it stands: `agent_session_id` is what the
+    /// launch has to record.
+    fn register(
+        state: &Arc<crate::state::AppState>,
+        live: &StandIn,
+        first_message: Option<&str>,
+        agent_session_id: Option<&str>,
+    ) -> Result<()> {
+        let claim = state.begin_launch("s").unwrap();
+        register_launched(
+            state,
+            &claim,
+            "s",
+            term::Launch {
+                session: (**live).clone(),
+                agent_session_id: agent_session_id.map(str::to_string),
+                notices: Vec::new(),
+                first_message: first_message.map(str::to_string),
+            },
+        )
+    }
+
+    /// A session of the test-only provider at its prompt, as the first hook leaves it, with the
+    /// stand-in process of a launch that has not been registered yet.
+    fn launched(name: &str) -> (Arc<crate::state::AppState>, ScratchDir, StandIn) {
+        let (state, dir) = console_with_project_and_accounts(name);
+        state
+            .store
+            .insert_session(&project_session("s", AgentId::TEST, SessionStatus::Idle))
+            .unwrap();
+        let live = watched_live_session("s", AgentId::TEST, 80, 24, "sleep 30", None);
+        (state, dir, live)
+    }
+
+    /// The first task is kept in the store from the moment it is queued until it has been written:
+    /// a queue lost while it waits (a daemon that exits without saving it) leaves the row, which
+    /// the session's next launch reads back to queue again, and writing it removes the row.
+    #[tokio::test]
+    async fn a_first_message_is_kept_in_the_store_until_it_is_written() {
+        let kept = |state: &Arc<crate::state::AppState>| -> Vec<String> {
+            state
+                .store
+                .kept_messages("s")
+                .unwrap()
+                .into_iter()
+                .map(|(_, text)| text)
+                .collect()
+        };
+
+        let (state, _dir, live) = launched("coordinator-launch-first-kept-lost");
+        register(&state, &live, Some("the first task"), None).unwrap();
+        assert_eq!(kept(&state), ["the first task"]);
+        state.discard_outbox("s");
+        assert_eq!(state.outbox.len("s"), 0, "the queue is lost");
+        assert_eq!(
+            crate::messaging::delivery::current_kept_messages(&state, "s")
+                .unwrap()
+                .into_iter()
+                .map(|(_, text)| text)
+                .collect::<Vec<_>>(),
+            ["the first task"],
+            "what the next launch queues"
+        );
+
+        let (state, _dir, live) = launched("coordinator-launch-first-kept-written");
+        register(&state, &live, Some("the first task"), None).unwrap();
+        crate::session::trust::on_hook(&state, &live);
+        let written = {
+            let state = state.clone();
+            within(PATIENCE, move || {
+                state.outbox.len("s") == 0 && state.store.kept_messages("s").unwrap().is_empty()
+            })
+            .await
+        };
+        assert!(written, "the row must go once the message is written");
+    }
+
+    /// The first task goes ahead of whatever was queued for the session while it was being
+    /// launched.
+    #[tokio::test]
+    async fn a_first_message_goes_ahead_of_what_was_queued_during_the_launch() {
+        let (state, _dir, live) = launched("coordinator-launch-first-is-first");
+        state.queue_message("s", "queued while it launched");
+
+        register(&state, &live, Some("the first task"), None).unwrap();
+
+        let queued: Vec<String> = state
+            .outbox
+            .take("s")
+            .into_iter()
+            .map(|(text, _)| text)
+            .collect();
+        assert_eq!(queued, ["the first task", "queued while it launched"]);
+    }
+
+    /// A hold for the agent's startup that ended before the first task was queued leaves nothing
+    /// to release it later, so registering asks for the drain itself: the message is written with
+    /// no hook, title or other message coming after it.
+    #[tokio::test]
+    async fn a_first_message_is_written_when_the_hold_ended_before_it_was_queued() {
+        let (state, _dir, live) = launched("coordinator-launch-first-after-hold");
+        live.trust.end_watch();
+        assert!(!live.trust.holds_writes());
+
+        register(&state, &live, Some("the first task"), None).unwrap();
+
+        let written = {
+            let state = state.clone();
+            within(PATIENCE, move || state.outbox.len("s") == 0).await
+        };
+        assert!(written, "nothing asked for the drain");
+    }
+
+    /// The session's process says whether its launch queued its first task as a message, which
+    /// only a launch whose plan gave one does.
+    #[tokio::test]
+    async fn only_a_launch_with_a_first_message_marks_its_first_task_as_queued() {
+        let (state, _dir, live) = launched("coordinator-launch-first-marked");
+        register(&state, &live, Some("the first task"), None).unwrap();
+        assert!(live.first_task_queued());
+
+        let (state, _dir, live) = launched("coordinator-launch-first-unmarked");
+        register(&state, &live, None, None).unwrap();
+        assert!(!live.first_task_queued());
+    }
+
+    /// A launch whose plan gave a first message queues it once, as the session's first message,
+    /// and it is written only once the hold for the agent's startup has ended, which a hook does.
+    #[tokio::test]
+    async fn a_launchs_first_message_is_queued_once_and_written_after_the_trust_hold() {
+        // At its prompt, as the first hook leaves the session: the queue is written only to a
+        // session reading as working or idle.
+        let (state, _dir) = console_with_project_and_accounts("coordinator-launch-first-message");
+        state
+            .store
+            .insert_session(&project_session("s", AgentId::TEST, SessionStatus::Idle))
+            .unwrap();
+        let live = watched_live_session("s", AgentId::TEST, 80, 24, "sleep 30", None);
+
+        register(&state, &live, Some("the first task"), None).unwrap();
+
+        assert_eq!(state.outbox.len("s"), 1, "queued once");
+        assert!(live.trust.holds_writes());
+        assert_eq!(
+            state.write_hold("s"),
+            Some(crate::state::WriteHold::Starting),
+            "held for the agent's startup"
+        );
+        // A drain asked for while the hold stands writes nothing.
+        let drained = {
+            let state = state.clone();
+            tokio::task::spawn_blocking(move || state.flush_outbox("s", SessionStatus::Idle))
+                .await
+                .unwrap()
+        };
+        assert_eq!(drained, crate::messaging::outbox::Drain::Pending);
+        assert_eq!(
+            state.outbox.len("s"),
+            1,
+            "nothing is written behind the hold"
+        );
+
+        crate::session::trust::on_hook(&state, &live);
+        let written = {
+            let state = state.clone();
+            within(PATIENCE, move || state.outbox.len("s") == 0).await
+        };
+        assert!(written, "the hook did not let the first message through");
+    }
+
+    /// A launch whose plan gave none queues nothing.
+    #[tokio::test]
+    async fn a_launch_without_a_first_message_queues_nothing() {
+        let (state, _dir) = console_with_project_and_accounts("coordinator-launch-no-first");
+        state
+            .store
+            .insert_session(&project_session("s", AgentId::TEST, SessionStatus::Idle))
+            .unwrap();
+        let live = watched_live_session("s", AgentId::TEST, 80, 24, "sleep 30", None);
+
+        register(&state, &live, None, None).unwrap();
+
+        assert_eq!(state.outbox.len("s"), 0);
+        assert!(state.live_session("s").is_some(), "registered all the same");
+    }
+
+    /// A launch that fails to register (the session's record is gone, so its agent session id
+    /// cannot be recorded) queues no first message.
+    #[tokio::test]
+    async fn a_launch_that_fails_to_register_queues_no_first_message() {
+        let (state, _dir) = console_with_project_and_accounts("coordinator-launch-failed-first");
+        let live = watched_live_session("s", AgentId::TEST, 80, 24, "sleep 30", None);
+
+        let failed = register(&state, &live, Some("the first task"), Some("agent-1"));
+
+        let failed = failed.expect_err("the launch must report the failure");
+        assert_eq!(
+            crate::test_support::code_of(&failed),
+            crate::protocol::error_code::UNKNOWN_SESSION,
+            "{failed:#}"
+        );
+        assert_eq!(state.outbox.len("s"), 0);
+    }
+}
+
+mod notices_and_tool_listing {
+    use std::time::Duration;
+
+    use super::*;
+    use crate::protocol::{notice_code, Code, Event, Notice};
+    use crate::test_support::test_provider::declaring_tool_listing_wait;
+    use crate::test_support::{project_session, watched_live_session, within, StandIn, PATIENCE};
+
+    /// A session of the test-only provider with the stand-in process of a launch that is past
+    /// its startup screens and has not been registered yet.
+    fn launched(
+        name: &str,
+    ) -> (
+        Arc<crate::state::AppState>,
+        crate::test_support::ScratchDir,
+        StandIn,
+    ) {
+        let (state, dir) = console_with_project_and_accounts(name);
+        state
+            .store
+            .insert_session(&project_session("s", AgentId::TEST, SessionStatus::Idle))
+            .unwrap();
+        let live = watched_live_session("s", AgentId::TEST, 80, 24, "sleep 30", None);
+        live.trust.end_watch();
+        (state, dir, live)
+    }
+
+    fn register(
+        state: &Arc<crate::state::AppState>,
+        live: &StandIn,
+        notices: Vec<Notice>,
+        first_message: Option<&str>,
+    ) {
+        let claim = state.begin_launch("s").unwrap();
+        register_launched(
+            state,
+            &claim,
+            "s",
+            term::Launch {
+                session: (**live).clone(),
+                agent_session_id: None,
+                notices,
+                first_message: first_message.map(str::to_string),
+            },
+        )
+        .unwrap();
+    }
+
+    fn told(code: Code, message: &str) -> Notice {
+        Notice::new(code, message, &[])
+    }
+
+    /// Every notice of a launch is told, each as an event of its own about the session, in the
+    /// order the launch gave them.
+    #[tokio::test]
+    async fn every_notice_of_a_launch_is_told_in_its_order() {
+        let (state, _dir, live) = launched("coordinator-launch-notices");
+        let mut events = state.subscribe();
+        register(
+            &state,
+            &live,
+            vec![
+                told(
+                    notice_code::DRAFT_DISCARDED,
+                    "The settings file was not read.",
+                ),
+                told(
+                    notice_code::MESSAGE_WAITS_ON_INPUT,
+                    "The leftover rules were not read.",
+                ),
+            ],
+            None,
+        );
+        let messages: Vec<String> = std::iter::from_fn(|| events.try_recv().ok())
+            .filter_map(|event| match event {
+                Event::SessionNotice {
+                    session, message, ..
+                } if session == "s" => Some(message),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            messages,
+            [
+                "The settings file was not read.",
+                "The leftover rules were not read."
+            ]
+        );
+    }
+
+    /// A launch whose provider has its first message wait for the session's MCP server to have
+    /// answered a listing of its tools holds the message, past its startup screens, until the
+    /// listing is answered; the answer has it written with nothing else coming to ask.
+    #[tokio::test]
+    async fn the_first_message_waits_for_the_tool_listing() {
+        let _wait = declaring_tool_listing_wait(Duration::from_secs(3600));
+        let (state, _dir, live) = launched("coordinator-launch-tools-wait");
+        assert!(!live.trust.holds_writes());
+        register(&state, &live, Vec::new(), Some("the first task"));
+        assert_eq!(
+            state.write_hold("s"),
+            Some(crate::state::WriteHold::Starting),
+            "still starting, to whoever asks"
+        );
+        assert_eq!(state.outbox.len("s"), 1);
+
+        state.note_mcp_tools_listed("s");
+        assert!(!state.awaits_tool_listing(&live));
+        let written = {
+            let state = state.clone();
+            within(PATIENCE, move || state.outbox.len("s") == 0).await
+        };
+        assert!(written, "the listing must have the message written");
+    }
+
+    /// A listing answered before the launch is registered counts: the agent's server starts
+    /// with the agent, and the launch is registered only once its process is up.
+    #[tokio::test]
+    async fn a_listing_answered_before_the_launch_is_registered_counts() {
+        let _wait = declaring_tool_listing_wait(Duration::from_secs(3600));
+        let (state, _dir, live) = launched("coordinator-launch-tools-early");
+        state.note_mcp_tools_listed("s");
+        register(&state, &live, Vec::new(), Some("the first task"));
+        assert!(!state.awaits_tool_listing(&live));
+        let written = {
+            let state = state.clone();
+            within(PATIENCE, move || state.outbox.len("s") == 0).await
+        };
+        assert!(written);
+    }
+
+    /// The wait is bounded: past it the message goes in, listing or none. A bound of nothing is
+    /// past at once.
+    #[tokio::test]
+    async fn the_wait_for_the_tool_listing_ends_at_its_bound() {
+        let _wait = declaring_tool_listing_wait(Duration::ZERO);
+        let (state, _dir, live) = launched("coordinator-launch-tools-bound");
+        assert!(!state.awaits_tool_listing(&live));
+        register(&state, &live, Vec::new(), Some("the first task"));
+        let written = {
+            let state = state.clone();
+            within(PATIENCE, move || state.outbox.len("s") == 0).await
+        };
+        assert!(written, "nothing may hold the message past the bound");
+    }
+
+    /// A wait that runs out after the launch is registered, with no listing answered and nothing
+    /// else asking for the queue, still has the message written: the session's dialog watch
+    /// retries what is pending.
+    #[tokio::test]
+    async fn a_wait_for_the_tool_listing_that_runs_out_later_has_the_message_written() {
+        let _wait = declaring_tool_listing_wait(Duration::from_secs(3600));
+        let (state, _dir, live) = launched("coordinator-launch-tools-runs-out");
+        register(&state, &live, Vec::new(), Some("the first task"));
+        assert_eq!(state.outbox.len("s"), 1, "held while the wait is open");
+
+        live.end_tool_listing_wait();
+        let written = {
+            let state = state.clone();
+            within(PATIENCE, move || state.outbox.len("s") == 0).await
+        };
+        assert!(written, "the wait's end was never picked up");
+    }
+
+    /// A launch whose provider declares no wait, as every registered provider's is, holds
+    /// nothing for a listing, and a new token forgets the listing answered under the one before.
+    #[tokio::test]
+    async fn a_launch_that_declares_no_wait_holds_nothing_for_a_listing() {
+        let (state, _dir, live) = launched("coordinator-launch-tools-none");
+        assert!(!state.awaits_tool_listing(&live));
+        live.await_tool_listing(Duration::from_secs(3600));
+        assert!(state.awaits_tool_listing(&live));
+        state.note_mcp_tools_listed("s");
+        assert!(!state.awaits_tool_listing(&live));
+        state.issue_mcp_token("s");
+        assert!(state.awaits_tool_listing(&live), "another launch's listing");
+    }
 }

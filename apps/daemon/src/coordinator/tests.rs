@@ -305,18 +305,13 @@ async fn reading_an_mcp_inventory_refuses_only_an_unknown_account_and_carries_ev
     assert_eq!(unavailable.reason, McpInventoryFailure::Failed);
     assert!(unavailable.detail.unwrap().contains("no shell environment"));
 
-    // An agent with no way of listing answers as unsupported.
-    let Some(Event::AccountMcpInventoryRead { inventory, .. }) =
-        handle(&state, None, read(AgentId::TEST, None))
-            .await
-            .unwrap()
-    else {
-        panic!("answered with the inventory");
-    };
-    assert_eq!(
-        inventory.unavailable.unwrap().reason,
-        McpInventoryFailure::UnsupportedAgent
-    );
+    // An agent with no way of listing is refused, as its capability says.
+    let refused = handle(&state, None, read(AgentId::TEST, None))
+        .await
+        .unwrap_err();
+    assert_eq!(code_of(&refused), error_code::PROVIDER_UNSUPPORTED);
+    let coded = refused.downcast_ref::<CodedError>().expect("coded");
+    assert_eq!(coded.params["operation"], "mcp_inventory");
 }
 
 #[tokio::test]

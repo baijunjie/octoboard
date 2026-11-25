@@ -50,7 +50,8 @@ pub(crate) fn idle_after_report_shown(
     let last = state.last_report(&session.id)?;
     if shown != SessionStatus::Idle
         || !state.shown_background_tasks(&session.id, shown).is_empty()
-        || state.queued_count(&session.id) > 0
+        // A message held until the next one is written keeps nobody busy.
+        || state.outbox.takeable(&session.id) > 0
     {
         return None;
     }

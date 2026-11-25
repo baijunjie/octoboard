@@ -139,11 +139,7 @@ impl UreqFetcher {
             .read()
             .context("the shell environment could not be taken")
             .map_err(|err| FetchError::Failed(format!("{err:#}")))?;
-        let host = url
-            .strip_prefix("https://")
-            .and_then(|rest| rest.split(['/', ':']).next())
-            .unwrap_or_default();
-        let proxy = crate::env_shell::proxy_for(&shell_env, host).map_err(FetchError::Failed)?;
+        let proxy = crate::env_shell::proxy_for_url(&shell_env, url).map_err(FetchError::Failed)?;
         Ok(ureq::Agent::config_builder()
             .timeout_global(Some(timeout))
             // Before any body comes, no phase waits for long; once it does, `pump` gives up on a

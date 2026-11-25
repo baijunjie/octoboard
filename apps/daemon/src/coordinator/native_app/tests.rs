@@ -21,7 +21,7 @@ fn claude_session(config_dir: Option<&Path>) -> Session {
 }
 
 /// A locator whose default Claude account is `default_root`.
-fn locator_for(default_root: &Path) -> Locator {
+fn locator_for(default_root: &Path) -> Locator<'static> {
     Locator::with_shell(HashMap::from([(
         "CLAUDE_CONFIG_DIR".to_string(),
         default_root.to_string_lossy().into_owned(),
@@ -327,17 +327,22 @@ async fn a_refusal_that_does_not_depend_on_the_process_leaves_it_running() {
             .await
             .expect_err("refused");
 
-        assert_eq!(code_of(&err), error_code::NATIVE_APP_UNAVAILABLE, "{case}");
         let why = match case {
-            "not-installed" => "application is not installed",
-            "no-conversation" => "this session has no conversation yet",
-            "bad-id" => "is not a conversation id",
-            _ => "has no desktop application",
+            "not-installed" => Some("application is not installed"),
+            "no-conversation" => Some("this session has no conversation yet"),
+            "bad-id" => Some("is not a conversation id"),
+            _ => None,
         };
-        assert!(
-            crate::test_support::param_of(&err, "detail").contains(why),
-            "{case}: {err}"
-        );
+        match why {
+            Some(why) => {
+                assert_eq!(code_of(&err), error_code::NATIVE_APP_UNAVAILABLE, "{case}");
+                assert!(
+                    crate::test_support::param_of(&err, "detail").contains(why),
+                    "{case}: {err}"
+                );
+            }
+            None => assert_refused_as_no_app(&err, case),
+        }
         assert!(!asked.load(Ordering::SeqCst), "{case}");
         assert!(!live.poll_exit(), "{case}: its process was ended");
         assert_eq!(
@@ -871,8 +876,19 @@ async fn a_locked_session_or_descendant_refuses_the_open_and_nothing_changes() {
     }
 }
 
-/// An agent that has no desktop application cannot be opened in one, and nor can a session that has
-/// no conversation to show yet; both come back as `native_app_unavailable` naming a `detail`.
+/// What an open is refused with for a provider that declares no desktop application.
+fn assert_refused_as_no_app(err: &anyhow::Error, case: &str) {
+    assert_eq!(code_of(err), error_code::PROVIDER_UNSUPPORTED, "{case}");
+    assert_eq!(
+        crate::test_support::param_of(err, "operation"),
+        "native_app",
+        "{case}"
+    );
+}
+
+/// An agent whose provider declares no desktop application cannot be opened in one
+/// (`provider_unsupported`), and nor can a session that has no conversation to show yet
+/// (`native_app_unavailable`, naming a `detail`).
 #[tokio::test]
 async fn a_session_with_nothing_to_open_in_an_app_is_refused_as_unavailable() {
     let (state, dir) = app_state("native-app-unavailable");
@@ -907,14 +923,14 @@ async fn a_session_with_nothing_to_open_in_an_app_is_refused_as_unavailable() {
         let err = open_session_in_app(&state, id, Vec::new())
             .await
             .expect_err(id);
+        if agent == AgentId::GROK {
+            assert_refused_as_no_app(&err, id);
+            continue;
+        }
         assert_eq!(code_of(&err), error_code::NATIVE_APP_UNAVAILABLE, "{id}");
-        let why = if agent == AgentId::GROK {
-            "has no desktop application"
-        } else {
-            "this session has no conversation yet"
-        };
         assert!(
-            crate::test_support::param_of(&err, "detail").contains(why),
+            crate::test_support::param_of(&err, "detail")
+                .contains("this session has no conversation yet"),
             "{id}: {err}"
         );
     }
@@ -985,8 +1001,9 @@ async fn opening_is_refused_while_a_launch_or_a_switch_holds_the_session() {
     drop(switch);
 }
 
-/// A refused open lets go of the claim, so the session can be launched afterwards; an unknown session
-/// is still reported as unknown.
+/// A refused open lets go of the claim, so the session can be launched afterwards, whether its
+/// provider declares no application or the application has nothing to open; an unknown session is
+/// still reported as unknown.
 #[tokio::test]
 async fn a_refused_open_leaves_the_session_free() {
     let (state, dir) = app_state("native-app-claim-released");
@@ -994,18 +1011,35 @@ async fn a_refused_open_leaves_the_session_free() {
         .store
         .insert_console(&crate::test_support::console(&dir))
         .unwrap();
-    let session = Session {
-        agent: AgentId::GROK,
-        status: SessionStatus::Interrupted,
-        ..claude_session(None)
-    };
-    state.store.insert_session(&session).unwrap();
+    for (id, agent, conversation, code) in [
+        (
+            "no-app",
+            AgentId::GROK,
+            true,
+            error_code::PROVIDER_UNSUPPORTED,
+        ),
+        (
+            "no-conversation",
+            AgentId::CLAUDE,
+            false,
+            error_code::NATIVE_APP_UNAVAILABLE,
+        ),
+    ] {
+        let session = Session {
+            id: id.to_string(),
+            agent,
+            status: SessionStatus::Interrupted,
+            has_conversation: conversation,
+            ..claude_session(None)
+        };
+        state.store.insert_session(&session).unwrap();
 
-    let err = open_session_in_app(&state, "s", Vec::new())
-        .await
-        .expect_err("refused");
-    assert_eq!(code_of(&err), error_code::NATIVE_APP_UNAVAILABLE);
-    drop(state.begin_launch("s").expect("free again"));
+        let err = open_session_in_app(&state, id, Vec::new())
+            .await
+            .expect_err(id);
+        assert_eq!(code_of(&err), code, "{id}");
+        drop(state.begin_launch(id).expect("free again"));
+    }
 
     let err = open_session_in_app(&state, "missing", Vec::new())
         .await
@@ -1194,8 +1228,8 @@ async fn a_refused_open_leaves_a_pending_recovery_alone() {
         ),
         (
             "no-app",
-            error_code::NATIVE_APP_UNAVAILABLE,
-            "has no desktop application",
+            error_code::PROVIDER_UNSUPPORTED,
+            "does not offer a desktop application",
         ),
         (
             "no-conversation",

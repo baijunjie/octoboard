@@ -12,6 +12,8 @@ import type { SessionRequest, TrustPrompt } from "../store";
 import { press } from "../components/alerts/detailsTestSupport";
 import { findButton, mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
 import { fakeTimers } from "../test/clock";
+import { availabilityOf } from "../fixtures/fixtureProviders";
+import { TEST_PROVIDERS } from "../test/testProviders";
 import { scheduledTaskOf } from "../fixtures/scheduledTaskBuilders";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -544,6 +546,35 @@ it("a switch to an account that is not logged in cannot be confirmed", () => {
   // The account's own error says it all: no second alert for the hold on the session sits outside the field.
   expect([...document.querySelectorAll('[role="alert"]')].filter((alert) => !alert.closest('[data-slot="field-error"]'))).toEqual([]);
   expect(findButton("Switch account")?.disabled).toBe(true);
+});
+
+// The provider of an account found not logged in decides what the dialog says to do about it.
+it("a switch to an account that is not logged in says how to log in with the provider's own command when it has no login flow", () => {
+  const session = sessionOf("s-held", "c-1", "p-1", "Old work", "idle", { agent: "test_agent", account_id: "t-one" });
+  mountPendingQuestionDialog({
+    ...snapshotState({ sessions: [session] }),
+    ...names,
+    settings: { ...snapshotState({}).settings!, accounts: [accountOf("t-one", "test_agent", "One", "/t/one"), accountOf("t-two", "test_agent", "Two", "/t/two")] },
+    accountQuotas: [{ agent: "test_agent", account: "t-two", fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Test Agent" }, message: "x" }, email: null }],
+    sessionRequests: [{ ...switching, agent: "test_agent", account: "t-two" }],
+  }, ack);
+  const error = document.querySelector('[data-slot="field-error"] [role="alert"]')!;
+  expect(error.textContent).toContain("is not logged in, so a session cannot use it. To log in, run test-agent login in a terminal, with /t/two as its configuration directory.");
+  expect(findButton("Switch account")?.disabled).toBe(true);
+});
+
+it("a handoff to a signed-out account of a provider with no login flow says how to log in with the provider's own command", () => {
+  const session = sessionOf("s-held", "c-1", "p-1", "Old work", "idle", { agent: "claude", account_id: "a-one" });
+  mountPendingQuestionDialog({
+    ...snapshotState({ sessions: [session] }),
+    ...names,
+    providers: TEST_PROVIDERS,
+    agentAvailability: availabilityOf(TEST_PROVIDERS, { test_agent: "available" }),
+    settings: { ...snapshotState({}).settings!, added_agents: ["claude", "test_agent"], accounts: [accountOf("t-two", "test_agent", "Two", "/t/two")] },
+    accountQuotas: [{ agent: "test_agent", account: "t-two", fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Test Agent" }, message: "x" }, email: null }],
+    sessionRequests: [{ ...request, action: "handoff", agent: "test_agent", target: "s-held", account: "t-two" }],
+  }, ack);
+  expect(dialogText()).toContain("is not logged in, so a session cannot use it. To log in, run test-agent login in a terminal, with /t/two as its configuration directory.");
 });
 
 const half = { id: "a-two", agent: "claude" as const, name: "Two", config_dir: "/a/two", share_default_config: true, share_default_config_incomplete: true, disabled: false, versions: {} };

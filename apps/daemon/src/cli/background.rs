@@ -1472,12 +1472,8 @@ pub(super) mod tests {
     /// A daemon that listens no more is gone, which the wait for the lock then settles.
     #[test]
     fn a_daemon_that_does_not_listen_is_gone() {
-        let port = TcpListener::bind("127.0.0.1:0")
-            .unwrap()
-            .local_addr()
-            .unwrap()
-            .port();
-        let asked = request_over_loopback(&owner_on(port), KEY, "/shutdown").unwrap();
+        let closed = crate::test_support::ClosedPort::new();
+        let asked = request_over_loopback(&owner_on(closed.port()), KEY, "/shutdown").unwrap();
         assert!(matches!(asked, Asked::Gone));
     }
 
@@ -1490,7 +1486,8 @@ pub(super) mod tests {
             let listener = TcpListener::bind("127.0.0.1:0").expect("a loopback port");
             let port = listener.local_addr().unwrap().port();
             let served = std::thread::spawn(move || {
-                let (mut stream, _) = listener.accept().expect("a request");
+                // A port probe is not the request: it is answered, and the request waited for.
+                let mut stream = crate::test_support::accept_past_probes(&listener);
                 stream.set_read_timeout(Some(PATIENCE)).unwrap();
                 let mut first = [0u8; 1];
                 stream.read_exact(&mut first).expect("the request begins");

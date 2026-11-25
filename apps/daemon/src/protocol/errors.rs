@@ -183,6 +183,8 @@ pub enum ProviderOperation {
     CliUpdate,
     /// Signing an account in to or out of an MCP server through the agent's own command.
     McpSignIn,
+    /// Accounts beyond the default, each with a directory of its own.
+    OwnedAccounts,
     /// Answering the prompts its agent shows while a session waits on the user
     /// (`answer_interaction`).
     Interactions,
@@ -190,6 +192,10 @@ pub enum ProviderOperation {
     MessageImages,
     /// A slash command sent as one (`send_command`).
     SlashCommands,
+    /// Listing an account's MCP servers and platform connectors (`read_account_mcp_inventory`).
+    McpInventory,
+    /// Opening a conversation in the agent's desktop application (`open_session_in_app`).
+    NativeApp,
 }
 
 impl ProviderOperation {
@@ -202,9 +208,12 @@ impl ProviderOperation {
             ProviderOperation::ConfigSharing => "config_sharing",
             ProviderOperation::CliUpdate => "cli_update",
             ProviderOperation::McpSignIn => "mcp_sign_in",
+            ProviderOperation::OwnedAccounts => "owned_accounts",
             ProviderOperation::Interactions => "interactions",
             ProviderOperation::MessageImages => "message_images",
             ProviderOperation::SlashCommands => "slash_commands",
+            ProviderOperation::McpInventory => "mcp_inventory",
+            ProviderOperation::NativeApp => "native_app",
         }
     }
 
@@ -216,9 +225,12 @@ impl ProviderOperation {
             ProviderOperation::ConfigSharing => "sharing the default account's configuration",
             ProviderOperation::CliUpdate => "an update of its CLI",
             ProviderOperation::McpSignIn => "signing in to an MCP server",
+            ProviderOperation::OwnedAccounts => "accounts beyond the default one",
             ProviderOperation::Interactions => "answering its prompts outside the terminal",
             ProviderOperation::MessageImages => "images attached to a message",
             ProviderOperation::SlashCommands => "slash commands sent as commands",
+            ProviderOperation::McpInventory => "a list of its MCP servers and connectors",
+            ProviderOperation::NativeApp => "a desktop application to open a conversation in",
         }
     }
 }
@@ -299,6 +311,13 @@ mod tests {
             (ProviderOperation::ResetCredit, "reset_credit"),
             (ProviderOperation::ConfigSharing, "config_sharing"),
             (ProviderOperation::McpSignIn, "mcp_sign_in"),
+            (ProviderOperation::OwnedAccounts, "owned_accounts"),
+            (ProviderOperation::CliUpdate, "cli_update"),
+            (ProviderOperation::Interactions, "interactions"),
+            (ProviderOperation::MessageImages, "message_images"),
+            (ProviderOperation::SlashCommands, "slash_commands"),
+            (ProviderOperation::McpInventory, "mcp_inventory"),
+            (ProviderOperation::NativeApp, "native_app"),
         ] {
             let err =
                 CodedError::require_offered::<()>(AgentId::GROK, operation, None).unwrap_err();

@@ -277,7 +277,7 @@ This never applies on macOS or Linux, where what sits in the agent's own termina
 
 Some agents end, as they exit, the whole process group of every shell command they still have running, so whatever
 runs in such a group ends with the session whatever keeps it. Each agent's provider declares whether its agent does so,
-served with the agents as the capability `ends_command_groups_on_exit`: Claude Code, Codex and Grok Build do. On a
+served with the agents as the capability `ends_command_groups_on_exit`: Claude Code, Codex, Grok Build, GitHub Copilot CLI, OpenCode, Qwen Code and Pi do. Antigravity CLI lacks this guarantee. A child that ignored hang-up, termination and interrupt signals survived both terminal hang-up and normal exit. On a
 macOS or Linux daemon host, a session's tree with a process in such a group cannot be kept: it is listed with
 `unkeepable_reason: "agent_command_group"`, and a keep naming it is refused with `process_in_agent_command_group`.
 

@@ -31,9 +31,15 @@ pub(in crate::mcp) async fn instruct_session(
     }
     // Headed as the caller's instruction, so the session tells it from the user's own typing.
     let text = texts::render_instruction(caller, body);
-    let outcome = delivery::write_message_off_runtime(state, &target.id, text, WhenBlocked::Queue)
-        .await
-        .map_err(|err| point_to_resume(err, caller.agent, &target))?;
+    let outcome = delivery::write_message_from_off_runtime(
+        state,
+        &target.id,
+        text,
+        WhenBlocked::Queue,
+        &caller.id,
+    )
+    .await
+    .map_err(|err| point_to_resume(err, caller.agent, &target))?;
     Ok(json!({
         "delivered": outcome == Delivery::Written,
         "note": delivery_note(outcome),

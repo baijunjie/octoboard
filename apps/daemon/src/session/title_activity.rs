@@ -1,7 +1,7 @@
 //! What an agent's terminal says about its turn: whether one is running, and how often it has gone
 //! back to the prompt. Each agent starts its title with a glyph of its own while a turn runs and
 //! drops or changes it when the turn is over; the forms are in `docs/agent-cli-reference.md`,
-//! section "Across the three agents" ("Terminal titles and the titles in an agent's own records").
+//! section "Across the agents" ("Terminal titles and the titles in an agent's own records").
 //! The title observer in `crate::session` notes every completed title here, and
 //! `crate::session::program_status` every move of the program's status reports; `title_interrupt`
 //! reads a cancel no hook reports off it, and `interrupt` checks that a turn is running before it

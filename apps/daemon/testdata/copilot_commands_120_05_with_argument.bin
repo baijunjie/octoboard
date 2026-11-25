@@ -1,0 +1,49 @@
+[H [1;97;44m[Current][m  Sessions  [2m Issues [m [2m Pull requests [m  Gists[K
+[119C 
+[2;90m╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮[m  
+[2;90m│[m    [4;27H               [76C[2;90m│[m  
+[2;90m│[m [34m ╭─╮╭─╮[5;27H[m            [2;90m│[m  [1;34mGetting started[61C[0;2;90m│[m  
+[2;90m│[m [34m ╰─╯╰─╯[m  Copilot v1.0.114 uses AI.  [2;90m│[m  Use the tabs above to explore your sessions and pull requests[15C[2;90m│[m  
+[2;90m│[m [35m █ [96m▘▝[35m █[m  Check for mistakes.        [2;90m│[m  /model — Switch models across providers, or use Auto[24C[2;90m│[m  
+[2;90m│[m [35m  ▔▔▔▔ [8;27H[m            [2;90m│[m        [70C[2;90m│[m  
+[2;90m│[m            [9;27H            [79C[2;90m│[m  
+[2;90m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[m  
+[K
+ [33m![m Model "standin" is not in the built-in catalog. Using defaults for: prompt tokens[K
+   (COPILOT_PROVIDER_MAX_PROMPT_TOKENS), output tokens (COPILOT_PROVIDER_MAX_OUTPUT_TOKENS). Run [37m copilot help [m[K
+   [37mproviders [m for configuration details.[K
+[K
+ [34m●[m MCP Servers reloaded: 0 servers connected[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[119C 
+[K
+[119C 
+[K
+[K
+[K
+[K
+[K
+[K
+ /Volumes/2TB/AgentData/tmp/claude/claude-501/.../work[36;73HRun on: This computer [1mctrl+e[m change environment 
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[m❯[K
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[m [1m←[m open sidebar · Interactive · Manual Approval · [1m/[m commands · [1m?[m help · [1mtab[m next tab[28Cstandin[38;3H[?25h[?25l[7A[36m┃[m ❯ /model
+[36m┃[m   /model plan  Set the model used while in plan mode
+[36m┃[m   /model auto  Let Copilot pick the model automatically
+[36m┃[m   /model --session|-s  Set the model for this session
+┃   /model --global  Set the default model for future sessions
+┃   /model --repo  Set the model default for this repository[K
+
+❯ /model [plan|auto|--session|--global|--repo|--local|--plan|<model-id>]
+
+ Interactive · Manual Approval · [1m@[m files/sessions · [1m#[m issues                        [38;10H[?25h

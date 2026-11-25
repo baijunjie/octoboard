@@ -352,8 +352,8 @@ fn every_title_says_which_language_to_write_the_name_in() {
     );
 }
 
-/// The prefix is the agent's own, and a role description that names the wrong one points the
-/// model at a tool it cannot see.
+/// The prefix and the separator are the agent's own, and a role description that names the wrong
+/// one points the model at a tool it cannot see.
 #[test]
 fn the_qualified_name_follows_the_agent() {
     assert_eq!(
@@ -367,6 +367,10 @@ fn the_qualified_name_follows_the_agent() {
     assert_eq!(
         qualified_tool_name(AgentId::GROK, "report"),
         "octoboard__report"
+    );
+    assert_eq!(
+        qualified_tool_name(AgentId::TEST, "report"),
+        "mcp__octoboard.report"
     );
 }
 
@@ -606,12 +610,12 @@ fn list_agents_names_the_five_hour_window_as_each_provider_reporting_one_does() 
         "(`kind` `session` is the five-hour window ({}), `weekly` the weekly one",
         named.join(", ")
     )));
-    // The two real wordings, and the test-only provider, which reports a session window too.
+    // The two real wordings; the test-only provider reports no window and is left out.
     assert!(named.starts_with(&[
         "Claude Code's session limit".to_string(),
         "Codex's 5h limit".to_string(),
     ]));
-    assert!(named.contains(&"Test Agent's session limit".to_string()));
+    assert!(!named.iter().any(|name| name.starts_with("Test Agent")));
 }
 
 #[test]

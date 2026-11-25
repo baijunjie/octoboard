@@ -2,9 +2,11 @@
 //!
 //! An agent's own way of taking an image from the clipboard works only where the daemon runs on the
 //! machine the clipboard is on, and only for some agents; a pasted image file's path is taken as an
-//! attached image by all of them, wherever the daemon runs. So the window sends the image's bytes
+//! attached image, wherever the daemon runs, by every agent whose provider declares
+//! `message_images`. So for a session of such a provider the window sends the image's bytes
 //! (`save_pasted_image`), the daemon writes them under the session's scratch directory, and the
-//! window pastes the path it is answered with. The file goes away with the scratch directory, when
+//! window pastes the path it is answered with; a session of any other provider is refused
+//! (`provider_unsupported`), since its agent would read the path as text. The file goes away with the scratch directory, when
 //! the session's process ends; the agent has read the image into its conversation by then.
 //!
 //! On a slow link the image can instead come in parts (`crate::session::upload`), so that no
@@ -24,7 +26,7 @@ use base64::Engine;
 use super::scratch::{scratch_of, subdirectory};
 use super::upload::{Kind, UploadBudget, Uploads};
 use crate::hostfs::replace::{replace_beside, Permissions};
-use crate::protocol::{error_code, CodedError};
+use crate::protocol::{error_code, CodedError, ProviderOperation};
 use crate::state::AppState;
 
 /// The largest image taken, in bytes. The single-frame request carries it base64-encoded in one
@@ -55,8 +57,9 @@ impl Uploads<Vec<u8>> {
     }
 
     /// Starts an image upload of `size` bytes for the running session `session_id`; see
-    /// [`Uploads::create_with`].
+    /// [`Uploads::create_with`]. Refused as [`save`] is for a provider that takes no images.
     pub fn create(&self, state: &AppState, session_id: &str, size: u64) -> Result<String> {
+        require_images_taken(state, session_id)?;
         self.create_with(state, session_id, size, |_| {
             Ok(Vec::with_capacity(size as usize))
         })
@@ -71,17 +74,83 @@ impl UploadBudget {
 }
 
 /// The directory under a session's scratch directory the images go in.
-const DIRECTORY: &str = "pasted";
+pub const DIRECTORY: &str = "pasted";
+
+/// What the name of an image's file starts with. The whole name is
+/// `paste-<milliseconds>-<count>.<extension>`, the extension one of [`FORMATS`]' (see
+/// [`saved_name_len`]).
+pub const NAME_PREFIX: &str = "paste-";
+
+/// A format an image is saved in.
+pub struct ImageFormat {
+    /// The extension its file is given.
+    pub extension: &'static str,
+    /// Its media type.
+    pub media_type: &'static str,
+}
+
+/// Every format an image is saved in: PNG, JPEG, GIF and WebP, in that order.
+pub const FORMATS: [ImageFormat; 4] = [
+    ImageFormat {
+        extension: "png",
+        media_type: "image/png",
+    },
+    ImageFormat {
+        extension: "jpg",
+        media_type: "image/jpeg",
+    },
+    ImageFormat {
+        extension: "gif",
+        media_type: "image/gif",
+    },
+    ImageFormat {
+        extension: "webp",
+        media_type: "image/webp",
+    },
+];
+
+/// The length, in characters, of the name of an image's file `text` starts with:
+/// [`NAME_PREFIX`], a run of digits, `-`, a run of digits, `.` and one of [`FORMATS`]' extensions.
+/// `None` where `text` starts with no such name. What follows the name is not looked at.
+pub fn saved_name_len(text: &str) -> Option<usize> {
+    let rest = text.strip_prefix(NAME_PREFIX)?;
+    let digits = |text: &str| {
+        let count = text.chars().take_while(char::is_ascii_digit).count();
+        (count > 0).then_some(count)
+    };
+    let first = digits(rest)?;
+    let rest = rest[first..].strip_prefix('-')?;
+    let second = digits(rest)?;
+    let rest = rest[second..].strip_prefix('.')?;
+    let extension = FORMATS
+        .iter()
+        .map(|format| format.extension)
+        .find(|extension| rest.starts_with(extension))?;
+    Some(NAME_PREFIX.len() + first + 1 + second + 1 + extension.len())
+}
 
 /// Distinguishes two images saved within one millisecond.
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
+/// Refuses the session `session_id` when its provider does not declare `message_images`
+/// (`provider_unsupported`), or as an unknown session.
+fn require_images_taken(state: &AppState, session_id: &str) -> Result<()> {
+    let agent = state.session_record(session_id)?.agent;
+    CodedError::require_offered(
+        agent,
+        ProviderOperation::MessageImages,
+        agent.descriptor().capabilities.message_images.then_some(()),
+    )
+}
+
 /// Writes the image `data` (base64) holds for the running session `session_id`, and returns the
-/// file's absolute path. Refused with `unknown_session` or `session_not_running`; an image over
+/// file's absolute path. Refused with `unknown_session` or `session_not_running`, and with
+/// `provider_unsupported` for a session whose provider takes no images; an image over
 /// [`MAX_BYTES`], one that is not a PNG, JPEG, GIF or WebP, or a write that fails is an error the
 /// window shows as it is: it limits the size before sending and sends only those formats.
 /// **Blocks.**
 pub fn save(state: &AppState, session_id: &str, data: &str) -> Result<PathBuf> {
+    require_images_taken(state, session_id)?;
     let scratch = scratch_of(state, session_id)?;
     // Four characters hold three bytes, so a longer text is over the limit whatever it decodes to.
     if data.len() > MAX_BYTES.div_ceil(3) * 4 {
@@ -95,6 +164,7 @@ pub fn save(state: &AppState, session_id: &str, data: &str) -> Result<PathBuf> {
 
 /// [`save`] for an image already decoded, as an upload's parts hold it. **Blocks.**
 pub fn save_bytes(state: &AppState, session_id: &str, bytes: &[u8]) -> Result<PathBuf> {
+    require_images_taken(state, session_id)?;
     let scratch = scratch_of(state, session_id)?;
     write_image(session_id, &scratch, bytes)
 }
@@ -115,7 +185,7 @@ pub(crate) fn require_saved_for(
         let own = path.parent() == Some(directory.as_path())
             && path
                 .file_name()
-                .is_some_and(|name| name.to_string_lossy().starts_with("paste-"))
+                .is_some_and(|name| name.to_string_lossy().starts_with(NAME_PREFIX))
             && path.is_file();
         if !own {
             return Err(CodedError::raised(
@@ -136,14 +206,15 @@ fn write_image(session_id: &str, scratch: &std::path::Path, bytes: &[u8]) -> Res
     if bytes.len() > MAX_BYTES {
         bail!("the image is larger than {MAX_BYTES} bytes");
     }
-    let Some(extension) = extension_of(bytes) else {
+    let Some(format) = format_of(bytes) else {
         bail!("the image is not a PNG, JPEG, GIF or WebP file");
     };
     let directory = subdirectory(session_id, scratch, DIRECTORY)?;
     let path = directory.join(format!(
-        "paste-{}-{}.{extension}",
+        "{NAME_PREFIX}{}-{}.{}",
         crate::time::now_millis(),
-        NEXT.fetch_add(1, Ordering::Relaxed)
+        NEXT.fetch_add(1, Ordering::Relaxed),
+        format.extension
     ));
     // The owner's alone, like everything else in the scratch directory.
     replace_beside(&path, bytes, Permissions::Private)
@@ -151,16 +222,17 @@ fn write_image(session_id: &str, scratch: &std::path::Path, bytes: &[u8]) -> Res
     Ok(path)
 }
 
-/// The extension of the format `bytes` begin as, from its signature.
-fn extension_of(bytes: &[u8]) -> Option<&'static str> {
+/// The format `bytes` begin as, from its signature.
+fn format_of(bytes: &[u8]) -> Option<&'static ImageFormat> {
+    let [png, jpeg, gif, webp] = &FORMATS;
     if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-        Some("png")
+        Some(png)
     } else if bytes.starts_with(b"\xff\xd8\xff") {
-        Some("jpg")
+        Some(jpeg)
     } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
-        Some("gif")
+        Some(gif)
     } else if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
-        Some("webp")
+        Some(webp)
     } else {
         None
     }
@@ -236,6 +308,11 @@ mod tests {
         assert_eq!(path.parent().unwrap(), pasted_directory(&f, &f.id));
         let name = path.file_name().unwrap().to_string_lossy().into_owned();
         assert!(name.starts_with("paste-"), "{name:?}");
+        assert_eq!(
+            super::saved_name_len(&format!("{name} and more")),
+            Some(name.chars().count()),
+            "{name:?}"
+        );
         assert!(!name.chars().any(char::is_whitespace), "{name:?}");
         let other = save_bytes(&f.state, &f.id, JPEG).unwrap();
         assert_ne!(path, other);
@@ -581,5 +658,73 @@ mod tests {
         }
         assert!(!pasted_directory(&f, &f.id).exists());
         assert!(!f.run.join(&f.id).join("attachments").exists());
+    }
+
+    /// A session whose provider does not declare `message_images` is refused an image, in one
+    /// frame, already decoded or as an upload, and nothing is written: its agent would read the
+    /// pasted path as text.
+    #[tokio::test]
+    async fn a_session_of_a_provider_that_takes_no_images_is_refused_and_nothing_is_written() {
+        use crate::protocol::AgentId;
+        use crate::session::pasted_image::ImageUploads;
+        use crate::session::upload::UploadBudget;
+
+        let f = fixture(true);
+        let _no_images = crate::providers::test_provider::without_message_images();
+        let without = AgentId::TEST;
+        assert!(!without.descriptor().capabilities.message_images);
+        let mut session = f.state.session_record(&f.id).unwrap();
+        session.agent = without;
+        f.state.store.update_session(&session).unwrap();
+
+        let refusals = [
+            save(&f.state, &f.id, &encoded(PNG)).unwrap_err(),
+            save_bytes(&f.state, &f.id, PNG).unwrap_err(),
+            ImageUploads::images(UploadBudget::images())
+                .create(&f.state, &f.id, PNG.len() as u64)
+                .unwrap_err(),
+        ];
+        for refused in refusals {
+            assert_eq!(code_of(&refused), error_code::PROVIDER_UNSUPPORTED);
+            assert_eq!(
+                crate::test_support::param_of(&refused, "operation"),
+                "message_images"
+            );
+            assert_eq!(
+                crate::test_support::param_of(&refused, "agent"),
+                without.wire_name()
+            );
+        }
+        assert!(!pasted_directory(&f, &f.id).exists());
+    }
+
+    /// A saved image's name is the prefix, two runs of digits and one of the formats' extensions;
+    /// anything else is no such name.
+    #[test]
+    fn a_saved_name_is_told_by_its_shape() {
+        for (text, len) in [
+            ("paste-1-0.png", Some(13)),
+            ("paste-17954-12.webp'rest", Some(19)),
+            ("paste-1-0.jpg/paste-2-0.gif", Some(13)),
+            ("paste-1.png", None),
+            ("paste--0.png", None),
+            ("paste-1-0.bmp", None),
+            ("shot-1-0.png", None),
+            ("paste-1-0png", None),
+        ] {
+            assert_eq!(super::saved_name_len(text), len, "{text}");
+        }
+    }
+
+    /// Each format's extension is the one an image of its signature is saved under.
+    #[test]
+    fn each_format_is_the_one_its_signature_is_saved_as() {
+        let extensions: Vec<_> = [PNG, JPEG, GIF_89, WEBP]
+            .iter()
+            .map(|bytes| super::format_of(bytes).expect("a format").extension)
+            .collect();
+        assert_eq!(extensions, ["png", "jpg", "gif", "webp"]);
+        assert_eq!(super::format_of(GIF_87).unwrap().media_type, "image/gif");
+        assert!(super::format_of(b"BM not one").is_none());
     }
 }

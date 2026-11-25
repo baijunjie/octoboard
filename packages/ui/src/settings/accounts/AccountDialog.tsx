@@ -6,7 +6,7 @@ import { appDataRecovery } from "../../errors/errorRecovery";
 import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
 import { defaultAccountName, servedAgents, listedAgents } from "../../agents/agents";
 import { ProviderMessage } from "../../agents/ProviderMessage";
-import { providerConfigDir, providerLabel } from "../../agents/providers";
+import { offersOwnedAccounts, providerConfigDir, providerLabel } from "../../agents/providers";
 import { agentIconSetupOptions } from "../../components/icons/AgentIcon";
 import { TILDE_PARAMS } from "../../components/text/literalParams";
 import { Dialog } from "../../components/dialog/Dialog";
@@ -164,8 +164,9 @@ export function AccountDialog({
           <OptionSelect
             label={t("settings.accounts.agent")}
             // Availability is shown but deliberately not enforced: an account may be set up before
-            // its agent is installed, so every added agent is selectable; one not added is not listed.
-            options={agentIconSetupOptions(t, providers, agentAvailability, listedAgents(addedAgents, servedAgents(providers)))}
+            // its agent is installed, so every added agent is selectable; one not added is not listed, nor one that
+            // cannot have accounts beyond the default.
+            options={agentIconSetupOptions(t, providers, agentAvailability, listedAgents(addedAgents, servedAgents(providers)).filter((listed) => offersOwnedAccounts(providers, listed)))}
             value={agent}
             onChange={setAgent}
           />
@@ -200,6 +201,7 @@ export function AccountDialog({
           announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}
           attempt={directoryFailure.attempt}
           pending={listingPending}
+          focusFallback={() => directoryField.current?.querySelector("input")}
           onRetry={() => {
             setListingPending(true);
             setListingAttempt((value) => value + 1);

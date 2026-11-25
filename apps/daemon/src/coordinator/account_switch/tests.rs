@@ -1009,7 +1009,8 @@ async fn a_switch_that_fails_keeps_what_the_process_started_under_its_project() 
             Ok(term::Launch {
                 session: process,
                 agent_session_id: None,
-                notice: None,
+                notices: Vec::new(),
+                first_message: None,
             })
         };
 

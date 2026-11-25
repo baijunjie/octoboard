@@ -61,6 +61,7 @@ pub fn run(
             session: Arc::new(session),
             kind,
             worker: Arc::new(AtomicBool::new(worker)),
+            listing_told: Arc::new(AtomicBool::new(false)),
             memory,
             port,
             key: Arc::new(key),
@@ -82,6 +83,9 @@ struct OctoboardMcp {
     /// Whether the session is a worker, which decides the catalogue along with the kind: the
     /// launch argument at first, then what the daemon's latest answer said.
     worker: Arc<AtomicBool>,
+    /// Whether the daemon has been told that a listing of the tools was answered
+    /// ([`Self::tell_tools_listed`]).
+    listing_told: Arc<AtomicBool>,
     /// Whether Octoboard's memory was on at the session's launch (`--memory`), which decides
     /// whether the memory tools are announced. A memory tool called anyway is forwarded, and the
     /// daemon refuses it while the setting is off at the time of the call.
@@ -140,6 +144,7 @@ impl ServerHandler for OctoboardMcp {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
+        self.tell_tools_listed();
         Ok(ListToolsResult::with_all_items(self.announced_tools()))
     }
 
@@ -210,6 +215,22 @@ impl ServerHandler for OctoboardMcp {
 }
 
 impl OctoboardMcp {
+    /// Tells the daemon that a listing of the tools is being answered, once: a launch whose
+    /// agent offers Octoboard's tools to its model only from then on holds its first message for
+    /// it. Off the answer, which does not wait for it, and best effort: a daemon that cannot be
+    /// reached holds the message for its bound and no longer.
+    fn tell_tools_listed(&self) {
+        if self.listing_told.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        let (port, key) = (self.port, self.key.clone());
+        let path = format!("/mcp/{}", self.token);
+        tokio::spawn(async move {
+            let body = br#"{"listed":true}"#.to_vec();
+            let _ = forward_until(port, key, path, body, std::future::pending::<()>()).await;
+        });
+    }
+
     /// Whether `name` is a tool of this kind's catalogue for either capability. Only a project
     /// session's capability changes while it runs; for any other kind the two are the same.
     fn is_known_tool(&self, name: &str) -> bool {
@@ -385,7 +406,7 @@ mod tests {
                 let _ = cancelled.await;
             },
         ));
-        let (mut daemon_side, _) = listener.accept().await.unwrap();
+        let mut daemon_side = crate::test_support::accepted_past_probes(&listener).await;
         let mut request = vec![0u8; 1024];
         let read = daemon_side.read(&mut request).await.unwrap();
         assert!(read > 0, "the call was sent");
@@ -426,7 +447,7 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         tokio::spawn(async move {
-            let (mut daemon_side, _) = listener.accept().await.unwrap();
+            let mut daemon_side = crate::test_support::accepted_past_probes(&listener).await;
             let mut request = vec![0u8; 1024];
             let _ = daemon_side.read(&mut request).await.unwrap();
             daemon_side.write_all(response).await.unwrap();
@@ -515,6 +536,7 @@ mod tests {
             session: Arc::new("s-1".to_string()),
             kind,
             worker: Arc::new(AtomicBool::new(worker)),
+            listing_told: Arc::new(AtomicBool::new(false)),
             memory: false,
             port: 0,
             key: Arc::new("k".to_string()),
@@ -578,5 +600,71 @@ mod tests {
     fn an_unreadable_answer_is_an_error_result_rather_than_a_panic() {
         let result = read_outcome(b"not json");
         assert_eq!(result.is_error, Some(true));
+    }
+
+    /// Answering the agent's `tools/list` tells the daemon so, with the body
+    /// `{"listed":true}` posted under the session's token (`POST /mcp/:token`): what a launch
+    /// that waits for the listing holds its first message for.
+    #[tokio::test]
+    async fn answering_a_tool_listing_tells_the_daemon() {
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mcp = OctoboardMcp {
+            port: listener.local_addr().unwrap().port(),
+            ..server(SessionKind::Project, false)
+        };
+        let (agent_side, server_side) = tokio::io::duplex(64 * 1024);
+        tokio::spawn(async move {
+            if let Ok(running) = mcp.serve(server_side).await {
+                let _ = running.waiting().await;
+            }
+        });
+        let (agent_reads, mut agent_writes) = tokio::io::split(agent_side);
+        let mut agent_reads = BufReader::new(agent_reads).lines();
+        let line = |value: Value| format!("{value}\n");
+        agent_writes
+            .write_all(
+                line(json!({
+                    "jsonrpc": "2.0", "id": 1, "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "clientInfo": {"name": "agent", "version": "0"},
+                    },
+                }))
+                .as_bytes(),
+            )
+            .await
+            .unwrap();
+        agent_reads.next_line().await.unwrap().expect("initialized");
+        let initialized = line(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
+        agent_writes
+            .write_all(initialized.as_bytes())
+            .await
+            .unwrap();
+        let list = line(json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}));
+        agent_writes.write_all(list.as_bytes()).await.unwrap();
+        let answer = agent_reads.next_line().await.unwrap().expect("listed");
+        assert!(answer.contains("\"tools\""), "{answer}");
+
+        let mut daemon_side = crate::test_support::accepted_past_probes(&listener).await;
+        let mut request = Vec::new();
+        let body = br#"{"listed":true}"#;
+        tokio::time::timeout(crate::test_support::PATIENCE, async {
+            let mut chunk = [0u8; 1024];
+            while !request.windows(body.len()).any(|window| window == body) {
+                let read = daemon_side.read(&mut chunk).await.unwrap();
+                assert!(read > 0, "the request ended without the body");
+                request.extend_from_slice(&chunk[..read]);
+            }
+        })
+        .await
+        .expect("the daemon is told the tools were listed");
+        assert!(
+            request.starts_with(b"POST /mcp/t?key=k HTTP/1.1\r\n"),
+            "{}",
+            String::from_utf8_lossy(&request)
+        );
     }
 }

@@ -1,12 +1,12 @@
-//! How an agent's CLI was installed, told by where its binary lies once its links are followed,
-//! and the command that updates an install of that method. The facts of each provider's packaging
-//! (`CliPackaging`) say which directories mark its own installer and which package or Homebrew
-//! name it has; nothing here names a provider.
+//! How an agent's CLI was installed, told by where its binary lies once its links are followed, or
+//! by a marker file its own installer leaves beside it, and the command that updates an install of
+//! that method. The facts of each provider's packaging (`CliPackaging`) say which directories or
+//! files mark its own installer and which npm packages or Homebrew names it uses.
 //!
-//! An install is recognised only by a path that says so. A package manager that is not npm
-//! (pnpm, Yarn, Bun) installs under `node_modules` too, and `npm install -g` would put a second
-//! copy elsewhere, so a path through one of their directories is not an npm install, and neither
-//! is one the daemon cannot tell more of: both are `unknown`, which is never updated.
+//! An install is recognised only by a path, or a marker file, that says so. A package manager that
+//! is not npm (pnpm, Yarn, Bun) installs under `node_modules` too, and `npm install -g` would put a
+//! second copy elsewhere, so a path through one of their directories is not an npm install, and
+//! neither is one the daemon cannot tell more of: both are `unknown`, which is never updated.
 
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -14,7 +14,7 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
 use crate::adapter::CliPackaging;
-use crate::platform::shell::ResolvedBinary;
+use crate::platform::shell::{self, ResolvedBinary, Shim};
 use crate::protocol::CliInstallMethod;
 
 /// Directories that mark an install another package manager than npm made.
@@ -27,11 +27,16 @@ const VOLTA: &str = ".volta";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Install {
     pub method: CliInstallMethod,
-    /// For an npm install, the global prefix it lies under (`<prefix>/lib/node_modules/<package>`,
-    /// or `<prefix>/node_modules/<package>` on Windows); absent where none can be told.
-    npm_prefix: Option<PathBuf>,
+    npm: Option<Npm>,
     /// For a Homebrew install, where it lies and under which name.
     homebrew: Option<Homebrew>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Npm {
+    package: &'static str,
+    /// The global prefix this install lies under, absent for Volta.
+    prefix: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,7 +51,7 @@ impl Install {
     fn of(method: CliInstallMethod) -> Self {
         Self {
             method,
-            npm_prefix: None,
+            npm: None,
             homebrew: None,
         }
     }
@@ -55,8 +60,10 @@ impl Install {
         Self::of(CliInstallMethod::Unknown)
     }
 
-    /// Tells the install of the CLI that `binary` starts. A launcher that starts the CLI through
-    /// an interpreter names the script as a leading argument, so those are looked at as well.
+    /// Tells the install of the CLI packaged as `packaging` that `binary` starts: by its path, else
+    /// by a marker file of its own installer beside it (`CliPackaging::native_markers`). A launcher
+    /// that starts the CLI through an interpreter names the script as a leading argument, so those
+    /// are looked at as well.
     pub fn of_binary(packaging: &CliPackaging, binary: &ResolvedBinary) -> Self {
         let candidates = binary
             .leading_args
@@ -69,6 +76,18 @@ impl Install {
             if install.method != CliInstallMethod::Unknown {
                 return install;
             }
+            if marked(packaging.native_markers, &resolved) {
+                return Self::of(CliInstallMethod::Native);
+            }
+        }
+        for package in packaging.npm_packages {
+            if let Shim::Package(directory) = shell::shim_package(binary, package) {
+                let resolved = crate::hostfs::canonical(&directory).unwrap_or(directory);
+                let install = Self::of_path(packaging, &resolved);
+                if install.method == CliInstallMethod::Npm {
+                    return install;
+                }
+            }
         }
         Self::unknown()
     }
@@ -76,21 +95,30 @@ impl Install {
     /// Tells the install a binary at `path`, with its links followed, belongs to.
     pub fn of_path(packaging: &CliPackaging, path: &Path) -> Self {
         let parts = names(path);
-        if let Some(package) = packaging.npm_package {
-            let mut run = vec!["node_modules"];
-            run.extend(package.split('/'));
-            if let Some(at) = find_run(&parts, &run) {
-                if parts
-                    .iter()
-                    .any(|part| OTHER_PACKAGE_MANAGERS.contains(&part.as_str()))
-                {
-                    return Self::unknown();
-                }
-                return Self {
-                    npm_prefix: npm_prefix(path, &parts, at),
-                    ..Self::of(CliInstallMethod::Npm)
-                };
+        let npm = packaging
+            .npm_packages
+            .iter()
+            .copied()
+            .filter_map(|package| {
+                let mut run = vec!["node_modules"];
+                run.extend(package.split('/'));
+                find_run(&parts, &run).map(|at| (package, at))
+            })
+            .min_by_key(|&(_, at)| at);
+        if let Some((package, at)) = npm {
+            if parts
+                .iter()
+                .any(|part| OTHER_PACKAGE_MANAGERS.contains(&part.as_str()))
+            {
+                return Self::unknown();
             }
+            return Self {
+                npm: Some(Npm {
+                    package,
+                    prefix: npm_prefix(path, &parts, at),
+                }),
+                ..Self::of(CliInstallMethod::Npm)
+            };
         }
         if packaging
             .native_layouts
@@ -118,6 +146,10 @@ impl Install {
         Self::unknown()
     }
 
+    pub fn npm_package(&self) -> Option<&'static str> {
+        self.npm.as_ref().map(|npm| npm.package)
+    }
+
     /// The command that updates this install of the CLI `binary` starts, with the shell
     /// environment the tool it runs resolves on; `None` for an install that is not updated, or
     /// whose tool (`npm`, `brew`) is not to be found.
@@ -136,12 +168,13 @@ impl Install {
                 )
             }),
             CliInstallMethod::Npm => {
+                let install = self.npm.as_ref()?;
                 let npm = crate::env_shell::resolve_binary("npm", shell_env).ok()?;
                 let mut args: Vec<OsString> = vec!["install".into(), "-g".into()];
-                if let Some(prefix) = &self.npm_prefix {
+                if let Some(prefix) = &install.prefix {
                     args.extend(["--prefix".into(), prefix.clone().into_os_string()]);
                 }
-                args.push(format!("{}@latest", packaging.npm_package?).into());
+                args.push(format!("{}@latest", install.package).into());
                 Some(ToolCommand::new(npm, args, false))
             }
             CliInstallMethod::Homebrew => {
@@ -244,6 +277,27 @@ fn names(path: &Path) -> Vec<String> {
             _ => None,
         })
         .collect()
+}
+
+/// Whether one of `markers` is a regular file, each a path from the directory holding `path`
+/// with `..` naming a parent (`AgentProvider::native_install_markers`).
+fn marked(markers: &[&[&str]], path: &Path) -> bool {
+    let Some(directory) = path.parent() else {
+        return false;
+    };
+    markers.iter().any(|marker| {
+        let mut file = directory.to_path_buf();
+        for name in *marker {
+            if *name == ".." {
+                if !file.pop() {
+                    return false;
+                }
+            } else {
+                file.push(name);
+            }
+        }
+        file.is_file()
+    })
 }
 
 /// Where in `parts` the consecutive components `run` first begin.

@@ -33,6 +33,61 @@ pub(super) struct Draft {
     /// ([`Self::message_written`]): what the submit key retried for a message left unsent checks
     /// that nothing the user typed can be in the box with it.
     written: Option<(u64, String)>,
+    /// Whether that message went in while a turn ran ([`Self::message_written_mid_turn`]).
+    written_mid_turn: bool,
+    /// The identity the queue wrote that message under, where it wrote it
+    /// ([`Self::message_written_as`]).
+    written_as: Option<String>,
+    /// The edit count when that message was cleared from the box and queued to be written again,
+    /// if it was ([`Self::message_queued_again`]).
+    queued_again: Option<u64>,
+    /// The messages of Octoboard's that went in while the turn ran, oldest first, the latest
+    /// [`HELD_KEPT`]: the ones an agent that holds such messages for the end of the turn may
+    /// still hold, and gives back or drops at a cancel ([`Self::held_messages`]).
+    held: VecDeque<HeldMessage>,
+    /// The messages written while a turn ran that the agent had not reported taking when the turn
+    /// ended, oldest first, the latest [`HELD_KEPT`]: for an agent that reports each message it
+    /// takes as a prompt sent, the ones it may never take ([`Self::turn_ended`]). A report of one
+    /// sent takes it off, whenever it comes.
+    untaken: VecDeque<(Instant, HeldMessage)>,
+    /// The messages told as not carried out that a late report could still show were
+    /// ([`Self::note_told_lost`]), oldest first, the latest [`HELD_KEPT`], each with when it was
+    /// told and as what; one told longer than [`TOLD_KEPT_FOR`] ago is let go.
+    told: VecDeque<(Instant, ToldLost, HeldMessage)>,
+    /// What the messages cleared from the box and queued to be written again read together,
+    /// where they were more than the latest one ([`Self::messages_queued_again`]).
+    queued_again_text: Option<String>,
+}
+
+/// How many messages written while a turn ran are kept ([`Draft::held_messages`]): more than an
+/// agent holds for one turn. The queue keeps as many of the messages it wrote to write again
+/// (`crate::messaging::outbox`), so each message kept here can still be.
+pub(crate) const HELD_KEPT: usize = 16;
+
+/// How long a message told as not carried out is kept for a late report of it
+/// ([`Draft::take_told_lost`]): a report later than this is no longer matched to it, and the
+/// notice stands.
+pub(crate) const TOLD_KEPT_FOR: Duration = Duration::from_secs(10 * 60);
+
+/// A message of Octoboard's that went in while a turn ran.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct HeldMessage {
+    pub(super) text: String,
+    /// The identity the queue wrote it under, where it wrote it.
+    pub(super) id: Option<String>,
+    /// Whether the agent reports a prompt for it: not for a slash command or a message of images
+    /// alone (`crate::session::Tail::records_prompt`), which no report can show taken, so a
+    /// turn's end never tells it as untaken.
+    pub(super) records_prompt: bool,
+}
+
+/// What a message was told as when it was told as not carried out ([`Draft::note_told_lost`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ToldLost {
+    /// Written while a turn ran and not taken by its end (`message_not_taken`).
+    NotTaken,
+    /// Not sent, with the input box empty after it (`message_not_delivered`).
+    NotDelivered,
 }
 
 /// When the keys typed into the session went in and what kind they were: what an empty input box
@@ -236,6 +291,23 @@ impl Draft {
     }
 
     pub(super) fn prompt_sent(&mut self, text: Option<&str>, agent: AgentId) {
+        // A message written while the turn ran that the agent reports sending is held no longer:
+        // a cancel after this neither gives it back nor drops it.
+        if let Some(at) = text.and_then(|text| {
+            self.held
+                .iter()
+                .position(|held| same_prompt(agent, &held.text, text))
+        }) {
+            self.held.remove(at);
+        }
+        // One the turn that ended had not taken, which the agent takes now, as a turn of its own.
+        if let Some(at) = text.and_then(|text| {
+            self.untaken
+                .iter()
+                .position(|(_, held)| same_prompt(agent, &held.text, text))
+        }) {
+            self.untaken.remove(at);
+        }
         if let Some(text) = text.filter(|text| text.len() <= RECENTLY_SENT_BYTES) {
             while self.recently_sent.len() >= RECENTLY_SENT
                 || self.recently_sent.iter().map(String::len).sum::<usize>() + text.len()
@@ -422,6 +494,213 @@ impl Draft {
     pub(super) fn message_written(&mut self, now: Instant, prompt: &str) {
         self.keys.message_written(now);
         self.written = Some((self.edited, prompt.to_string()));
+        self.written_mid_turn = false;
+        self.written_as = None;
+        self.queued_again = None;
+        self.queued_again_text = None;
+        // Written at the prompt: the agent holds nothing for the end of a turn any more.
+        self.held.clear();
+    }
+
+    /// Notes that the latest message of Octoboard's, which the agent gave back at a cancel, was
+    /// cleared from the box, at least in part, and queued to be written again: what is left of it
+    /// there is no longer a message to tell apart, nor a draft of the user's.
+    pub(super) fn message_queued_again(&mut self) {
+        self.queued_again = Some(self.edited);
+        self.message_held_no_longer();
+    }
+
+    /// Notes that the latest message of Octoboard's, where it was written while the turn ran, is
+    /// held by the agent no longer: it was given back at a cancel and cleared from the box,
+    /// queued again or told as not.
+    pub(super) fn message_held_no_longer(&mut self) {
+        let latest = self.message_text();
+        if self.written_mid_turn && self.held.back().map(|held| held.text.as_str()) == latest {
+            self.held.pop_back();
+        }
+    }
+
+    /// Whether the latest message of Octoboard's was cleared and queued to be written again.
+    pub(super) fn was_queued_again(&self) -> bool {
+        self.queued_again.is_some()
+    }
+
+    /// Whether anything has been typed into the input since that message was queued again: what
+    /// the box holds then is no longer only what a clear left of it.
+    pub(super) fn typed_since_queued_again(&self) -> bool {
+        self.queued_again
+            .is_some_and(|edited| edited != self.edited)
+    }
+
+    /// Notes the identity the queue wrote the latest message of Octoboard's under, right after
+    /// [`Self::message_written`]: what the queue finds it by to write it again if it is later
+    /// cleared from the box unsent. `None` for a write the queue did not make.
+    pub(super) fn message_written_as(&mut self, id: Option<String>) {
+        if self.written_mid_turn {
+            if let Some(latest) = self.held.back_mut() {
+                latest.id.clone_from(&id);
+            }
+        }
+        self.written_as = id;
+    }
+
+    /// The identity the queue wrote the latest message of Octoboard's under, if it wrote it.
+    pub(super) fn message_id(&self) -> Option<&str> {
+        self.written_as.as_deref()
+    }
+
+    /// [`Self::message_written`] for a message that went in while a turn ran, which an agent that
+    /// holds such messages for the end of the turn takes out of its box and may give back at a
+    /// cancel ([`Self::message_held_mid_turn`]).
+    /// `records_prompt` says whether the agent reports a prompt for it ([`HeldMessage`]).
+    pub(super) fn message_written_mid_turn(
+        &mut self,
+        now: Instant,
+        prompt: &str,
+        records_prompt: bool,
+    ) {
+        let mut held = std::mem::take(&mut self.held);
+        self.message_written(now, prompt);
+        self.written_mid_turn = true;
+        if held.len() >= HELD_KEPT {
+            held.pop_front();
+        }
+        held.push_back(HeldMessage {
+            text: prompt.to_string(),
+            id: None,
+            records_prompt,
+        });
+        self.held = held;
+    }
+
+    /// The messages of Octoboard's that went in while the turn ran and that nothing has shown
+    /// the agent to have taken since, oldest first: written since the turn began
+    /// ([`Self::turn_began`]), with no message written at the prompt after them, and none of them
+    /// reported sent ([`Self::prompt_sent`]).
+    pub(super) fn held_messages(&self) -> impl DoubleEndedIterator<Item = &HeldMessage> + Clone {
+        self.held.iter()
+    }
+
+    /// Notes that a turn began: the messages written while the turn before it ran are held no
+    /// longer, since the agent sends what it held when a turn ends.
+    pub(super) fn turn_began(&mut self) {
+        self.held.clear();
+    }
+
+    /// Notes that the turn ended, not cancelled: the messages written while it ran that the agent
+    /// has not reported taking ([`Self::held_messages`]) move to the ones it may never take
+    /// ([`Self::take_untaken`]), where a report of one sent still takes it off. One no report
+    /// can show taken (a slash command, images alone: [`HeldMessage::records_prompt`]) is left
+    /// out. For an agent that reports each message it takes as a prompt sent; the list of held
+    /// messages is left empty, as a turn's start leaves it. Returns whether any moved, and the
+    /// oldest ones pushed off the list past [`HELD_KEPT`], which are to be told at once rather
+    /// than let go unseen.
+    pub(super) fn turn_ended(&mut self, now: Instant) -> (bool, Vec<HeldMessage>) {
+        let ended = std::mem::take(&mut self.held);
+        let mut any = false;
+        let mut pushed_off = Vec::new();
+        for message in ended.into_iter().filter(|message| message.records_prompt) {
+            any = true;
+            if self.untaken.len() >= HELD_KEPT {
+                pushed_off.extend(self.untaken.pop_front().map(|(_, message)| message));
+            }
+            self.untaken.push_back((now, message));
+        }
+        (any, pushed_off)
+    }
+
+    /// Takes off the messages [`Self::turn_ended`] found untaken at a turn's end no later than
+    /// `ended_by` that no report of one sent has taken off since, oldest first; the ones a later
+    /// end found stay.
+    pub(super) fn take_untaken(&mut self, ended_by: Instant) -> Vec<HeldMessage> {
+        let (due, later): (VecDeque<_>, VecDeque<_>) = std::mem::take(&mut self.untaken)
+            .into_iter()
+            .partition(|(ended, _)| *ended <= ended_by);
+        self.untaken = later;
+        due.into_iter().map(|(_, message)| message).collect()
+    }
+
+    /// Notes that the message `text`, written under `id`, was told as not carried out, as `told`,
+    /// at `now`: a report of it sent within [`TOLD_KEPT_FOR`] finds it ([`Self::take_told_lost`]).
+    pub(super) fn note_told_lost(
+        &mut self,
+        now: Instant,
+        told: ToldLost,
+        id: Option<String>,
+        text: String,
+    ) {
+        if self.told.len() >= HELD_KEPT {
+            self.told.pop_front();
+        }
+        self.told.push_back((
+            now,
+            told,
+            HeldMessage {
+                text,
+                id,
+                records_prompt: true,
+            },
+        ));
+    }
+
+    /// Takes off the oldest message told as not carried out within [`TOLD_KEPT_FOR`] of `now`
+    /// that `reported`, a prompt the agent reports sending, is: it ran after all. Messages told
+    /// longer ago are let go.
+    pub(super) fn take_told_lost(
+        &mut self,
+        now: Instant,
+        reported: &str,
+        agent: AgentId,
+    ) -> Option<(ToldLost, HeldMessage)> {
+        self.told
+            .retain(|(told, _, _)| now.saturating_duration_since(*told) < TOLD_KEPT_FOR);
+        let at = self
+            .told
+            .iter()
+            .position(|(_, _, message)| same_prompt(agent, &message.text, reported))?;
+        self.told
+            .remove(at)
+            .map(|(_, told, message)| (told, message))
+    }
+
+    /// Whether `reported`, a prompt the agent reports sending, is a message of Octoboard's the
+    /// agent may still take or have taken unseen: one written while a turn ran and not reported
+    /// sent since, or one told as not carried out ([`Self::take_told_lost`]).
+    pub(super) fn wrote_message(&self, reported: &str, agent: AgentId) -> bool {
+        let is = |message: &HeldMessage| same_prompt(agent, &message.text, reported);
+        self.held.iter().any(is)
+            || self.untaken.iter().any(|(_, message)| is(message))
+            || self.told.iter().any(|(_, _, message)| is(message))
+    }
+
+    /// [`Self::message_queued_again`] for the `count` latest messages written while the turn
+    /// ran, which the agent gave back together: they are held no longer, and what is left of
+    /// their text in the box is no draft of the user's.
+    pub(super) fn messages_queued_again(&mut self, count: usize) {
+        let from = self.held.len().saturating_sub(count);
+        let text: String = self
+            .held
+            .drain(from..)
+            .map(|message| message.text)
+            .collect::<Vec<_>>()
+            .join("\n");
+        self.queued_again = Some(self.edited);
+        self.queued_again_text = Some(text);
+    }
+
+    /// The text cleared from the box and queued to be written again
+    /// ([`Self::message_queued_again`], [`Self::messages_queued_again`]): the latest message's,
+    /// or that of the several given back together.
+    pub(super) fn queued_again_text(&self) -> Option<&str> {
+        self.queued_again?;
+        self.queued_again_text
+            .as_deref()
+            .or_else(|| self.message_text())
+    }
+
+    /// Whether the latest message of Octoboard's went in while a turn ran.
+    pub(super) fn message_held_mid_turn(&self) -> bool {
+        self.written.is_some() && self.written_mid_turn
     }
 
     /// Whether anything has been typed into the input since the latest message of Octoboard's went
@@ -535,8 +814,7 @@ impl KeyTiming {
 fn same_prompt(agent: AgentId, candidate: &str, text: &str) -> bool {
     crate::adapter::provider(agent)
         .screen()
-        .as_submitted(candidate)
-        == text
+        .same_as_submitted(candidate, text)
 }
 
 /// Whether `key`, a control byte or a complete escape sequence the mirror does not follow, may put
@@ -582,6 +860,109 @@ fn incomplete_escape(sequence: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A message no report can show taken (a slash command, images alone) is never among the
+    /// untaken: a turn's end leaves it out, and a turn whose messages were all such moves none.
+    #[test]
+    fn a_message_that_reports_no_prompt_is_never_untaken() {
+        let mut draft = Draft::default();
+        let end = Instant::now();
+        draft.message_written_mid_turn(end, "/status", false);
+        assert!(!draft.turn_ended(end).0);
+        draft.message_written_mid_turn(end, "/status", false);
+        draft.message_written_mid_turn(end, "words", true);
+        assert!(draft.turn_ended(end).0);
+        let due: Vec<_> = draft
+            .take_untaken(end)
+            .into_iter()
+            .map(|message| message.text)
+            .collect();
+        assert_eq!(due, ["words"]);
+    }
+
+    /// More untaken messages than are kept push the oldest off the list, and a turn's end hands
+    /// them back to be told, never let go unseen.
+    #[test]
+    fn untaken_messages_pushed_off_the_list_are_handed_back() {
+        let mut draft = Draft::default();
+        let end = Instant::now();
+        for at in 0..HELD_KEPT {
+            draft.message_written_mid_turn(end, &format!("message {at}"), true);
+        }
+        assert!(draft.turn_ended(end).1.is_empty());
+        draft.message_written_mid_turn(end, "one more", true);
+        let (_, pushed_off) = draft.turn_ended(end);
+        let pushed_off: Vec<_> = pushed_off.into_iter().map(|message| message.text).collect();
+        assert_eq!(pushed_off, ["message 0"]);
+        assert_eq!(draft.take_untaken(end).len(), HELD_KEPT);
+    }
+
+    /// A message told as not carried out is found by a later report of it, once, while it is
+    /// kept, and is let go once kept for longer than that.
+    #[test]
+    fn a_message_told_lost_is_found_by_a_late_report_while_kept() {
+        let mut draft = Draft::default();
+        let told = Instant::now();
+        draft.note_told_lost(
+            told,
+            ToldLost::NotTaken,
+            Some("l:7".to_string()),
+            "first".to_string(),
+        );
+        draft.note_told_lost(told, ToldLost::NotDelivered, None, "second".to_string());
+        assert!(draft.wrote_message("first", AgentId::TEST));
+        assert!(draft.take_told_lost(told, "other", AgentId::TEST).is_none());
+        let (as_what, message) = draft
+            .take_told_lost(told, "first", AgentId::TEST)
+            .expect("found");
+        assert_eq!(as_what, ToldLost::NotTaken);
+        assert_eq!(message.id.as_deref(), Some("l:7"));
+        assert!(
+            draft.take_told_lost(told, "first", AgentId::TEST).is_none(),
+            "once"
+        );
+        assert!(draft
+            .take_told_lost(told + TOLD_KEPT_FOR, "second", AgentId::TEST)
+            .is_none());
+        assert!(!draft.wrote_message("second", AgentId::TEST));
+    }
+
+    /// The messages a turn's end found untaken are taken off by a report of one sent, whenever it
+    /// comes, and a check for one end leaves what a later end found: each end has its own grace.
+    #[test]
+    fn untaken_messages_are_kept_per_turn_end_until_reported() {
+        let mut draft = Draft::default();
+        let first_end = Instant::now();
+        draft.message_written_mid_turn(first_end, "first", true);
+        draft.message_written_mid_turn(first_end, "taken late", true);
+        assert!(draft.turn_ended(first_end).0);
+        assert_eq!(draft.held_messages().count(), 0);
+        let second_end = first_end + Duration::from_secs(1);
+        draft.message_written_mid_turn(second_end, "second", true);
+        assert!(draft.turn_ended(second_end).0);
+        assert!(
+            !draft.turn_ended(second_end).0,
+            "nothing held is left to move"
+        );
+
+        draft.prompt_sent(Some("taken late"), AgentId::TEST);
+        let due: Vec<_> = draft
+            .take_untaken(first_end)
+            .into_iter()
+            .map(|message| message.text)
+            .collect();
+        assert_eq!(due, ["first"]);
+        let later: Vec<_> = draft
+            .take_untaken(second_end)
+            .into_iter()
+            .map(|message| message.text)
+            .collect();
+        assert_eq!(later, ["second"]);
+        assert!(
+            draft.take_untaken(second_end).is_empty(),
+            "none is told twice"
+        );
+    }
 
     /// A record that has overflowed still tells a prompt from before a fragment, one it kept, from
     /// a later one, which ends a takeover.
@@ -1081,5 +1462,61 @@ mod tests {
         draft.input(b" leading space\r");
         draft.prompt_sent(Some("leading space"), AgentId::CLAUDE);
         assert!(!draft.holds());
+    }
+
+    /// A prompt recorded at launch (`LiveSession::note_launch_prompt`) is cleared when the agent
+    /// reports sending it. Grok Build reports a prompt verbatim and matches it as it is, so only
+    /// the text exactly as it was passed is cleared; one recorded with a leading space the agent
+    /// never got stays pending.
+    #[test]
+    fn a_launch_prompt_recorded_as_passed_is_cleared_when_grok_reports_it() {
+        let mut draft = Draft::default();
+        draft.submission(None, "- update deps".to_string());
+        draft.prompt_sent(Some("- update deps"), AgentId::GROK);
+        assert!(draft.submissions.is_empty());
+
+        draft.submission(None, " - update deps".to_string());
+        draft.prompt_sent(Some("- update deps"), AgentId::GROK);
+        assert_eq!(draft.submissions.len(), 1);
+    }
+
+    /// Claude Code reports a command-line prompt without the invisible characters it removed from
+    /// it and with the ones it kept, while the launch prompt is recorded as it was passed, with
+    /// all of them: the record is cleared by either report, since they are ignored in the match.
+    #[test]
+    fn a_launch_prompt_is_cleared_whichever_invisible_characters_claude_reports_it_without() {
+        const TASK: &str = "## Goal\n\n\u{2068}\u{0645}\u{06CC}\u{200C}\u{062E}\u{2069} \u{0915}\u{094D}\u{200D}\u{0937}";
+        for reported in [
+            // The isolates removed, the non-joiner and the joiner kept.
+            "## Goal\n\n\u{0645}\u{06CC}\u{200C}\u{062E} \u{0915}\u{094D}\u{200D}\u{0937}",
+            // Nothing removed.
+            TASK,
+        ] {
+            let mut draft = Draft::default();
+            draft.submission(None, TASK.to_string());
+            draft.prompt_sent(Some(reported), AgentId::CLAUDE);
+            assert!(draft.submissions.is_empty(), "{reported:?}");
+        }
+
+        let mut draft = Draft::default();
+        draft.submission(None, TASK.to_string());
+        draft.prompt_sent(Some("## Goal\n\nanother prompt"), AgentId::CLAUDE);
+        assert_eq!(draft.submissions.len(), 1);
+    }
+
+    /// A message Octoboard wrote holds no invisible character, so for it the match is the exact
+    /// one it was, a leading space and a paste wrapper aside; for Grok Build nothing is ignored.
+    #[test]
+    fn a_written_messages_match_is_exact_apart_from_what_the_provider_ignores() {
+        let mut draft = Draft::default();
+        draft.submission(None, "report: done".to_string());
+        draft.prompt_sent(Some("report: done."), AgentId::CLAUDE);
+        assert_eq!(draft.submissions.len(), 1);
+        draft.prompt_sent(Some("report: done"), AgentId::CLAUDE);
+        assert!(draft.submissions.is_empty());
+
+        draft.submission(None, "a\u{200C}b".to_string());
+        draft.prompt_sent(Some("ab"), AgentId::GROK);
+        assert_eq!(draft.submissions.len(), 1);
     }
 }

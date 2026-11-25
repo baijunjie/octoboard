@@ -27,6 +27,14 @@ agent.
 | Simple shell commands while on (see "Simple shell commands" in `docs/product/per-agent-settings.md`) | One instruction appended to the `--append-system-prompt` text, after the Codex compatibility section when that is on | Not applicable | Not applicable |
 | Anything else | The status line, and under **Bypass permissions** the acceptance of Claude Code's warning, in the `--settings` file | The overrides listed under "Codex" below | `--no-leader` (see "Grok's leader mode" below) |
 
+| Agent | Hook or status injection | MCP tools and role description |
+|---|---|---|
+| Antigravity CLI | Hooks in the launch’s private configuration and native OSC 7501 status reports. | The launch’s MCP file and global rule file in its private home. |
+| GitHub Copilot CLI | A plugin passed with `--plugin-dir`. | `--additional-mcp-config` and an instructions directory for the role. |
+| OpenCode | A plugin named in the launch’s inline configuration. | The same configuration supplies the MCP server and references the role file. |
+| Qwen Code | Hooks in the launch’s system settings. | `--mcp-config` and `--append-system-prompt`. |
+| Pi | An extension loaded for the launch, together with program status reports. | The extension supplies the Octoboard tools. `--append-system-prompt` names the launch’s role file. |
+
 The 660 seconds are Octoboard's own 10-minute limit on a forwarded call plus a minute (see "The time limit on
 Octoboard's tools" below and the Codex list below for why). A value the session leaves to the agent's default — no
 model, no effort, **Follow account configuration** for Claude Code and Grok Build or **Custom (config.toml)** for Codex
@@ -35,10 +43,19 @@ model, no effort, **Follow account configuration** for Claude Code and Grok Buil
 `CODEX_HOME`, `GROK_HOME` and `GROK_THEME` among them, are in "The launch environment" in
 `docs/product/launching-agents.md`.
 
-A new session's initial task is passed as the agent's prompt argument. On a resume only Claude Code is given a prompt
-argument, and only when Octoboard has an instruction or a prompt to continue for it; Codex and Grok Build are given none
-on a resume, and what Octoboard has for them is written into the session instead (see "Messages held until a session
-can take them" in `docs/product/message-delivery.md`).
+A new session's initial task is passed as the agent's prompt argument, exactly as it was given, last on the command
+line, after the flags and a bare `--`, so a task that begins with `-` is taken as the prompt and never as an option.
+Octoboard removes no invisible characters from it: Claude Code removes the ones it treats as invisible itself and sends
+the prompt at once. A task that is nothing but whitespace once its control and invisible characters are ignored is no
+task: nothing is passed, and the session comes up at its prompt rather than working. On a resume only Claude Code is
+given a prompt argument, placed the same way, and only when Octoboard has an instruction or a prompt to continue for it;
+Codex and Grok Build are given none on a resume, and what Octoboard has for them is written into the session instead
+(see "Messages held until a session can take them" in `docs/product/message-delivery.md`).
+
+For Claude Code, a prompt that is one command-like word — nothing but ASCII letters, digits, `-` and `_` — is passed
+with a single leading space, which the model sees: Claude Code runs an argument that names one of its subcommands even
+after the `--`, so such a word, a new session's task or a resume's instruction alike, would otherwise run that command
+rather than start a turn.
 
 ## Claude Code
 
@@ -512,3 +529,40 @@ directory, and in a directory without one it loads none of the project's hooks. 
 MCP servers, they load only once the folder is trusted (see `docs/product/folder-trust.md`). That is how a Grok console
 session reads the console's instruction file (see "The console session's instruction file" in
 `docs/product/launching-agents.md`).
+
+## Windows and Linux hosts
+
+The launch uses the daemon host's installation and configuration, including for a remote window. These are
+platform differences for the agents listed below. Claude Code, Codex and Grok Build’s platform-specific launch rules are in their sections above.
+
+| Agent | Windows | Linux |
+|---|---|---|
+| Antigravity CLI | The native install uses a private launch directory. When the host cannot link files, eligible files are copied into that directory. The CLI's first-run Terms screen waits for the user's answer. | The native install uses a private launch directory and a shell to run the injected hook. |
+| GitHub Copilot CLI | The npm install and Windows block-border composer are supported. Account login uses Credential Manager when available. | Account login uses Secret Service when available. When the CLI asks to save its token in plain text, the login dialog waits for the user's answer. |
+| OpenCode | The npm install launches the bundled executable. A cold first launch can take longer while OpenCode sets up its plugins and downloads ripgrep. | A cold first launch can take longer while OpenCode installs its dependencies. |
+| Qwen Code | The npm install launches through Node, and the injected hooks use PowerShell. The system settings directory is under `C:\ProgramData\qwen-code`. | The injected hooks run through the POSIX shell, and system settings are read from `/etc/qwen-code/settings.json`. |
+| Pi | The launch extension supplies turn status when the console host relies on rendered output. A daemon interrupt sends Escape. | Pi supplies native turn status. The launch extension runs the injected hook and provides message delivery as on Windows. |
+
+Qwen Code's injected status hooks apply to the outer Octoboard launch on both platforms. A nested Qwen Code
+started by a shell tool or MCP server cannot report its status as that launch.
+
+For sign-in on either host, see "How a quota is read" in `docs/product/account-quota-readings.md` and "How each
+agent signs in" in `docs/product/logging-accounts-in.md`.
+
+## Antigravity CLI
+
+A launch uses its own copy of the hooks, MCP server configuration and global rule file. Changes a session makes
+to those copies or to its enabled plugins end with the launch. To keep these changes, make them in `agy` run
+directly. A launch can create the native `antigravity-cli` and `config/projects` directories under `~/.gemini`
+when they are missing. Model listing runs in a private directory and leaves the user's home as it was.
+
+Octoboard refuses to launch or list models from an unmigrated Antigravity configuration. Run `agy` directly to
+migrate it. If a hooks or MCP configuration file exists in both layouts and migration would overwrite one,
+choose which file to keep before migrating. Octoboard never starts the migration.
+
+## OpenCode
+
+Octoboard launches OpenCode 1.19.6, 2.3.2, 2.4.0 and 2.4.1. Launch refuses an unrecognized version and lists
+the supported versions. If OpenCode 2 still needs to import legacy credentials, launch asks the user to run
+OpenCode directly to finish its migration. For session messages, see "Messages through OpenCode's private server"
+in `docs/product/message-delivery.md`.

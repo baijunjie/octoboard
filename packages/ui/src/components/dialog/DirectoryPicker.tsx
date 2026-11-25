@@ -179,6 +179,7 @@ export function DirectoryPicker({
           title={t("directoryPicker.failed")}
           message={failure.error}
           pending={retrying}
+          focusFallback={() => pathRef.current}
           onRetry={() => {
             setRetrying(true);
             void load(failure.target).finally(() => setRetrying(false));

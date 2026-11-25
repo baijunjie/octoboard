@@ -96,6 +96,9 @@ export interface TerminalControllerHandlers {
    * in the image's place (see `pasteImage`). Absent for a terminal whose process is not an agent, which gets the
    * paste as the clipboard's text, empty or not. */
   pasteImage?: {
+    /** Whether the agent of the session takes a pasted image file's path as an attached image. A session whose agent
+     * does not gets the paste as a terminal whose process is not an agent does. */
+    takes: (sessionId: string) => boolean;
     /** Saves `image` for the session and resolves to the text to paste in its place. Shows its own failures and then
      * resolves to `undefined`, which pastes nothing. */
     save: (image: Blob, sessionId: string) => Promise<string | undefined>;
@@ -440,7 +443,7 @@ export class TerminalController {
       (event) => {
         const sessionId = this.inputSessionId;
         const pasting = this.handlers.pasteImage;
-        if (!pasting || !sessionId || event.clipboardData?.getData("text/plain")) return;
+        if (!pasting || !sessionId || !pasting.takes(sessionId) || event.clipboardData?.getData("text/plain")) return;
         const image = imageInPaste(event.clipboardData);
         if (!image && !pasting.read) return;
         event.preventDefault();
@@ -631,15 +634,16 @@ export class TerminalController {
 
   /**
    * Pastes the image a paste with no text stands for: `image` where the paste carried one, otherwise the one
-   * `pasteImage.read` finds on the clipboard. A session that takes images gets the path of the file the image was
-   * saved as, which every agent reads as an attached image wherever the daemon runs; any other terminal (which never
-   * reads the clipboard for an image, since that may ask for permission), a platform that cannot read one, a clipboard
-   * that holds none or one that could not be read gets what a paste of no text always was, an empty one. The
-   * destination is checked again once the image is read and saved, each of which may take a prompt or a transfer.
+   * `pasteImage.read` finds on the clipboard. A session whose agent takes images (`pasteImage.takes`) gets the path of
+   * the file the image was saved as, which the agent reads as an attached image wherever the daemon runs; any other
+   * terminal (which never reads the clipboard for an image, since that may ask for permission), a platform that cannot
+   * read one, a clipboard that holds none or one that could not be read gets what a paste of no text always was, an
+   * empty one. The destination is checked again once the image is read and saved, each of which may take a prompt or a
+   * transfer.
    */
   pasteImage(sessionId: string, image?: Blob): void {
     const pasting = this.handlers.pasteImage;
-    if (!pasting || !(image || pasting.read)) return this.paste("", sessionId);
+    if (!pasting || !pasting.takes(sessionId) || !(image || pasting.read)) return this.paste("", sessionId);
     new Promise<Blob | undefined>((resolve) => resolve(image ?? pasting.read?.()))
       .then(
         (blob) => (blob ? pasting.save(blob, sessionId) : ""),

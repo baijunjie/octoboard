@@ -119,8 +119,8 @@ regex-syntax = "0.8"
 libc = "0.2"
 portable-pty = "0.8"
 
-# The Linux hold on sleep (`platform::sleep`): logind's inhibitor lock over D-Bus. Pure Rust, with
-# blocking calls; the version the lockfile already resolves for other dependencies.
+# D-Bus for Linux sleep inhibition and credential presence. Pure Rust; the version the lockfile
+# already resolves for other dependencies.
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus = "5"
 
@@ -135,6 +135,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_Networking_WinSock",
     "Win32_Security",
     "Win32_Security_Authorization",
+    "Win32_Security_Credentials",
     "Win32_Security_Cryptography",
     "Win32_Storage_FileSystem",
     "Win32_System_Com",

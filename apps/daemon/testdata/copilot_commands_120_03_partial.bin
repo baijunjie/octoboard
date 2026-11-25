@@ -1,0 +1,8 @@
+[?25l[7A  ❯ /[4mhe[mlp   [31;41HShow help for interactive commands[K
+    /t[4mhe[mme[32;41HOpen the color mode picker. /theme <mode> is deprecated; use /settings theme <m…
+    /s[4mh[mar[4me[33;41H[mOpen sharing actions for this session, or export with file, html, gist, researc
+    /c[4mh[mang[4me[mlog[34;41HDisplay changelog for CLI versions. Add 'summarize' to get an AI summary.
+    /c[4mh[mronicl[4me[35;41H[mSession history tools and insights[K
+[K
+
+❯ /help   [5D[?25h

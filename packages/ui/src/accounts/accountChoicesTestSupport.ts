@@ -7,11 +7,11 @@ import { accountOf } from "../fixtures/builders";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
 import { type Account, type AccountQuota, type Agent, type AgentAvailability, type Console, type Project, type QuotaWindow } from "../protocol";
-import { TEST_AGENTS, TEST_PROVIDERS } from "../test/testProviders";
+import { BASELINE_AGENTS, BASELINE_PROVIDERS } from "../test/testProviders";
 
 export const availability = (entries: Partial<Record<Agent, AgentAvailability["availability"]>>): Map<Agent, AgentAvailability> =>
   new Map(
-    TEST_AGENTS.map((agent) => [
+    BASELINE_AGENTS.map((agent) => [
       agent,
       { agent, availability: entries[agent] ?? "not_determined", default_account_dir: null },
     ]),
@@ -23,7 +23,7 @@ export const accounts = [account("w", "claude", "Work"), account("c", "codex", "
 
 /** The state `settledInitialChoice` is given for `accounts`, `agents` and `added` (quotas judged by `readings`). */
 export const settle = (owner: Console, project: Project | undefined, accounts: Account[], agents: ReturnType<typeof availability>, added: Agent[] | null, readings?: QuotaReadings) =>
-  settledInitialChoice(owner, project, accounts, agents, added, TEST_PROVIDERS, choiceGroups(accounts, agents, added, TEST_PROVIDERS, () => "", readings));
+  settledInitialChoice(owner, project, accounts, agents, added, BASELINE_PROVIDERS, choiceGroups(accounts, agents, added, BASELINE_PROVIDERS, () => "", readings));
 
 /** The agent and account the dialog opens on. */
 export const initialChoice = (...args: Parameters<typeof settle>) => settle(...args).choice;

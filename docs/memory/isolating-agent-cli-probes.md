@@ -1,8 +1,8 @@
 # Isolating agent CLI probes
 
-Rules for keeping a probe of Claude Code, Codex or Grok Build, or of a live Octoboard session that launches them, off
-the user's own configuration, accounts and Octoboard data, and for building the scratch homes and config directories
-such a probe runs in so that they behave like the agent's own.
+Rules for keeping a probe of an agent CLI, or of a live Octoboard session that launches one, off the user's own
+configuration, accounts and Octoboard data, and for building the scratch homes and config directories such a probe runs
+in so that they behave like the agent's own.
 
 ## A probe is not read-only: give it its own scratch directory
 
@@ -20,6 +20,17 @@ file or directory of its own for each entry the CLI writes: its config file, its
 place of the symlinked session store, or the probe's own session records land in the user's home. What stays symlinked
 still collects the run's residue, a live-session index, logs and caches among it, so include it in what you tell the
 user the probe left.
+
+A link into the user's home also carries the CLI's own migrations across it, which can move or replace the user's
+files rather than write beside them: Antigravity CLI's migration out of its earlier layout, run through a launch
+directory whose data directory linked to the home's, moved the user's rules, skills, hooks and MCP configuration out of
+the home into the scratch directory, and even in a plain run it replaces a newer `config/hooks.json` or
+`config/mcp_config.json` with the earlier one (`docs/agent-cli-reference.md`, "Antigravity CLI", "Injection: a
+directory of the launch's own"). A migration shows only in a home that holds the layout it migrates from. So before
+running a CLI against the user's home or a directory linked into it — a probe, or a launch arrangement a provider
+builds — measure in a scratch home seeded with the CLI's earlier layout what each command writes, moves and replaces,
+and count every command the daemon runs on its own (a version probe, a model listing, a quota reading) among them:
+`agy models` migrates, `agy --version` does not.
 
 A setting the probe needs goes in the configuration of the project it runs in, never in the agent's own config file:
 for Codex `<cwd>/.codex/config.toml`, which Codex layers over `CODEX_HOME/config.toml` once the project is trusted;
@@ -66,6 +77,27 @@ directory before any measurement, with the keys the "Folder-trust confirmations"
 
 When several probes run concurrently, each needs its own distinct scratch directory, and expect to see the other
 probes' trust entries and session records — that residue is not evidence of a defect.
+
+## A throwaway `HOME` silently loses a login kept in the OS credential store
+
+Applies to any probe or daemon run that needs a signed-in CLI. Several CLIs keep their login in the system credential
+store, which is found through the real home (on macOS `~/Library/Keychains`), not in their config directory, so under
+a throwaway `HOME` they come up signed out with nothing saying why. Before isolating a CLI by `HOME`, look up where its
+login lives in its section of `docs/agent-cli-reference.md`.
+
+- **Running the CLI directly:** keep the real `HOME` and point the CLI's own config-directory variable or flag at the
+  scratch directory: `COPILOT_HOME` for GitHub Copilot CLI, which under a `HOME` with no keychain asks on its terminal
+  whether to store the token in plain text, a question nothing answers in a scripted run; `--gemini_dir=<dir>` for
+  Antigravity CLI, whose login is one keychain entry shared with Google's Antigravity app and IDE, so a probe's sign-in
+  or sign-out there is the user's own.
+- **Claude Code is the opposite case:** setting `CLAUDE_CONFIG_DIR` costs it the login whatever directory it names.
+  Leave the variable unset, never set it to repair a login that looks broken, and under a throwaway `HOME` symlink
+  `<throwaway HOME>/Library/Keychains` to the real `~/Library/Keychains`, which brings back every account's login
+  without copying a credential and leaves the config directory inside the throwaway `HOME`, where the probe owns it
+  (measured in the "Moving a conversation to another config directory" section of `docs/agent-cli-reference.md`).
+  This is how a daemon run, whose `HOME` has to be a throwaway one, keeps Claude Code signed in.
+- Codex keeps its login in its config directory and stays signed in with `CODEX_HOME` pointed at the user's real
+  `~/.codex`, so the arrangement that works for one CLI is not carried over to another without looking it up.
 
 ## Ask the user before a probe runs a login flow that can open their browser
 
@@ -140,15 +172,6 @@ from the command line"). But every agent it runs, its quota readings included, g
 `USERPROFILE`, `APPDATA` and `LOCALAPPDATA` back, since the daemon lays the logon's variables (`HKCU\Volatile
 Environment`) over the environment it inherited, so those agents read and write the user's own `.claude.json`, `.codex`
 and `.grok`. Treat such a run as one on the real configuration and report its residue.
-
-A throwaway `HOME` hides Claude Code's keychain login as well. When a run needs it logged in, symlink
-`<throwaway HOME>/Library/Keychains` to the real `~/Library/Keychains`, which brings back every account's login
-without copying a credential. **Leave `CLAUDE_CONFIG_DIR` unset in such a run, and never set it to repair a login that
-looks broken**: setting it costs Claude Code the login whatever directory it names, while unset puts the config
-directory inside the throwaway `HOME`, where the probe owns it and can write its own `settings.json`. Codex is not
-symmetric here — it stays logged in with `CODEX_HOME` pointed at the user's real `~/.codex` — so the arrangement that
-worked for a Codex probe is the wrong one to carry over (the measurements are in the "Moving a conversation to another
-config directory" section of `docs/agent-cli-reference.md`).
 
 A fake agent CLI for such a daemon goes on `PATH` from the throwaway `HOME`'s shell rc file (`.zshrc` when `$SHELL`
 is zsh), never by prepending it to the `PATH` the daemon is started with. The daemon launches every agent with the

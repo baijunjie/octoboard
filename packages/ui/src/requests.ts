@@ -27,6 +27,7 @@ export const REPLY_TYPES = {
   sign_out_account_mcp_server: "account_mcp_server_auth_ended",
   cancel_account_mcp_sign_in: "ack",
   cancel_account_login: "ack",
+  answer_account_login_question: "ack",
   check_agent_clis: "ack",
   update_agent_cli: "ack",
   check_daemon_update: "daemon_update_check",

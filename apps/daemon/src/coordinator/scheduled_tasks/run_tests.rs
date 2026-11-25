@@ -368,6 +368,44 @@ async fn a_failed_launch_is_recorded_as_a_failed_run() {
     assert_eq!(state.store.list_scheduled_task_runs("t").unwrap(), [run]);
 }
 
+/// A task stored with a prompt of nothing but control and invisible characters, as one saved
+/// before such a prompt was refused can be, starts no session: its run is recorded as failed for
+/// the missing prompt, and nothing is launched.
+#[tokio::test]
+async fn a_stored_task_whose_prompt_is_blank_fails_its_run_for_the_missing_prompt() {
+    let (state, _dir) = state_for_opening("scheduled-run-blank-prompt");
+    state
+        .store
+        .insert_scheduled_task(&ScheduledTask {
+            prompt: "\u{1}\u{2068}\u{2069} ".to_string(),
+            ..task("t", Schedule::Manual, None, true)
+        })
+        .unwrap();
+    let mut events = state.subscribe();
+
+    run_scheduled_task_now(
+        &state,
+        "t",
+        failing_launcher(|| anyhow::anyhow!("nothing is to be launched")),
+    )
+    .unwrap();
+    let run = next_run_added(&mut events).await;
+
+    match &run.outcome {
+        ScheduledRunOutcome::Failed {
+            code,
+            params,
+            message,
+        } => {
+            assert_eq!(code, error_code::FIELD_REQUIRED.as_str());
+            assert_eq!(params.get("field").map(String::as_str), Some("prompt"));
+            assert_eq!(message, "`prompt` is required");
+        }
+        other => panic!("not a failed run: {other:?}"),
+    }
+    assert!(state.store.list_sessions().unwrap().is_empty());
+}
+
 /// A run the daemon's stop refuses is not recorded, and the task gets back the occurrence it was
 /// waiting for, for the next daemon to make up.
 #[tokio::test]

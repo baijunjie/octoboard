@@ -195,6 +195,11 @@ fn write_hold_explanation(hold: WriteHold) -> &'static str {
             "Its agent is asking whether to trust its folder. Messages for it are queued until \
              that is answered."
         }
+        WriteHold::AgentDialog(dialog) if dialog.is_own_view() => {
+            "The user has a view of its agent's own open in its terminal (a list of commands, a \
+             picker, a help screen), and a message written now would go to that view. Messages \
+             for it are queued until the view is closed."
+        }
         WriteHold::AgentDialog(_) => {
             "Its agent is showing a dialog that only the user can answer, and a message written \
              into it would answer the dialog instead. Messages for it are queued until the dialog \

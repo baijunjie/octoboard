@@ -288,6 +288,7 @@ const { CodeGallery } = scenario?.codePalette ? await import("./codeGallery") : 
 const { LicensesGallery } = scenario?.licensesDialog ? await import("./licensesGallery") : { LicensesGallery: undefined };
 const { SemanticColoursGallery } = scenario?.semanticColours ? await import("./semanticColoursGallery") : { SemanticColoursGallery: undefined };
 const { ButtonsGallery } = scenario?.pendingButtons ? await import("./buttonsGallery") : { ButtonsGallery: undefined };
+const Sheet = scenario?.sheet ? (await scenario.sheet()).default : undefined;
 
 function screen(): React.ReactElement {
   if (!scenario) return <p className="p-4">Unknown scenario “{params.get("scenario")}”.</p>;
@@ -296,6 +297,7 @@ function screen(): React.ReactElement {
   if (LicensesGallery && scenario.licensesDialog) return <LicensesGallery state={scenario.licensesDialog} />;
   if (SemanticColoursGallery) return <SemanticColoursGallery />;
   if (ButtonsGallery) return <ButtonsGallery />;
+  if (Sheet) return <Sheet />;
   switch (scenario.startup?.kind) {
     case "noAddress":
       return <StartupScreen message={<NoAddressMessage />} />;

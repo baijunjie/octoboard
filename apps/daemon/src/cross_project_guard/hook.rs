@@ -29,13 +29,18 @@ use crate::hostfs::place::Place;
 const PAYLOAD_LIMIT: u64 = 32 * 1024 * 1024;
 
 /// Runs the guard over stdin with the list in `list_file`, printing the decision if there is one.
-pub fn run(list_file: &Path) {
+/// `admits` is asked once the payload is read, so the agent's write to this process ends as it
+/// would: where it says no (the call is not the session's own agent's), nothing is decided.
+pub fn run(list_file: &Path, admits: impl FnOnce() -> bool) {
     let mut payload = Vec::new();
     if std::io::stdin()
         .take(PAYLOAD_LIMIT)
         .read_to_end(&mut payload)
         .is_err()
     {
+        return;
+    }
+    if !admits() {
         return;
     }
     let Some(list) = read_list(list_file) else {

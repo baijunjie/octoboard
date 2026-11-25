@@ -98,15 +98,14 @@ Where to start, by question:
 - [Supported agents](product/supported-agents.md) — the agents Octoboard supports, their ids and order, how an agent
   the window has no presentation for is shown, and what happens to stored data of an agent the build does not support.
 - [Octoboard's memory](product/memory.md) — the console and project memory every agent shares: the switch that turns it
-  on (and the agents' own memory off), entries and their limits, the session tools, the index a session starts with,
+  on (and turns off switchable native memory), entries and their limits, the session tools, the index a session starts with,
   memory left behind by removed projects, and the memory dialog and Settings section.
 - [Launching agents](product/launching-agents.md) — what every agent launch injects, what is never modified, and the
   launch environment.
-- [Per-agent launch specifics](product/per-agent-launch-specifics.md) — what Claude Code, Codex and Grok Build each do
+- [Per-agent launch specifics](product/per-agent-launch-specifics.md) — what individual agents do
   differently at launch.
 - [Compatibility between agents](product/compatibility-between-agents.md) — what a launch is given while a
-  compatibility switch is on (Claude compatibility for Codex and Grok Build, Codex compatibility for Claude Code and
-  Grok Build): MCP servers, skills and prompts, and instructions, with the trust, naming and left-out rules.
+  compatibility switch is on, what native configuration discovery does without a switch, and which resources each agent loads.
 - [Compatibility switches in launch settings](product/compatibility-switches-in-launch-settings.md) — the
   compatibility switches a console, a project or a session holds beside its model and effort: the follow / On / Off
   states, which value a launch uses, the pickers in each dialog, and what sessions may change.
@@ -121,9 +120,10 @@ Where to start, by question:
   tags.
 - [Removing an account](product/removing-accounts.md) — what removing an account clears, its confirmation, and the option
   to move the account directory to the Trash.
-- [Logging an account in](product/logging-accounts-in.md) — the login dialog and how each agent signs in.
+- [Logging an account in](product/logging-accounts-in.md) — the login dialog, how each agent signs in, and the
+  agents Octoboard cannot log in.
 - [Account MCP servers and connectors](product/account-mcp-servers-and-connectors.md) — reading an account's platform
-  connectors and local MCP servers (Claude Code, Codex, Grok Build), the Connectors and MCP dialog opened from an
+  connectors and local MCP servers, the Connectors and MCP dialog opened from an
   account's actions menu, and signing a Codex account in to and out of an MCP server.
 - [Sharing the default configuration](product/sharing-the-default-configuration.md) — an account sharing the agent's
   default configuration and how a change is carried out.
@@ -386,8 +386,8 @@ Where to start, by question:
 
 - [Architecture](architecture.md) — what Octoboard is, its layers and technology choices, orchestration design
   decisions, known pitfalls and the data model.
-- [Agent CLI reference](agent-cli-reference.md) — facts about the three agent CLIs themselves: hooks, payloads,
-  injection, config directories and plan quota.
+- [Agent CLI reference](agent-cli-reference.md) — measurements for all eight agents covering hooks, payloads, launch injection,
+  config directories, platform behaviour and plan quota.
 - [VoiceOver verification cases](voiceover-cases.md) — real-device VoiceOver results kept as reusable cases.
 
 ## Code
@@ -478,7 +478,8 @@ Binding rules for code, one home per rule; the structure docs keep placement and
   focus and key defects (modal presses, session selection, handoffs, viewer copy), which press to test a dialog under,
   and reading Escape and top-layer symptoms.
 - [Isolating agent CLI probes](memory/isolating-agent-cli-probes.md) — keeping a probe of an agent CLI or a live session
-  off the user's configuration, accounts and data, and what a scratch daemon on Windows does not keep apart.
+  off the user's configuration, accounts and data, where each CLI keeps its login, what a CLI's own migration can do
+  through a link into the user's home, and what a scratch daemon on Windows does not keep apart.
 - [Keeping the UI responsive in WebKit](memory/keeping-the-ui-responsive-in-webkit.md) — judging cost as restyle times
   forced passes, counting bare rightmost compounds, the specificity trap in unwrapping `:where()`, and measuring latency
   only in WKWebView with `bench:wkwebview`.

@@ -39,3 +39,12 @@ it("draws the usage bar of an account that is not used up in its provider's fill
 it("draws an account with no reading in its provider's fill", () => {
   expect(bar(accountUsage(t, TEST_PROVIDERS, "claude", undefined, undefined, NOW)).classList.contains(PROVIDER_FILL_CLASS)).toBe(true);
 });
+
+it("draws no bar and says nothing in words for an account of a provider that declares no plan quota, whatever its reading holds", () => {
+  const own = { ...quota(exhausted), agent: "test_agent" };
+  for (const held of [undefined, own, { ...own, windows: [] }]) {
+    expect(accountUsage(t, TEST_PROVIDERS, "test_agent", held, undefined, NOW)).toEqual({});
+  }
+  // Not even a window that would read as used up draws one: there is no quota to be used up.
+  expect(accountUsage(t, TEST_PROVIDERS, "test_agent", own, exhausted, NOW)).toEqual({});
+});

@@ -1404,7 +1404,7 @@ it("puts the consequences under the options, so a line they gain moves no checkb
   const tops = boxes().map((box) => box.closest("label"));
   act(() => boxes()[1].click());
   expect(boxes().map((box) => box.closest("label"))).toEqual(tops);
-  expect(dialogParagraph("Also moves the agent's own records of this session and of the sessions deleted with it to the Trash.")).toBeDefined();
+  expect(dialogParagraph("Also cleans up the agents’ own records of the sessions being deleted.")).toBeDefined();
 });
 
 it("validates a project rename before requesting it, retaining excess Unicode text", async () => {

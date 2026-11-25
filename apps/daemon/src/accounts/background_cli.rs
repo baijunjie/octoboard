@@ -1,8 +1,9 @@
-//! An agent's CLI run for an account in the background, with no terminal: the [`Process`] it runs
-//! in, killed with its whole session when it is ended early, the [`Line`]s it says, and the
-//! [`SigningIn`] count that keeps the account's sharing from changing under it. Used by an
-//! account's own login (`accounts::login::flows`) and by an MCP server's sign-in and sign-out
-//! (`accounts::mcp_sign_in`).
+//! An agent's CLI run for an account in the background, with no terminal of the user's: the
+//! [`Process`] it runs in on pipes, or the [`TerminalProcess`] it runs in on a pseudo-terminal of
+//! its own for a CLI that asks only a terminal, either killed with its whole session when it is
+//! ended early, the [`Line`]s it says, and the [`SigningIn`] count that keeps the account's sharing
+//! from changing under it. Used by an account's own login (`accounts::login::flows`) and by an MCP
+//! server's sign-in and sign-out (`accounts::mcp_sign_in`).
 
 use std::process::Stdio;
 use std::sync::Arc;
@@ -16,6 +17,10 @@ use tokio::sync::mpsc;
 use crate::platform::proc::{self, ChildHandle, ProcessId, Reach};
 use crate::state::AppState;
 use crate::terminal::plain_text::strip_escapes;
+
+mod terminal;
+
+pub(crate) use terminal::TerminalProcess;
 
 /// How long a CLI's last words are waited for after it exits.
 const LAST_WORDS: Duration = Duration::from_millis(300);
@@ -135,34 +140,7 @@ impl Process {
     pub(crate) async fn stop(&mut self) {
         // `id` is `None` once the child has been reaped, when its pid may be someone else's.
         if self.child.id().is_some() {
-            let child = &self.handle;
-            child.kill();
-            loop {
-                match child.exited_unreaped() {
-                    Some(false) => tokio::time::sleep(EXIT_POLL).await,
-                    Some(true) => {
-                        let pending = child.start_kill_leftovers(&[]);
-                        let (pid, label) = (child.pid(), self.label);
-                        if pending.needs_wait() {
-                            match tokio::task::spawn_blocking(move || pending.wait()).await {
-                                Ok(swept) => swept.log(pid, label),
-                                Err(err) => tracing::warn!(
-                                    process = label,
-                                    pid = pid.0,
-                                    %err,
-                                    "waiting for what the sweep of the session ended failed"
-                                ),
-                            }
-                        } else {
-                            pending.wait().log(pid, label);
-                        }
-                        break;
-                    }
-                    // `waitid` cannot tell, which it also says of a child already reaped, whose
-                    // pid may be someone else's: no sweep, and `wait` decides.
-                    None => break,
-                }
-            }
+            end_session(&self.handle, self.label).await;
         }
         let _ = self.child.wait().await;
     }
@@ -170,47 +148,94 @@ impl Process {
     /// Takes what the CLI printed last into `last_words`, a moment's worth: the line that says
     /// why it failed comes just before it exits.
     pub(crate) async fn last_words(&mut self, last_words: &mut String) {
-        self.drain(|line| {
-            if let Some(words) = line.into_words() {
-                *last_words = words;
-            }
-        })
-        .await;
+        take_last_words(&mut self.lines, last_words).await;
     }
 
     /// Hands every line the CLI has still to say to `each`, a moment's worth after the last: a
     /// helper that kept the pipes open must not hold the login for good.
-    pub(crate) async fn drain(&mut self, mut each: impl FnMut(Line)) {
-        while let Ok(Some(line)) = tokio::time::timeout(LAST_WORDS, self.lines.recv()).await {
-            each(line);
+    pub(crate) async fn drain(&mut self, each: impl FnMut(Line)) {
+        drain_lines(&mut self.lines, each).await;
+    }
+}
+
+/// [`Process::last_words`], over the lines of a CLI however it runs.
+async fn take_last_words(lines: &mut mpsc::Receiver<Line>, last_words: &mut String) {
+    drain_lines(lines, |line| {
+        if let Some(words) = line.into_words() {
+            *last_words = words;
         }
+    })
+    .await;
+}
+
+/// [`Process::drain`], over the lines of a CLI however it runs.
+async fn drain_lines(lines: &mut mpsc::Receiver<Line>, mut each: impl FnMut(Line)) {
+    while let Ok(Some(line)) = tokio::time::timeout(LAST_WORDS, lines.recv()).await {
+        each(line);
+    }
+}
+
+/// Kills the CLI `child` is and waits for it to have exited, then sweeps the session it led, as
+/// [`Process::stop`] promises. `child` is one the caller holds unreaped.
+async fn end_session(child: &ChildHandle, label: &'static str) {
+    child.kill();
+    loop {
+        match child.exited_unreaped() {
+            Some(false) => tokio::time::sleep(EXIT_POLL).await,
+            Some(true) => {
+                let pending = child.start_kill_leftovers(&[]);
+                let pid = child.pid();
+                if pending.needs_wait() {
+                    match tokio::task::spawn_blocking(move || pending.wait()).await {
+                        Ok(swept) => swept.log(pid, label),
+                        Err(err) => tracing::warn!(
+                            process = label,
+                            pid = pid.0,
+                            %err,
+                            "waiting for what the sweep of the session ended failed"
+                        ),
+                    }
+                } else {
+                    pending.wait().log(pid, label);
+                }
+                return;
+            }
+            // `waitid` cannot tell, which it also says of a child already reaped, whose
+            // pid may be someone else's: no sweep, and the caller's reaping decides.
+            None => return,
+        }
+    }
+}
+
+/// Kills the CLI `child` is and sweeps the session it led without waiting for the CLI to exit,
+/// which a drop cannot do, so a process it starts while the kill is landing is missed. `child` is
+/// one the caller holds unreaped.
+fn end_session_on_drop(child: &ChildHandle, label: &'static str) {
+    child.kill();
+    let pending = child.start_kill_leftovers(&[]);
+    let pid = child.pid();
+    if !pending.needs_wait() {
+        pending.wait().log(pid, label);
+        return;
+    }
+    let wait = move || pending.wait().log(pid, label);
+    // What the sweep ended is ended already; only the wait for it to be gone is left. A
+    // drop on the runtime (a flow's timeout, the daemon's exit) hands that to a blocking
+    // thread rather than hold a worker for it, one off the runtime waits in place. So on
+    // Windows the flow's scratch directory, removed as best it can be when the flow is
+    // dropped, may meet a file a process still running down holds, and stay.
+    match tokio::runtime::Handle::try_current() {
+        Ok(runtime) => {
+            runtime.spawn_blocking(wait);
+        }
+        Err(_) => wait(),
     }
 }
 
 impl Drop for Process {
     fn drop(&mut self) {
-        // Swept without waiting for the CLI to exit, which a drop cannot do, so a process it
-        // starts while the kill is landing is missed.
         if self.child.id().is_some() {
-            self.handle.kill();
-            let pending = self.handle.start_kill_leftovers(&[]);
-            let (pid, label) = (self.handle.pid(), self.label);
-            if !pending.needs_wait() {
-                pending.wait().log(pid, label);
-                return;
-            }
-            let wait = move || pending.wait().log(pid, label);
-            // What the sweep ended is ended already; only the wait for it to be gone is left. A
-            // drop on the runtime (a flow's timeout, the daemon's exit) hands that to a blocking
-            // thread rather than hold a worker for it, one off the runtime waits in place. So on
-            // Windows the flow's scratch directory, removed as best it can be when the flow is
-            // dropped, may meet a file a process still running down holds, and stay.
-            match tokio::runtime::Handle::try_current() {
-                Ok(runtime) => {
-                    runtime.spawn_blocking(wait);
-                }
-                Err(_) => wait(),
-            }
+            end_session_on_drop(&self.handle, self.label);
         }
     }
 }
@@ -229,6 +254,11 @@ pub(crate) struct Line {
     pub(crate) stderr: bool,
     /// Whether the CLI's line was longer than [`LINE_LIMIT`] and `text` is only its start.
     cut: bool,
+    /// Whether the CLI had not ended the line when it was handed over: what a CLI on a terminal
+    /// shows of a prompt it waits at ([`TerminalProcess`]). Never so for a CLI on pipes, whose
+    /// lines are handed over only once they end.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) unfinished: bool,
 }
 
 impl Line {
@@ -290,6 +320,7 @@ fn forward_lines(
                 text: strip_escapes(&line).trim().to_string(),
                 stderr,
                 cut,
+                unfinished: false,
             };
             match tx.try_send(line) {
                 Err(mpsc::error::TrySendError::Closed(_)) => return,
@@ -364,6 +395,7 @@ mod tests {
             text: text.to_string(),
             stderr: false,
             cut,
+            unfinished: false,
         };
         assert_eq!(
             line("failed", false).into_words().as_deref(),

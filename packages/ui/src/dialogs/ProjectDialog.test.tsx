@@ -9,6 +9,8 @@ import { projectOf } from "../fixtures/builders";
 import type { Agent } from "../protocol";
 import { roots, work, personal, render, input, type, settle, PAST_LOCAL_DETECTION_MS, PAST_GIT_DETECTION_MS, click, answer, chooseSource, buttonText, accountPicker, buttons, pickerNamed, sentOf, fillDirectory, stored } from "./projectDialogTestSupport";
 import { runOutTimers } from "../test/clock";
+import { joinValues } from "../i18n/joinPhrases";
+import { TEST_PROVIDERS } from "../test/testProviders";
 
 /** The hidden native select behind the Default agent field, which holds the chosen value. */
 const agentValue = () =>
@@ -275,7 +277,9 @@ it("lists the markers the daemon serves in the help of detecting the agent", asy
   await chooseSource("A parent directory");
   await click(buttons().find((b) => b.getAttribute("aria-label") === "About detecting the agent"));
   const help = document.body.textContent ?? "";
-  expect(help).toContain("looks for agent files and folders such as CLAUDE.md, .claude, .codex, AGENTS.md, .agents, .grok, and .test-agent in each repository");
+  // Every marker the daemon serves, each once, in served order.
+  const markers = [...new Set(TEST_PROVIDERS.flatMap(({ detection_markers }) => detection_markers))];
+  expect(help).toContain(`looks for agent files and folders such as ${joinValues("en", markers)} in each repository`);
 });
 
 const typeDescription = (value: string) => type(document.body.querySelector<HTMLTextAreaElement>("textarea")!, value);

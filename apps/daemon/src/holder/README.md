@@ -49,9 +49,9 @@ daemon's own; see [`../processes/ledger/README.md`](../processes/ledger/README.m
   yet), `terminal.rs` one terminal's threads and its 1 MiB raw tail (and what a handover restarted it with),
   `companion.rs` a terminal's companion (its endpoint, start, readiness wait, exit watch and end), `offline.rs` the
   recogniser of the queries it answers itself while no daemon is linked, `launches.rs` the per-launch keys it issues,
-  `helpers.rs` the helper routes on its port (`/hook`, `/git-ref`, `/context-window`, `/revert-gate`, `/mcp`: the
-  daemon's paths and bodies, with the launch's key bound to the terminal and its session, checked by a middleware before
-  any body is taken), `relay.rs` the path of those requests to the daemon.
+  `helpers.rs` the helper routes on its port (`/hook`, `/git-ref`, `/context-window`, `/revert-gate`, `/mcp`,
+  `/channel`: the daemon's paths and bodies, with the launch's key bound to the terminal and its session, checked by a
+  middleware before any body is taken), `relay.rs` the path of those requests to the daemon.
 - `client/` — the daemon's side. `mod.rs` `Holders` (starts a holder on the first terminal, adopts the existing ones,
   tries again those it cannot link to yet, ends a holder), `link.rs` the link and its reconnect rules, `held.rs`
   `HeldTerminal` and `HeldReader`, `companion.rs` `HeldCompanion`, `relay.rs` the types of the relayed requests,

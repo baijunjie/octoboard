@@ -58,10 +58,11 @@ export type NoAgentReason = "add" | "install";
  * before the daemon has served its providers (`providers` is empty), when no agent is known at all.
  * Determination lands for every agent together, from one shared snapshot, so a mix of
  * `not_determined` and a determined state never happens in practice; this still checks every entry
- * rather than just one, so it reads correctly even so. */
-export function noAgentState(agentAvailability: Map<Agent, AgentAvailability>, added: Agent[] | null, providers: readonly ProviderInfo[]): NoAgentReason | undefined {
-  if (providers.length === 0 || pickableAgents(agentAvailability, added, providers).length > 0) return undefined;
-  return servedAgents(providers).some((agent) => !isAgentUnavailable(agentAvailability, agent)) ? "add" : "install";
+ * rather than just one, so it reads correctly even so. `counts` limits the agents that count, for a surface that is about
+ * some of them only (the usage panel counts the ones that have a plan quota). */
+export function noAgentState(agentAvailability: Map<Agent, AgentAvailability>, added: Agent[] | null, providers: readonly ProviderInfo[], counts: (agent: Agent) => boolean = () => true): NoAgentReason | undefined {
+  if (providers.length === 0 || pickableAgents(agentAvailability, added, providers).some(counts)) return undefined;
+  return servedAgents(providers).some((agent) => counts(agent) && !isAgentUnavailable(agentAvailability, agent)) ? "add" : "install";
 }
 
 /** Every served agent: the added ones in their order, then the others in the registry's. */

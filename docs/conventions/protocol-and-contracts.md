@@ -9,7 +9,10 @@ code goes".
 - **`apps/daemon/PROTOCOL.md` is the contract, and this doc says only what code must do to keep it.** Each request,
   event and record, the names and the compatibility rules are written there once; a rule restated here drifts from it.
 - **A generation only grows.** A client of the same generation must keep working against any daemon of it, so a field
-  or value is added, never changed or taken away, until `GENERATION` is raised.
+  or value is added, never changed or taken away, until `GENERATION` is raised. One narrowing: a value of an output
+  enum that only the daemon sends may be dropped within a generation when every released client of that generation
+  reads an unknown value by a stated fallback and already handles what replaces it; the change says which clients were
+  checked.
 - **A version is raised at most once per release.** Whatever no release has carried is changed in place, with no step.
 
 ## Wire types and generated files
@@ -77,10 +80,12 @@ its name exactly.
 
 ## MCP tools and the MCP contract
 
-- **The MCP server key `octoboard` (`SERVER_KEY`), the qualified tool names (`mcp__octoboard__<tool>`,
-  `octoboard__<tool>` for Grok Build) and the `{"tool", "arguments"}` call shape are frozen.** Role descriptions and
-  notices name a tool qualified as the receiving session's agent shows it; the console instruction file and tool
-  descriptions use bare names.
+- **The MCP server key `octoboard` (`SERVER_KEY`), the qualified tool names and the `{"tool", "arguments"}` call shape
+  are frozen.** A qualified name is `<tool_name_prefix>octoboard<tool_name_separator><tool>` as each descriptor
+  declares it (`session_tools::catalogue::qualified_tool_name`; for example `mcp__octoboard__<tool>`, and
+  `octoboard__<tool>` for Grok Build), frozen per agent once that agent is released. Role descriptions and notices name
+  a tool qualified as the receiving session's agent shows it; the console instruction file and tool descriptions use
+  bare names.
 - **A new MCP tool is a catalogue entry (`src/session_tools/catalogue/`), a dispatch arm (`src/mcp/dispatch.rs`) and a
   file in `src/mcp/tools/`**, calling the coordinator or reporting function the control socket uses, never
   reimplementing it.
@@ -108,6 +113,10 @@ its name exactly.
 The compatibility rules (a generation only grows, what raises `GENERATION`, the frozen `hello`, what each side
 tolerates) are in `apps/daemon/PROTOCOL.md`, "Versions and compatibility". What code must do to meet them:
 
+- **A capability or switch added to a served type within a generation is read with the meaning released daemons had
+  when the field is absent** (for a capability every released provider has, present), so a client connected to an
+  older daemon of the same generation never takes an action away. Not: reading `capabilities.owned_accounts === true`,
+  which would hide Add account for every agent against a daemon that predates the field.
 - **Never read a request with `deny_unknown_fields`, and never add a required input within a generation.** A change that
   breaks a released generation raises `GENERATION`; `protocol::compatibility` fails against the last release's snapshot
   in `contracts/protocol/released/` (refreshed by `release:version`) until it does.
@@ -132,7 +141,8 @@ tolerates) are in `apps/daemon/PROTOCOL.md`, "Versions and compatibility". What 
   only where `apps/daemon/PROTOCOL.md` states a fallback, the enum has its own `unknown` member, or the reader names
   beside the predicate a neutral reading that offers, enables and counts nothing (a switch off, an `info` tone, a plain
   file, no link); otherwise the record is shown neutrally (how is in `docs/product/values-a-newer-daemon-sends.md`), and
-  nothing is offered, enabled or counted because of it. Not: an `as Foo` cast, a `switch` without a default,
+  nothing is offered, enabled or counted because of it. An equality test against one known value
+  (`raw === "available"`) needs no normaliser: it reads an unknown value as not that value. Not: an `as Foo` cast, a `switch` without a default,
   `Record<Foo, X>[raw]`, a message key built from the raw value, or `.find(...)!` over it. A tagged union (an object
   discriminated by `type`, `kind`, `group` or `state`) is not caught by the types: each of its readers handles an
   unknown tag by hand. Every entry point to an action follows the rule of the menu that offers it: a dialog reachable

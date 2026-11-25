@@ -38,10 +38,10 @@ use windows_sys::Win32::System::JobObjects::{
     JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
 };
 use windows_sys::Win32::System::Threading::{
-    GetCurrentProcess, OpenThread, QueryFullProcessImageNameW, ResumeThread, TerminateProcess,
-    WaitForSingleObject, CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW, CREATE_SUSPENDED, INFINITE,
-    PROCESS_ALL_ACCESS, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
-    THREAD_SUSPEND_RESUME,
+    GetCurrentProcess, GetExitCodeProcess, OpenThread, QueryFullProcessImageNameW, ResumeThread,
+    TerminateProcess, WaitForSingleObject, CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW,
+    CREATE_SUSPENDED, INFINITE, PROCESS_ALL_ACCESS, PROCESS_QUERY_LIMITED_INFORMATION,
+    PROCESS_SYNCHRONIZE, PROCESS_TERMINATE, THREAD_SUSPEND_RESUME,
 };
 
 mod create;
@@ -474,6 +474,18 @@ impl ChildHandle {
     /// always say.
     pub fn exited_unreaped(&self) -> Option<bool> {
         Some(!is_running(self.process()))
+    }
+
+    /// Whether the child, having exited, ended with exit code 0; `None` while it runs and when
+    /// its exit code cannot be read. The handle keeps the code readable until it is dropped.
+    pub fn exited_successfully(&self) -> Option<bool> {
+        if is_running(self.process()) {
+            return None;
+        }
+        let mut code = 0;
+        // SAFETY: the handle is open for as long as `self` lives, and `code` is writable.
+        let read = unsafe { GetExitCodeProcess(self.process(), &mut code) };
+        (read != 0).then_some(code == 0)
     }
 
     /// Asks the child to end as `how` says, where it can be asked: a terminal's process through

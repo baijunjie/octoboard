@@ -15,9 +15,10 @@ use tokio::task::JoinSet;
 
 use super::diagnostics::{log_stop, ProbeTrace};
 use super::email::account_email;
-use super::judgement::is_account_state;
+use super::judgement::{is_account_state, is_failure};
 use super::kick::{kick, KICK_TIMEOUT};
-use super::probe::{config_dir_missing, failed, probe, PROBE_TIMEOUT};
+use super::probe::{config_dir_missing, failed, not_signed_in, probe, PROBE_TIMEOUT};
+use super::sign_in::SignInReading;
 use super::{retain_locked, window_id, AccountQuotas, Claim, Entry, Inner, Key, WindowId};
 use crate::adapter::provider;
 use crate::protocol::{
@@ -109,9 +110,10 @@ pub struct Scope {
 }
 
 /// The accounts worth reading: the default account and every stored account of each agent whose
-/// binary was found on the login shell's `PATH` and that has a quota to read, except the ones the
-/// user turned off, which no trigger reads unless a session is running on them (the rail's
-/// indicator and the automatic account switch go on needing their reading).
+/// binary was found on the login shell's `PATH` and that has accounts to read (a quota probe, or
+/// else a sign-in reading), except the ones the user turned off, which no trigger reads unless a
+/// session is running on them (the rail's indicator and the automatic account switch go on needing
+/// their reading).
 fn targets(state: &AppState) -> anyhow::Result<Vec<Key>> {
     let accounts = state.store.list_accounts()?;
     let disabled_defaults = state.store.disabled_default_accounts()?;
@@ -130,10 +132,7 @@ fn targets(state: &AppState) -> anyhow::Result<Vec<Key>> {
     let mut keys = Vec::new();
     for agent in AgentId::ALL {
         if state.agent_availability_of(agent).availability != Availability::Available
-            || provider(agent)
-                .accounts()
-                .and_then(|ops| ops.quota_probe())
-                .is_none()
+            || provider(agent).accounts().is_none()
         {
             continue;
         }
@@ -502,7 +501,7 @@ async fn read_account(
     let key = claim.key.clone();
     let shell = shell.clone();
     let stopping = state.account_quotas.stopping.clone();
-    let run_homes = crate::paths::agent_query_homes_dir();
+    let run_homes = state.agent_query_homes.clone();
     let outcome =
         tokio::task::spawn_blocking(move || read(&key, &*shell, &run_homes, &stopping)).await;
     let (quota, trace) = outcome.unwrap_or_else(|err| {
@@ -566,6 +565,12 @@ fn finish_reading(
     }
 }
 
+/// [`refresh`] for the tests of other modules, in the shell environment `shell` gives.
+#[cfg(test)]
+pub(crate) async fn refresh_for_test(state: &Arc<AppState>, scope: &Scope, shell: ShellSource) {
+    refresh_with(state, scope, Trigger::Poll, shell).await;
+}
+
 #[cfg(test)]
 pub(crate) fn finish_probe_for_test(
     state: &Arc<AppState>,
@@ -594,7 +599,7 @@ async fn kick_and_read(state: &Arc<AppState>, shell: &ShellSource, claim: Claim)
             let key = claim.key.clone();
             let shell = shell.clone();
             let stopping = state.account_quotas.stopping.clone();
-            let run_homes = crate::paths::agent_query_homes_dir();
+            let run_homes = state.agent_query_homes.clone();
             let outcome = tokio::task::spawn_blocking(move || {
                 start_windows(&key, &*shell, &run_homes, &stopping)
             })
@@ -621,8 +626,9 @@ async fn kick_and_read(state: &Arc<AppState>, shell: &ShellSource, claim: Claim)
     }
 }
 
-/// Reads one account's quota in the shell environment `shell` gives, with what the probe left to
-/// log (see `diagnostics.rs`). Blocking: it runs a subprocess, which setting `cancel` stops.
+/// Reads one account in the shell environment `shell` gives, its quota or, for a provider with no
+/// quota probe, its sign-in (`read_sign_in`), with what the probe left to log (see
+/// `diagnostics.rs`). Blocking: it runs a subprocess, which setting `cancel` stops.
 fn read(
     key: &Key,
     shell: &(dyn Fn() -> anyhow::Result<HashMap<String, String>> + Send + Sync),
@@ -642,7 +648,14 @@ fn read(
         );
     }
     let shell_env = shell();
-    let result = match &shell_env {
+    let Some(ops) = provider(key.agent)
+        .accounts()
+        .filter(|ops| ops.quota_probe().is_some())
+    else {
+        return (read_sign_in(key, &shell_env, &mut trace), trace);
+    };
+    let config_dir = key.config_dir.as_deref().map(Path::new);
+    let mut result = match &shell_env {
         Ok(shell_env) => probe(
             key.agent,
             shell_env,
@@ -652,14 +665,24 @@ fn read(
             cancel,
             &mut trace,
         ),
-        Err(err) => {
-            let detail = format!("{err:#}");
-            Err(QuotaUnavailable::new(
-                code::SHELL_ENVIRONMENT_FAILED,
-                format!("the shell environment could not be captured: {detail}"),
-                &[("detail", &detail)],
-            ))
+        Err(err) => Err(shell_environment_failed(err)),
+    };
+    let sign_in = match (&result, &shell_env) {
+        (Err(unavailable), Ok(env))
+            if is_failure(unavailable.code) && !cancel.load(Ordering::Relaxed) =>
+        {
+            ops.sign_in_after_quota_failure(config_dir, env)
         }
+        _ => SignInReading::CannotTell,
+    };
+    let fallback_email = match sign_in {
+        SignInReading::SignedOut => {
+            trace.reason = Some("the provider reads the account as signed out".to_string());
+            result = Err(not_signed_in(key.agent));
+            None
+        }
+        SignInReading::SignedIn { email } => email,
+        SignInReading::CannotTell => None,
     };
     // An account that is not signed in has no email, whatever a leftover record says. Without a
     // shell environment an owned account's directory is still known, but the default account's
@@ -672,9 +695,9 @@ fn read(
     };
     let email = match &result {
         Err(unavailable) if is_account_state(unavailable.code) => None,
-        _ => env.and_then(|env| {
-            account_email(key.agent, key.config_dir.as_deref().map(Path::new), env)
-        }),
+        _ => {
+            fallback_email.or_else(|| env.and_then(|env| account_email(key.agent, config_dir, env)))
+        }
     };
     let quota = match result {
         Ok(reading) => AccountQuota {
@@ -693,6 +716,55 @@ fn read(
         },
     };
     (quota, trace)
+}
+
+fn shell_environment_failed(err: &anyhow::Error) -> QuotaUnavailable {
+    let detail = format!("{err:#}");
+    QuotaUnavailable::new(
+        code::SHELL_ENVIRONMENT_FAILED,
+        format!("the shell environment could not be captured: {detail}"),
+        &[("detail", &detail)],
+    )
+}
+
+/// The reading of an account of a provider with no quota probe: its sign-in reading
+/// (`AccountOps::sign_in_state`) in the shape of a quota reading, with no plan and no windows. Signed
+/// out is the not-signed-in state; one that cannot be told carries no reason, as a failed quota
+/// reading says nothing of the sign-in. Blocking: the provider may run a short query.
+fn read_sign_in(
+    key: &Key,
+    shell_env: &anyhow::Result<HashMap<String, String>>,
+    trace: &mut ProbeTrace,
+) -> AccountQuota {
+    let shell_env = match shell_env {
+        Ok(shell_env) => shell_env,
+        Err(err) => return unavailable_quota(key, shell_environment_failed(err)),
+    };
+    let ops = provider(key.agent).accounts();
+    let config_dir = key.config_dir.as_deref().map(Path::new);
+    let reading = ops.map_or(SignInReading::CannotTell, |ops| {
+        ops.sign_in_state(config_dir, shell_env)
+    });
+    let (email, unavailable) = match reading {
+        // The email of the sign-in reading, else the one the provider's email reader finds.
+        SignInReading::SignedIn { email } => (
+            email.or_else(|| ops.and_then(|ops| ops.email(config_dir, shell_env))),
+            None,
+        ),
+        SignInReading::SignedOut => {
+            trace.reason = Some("the provider reads the account as signed out".to_string());
+            (None, Some(not_signed_in(key.agent)))
+        }
+        SignInReading::CannotTell => {
+            trace.sign_in_unknown = true;
+            (None, None)
+        }
+    };
+    AccountQuota {
+        email,
+        unavailable,
+        ..empty_reading(key)
+    }
 }
 
 /// The account's configuration directory when it is gone. Looked for before anything is run:
@@ -735,13 +807,21 @@ fn start_windows(
 
 fn unavailable_quota(key: &Key, unavailable: QuotaUnavailable) -> AccountQuota {
     AccountQuota {
+        unavailable: Some(unavailable),
+        ..empty_reading(key)
+    }
+}
+
+/// A reading of `key`'s account at this moment holding nothing: no plan, email, windows or reason.
+fn empty_reading(key: &Key) -> AccountQuota {
+    AccountQuota {
         agent: key.agent,
         account: key.account.clone(),
         fetched_at: now_millis(),
         plan: None,
         email: None,
         windows: Vec::new(),
-        unavailable: Some(unavailable),
+        unavailable: None,
         reset_credits: None,
     }
 }

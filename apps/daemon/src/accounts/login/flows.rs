@@ -1,9 +1,11 @@
 //! What drives an agent's CLI to sign an account in, whichever the agent: the [`Flow`] to run, the
-//! [`Process`] it runs in (from `accounts::background_cli`) and what it reports through
-//! [`Progress`]. How each CLI is driven is the provider's own ([`LoginFlow`], in
+//! [`Process`] it runs in (from `accounts::background_cli`) and what it reports, and asks the
+//! user, through [`Progress`]. How each CLI is driven is the provider's own ([`LoginFlow`], in
 //! `crate::adapter::<provider>::login`), as measured in `docs/agent-cli-reference.md` ("Signing in
-//! a config directory without a terminal"). All run with no terminal and nothing written to their
-//! stdin beyond what the provider writes.
+//! a config directory without a terminal"). All run with no terminal of the user's and nothing
+//! written to their input beyond what the provider writes: on pipes ([`Process`]), or, for a CLI
+//! that asks its question only where it has a terminal, on a pseudo-terminal of the flow's own
+//! (`accounts::background_cli::TerminalProcess`).
 //!
 //! Dropping a flow's future kills the CLI's whole session (see [`Process`]), which is how a timeout
 //! and the daemon's exit end one, and removes the flow's scratch directory.
@@ -16,13 +18,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::Value;
-use tokio::sync::Notify;
+use tokio::sync::{oneshot, watch, Notify};
 
 use super::Key;
 use crate::accounts::background_cli::{Process, SigningIn};
 use crate::adapter::{self, Unstartable};
 use crate::platform::shell::ResolvedBinary;
-use crate::protocol::{login_failure_code as code, AgentId, LoginFailure, LoginStatus};
+use crate::protocol::{
+    login_failure_code as code, AgentId, LoginAnswer, LoginFailure, LoginQuestion, LoginStatus,
+};
 use crate::providers::ProviderCode;
 use crate::state::AppState;
 
@@ -42,11 +46,24 @@ const WRITE_FAILURE_GRACE: Duration = Duration::from_secs(1);
 pub(crate) struct Progress {
     state: Arc<AppState>,
     key: Key,
+    /// The serial of the flow's question that is open, waiting on the user: the login's clock
+    /// stands still meanwhile ([`Self::question_open`]).
+    asking: watch::Sender<Option<u64>>,
 }
 
 impl Progress {
     pub(super) fn new(state: Arc<AppState>, key: Key) -> Self {
-        Self { state, key }
+        Self {
+            state,
+            key,
+            asking: watch::Sender::new(None),
+        }
+    }
+
+    /// Follows which question [`Self::ask`] put is open, by its serial, for the login's timeout,
+    /// which does not count the time the user takes to answer.
+    pub(super) fn question_open(&self) -> watch::Receiver<Option<u64>> {
+        self.asking.subscribe()
     }
 
     /// The user has something to do: authorize on `url`, confirming `device_code` there if there
@@ -66,6 +83,78 @@ impl Progress {
                 login.opened_by_agent = opened_by_agent;
             });
     }
+
+    /// Puts `question` of the agent's own to the user and waits for their
+    /// answer, however long that takes: nothing answers it but the user, so a flow that needs an
+    /// answer does nothing until this returns, and the login's own timeout stands still while the
+    /// question is open. While it waits the login shows the question in place of the page and the
+    /// code. A login asks one question at a time: a second one while the first is open is refused
+    /// as [`AlreadyAsking`], the first staying open. Dropping the future (a flow that is
+    /// cancelled, or whose CLI has gone) takes its own question back.
+    pub(crate) async fn ask(&self, question: LoginQuestion) -> Result<LoginAnswer, AlreadyAsking> {
+        let (answer, answered) = oneshot::channel();
+        let logins = &self.state.account_logins;
+        let serial = match logins.ask(&self.state, &self.key, question, answer) {
+            super::Asked::Open(serial) => serial,
+            super::Asked::AlreadyAsking => return Err(AlreadyAsking),
+            // The flow is about to be dropped with its login: nothing is ever answered.
+            super::Asked::Ended => return std::future::pending().await,
+        };
+        // Declared before the receiver is moved into the wait below, so that the receiver goes
+        // first when the future is dropped: an answer arriving then finds nobody waiting and is
+        // refused instead of being taken for a question about to be withdrawn.
+        let _open = OpenQuestion {
+            progress: self,
+            serial,
+        };
+        self.asking.send_replace(Some(serial));
+        match answered.await {
+            Ok(answer) => Ok(answer),
+            // The login has ended under the flow.
+            Err(_) => std::future::pending().await,
+        }
+    }
+}
+
+/// A flow asked a question while its login was still waiting on one.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct AlreadyAsking;
+
+/// A question that is open on a login, taken back when its asker stops waiting.
+struct OpenQuestion<'a> {
+    progress: &'a Progress,
+    serial: u64,
+}
+
+impl Drop for OpenQuestion<'_> {
+    fn drop(&mut self) {
+        let Progress { state, key, asking } = self.progress;
+        // Answered or taken back, the question no longer holds the login's clock, unless another
+        // question has opened since: a flow polling a second `ask` while the first's future has
+        // not completed yet.
+        asking.send_if_modified(|open| {
+            let own = *open == Some(self.serial);
+            if own {
+                *open = None;
+            }
+            own
+        });
+        if !state.account_logins.withdraw_question(key, self.serial) {
+            return;
+        }
+        // Said from a task of its own, a turn later, so that a login ending in the same turn (given
+        // up on, or cancelled with nothing left to wait for) announces its ending alone, as a rule,
+        // not a question taken back just before it. Outside a runtime the daemon is going down and
+        // nobody listens.
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        let (state, key) = (state.clone(), key.clone());
+        runtime.spawn(async move {
+            tokio::task::yield_now().await;
+            state.account_logins.announce(&state, &key);
+        });
+    }
 }
 
 /// How one provider's CLI is driven to sign an account in.
@@ -84,6 +173,14 @@ pub(crate) trait LoginFlow: Send + Sync {
     /// in, for a provider whose sign-in only one login at a time can use (one that listens on a
     /// fixed local port); `None`, the default, lets its logins run side by side.
     fn busy_code(&self) -> Option<ProviderCode> {
+        None
+    }
+
+    /// How long the daemon waits for this sign-in before giving up on it, for a flow whose own
+    /// wait is not the daemon's (a device code that lives longer, so that the user is shown the
+    /// agent's own expiry and not the daemon's timeout); `None`, the default, declares none, and
+    /// the flow is given the daemon's own wait.
+    fn timeout(&self) -> Option<Duration> {
         None
     }
 }
@@ -174,7 +271,9 @@ impl Flow {
         &self.scratch.0
     }
 
-    pub(crate) fn command(&self, args: &[&str]) -> std::process::Command {
+    /// The command that runs the agent's CLI as the account, or how the login ends when the
+    /// account's directory is one the agent cannot be given.
+    pub(crate) fn command(&self, args: &[&str]) -> Result<std::process::Command, Outcome> {
         adapter::account_command_of(
             &self.binary,
             self.agent,
@@ -182,6 +281,7 @@ impl Flow {
             self.config_dir.as_deref(),
             args,
         )
+        .map_err(|unstartable| self.failed(&unstartable.into_error().to_string()))
     }
 
     pub(crate) fn failed(&self, detail: &str) -> Outcome {
@@ -234,6 +334,18 @@ impl Flow {
             _ => Err(self.failed(&format!("it could not be written to: {err}"))),
         }
     }
+}
+
+/// Whether `text` is a device code as the agents print one: two groups of four letters or digits
+/// joined by a hyphen, and nothing else.
+pub(crate) fn looks_like_device_code(text: &str) -> bool {
+    let mut groups = text.split('-');
+    let is_group = |group: Option<&str>| {
+        group.is_some_and(|group| {
+            group.len() == 4 && group.chars().all(|c| c.is_ascii_alphanumeric())
+        })
+    };
+    is_group(groups.next()) && is_group(groups.next()) && groups.next().is_none()
 }
 
 /// The last non-empty line of the file at `path`; empty while it is missing.
@@ -301,5 +413,32 @@ mod tests {
             failure.params.get("detail").map(String::as_str),
             Some("Error: bad configuration")
         );
+    }
+
+    /// A device code is two groups of four letters or digits joined by a hyphen, and nothing else.
+    #[test]
+    fn a_device_code_is_two_groups_of_four_letters_or_digits() {
+        for code in ["ABCD-1234", "a1b2-C3D4", "0000-ffff", "XXXX-XXXX"] {
+            assert!(looks_like_device_code(code), "{code}");
+        }
+        for not_a_code in [
+            "",
+            "Waiting for authorization...",
+            "ABCD-12345",
+            "ABC-1234",
+            "ABCD1234",
+            "ABCD-12-34",
+            "abcd-12-34",
+            "ABCD-1234-",
+            "-ABCD-1234",
+            "ABCD-",
+            "ABCD- 1234",
+            "ABCD-123!",
+            " ABCD-1234",
+            // Four bytes, two letters, and not ASCII.
+            "\u{c0}\u{c0}-1234",
+        ] {
+            assert!(!looks_like_device_code(not_a_code), "{not_a_code:?}");
+        }
     }
 }

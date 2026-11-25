@@ -1,0 +1,29 @@
+# capture<TAB>title<TAB>glyph (U+XXXX, or nothing); a title of * is every title of the capture.
+# GitHub Copilot sets its title as OSC 0 (byte 280 of each capture) after its start-up queries and before it has
+# drawn anything (its first drawing starts at byte 337, with the tab bar of its welcome screen), in the captures taken
+# from its start: the trust screens, the empty composer's, the opened sidebar's, the forms', and the first of the
+# commands', feedback prompt's, images', permission prompts' (of every kind), questions' (the wrapped one too) and
+# stash's. The other captures hold only titles set after drawing, or none.
+copilot_trust_screen_120.bin	GitHub Copilot
+copilot_trust_screen_80.bin	GitHub Copilot
+copilot_composer_120_01_empty.bin	GitHub Copilot
+copilot_composer_80_01_empty.bin	GitHub Copilot
+copilot_sidebar_120_01_open.bin	GitHub Copilot
+copilot_sidebar_80_01_open.bin	GitHub Copilot
+copilot_elicitation_120_01_start.bin	GitHub Copilot
+copilot_elicitation_80_01_start.bin	GitHub Copilot
+copilot_elicitation_fields_120_01_start.bin	GitHub Copilot
+copilot_commands_120_01_idle.bin	GitHub Copilot
+copilot_images_120_01_one_image.bin	GitHub Copilot
+copilot_permission_120_01_permission.bin	GitHub Copilot
+copilot_question_120_01_form.bin	GitHub Copilot
+copilot_stash_120_01_draft.bin	GitHub Copilot
+copilot_stash_80_01_draft.bin	GitHub Copilot
+copilot_feedback_wrap_120_01_prompt.bin	GitHub Copilot
+copilot_permission_create_120_01_prompt.bin	GitHub Copilot
+copilot_permission_edit_120_01_prompt.bin	GitHub Copilot
+copilot_permission_huge_120_01_prompt.bin	GitHub Copilot
+copilot_permission_long_120_01_prompt.bin	GitHub Copilot
+copilot_permission_mcp_120_01_prompt.bin	GitHub Copilot
+copilot_permission_view_120_01_prompt.bin	GitHub Copilot
+copilot_question_wrap_120_01_form.bin	GitHub Copilot

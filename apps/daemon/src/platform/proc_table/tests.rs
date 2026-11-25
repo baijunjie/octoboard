@@ -45,3 +45,26 @@ fn no_process_is_listed_with_a_process_group_on_windows() {
     let own = listed(std::process::id() as i32);
     assert_eq!(own.pgid, None);
 }
+
+/// A process's parent is the process that started it, read without starting anything: this
+/// process is the parent of a child it starts, and has a parent itself. The child is a program
+/// every host has, so each host's reader is held to it.
+#[test]
+fn the_parent_of_a_process_is_the_one_that_started_it() {
+    let child = crate::test_support::programs::sleep(300)
+        .command()
+        .spawn()
+        .expect("sleep starts");
+    let pid = child.id() as i32;
+    let _children = Children(vec![child]);
+    // Listed first, so the child is there to be asked about.
+    listed(pid);
+    assert_eq!(parent_of(pid), Some(std::process::id() as i32));
+    assert!(parent_of(std::process::id() as i32).is_some_and(|parent| parent > 0));
+}
+
+/// A pid no process has names no parent.
+#[test]
+fn no_process_has_no_parent() {
+    assert_eq!(parent_of(i32::MAX), None);
+}

@@ -105,6 +105,18 @@ pub(crate) fn refuse_if_account_not_signed_in(
         return Ok(());
     }
     let account = state.store.account_display_name(agent, account_id)?;
+    // The directory the account's sign-in lives in, for a client that tells the user how to sign
+    // in with the agent's own CLI: the account's own, else the default account's as resolved.
+    let default_dir = state.agent_availability_of(agent).default_account_dir;
+    let dir = config_dir.map(str::to_string).or(default_dir);
+    let mut params = vec![
+        ("agent", agent.label()),
+        ("agent_id", agent.wire_name()),
+        ("account", account.as_str()),
+    ];
+    if let Some(dir) = dir.as_deref() {
+        params.push(("config_dir", dir));
+    }
     Err(CodedError::raised(
         error_code::ACCOUNT_NOT_SIGNED_IN,
         format!(
@@ -112,7 +124,7 @@ pub(crate) fn refuse_if_account_not_signed_in(
              → Agent accounts.",
             agent.label()
         ),
-        &[("agent", agent.label()), ("account", account.as_str())],
+        &params,
     ))
 }
 

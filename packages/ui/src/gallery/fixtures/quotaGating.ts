@@ -1,12 +1,13 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { type Account, type AccountQuota, type Agent, type AgentAvailability, type Console, type Project, type Settings } from "../../protocol";
-import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
+import { FIXTURE_AGENTS, NO_QUOTA_PROVIDER } from "../../fixtures/fixtureProviders";
 import type { Scenario } from "../scenario";
 import { describing, type Ui } from "../../fixtures/interact";
 import { accountOf, SAMPLE, accountSharingOf, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
 import { quotaFailure, quotaOf, quotaWindow } from "../../fixtures/quotas";
 
 import { settingsUpdated } from "./liveChanges";
+import { NO_QUOTA_AGENT, withNoQuotaProvider } from "./noQuotaProvider";
 
 const GROUP = "Sidebar sessions";
 const FOCUS_GROUP = "Focus mode";
@@ -103,6 +104,18 @@ const openSwitchTo = (account: string) => [
   (ui: Ui) => ui.press(ui.t("sidebar.session.switchAccount")),
   (ui: Ui) => ui.press(account),
 ];
+
+/** A window whose project's sessions run on the provider that reports no plan quota, with its default account, Work and
+ * Client (`withNoQuotaProvider`). */
+const onNoQuotaProvider = withNoQuotaProvider(launchState([projectWith(website, { default_agent: NO_QUOTA_AGENT })], []));
+
+/** `switchState` whose session to switch runs on that provider's default account. */
+const noQuotaSwitchState = (() => {
+  const base = switchState([]);
+  const sessions = new Map(base.sessions);
+  sessions.set("s-switch-work", { ...sessions.get("s-switch-work")!, agent: NO_QUOTA_AGENT });
+  return withNoQuotaProvider({ ...base, sessions });
+})();
 
 /** Client is turning sharing of the default configuration on, 2 entries of 9 done: while that runs the daemon refuses a
  * session on it, whatever its quota. */
@@ -236,6 +249,15 @@ export const quotaGatingScenarios: Scenario[] = [
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
   },
   {
+    id: "dialog-new-session-without-plan-quota-picker",
+    group: GROUP,
+    category: "normal",
+    title: "New session, account picker of a provider with no plan quota",
+    description: "Website would run on Terminal Agent, a provider that reports no plan quota, so the account field opens on Default and the open picker lists Default (selected), Work and Client with no usage bar or empty track before the names, which start at the left edge of each row. Client, whose last reading found it not logged in, is unselectable, its name in the secondary text colour with the short reason \"Not logged in\" under it; Work, whose sign-in cannot be told, can be chosen.",
+    state: onNoQuotaProvider,
+    steps: [openSessionDialog, (ui) => ui.press(accountField(ui, NO_QUOTA_PROVIDER.label))],
+  },
+  {
     id: "dialog-new-session-quota-all-used-up",
     group: GROUP,
     category: "normal",
@@ -335,6 +357,18 @@ export const quotaGatingScenarios: Scenario[] = [
     title: "Switch account menu, accounts not logged in",
     description: "The row's Switch account submenu lists Default (current), Work, Personal and Client. Work and Client, whose last reading found them not logged in, are greyed out and cannot be chosen, with the short reason \"Not logged in\" under each name, in the style of an account at its limit (arrow keys still reach them; the accessible name stays the account's name and its description reads \"Unavailable until it is logged in\"); Personal can be chosen.",
     state: switchState(signedOutQuotas),
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
+      (ui) => ui.press(ui.t("sidebar.session.switchAccount")),
+    ],
+  },
+  {
+    id: "sidebar-session-switch-account-without-plan-quota-menu",
+    group: GROUP,
+    category: "normal",
+    title: "Switch account menu, a provider with no plan quota",
+    description: "The row's Switch account submenu of a Terminal Agent session, a provider that reports no plan quota, lists Default (current), Work and Client with a blank space where the other menus draw the usage bar, so the names line up with them and no bar or key icon is drawn. Client, whose last reading found it not logged in, is greyed out and cannot be chosen, with the short reason \"Not logged in\" under its name; Work can be chosen.",
+    state: noQuotaSwitchState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
       (ui) => ui.press(ui.t("sidebar.session.switchAccount")),

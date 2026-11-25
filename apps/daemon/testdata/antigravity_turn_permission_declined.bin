@@ -1,0 +1,91 @@
+[?25lCALL run_command {"CommandLine":"echo octo > other.txt","toolSummary":"make another","WaitMsBeforeAsync":5000}
+
+[13D[1K [2mG[m[2A[11C[?25h[?25l]7501;state=working:app=antigravityM[52D[K
+[34;1m> CALL run_command {"CommandLine":"echo octo > other.txt","toolSummary":"make another","WaitMsBeforeAsync":5000}[m
+⡿  [90mGenerating...[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[94m>[m
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l[2A[K
+[33m●[m [33;1mRunning[m [37m(echo octo > other.txt)[m [37m(ctrl+o to expand)[m[K
+⡿  [90mRunning command...[m
+
+[94m>[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l[0 q]7501;state=blocked:kind=permission:app=antigravity:msg=QXBwcm92ZSBCYXNoOiBlY2hvIG9jdG8gPiBvdGhlci50eHQ=[28A[4C[38;5;179m▄[38;5;208;48;5;208m▀[38;5;203;48;5;209m▀[49m▄[m        [94;1mAntigravity CLI 1.5.14[m
+[35D[38;5;149;48;5;113m▀[38;5;143;48;5;107m▀[38;5;173;48;5;173m▀[38;5;209;48;5;209m▀[38;5;203;48;5;167m▀▀[m       [90mGemini API key[m[K
+[28D[38;5;107;48;5;113m▀[38;5;71;48;5;72m▀[38;5;72;48;5;68m▀[38;5;67;49m▀[38;5;103m▀[38;5;98;48;5;68m▀[38;5;97;48;5;62m▀[38;5;132;48;5;97m▀[m      [90mGemini 3.1 Pro (Low)[m
+   [38;5;78m▄[48;5;74m▀[38;5;73m▀[m    [38;5;68;48;5;69m▀▀[49m▄[m     [90m/scratch/project[m
+  [38;5;75m▄[38;5;79;48;5;75m▀[38;5;75;49m▀[m      [38;5;69m▀[48;5;69m▀[49m▄[m[K
+[K
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> a drafthi[m[K
+[K
+  Stub: hello.
+[K
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> SLOW please[m[K
+[K
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL run_command {"CommandLine":"echo octo > made.txt","toolSummary":"make a file","WaitMsBeforeAsync":5000}[m
+[K
+[32m●[m [33;1mRan[m [37m(echo octo > made.txt)[m [37m(ctrl+o to expand)[m
+[K
+  Stub: tool finished.
+[K
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL run_command {"CommandLine":"echo octo > other.txt","toolSummary":"make another","WaitMsBeforeAsync":5000}[m
+[K
+[33m●[m [33;1mRan[m [37m(echo octo > other.txt)[m [37m(ctrl+o to expand)[m
+[K
+[33;1mCommand[m[K
+
+[K
+[37;1mRequesting permission for:[m[K
+[37m   echo octo > other.txt[m[K
+
+[1mRun this command?[m
+[94m> 1. Yes, run command[K[m
+  2. Yes, and always allow in this conversation for commands that start with 'echo octo > other.txt'
+  3. Yes, and always allow for commands that start with 'echo octo > other.txt' (Persist to settings.json)
+  4. No, cancel
+
+  [94;1m↑/↓[90;22m Navigate · [94;1mtab[90;22m Amend · [94;1mctrl+g[90;22m edit/expand command[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[6A  1. Yes, run command[K
+[94m> 2. Yes, and always allow in this conversation for commands that start with 'echo octo > other.txt'[K[m  2. Yes, and always allow in this conversation for commands that start with 'echo octo > other.txt'[K
+[94m> 3. Yes, and always allow for commands that start with 'echo octo > other.txt' (Persist to settings.json)[K[m  3. Yes, and always allow for commands that start with 'echo octo > other.txt' (Persist to settings.json)[K
+[94m> 4. No, cancel[K[m[0 q]7501;state=idle:app=antigravityM[J[35A[K
+[5C [38;5;179m▄[38;5;208;48;5;208m▀[38;5;203;48;5;209m▀[49m▄[m        [94;1mAntigravity CLI 1.5.14[m
+[36D [38;5;149;48;5;113m▀[38;5;143;48;5;107m▀[38;5;173;48;5;173m▀[38;5;209;48;5;209m▀[38;5;203;48;5;167m▀▀[m       [90mGemini API key[m[K
+    [38;5;107;48;5;113m▀[38;5;71;48;5;72m▀[38;5;72;48;5;68m▀[38;5;67;49m▀[38;5;103m▀[38;5;98;48;5;68m▀[38;5;97;48;5;62m▀[38;5;132;48;5;97m▀[m      [90mGemini 3.1 Pro (Low)[m[K
+   [38;5;78m▄[48;5;74m▀[38;5;73m▀[m    [38;5;68;48;5;69m▀▀[49m▄[m     [90m/scratch/project[m
+  [38;5;75m▄[38;5;79;48;5;75m▀[38;5;75;49m▀[m      [38;5;69m▀[48;5;69m▀[49m▄[m
+[K
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> a drafthi[m
+[K
+  Stub: hello.
+[K
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> SLOW please[m
+[K
+[90m────────────────────────────────────────────────────────────[m[K
+[34;1m> CALL run_command {"CommandLine":"echo octo > made.txt","toolSummary":"make a file","WaitMsBeforeAsync":5000}[m
+[K
+[32m●[m [33;1mRan[m [37m(echo octo > made.txt)[m [37m(ctrl+o to expand)[m
+[K
+  Stub: tool finished.
+[K
+[90m────────────────────────────────────────────────────────────[m[K
+[34;1m> CALL run_command {"CommandLine":"echo octo > other.txt","toolSummary":"make another","WaitMsBeforeAsync":5000}[m
+[K
+[31m●[m [33;1mRan[m [37m(echo octo > other.txt)[m [37mfailed[m [37m(ctrl+o to expand)[m
+[K
+[34;1mCommand[m[K
+[34;1m  ⎿  [37;22mUser declined the tool call[m
+[K
+[90m  ⎿  Interrupted · What should Antigravity CLI do instead?[m
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[94m>[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90m? for shortcuts[m[85X[85C[2mGemini 3.1 Pro · low[m[2A[2C[?25h

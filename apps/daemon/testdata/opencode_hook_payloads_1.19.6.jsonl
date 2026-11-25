@@ -1,0 +1,30 @@
+{"format":1,"hook_event_name":"session.created","session_id":"ses_e0112914affebO3p9ns7jq9toq"}
+{"format":1,"hook_event_name":"turn.started","turn_id":"msg_1feed6ed9001y7AjUpqWkEdyeI","prompt":"hello","session_id":"ses_e0112914affebO3p9ns7jq9toq"}
+{"format":1,"hook_event_name":"session.idle","turn_id":"msg_1feed6ed9001y7AjUpqWkEdyeI","last_assistant_message":"Final answer from stub.","session_id":"ses_e0112914affebO3p9ns7jq9toq"}
+{"format":1,"hook_event_name":"session.created","session_id":"ses_e01125d50ffeb0OSR6AN7B4fyy"}
+{"format":1,"hook_event_name":"turn.started","turn_id":"msg_1feeda2cb0019QQG3cBj5KV5pK","prompt":"run BASH now","session_id":"ses_e01125d50ffeb0OSR6AN7B4fyy"}
+{"format":1,"hook_event_name":"permission.asked","session_id":"ses_e01125d50ffeb0OSR6AN7B4fyy","request_id":"per_1feeda8930011h532gEY8BfrSP","tool":"bash"}
+{"format":1,"hook_event_name":"permission.replied","session_id":"ses_e01125d50ffeb0OSR6AN7B4fyy","request_id":"per_1feeda8930011h532gEY8BfrSP"}
+{"format":1,"hook_event_name":"session.idle","turn_id":"msg_1feeda2cb0019QQG3cBj5KV5pK","last_assistant_message":"Final answer from stub.","session_id":"ses_e01125d50ffeb0OSR6AN7B4fyy"}
+{"format":1,"hook_event_name":"session.created","session_id":"ses_e011220fdffeL74yKvHdD0TPiB"}
+{"format":1,"hook_event_name":"turn.started","turn_id":"msg_1feeddf16001b3v3tPc2eXJIHN","prompt":"run BASH now","session_id":"ses_e011220fdffeL74yKvHdD0TPiB"}
+{"format":1,"hook_event_name":"permission.asked","session_id":"ses_e011220fdffeL74yKvHdD0TPiB","request_id":"per_1feede3dc001PE3Uu6HV2cLiaA","tool":"bash"}
+{"format":1,"hook_event_name":"permission.replied","session_id":"ses_e011220fdffeL74yKvHdD0TPiB","request_id":"per_1feede3dc001PE3Uu6HV2cLiaA"}
+{"format":1,"hook_event_name":"session.idle","turn_id":"msg_1feeddf16001b3v3tPc2eXJIHN","session_id":"ses_e011220fdffeL74yKvHdD0TPiB"}
+{"format":1,"hook_event_name":"session.created","session_id":"ses_e0111e06effeElwpIckPhLDlDf"}
+{"format":1,"hook_event_name":"turn.started","turn_id":"msg_1feee1fb2001guUyMp42QsCu1E","prompt":"please ASKQ me","session_id":"ses_e0111e06effeElwpIckPhLDlDf"}
+{"format":1,"hook_event_name":"question.asked","session_id":"ses_e0111e06effeElwpIckPhLDlDf","request_id":"que_1feee2548001ZxrgDiWiH8nNS7","tool":"question"}
+{"format":1,"hook_event_name":"question.replied","session_id":"ses_e0111e06effeElwpIckPhLDlDf","request_id":"que_1feee2548001ZxrgDiWiH8nNS7"}
+{"format":1,"hook_event_name":"session.idle","turn_id":"msg_1feee1fb2001guUyMp42QsCu1E","last_assistant_message":"Final answer from stub.","session_id":"ses_e0111e06effeElwpIckPhLDlDf"}
+{"format":1,"hook_event_name":"session.created","session_id":"ses_e01116a46ffeujZ4JYHULc89Sw"}
+{"format":1,"hook_event_name":"turn.started","turn_id":"msg_1feee95e00015T7ovuE345REx3","prompt":"do a SUBTASK","session_id":"ses_e01116a46ffeujZ4JYHULc89Sw"}
+{"format":1,"hook_event_name":"session.created","session_id":"ses_e011165d4ffeDxtxfuj6pttmgQ","subagent":true}
+{"format":1,"hook_event_name":"turn.started","turn_id":"msg_1feee9a38001n0aIetcAq6MoAL","prompt":"say hi","session_id":"ses_e011165d4ffeDxtxfuj6pttmgQ","subagent":true}
+{"format":1,"hook_event_name":"session.idle","turn_id":"msg_1feee9a38001n0aIetcAq6MoAL","last_assistant_message":"Final answer from stub.","session_id":"ses_e011165d4ffeDxtxfuj6pttmgQ","subagent":true}
+{"format":1,"hook_event_name":"session.idle","turn_id":"msg_1feee95e00015T7ovuE345REx3","last_assistant_message":"Final answer from stub.","session_id":"ses_e01116a46ffeujZ4JYHULc89Sw"}
+{"format":1,"hook_event_name":"session.created","session_id":"ses_e01112114ffe8g0F0D0PfZBMse"}
+{"format":1,"hook_event_name":"turn.started","turn_id":"msg_1feeee08d001CBgcMrbHpKcD3R","prompt":"a SLOW one","session_id":"ses_e01112114ffe8g0F0D0PfZBMse"}
+{"format":1,"hook_event_name":"turn.cancelled","turn_id":"msg_1feeee08d001CBgcMrbHpKcD3R","session_id":"ses_e01112114ffe8g0F0D0PfZBMse"}
+{"format":1,"hook_event_name":"session.created","session_id":"ses_e0110c7abffenQiHjRsOm53LRL"}
+{"format":1,"hook_event_name":"turn.started","turn_id":"msg_1feef38940015KKkYVR9DEMmKR","prompt":"please DENY this","session_id":"ses_e0110c7abffenQiHjRsOm53LRL"}
+{"format":1,"hook_event_name":"session.error","turn_id":"msg_1feef38940015KKkYVR9DEMmKR","error":"stub says no","session_id":"ses_e0110c7abffenQiHjRsOm53LRL"}

@@ -10,8 +10,8 @@ const GROUP = "Archive view";
 
 
 /** The model each archived session last ran, as its records named it: Claude Code's by the id (a version and a dated one)
- * or the alias it was chosen by, Codex's and Grok Build's as they are. */
-const OBSERVED_MODELS: Record<string, string[]> = {
+ * or the alias it was chosen by, Codex's and Grok Build's as they are. Other rows have no recorded model. */
+const OBSERVED_MODELS: Partial<Record<string, string[]>> = {
   claude: ["claude-opus-5-5", "claude-haiku-4-5-20251001", "sonnet"],
   codex: ["gpt-6.1-sol"],
   grok: ["grok-4.7"],
@@ -20,7 +20,7 @@ const OBSERVED_MODELS: Record<string, string[]> = {
 /** The model of the `i`th archived session, the models of its agent in turn. */
 const observedModel = (i: number) => {
   const models = OBSERVED_MODELS[FIXTURE_AGENTS[i % FIXTURE_AGENTS.length]];
-  return models[Math.floor(i / FIXTURE_AGENTS.length) % models.length];
+  return models ? models[Math.floor(i / FIXTURE_AGENTS.length) % models.length] : undefined;
 };
 
 const archived = Array.from({ length: 70 }, (_, i) =>

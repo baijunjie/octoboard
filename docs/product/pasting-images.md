@@ -2,10 +2,11 @@
 
 An image on the clipboard pasted into an agent session's terminal reaches the agent as an attached image: Octoboard
 saves it as a file on the machine the daemon runs on and pastes that file's absolute path into the terminal, as a
-system terminal pastes the path of an image file dragged onto it. Claude Code, Codex and Grok Build each take a pasted
-path of an image file as an attached image (`[Image #1]` in their input). Because the agent reads the file, not the
-clipboard, this works for every agent, also when the daemon runs on another machine than the window, and in a browser
-as well as in the desktop app. Pasting text, and the editing menu itself, are described in
+system terminal pastes the path of an image file dragged onto it. This is done for an agent whose provider declares
+that it takes a pasted image file's path as an attached image (`message_images` in its capabilities): Claude Code,
+Codex and Grok Build each do (`[Image #1]` in their input). Because the agent reads the file, not the clipboard, it
+works also when the daemon runs on another machine than the window, and in a browser as well as in the desktop app.
+Pasting text, and the editing menu itself, are described in
 `docs/product/terminal-copy-paste-and-selection.md`; dropping image files onto the terminal, in
 `docs/product/dropping-files-onto-a-terminal.md`.
 
@@ -14,6 +15,10 @@ as well as in the desktop app. Pasting text, and the editing menu itself, are de
 - **Only a session's terminal**: the terminal of the selected project or console session, whose program is its agent.
   A shell terminal in the Terminal panel pastes no image: a clipboard holding only an image is pasted there as an empty
   paste, as before.
+- **Only an agent that takes images.** A session whose agent's provider does not declare `message_images`, or whose
+  agent's provider the daemon does not serve, pastes no image either: its terminal behaves as a shell terminal's, the
+  clipboard is not read for an image and nothing is saved. A daemon that does not send `message_images` at all (one
+  older than the capability) is taken as declaring it for every agent it serves.
 - **Both ways of pasting**: the platform's paste shortcut (Cmd+V on macOS, Ctrl+V elsewhere) and Paste in the
   terminal's editing menu.
 - **Only a paste with no text.** When the clipboard holds text, the text is pasted, whether or not it also holds an
@@ -77,8 +82,10 @@ The window saves an image with the control request `save_pasted_image`:
 | `upload` | In place of `data`, an upload of the same connection whose parts hold the image (see "Uploading the image in parts" below). Exactly one of `data` and `upload` is given; the window always sends `data` |
 
 It is answered with `pasted_image_saved`, carrying `id` and `path`, the absolute path of the saved file as the
-daemon's host spells paths. It is refused with `unknown_session` for an id that names no session and
-`session_not_running` for a session with no process. Data over 10 MiB, data that is not one of the four formats or not
+daemon's host spells paths. It is refused with `unknown_session` for an id that names no session,
+`session_not_running` for a session with no process, and `provider_unsupported` (operation `message_images`) for a
+session whose agent's provider does not declare `message_images`, whose agent would read the path as text; a refusal
+writes nothing. Data over 10 MiB, data that is not one of the four formats or not
 valid base64, and a write that fails are errors with no code.
 
 ### Uploading the image in parts
@@ -87,7 +94,8 @@ For a client whose link cannot carry the whole image in one message within the d
 daemon also takes the image in parts; the window never uploads this way. The client starts an upload of the image's
 size (`create_pasted_image_upload`), sends its bytes in order in parts of at most 1 MiB each
 (`write_pasted_image_part`), and then saves it with `save_pasted_image` naming the upload. The saved file, its
-formats, its 10 MiB limit and the answer are those of the single-message request.
+formats, its 10 MiB limit and the answer are those of the single-message request, and starting an upload is refused
+with `provider_unsupported` as that request is.
 
 The parts are held in the daemon's memory only, so an upload that is not saved leaves nothing behind. An upload
 belongs to the connection that started it and is discarded when it is deleted (`delete_pasted_image_upload`), when

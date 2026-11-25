@@ -17,14 +17,14 @@ Paths in this doc that do not start with `packages/` or `apps/` are relative to 
 | `index.html`, `src/main.tsx` | The window's entry: startup (platform, daemon location, connection, native window reveal, global error handlers), mounting `App` under `AppRoot`, or, for the flyout window kind, which has no daemon behind it (`windowKind`), `TrayFlyout`; the application's own window that failed to start gets an inert daemon (`createInertDaemon`) and shows the failure inside `App`'s frame |
 | `package.json` `exports` | The files `apps/web/` imports by package name: `./agent-marks`, `./languages`, `./match-language`, `./preview-messages`; nothing else of the package is importable from outside |
 | `eslint.layers.mjs` | The import-layering blocks and the rule that confines the third-party UI libraries to `src/primitives/` (see "Dependency direction"), spread into the root `eslint.config.mjs` |
-| `vite.config.ts`, `typography.mjs`, `tsconfig.json`, `tsconfig.app.json` | Vite and Vitest configuration (it also defines `__OCTOBOARD_VERSION__`, the build's release version, read from `apps/desktop/package.json`); `tsconfig.app.json` is the production type check, which leaves out tests, `src/gallery/`, `src/fixtures/` and `src/website-preview/` |
+| `vite.config.ts`, `typography.mjs`, `tsconfig.json`, `tsconfig.app.json` | Vite and Vitest configuration (it also defines `__OCTOBOARD_VERSION__`, the build's release version, read from `apps/desktop/package.json`); `tsconfig.app.json` is the production type check, which leaves out tests, `src/gallery/`, `src/fixtures/`, `src/website-preview/` and the providers' served-info fixtures (`src/providers/*.fixture.ts`, `src/providers/servedFixtures.ts`) |
 | `gallery.html`, `gallery-frame.html` | Entries of the gallery |
 | `website-preview.html`, `feature-preview.html`, `vite.preview.config.ts` | Entries and build of the website preview and the feature views (`pnpm build:preview` writes into `dist-preview/`; the site's `build-preview` passes `--outDir`) |
 | `packages/ui/scripts/gallery-sweep.mjs`, `gallery-compare.mjs` | `pnpm gallery:sweep` checks scenario rendering; the manual `pnpm gallery:compare` writes screenshot difference reports from two served galleries. The sweep and the docs' screenshot script (`apps/docs/scripts/screenshots.mjs`) share `gallery-browser.mjs` (browser resolution, the dev server, reading the scenario list, loading a frame and reading its failure overlay, the run's lifecycle of owned resources and signals); the comparison shares only its browser resolution, and its own comparison and report helpers live in `gallery-compare-report.mjs`. Usage is in the [gallery README](../../packages/ui/src/gallery/README.md). `gallery-chip-geometry.mjs` and `gallery-report-focus.mjs` are standalone Playwright checks run by hand |
 | `packages/ui/scripts/compiler-bailouts.mjs` | `pnpm compiler:bailouts`: lists the components and hooks the React Compiler leaves uncompiled, and exits 1 when there is any (run by hand; not part of `pnpm verify`) |
 | `packages/ui/scripts/generate-licenses.mjs` | `pnpm licenses:generate`, the first step of `pnpm build`: writes the gitignored `src/about/licenses.generated.json` |
 | [`packages/ui/scripts/wkbench/`](../../packages/ui/scripts/wkbench/README.md) | `pnpm bench:wkwebview`, the latency benchmark in the system WKWebView (a developer tool with its own usage guide) |
-| `src/test/` | Vitest setup, the reporter listing failed test files for `pnpm verify`, and the shared test daemon (`testDaemon`, with `withEmptyReplies` to turn a stand-in's `ack` into the empty reply of the requests that have one), its providers (`TestHost`) and `mountHost`, which renders under them; `hosts.ts`, the `HostFacts` of a macOS and a Windows desktop shell (`MAC_HOST`, `WINDOWS_HOST`) for tests; `clock.ts`, the one fake-clock module; `dom.ts`, DOM helpers for tests (`type`, `typeInto`, which types the way a keyboard does so react-aria's autocomplete sees it, `inputLabelled`); `lazyImport.ts`, the settle of a lazily imported chunk; `daemonError.ts`, a faked request's failure with a daemon code; `fileRange.ts`, the stand-in of a `file_range` reply for a faked `read_file_range` (`fileRangeReply`, with `encodeBase64`, `decodeBase64`, `sampleBytes` and the `RangeRequest` type); `alertQueue.ts`, the drain of the error-alert queue that `setup.ts` runs after every jsdom test |
+| `src/test/` | Vitest setup, the reporter listing failed test files for `pnpm verify`, and the shared test daemon (`testDaemon`, with `withEmptyReplies` to turn a stand-in's `ack` into the empty reply of the requests that have one), its providers (`TestHost`) and `mountHost`, which renders under them; `hosts.ts`, the `HostFacts` of a macOS and a Windows desktop shell (`MAC_HOST`, `WINDOWS_HOST`) for tests; `clock.ts`, the one fake-clock module; `dom.ts`, DOM helpers for tests (`type`, `typeInto`, which types the way a keyboard does so react-aria's autocomplete sees it, `inputLabelled`); `lazyImport.ts`, the settle of a lazily imported chunk; `daemonError.ts`, a faked request's failure with a daemon code; `remedyProvider.ts`, `acknowledgedNoticeProvider.ts`, `loginQuestionProvider.ts` and `sessionNoteProvider.ts`, the test-only provider's code remedies, notices to acknowledge, login question wording and note about its sessions, which a test file adds to the provider registry with `vi.mock` of `providers/registry`, each built by `withTestAgent` (`testAgentRegistry.ts`); `fileRange.ts`, the stand-in of a `file_range` reply for a faked `read_file_range` (`fileRangeReply`, with `encodeBase64`, `decodeBase64`, `sampleBytes` and the `RangeRequest` type); `alertQueue.ts`, the drain of the error-alert queue that `setup.ts` runs after every jsdom test |
 
 ## Directory map of `src/`
 
@@ -102,22 +102,30 @@ their cascade order does not depend on which screen opened first.
   capitalised name (`{MenuBarIcon}`) where a message starts with it. A caller never passes them; `catalog.test.ts`
   checks every one is filled in every language for every host.
 - `src/format/` — small pure formatting helpers (relative time, sizes, `Reason`, wire-path display), `dataDirectory.ts` (where the daemon keeps its data and logs on its host, spelled for that host's `path_style`, for telling the user and never for building a path), and `hostPath`, the one module that reads and shows the daemon host's absolute paths by its `path_style` (`isAbsolute`, `split`, `basename`, `parent`, `display` with the `~` rule that applies on Unix hosts only, `isPathLike` for terminal links, home expansion); every such rule takes the style as an argument, taken from `snapshot.host` by `useHostPaths()` (`components/hooks/`), and defaults to `unix` before the first snapshot. Project-relative wire paths stay `/`-separated and never go through it.
-- `src/providers/` — one presentation module per provider (`claude.ts`, `codex.ts`, `grok.ts`: mark, quota colour and
-  the `provider.<id>.*` catalog messages, among them the trust, sharing and directory-hint wording that `types.ts`'s
+- `src/providers/` — one presentation module per provider (`claude.ts`, `codex.ts`, `grok.ts` and the five newer `antigravity.ts`, `copilot.ts`,
+  `opencode.ts`, `qwen.ts` and `pi.ts`, each with its `<id>.test.ts`: mark, quota colour and
+  the `provider.<id>.*` catalog messages, among them the trust, sharing, directory-hint and sign-in-command (`signInHint`, which may name the account's directory as `{dir}`) wording that `types.ts`'s
   `ProviderMessageName` names; each also owns the copy of every setting its descriptor declares
-  (`provider.<id>.setting.<setting>.*`) and the record and wording of every code the descriptor declares (`codes`,
+  (`provider.<id>.setting.<setting>.*`), the wording of every question its login asks (`provider.<id>.loginQuestion.<question>`, with
+  `.yes` and `.no` for a choice, or `.field` and `.submit` for a masked answer). `loginQuestionKeys` and
+  `secretLoginQuestionKeys` resolve these keys for `AccountLoginDialog`, which sends the answer through
+  `answer_account_login_question`. The module also owns the record and wording of every code the descriptor declares (`codes`,
   `provider.<id>.<code>`, whose recovery may be the module's own `provider.<id>.<code>.remedy` copy, with literal
   placeholders supplied by `recoveryReferences` and marked by `ErrorGuidance`); `planNames` for plan ids whose generic
   wording reads badly and `params`, the product-name placeholders its messages use, which `i18n/catalog.ts` merges into
-  the catalogs' global params as `PROVIDER_PARAMS`), `registry.ts` listing them (the built-in three plus a test-only
+  the catalogs' global params as `PROVIDER_PARAMS`), `registry.ts` listing them (`BUILT_IN`, the eight providers in the daemon's registry order, plus a test-only
   `testAgent` module registered under the test runner, one line each) and looking them up by provider id
   (`genericMark.ts` is the mark of a provider with no module), and `agentMarks.ts`, the `@octoboard/ui/agent-marks`
-  entry. Imports nothing; the catalogs and the website import it.
-- `src/agents/` — agent rules (`agents.ts`: the pickable, listed and served agents, always taken from the providers the daemon serves in `snapshot`, in its registry order), provider names and facts read from the module or from the providers the daemon serves in `snapshot` (`providers.ts`, which also reads the served model display rule and capabilities; the store holds them as `State.providers`, read with `useProviders()`; `ProviderMessage.tsx` shows a provider's message with a generic fallback), model and effort picker rules, per-agent launch settings (`launchCompatibility.ts`: the compatibility switches an agent's served settings declare, and the helpers that set, diff and apply their held values); `providers.ts` also holds `settingMessageKey` (the copy key of a provider setting), `switchValue` (a switch's value in effect, with its declared default before settings arrive), `idWords` (an id read as words, for a setting or choice a module has no copy for) and re-exports the providers' code records as `PROVIDER_CODES`.
+  entry (`AGENT_MARKS`, one mark per built-in provider, which `agentMarks.test.ts` holds to `BUILT_IN`). Imports nothing; the catalogs and the website import it. Beside each module is its served-info fixture,
+  `<id>.fixture.ts` (what the daemon serves for that provider, as `served`; `testAgent.fixture.ts` for the test-only one),
+  which `servedFixtures.ts` gathers in `BUILT_IN` order (`BUILT_IN_SERVED`, `TEST_AGENT_SERVED`) and throws for a registered
+  module that has none. They are fixtures' kind, read by `src/fixtures/` and `src/test/`: production code does not import
+  them (`eslint.layers.mjs`).
+- `src/agents/` — agent rules (`agents.ts`: the pickable, listed and served agents, always taken from the providers the daemon serves in `snapshot`, in its registry order), provider names and facts read from the module or from the providers the daemon serves in `snapshot` (`providers.ts`, which also reads the served model display rule and capabilities, among them `offersOwnedAccounts`, where a daemon that does not send the field reads as offering them, `hasPlanQuota` (the provider declares a quota window), `offersLoginFlow` (the daemon can sign an account in itself), `takesMessageImages` (the one reading of the `message_images` capability, which pasting or dropping an image onto a terminal relies on) and `defaultAccountConfigDir` (the default account's directory as the daemon found it, else the provider's usual one); the store holds them as `State.providers`, read with `useProviders()`; `ProviderMessage.tsx` shows a provider's message with a generic fallback), model and effort picker rules, per-agent launch settings (`launchCompatibility.ts`: the compatibility switches an agent's served settings declare, and the helpers that set, diff and apply their held values); `providers.ts` also holds `settingMessageKey` (the copy key of a provider setting), `loginQuestionKeys` (the three copy keys of a login question, none unless the catalogs hold all of them), `switchValue` (a switch's value in effect, with its declared default before settings arrive), `idWords` (an id read as words, for a setting or choice a module has no copy for) and re-exports the providers' code records as `PROVIDER_CODES`.
 - `src/git/` — git workflow settings and git-badge wording, the wording of a manual pull's notice (`pullNotice.ts`), repository host links.
 - `src/sessions/` — pure session rules and wording (index, order — with the scope of an archive deletion, `archivedDeletionScope` — labels, the session-order wording `orderWording.ts` shared by Settings and the configuration import, status derivation — `sessionStatus.ts` holds the live and no-process status sets and `sessionIsWorking`, the predicate for a session that is doing or about to do work, `sessionIsBusy` and `childCanReport`, the rest a handoff waits for in a session and in the sessions it owns — `nativeApp.ts`, why a session cannot be opened in its agent's desktop application and what to say when the application may not show it — colours, filtering, waiting).
 - `src/accounts/` — pure account rules: order, quota of an account, quota formatting, the default account's name
-  (`defaultAccount.ts`), how an account is found among the
+  (`defaultAccount.ts`), an account's configuration directory as the window names it (`accountDir.ts`: `accountConfigDir`), how an account is found among the
   records (`accountRecords.ts`), and the account picker split by concern (`choiceEntries.ts`, `accountInheritance.ts`,
   `accountRanking.ts`, `openingChoice.ts`, `switchEntries.ts`).
 - `src/errors/` — turning a failure into words: `codedError.ts` (`CodedError`, the failure carrying a daemon or client
@@ -125,7 +133,7 @@ their cascade order does not depend on which screen opened first.
   `sharingFailure.ts` and `branchCleanupItems.ts` for the two items-bearing messages, and the folder rules the latter
   applies), `causes.ts` (parsers for the structured causes a daemon failure carries), `writeConflict.ts` (the `base_versions` a
   checked write carries, and what a `write_conflict` names), `droppedFileEntries.ts` (the entries of the gathered
-  `dropped_files_refused` alert, which `components/alerts/DaemonErrorMessage.tsx` draws), the shared `ErrorPresentation`, recovery classification,
+  `dropped_files_refused` alert, which `components/alerts/DaemonErrorMessage.tsx` draws), the shared `ErrorPresentation`, recovery classification (`errorRecovery.ts`, whose `retryCanHelp` says whether a Try again can change the outcome: false for a failure that is the state of what was asked about, a provider's `provider_unsupported` refusal included),
   issue-report address.
 - `src/browse/` — browse requests to the daemon: `budget.ts` (the window's shares of the daemon's bound of outstanding
   browse requests, the shared slot names and the lanes every browse request goes through), the lane primitive
@@ -201,7 +209,8 @@ their cascade order does not depend on which screen opened first.
   the run history; `scheduleText.ts` a schedule in words, the kinds the form offers and the countdown; `taskFields.ts`
   the mapping between a task's wire fields and the form's, `taskDraft.ts` the form's draft model and what a save
   changes, `useTaskDraft.ts` and `useTaskLaunch.ts` its state, `useTarget.ts`, `useTaskZone.ts` and `taskName.ts` what a
-  task is shown as; `useScheduledTasksSync.ts`, `useScheduledTaskRuns.ts` and `useSnapshotListing.ts` listing the tasks
+  task is shown as; `blankPrompt.ts` whether a prompt is blank once its control and invisible characters are stripped, the
+  daemon's rule (`apps/daemon/testdata/blank_prompt_cases.json` holds the two to the same cases); `useScheduledTasksSync.ts`, `useScheduledTaskRuns.ts` and `useSnapshotListing.ts` listing the tasks
   and a task's runs after every snapshot; `useEnabledTaskCount.ts` the rail's badge; `useScheduledRunNotifications.ts`
   the system notification of a failed run, whose choosing opens the page on that task; `scheduledTaskPreference.ts` the
   task last viewed, per daemon).
@@ -245,7 +254,9 @@ their cascade order does not depend on which screen opened first.
   failures, `downloadFailure.tsx`) with `standInAction.ts` (what the stand-in of such a file offers: the default
   application, or the download); `largeImage.ts` (`readLargeImage`, `MAX_IMAGE_BYTES`) reads in parts a live image that a whole read refused for size, up to `MAX_IMAGE_BYTES`, and `content.ts`'s `imageMediaTypeOfName` gives the binary image type a file name says it holds; `surfaceClose.ts` (`SurfaceCloseContext`, the close of the dialog a text surface is in, which `FileViewer` and the Find in files dialog provide and `ViewerEditMenu` reads, so a Quote chosen there closes that dialog); `@pierre/diffs` is imported only inside it.
 - `src/quota/` — plan quota wording, meters, reset credits, and the rail's quota panels (`RailQuotaBars`, `QuotaPanel`,
-  `AgentPanel`, `QuotaAccount`).
+  `AgentPanel`, `QuotaAccount`). An agent whose provider declares no plan quota (`hasPlanQuota`) has no tab there and
+  counts towards neither empty state (when all added agents are such, the panel says no agent reports usage);
+  `useAccountQuota` gives such an account only its sign-in reading.
 - `src/settings/` — the settings modal and its sections (`sections.ts` holds the section ids and `SettingsNavigation`).
   The modal's search field filters sections and rows: `settingsSearch.ts` holds the static search index
   (`SETTINGS_SEARCH_INDEX`, one entry per row or block of each section, its `SettingsSearchId` type) and the matching,
@@ -281,10 +292,11 @@ their cascade order does not depend on which screen opened first.
   (`src/platform/commandLineError.ts`), its outcome announced through `AttendedStatusAnnouncer`;
   `AppearanceSection.tsx` the Appearance section (`ThemeSetting.tsx`, `MarkdownStyleSetting.tsx` and `TerminalFontSizeSetting.tsx`,
   the terminals' font size, a `NumberField` from `src/primitives/`), `CleanupSection.tsx` the Cleanup section, whose second row is `UninstallCleanup.tsx` (the cleanup before uninstalling: one row that says whether anything Octoboard's features added outside its own directories is in effect, from `PlatformAdapter.systemChanges`, which answers the application's items and its own daemon's in one list, and the one action, offered only in the local window; its warning modal holds the list, read again as it opens, and the typed confirmation, and the result takes the modal's place);
-  `accounts/` the Agent accounts section, where `AgentProviderSettings.tsx` renders every setting the daemon serves for an agent
+  `accounts/` the Agent accounts section, where `AccountSignInHelp.tsx` takes the Log in button's place for a provider with no login flow and `AgentProviderSettings.tsx` renders every setting the daemon serves for an agent
   and `providerSettingCopy.tsx` is the copy and help of any provider setting, shared with the dialogs that hold a setting's value,
-  `MemorySection.tsx` the Memory section (the switch for Octoboard's memory, and the memory that removed projects left
-  behind: `useOrphanedMemory.ts` keeps that set current and `OrphanedMemoryDialog.tsx` lists and deletes it),
+  `MemorySection.tsx` the Memory section (the switch for Octoboard's memory, whose description `NativeMemoryNote.tsx`
+  follows with the agents that keep a memory of their own, by `ProviderInfo.native_memory`; and the memory that removed
+  projects left behind: `useOrphanedMemory.ts` keeps that set current and `OrphanedMemoryDialog.tsx` lists and deletes it),
   `AgentMenus.tsx` holds an agent tab's menu and actions button, which open `AgentSettingsDialog.tsx` (the per-agent
   settings) and `AgentVersionDialog.tsx` (the agent's CLI version, its content `AgentCliVersionSetting.tsx`, with
   `cliVersion.ts` judging whether an update exists), both on `agentDialogSubject.tsx` (the heading and the closing of
@@ -347,7 +359,8 @@ the shape is:
 - From below `src/`, the root files that may be imported are `protocol`, `requests`, `daemon`, `daemon-client`, `appConfig`, `launchable` and the
   `store/`, `platform/` and `primitives/` barrels. The entry, `App` and the screens are imported by nothing below them.
 - `shell/` is imported only by root files, `app/`, the gallery and the website preview; `app/` only by `App.tsx`.
-- Production code imports neither `fixtures/` nor `gallery/`; `fixtures/` and `website-preview/` never import
+- Production code imports neither `fixtures/` nor `gallery/` nor the served-info fixtures in `providers/`
+  (`providers/<id>.fixture.ts`, `providers/servedFixtures.ts`; `eslint.layers.mjs` forbids it); `fixtures/` and `website-preview/` never import
   `gallery/`; `fixtures/` does not import `shell/`.
 - `@heroui/react`, `@heroui/styles`, `react-aria-components`, `react-aria` and the `@react-aria/*`, `@react-stately/*`
   and `@react-types/*` packages are confined to `primitives/` (`WRAPPED_LIBRARIES` in `eslint.layers.mjs`, a
@@ -392,7 +405,11 @@ is `docs/README.md`, "Coding conventions".
 - A new provider: its presentation module `src/providers/<id>.ts` (mark, colour, its messages in every language, the
   record and wording of each code it declares, with the code's recovery copy `provider.<id>.<code>.remedy`, the copy of
   each of its settings, `planNames`, `params`), added to `BUILT_IN` in `src/providers/registry.ts`, whose keys type the
-  catalogs. `providers/agentMarks.ts` and the website's marks are outside this bar (see
+  catalogs, and its served-info fixture `src/providers/<id>.fixture.ts`, with a line in `AGENT_MARKS`. The gallery's `provider-marks`
+  scenario (`src/gallery/providerMarksGallery.tsx`) reads `BUILT_IN`, so it needs no line per provider. The released fixtures serve Claude Code, Codex, Grok Build, Antigravity CLI, GitHub Copilot CLI, OpenCode, Qwen Code and Pi. A provider
+  the daemon registers only in test and development builds is not served by the gallery, the fixture daemon and the
+  website preview until its id is added to the released list (`RELEASED`) in `src/fixtures/fixtureProviders.ts`; the tests
+  serve it as soon as it is registered. `providers/agentMarks.ts` and the website's marks are outside this bar (see
   `docs/conventions/provider-neutral-core.md`, "UI").
 - A per-agent difference the daemon now declares (a capability, a descriptor fact): read from the provider info the
   daemon serves (generated into `protocol.generated.ts`) through `src/agents/providers.ts`, never copied into a table
@@ -417,7 +434,10 @@ is `docs/README.md`, "Coding conventions".
 - A new kind of report-page component is added to the daemon's `page_content` first (see the daemon structure doc);
   `src/report/page/registry.tsx` then fails type checking until the kind has its renderer there.
 - A new UI state worth seeing is a scenario under `src/gallery/fixtures/`; data used by both the gallery and the website
-  preview or application tests belongs in `src/fixtures/`.
+  preview or application tests belongs in `src/fixtures/`, except what the daemon serves for a provider, which sits beside
+  the provider's module (`src/providers/<id>.fixture.ts`). A provider no released daemon serves, such as the one with no plan
+  quota and no login flow (`NO_QUOTA_PROVIDER`, `src/fixtures/fixtureProviders.ts`), is scenario-only: a scenario serves
+  it beside the released ones (`src/gallery/fixtures/noQuotaProvider.ts`).
 - Tests sit beside the code (`*.test.ts(x)`); how they are written and where their data comes from is in
   `docs/conventions/tests.md`, "Where tests sit" and "UI component tests (jsdom)".
 
@@ -482,7 +502,7 @@ are the helper list; the rules that go beyond "use helper X" are in `docs/conven
 | Agent availability for a store in a test or a fixture | `availabilityOf(providers, states)` (`src/fixtures/fixtureProviders.ts`), which gives every served agent an entry, `not_determined` unless `states` names another, as the daemon sends one entry per agent |
 | A test that depends on time (a fake clock, a timer, a frame, a wait on the real clock, a lazily imported chunk) | `src/test/clock.ts` (`fakeTimers`, whose one teardown drains pending timers and restores the real clock; `fakeTimersKeepingFrames`, `runOutTimers`, `runPendingTimers`, `afterQueuedWork`, `flushPromises`, `waitOnRealClock`) and `settleLazyImport` (`src/test/lazyImport.ts`). Time helpers tied to one area sit beside it: `settleFrames`, `framesAsTimers`, `framesHeld` and `withModality` (`src/components/dialog/dialogTestSupport.ts`), `press`, `tooltipsCooledDown` and `mountForTooltip` (`src/components/hint/tooltipTestSupport.ts`), `firstWriteDelayPassed` (`src/components/announce/statusAnnouncerTestSupport.ts`), `SUBMENU_HOVER_DELAY_MS`, and `openBy`, `filterField`, `typeInFilter`, `pressInFilter` and `holdExitAnimations` for a menu's opening and its filter field (`src/components/menus/menuTestSupport.ts`), `PAST_ANY_RETRY_MS` (`src/terminal/reconnectTestSupport.ts`), and `settle` and `settleInAct` for gallery steps (`src/fixtures/clockTestSupport.ts`) |
 | State a test leaves behind for the next one (the error-alert queue, the window preferences held in module memory) | `src/test/setup.ts` empties the alert queue after every jsdom test (`acknowledgeAllAlerts`, `src/test/alertQueue.ts`), through the test-only registry `src/components/alerts/errorAlertsUnderTest.ts`: `errorAlerts.ts` adds its queue to it when evaluated under test, so the setup loads no alert code itself and a test file that never loads the queue pays nothing for it (the reason a production module holds a test line); and shims `getClientRects` (no rects for a disconnected element, one that is or sits in `hidden` or `display: none`, a rect otherwise, as `useListMotion` reads none as a list not rendered); `stubWindow`'s teardown in `src/appTestSupport.tsx` calls `resetAppPreferences` (panel stacks, closed Report panels, the selected console, the chosen item of the Remote devices and Scheduled tasks pages, sidebar and aside visibility), which `localStorage.clear()` alone does not reset |
-| A plain on/off application setting in Settings | `DaemonSwitchSetting` (`src/settings/DaemonSwitchSetting.tsx`) over the list in `src/configuration/booleanSettings.ts` |
+| A plain on/off application setting in Settings | `DaemonSwitchSetting` (`src/settings/DaemonSwitchSetting.tsx`) over the list in `src/configuration/booleanSettings.ts`; its `detail` follows the description with what depends on more than the setting's value, and is not searched |
 | A checked write of application settings from a control (the switches, the choice of when to prevent sleep, the Git section) | `useSettingsWrite` (`src/settings/useSettingsWrite.ts`): sends `update_settings` based on the versions the store holds of the paths it changes, and drops a press while the store still holds a path at the version this window last wrote it from; code that is not a component writes through `createSettingsWriter` (`src/store/settingsWrite.ts`), which it wraps |
 | The checked-write side of a form dialog for a console, a project or an account | `useCheckedEdit` (`src/components/hooks/useCheckedEdit.ts`) over `baseVersions` and `writeConflict` (`src/errors/writeConflict.ts`): the `base_versions` of the fields the user changed, and putting a field the store moved past back to its current value, announced through `ChangedElsewhereAnnouncer` when the user had edited it |
 | Wait for the store to reach a state from code that outlives its component (a checked write that goes on after its field has gone) | `whenState` (`src/store/whenState.ts`) |
@@ -521,6 +541,7 @@ are the helper list; the rules that go beyond "use helper X" are in `docs/conven
 | A select field, including a branch picker | `OptionSelect` (`src/components/form/OptionSelect.tsx`) owns the field and its option list, including virtualization; feature adapters supply the values and their presentation |
 | A choice between following the parent, On and Off | `FollowSwitchSelect` (`src/components/form/FollowSwitchSelect.tsx`), as the Git workflow field and the compatibility pickers use it |
 | A provider's name set apart in a sentence | `ProviderName` (`src/components/text/ProviderName.tsx`) |
+| How to sign an account in for a provider that has no login flow (its own `signInHint`, else a generic sentence) | `SignInHint` (`src/components/text/SignInHint.tsx`) with `accountConfigDir` (`src/accounts/accountDir.ts`) for the directory; `AccountSignInHelp` in Settings, and `useSignInHintOf` (`src/components/alerts/ErrorGuidance.tsx`) for an `account_not_signed_in` alert |
 | A provider's mark and colour | `providerMark`, `providerColour` (`src/providers/registry.ts`); `AgentIcon` (`src/components/icons/`) draws the mark, `providerFillVars` (`src/quota/providerFill.ts`) paints a quota bar |
 | Which accounts a quota list shows | `listedQuotaAccounts` (`src/quota/quotaListing.ts`) |
 | The tags offered to a tag field (projects and agents) | `tagVocabulary` (`src/components/form/tagVocabulary.ts`) with `TagsInput` |

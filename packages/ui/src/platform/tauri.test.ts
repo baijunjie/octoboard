@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { afterQueuedWork } from "../test/clock";
-import { LAZY_IMPORT_TIMEOUT_MS } from "../test/lazyImport";
 import { MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { CommandLineError } from "./commandLineError";
 import { ConfigurationFileError } from "./configurationFileError";
@@ -28,7 +27,9 @@ vi.mock("@tauri-apps/api/webviewWindow", () => ({
     return {
       listen: async (name: string, handler: (event: { payload: unknown }) => void) => {
         listeners.set(name, handler);
-        return () => listeners.delete(name);
+        return () => {
+          if (listeners.get(name) === handler) listeners.delete(name);
+        };
       },
     };
   },
@@ -863,6 +864,7 @@ describe("the remote daemons", () => {
     // Undone before the shell was listened to: nothing is taken at all.
     tauriPlatform().remoteDaemons!.onHandedOver(vi.fn())();
     tauriPlatform().remoteDaemons!.onPageRequested(vi.fn())();
+    await vi.dynamicImportSettled();
     await afterQueuedWork();
     expect(takes()).toBe(0);
     // Undone while a take is under way: its answer reaches no one.
@@ -879,6 +881,7 @@ describe("the remote daemons", () => {
     const asked = vi.fn();
     invoke.mockImplementation(() => new Promise((resolve) => { answer = resolve as typeof answer; }));
     const undoAdd = tauriPlatform().remoteDaemons!.onPageRequested(asked);
+    await vi.dynamicImportSettled();
     await afterQueuedWork();
     undoAdd();
     (answer as unknown as (asked: boolean) => void)(true);
@@ -903,21 +906,17 @@ describe("the remote daemons", () => {
     invoke.mockImplementation(async (command: string) => (command === "remote_page_requested_take" ? true : undefined));
     const listener = vi.fn();
     const undo = tauriPlatform().remoteDaemons!.onPageRequested(listener);
-    // The listener registers after two dynamic imports of the shell's modules, cold when this is the file's first
-    // test to reach them: the wait ends as soon as it has registered and taken, and its bound is only how long a hang
-    // is tolerated, not a window the imports have to beat.
-    await vi.waitFor(
-      () => {
-        expect(listeners.has("remote-page-requested")).toBe(true);
-        expect(listener).toHaveBeenCalledTimes(1);
-      },
-      { timeout: LAZY_IMPORT_TIMEOUT_MS },
-    );
+    await vi.dynamicImportSettled();
+    expect(listeners.has("remote-page-requested")).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(1);
+    listeners.get("remote-page-requested")!({ payload: undefined });
+    await afterQueuedWork();
+    expect(listener).toHaveBeenCalledTimes(2);
     // Nothing asked for is not passed on.
     invoke.mockImplementation(async () => false);
     listeners.get("remote-page-requested")!({ payload: undefined });
     await afterQueuedWork();
-    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledTimes(2);
     undo();
   });
 

@@ -45,7 +45,10 @@ async fn sign_in(flow: &Flow, progress: &Progress, cancel: &Notify) -> Outcome {
         Ok(written) => written,
         Err(err) => return flow.failed(&format!("preparing the sign-in failed: {err}")),
     };
-    let mut command = flow.command(&["auth", "login"]);
+    let mut command = match flow.command(&["auth", "login"]) {
+        Ok(command) => command,
+        Err(outcome) => return outcome,
+    };
     command.env("BROWSER", script);
     let mut process = match Process::spawn(command, flow.agent.label(), false) {
         Ok(process) => process,
@@ -109,7 +112,9 @@ fn write_browser_script(flow: &Flow) -> std::io::Result<(PathBuf, PathBuf)> {
 /// Whether `claude auth status` says the account is signed in. It exits 1 when it is not, with
 /// the answer on stdout either way, so the exit status is not looked at.
 async fn claude_signed_in(flow: &Flow) -> bool {
-    let mut command = flow.command(&["auth", "status"]);
+    let Ok(mut command) = flow.command(&["auth", "status"]) else {
+        return false;
+    };
     let output = tokio::task::spawn_blocking(move || {
         account_cli::run_query(&mut command, STATUS_TIMEOUT, STATUS_OUTPUT_LIMIT, None)
     })

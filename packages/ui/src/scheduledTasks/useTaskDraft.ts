@@ -12,6 +12,7 @@ import { useT } from "../i18n/react";
 import type { Console, Project, Schedule, ScheduledTask, ScheduledTaskLaunch } from "../protocol";
 import { type State, useDaemonStore } from "../store";
 import { sameValue } from "../values/sameValue";
+import { isBlankPrompt } from "./blankPrompt";
 import { draftAfter, draftBase, draftOver, fieldsSaved, NO_DRAFT, type TaskDraftEvent, type TaskSave, withSave } from "./taskDraft";
 import { fieldsOf, NO_OWNER, NO_PROJECT, sameLaunch, scheduleOf, scheduleProblems, type TaskFields } from "./taskFields";
 import { useTaskLaunch } from "./useTaskLaunch";
@@ -187,7 +188,7 @@ export function useTaskDraft({ task, consoleId, consoles, projects, onSave }: {
   const accountError = named?.disabled ? accountRefusalMessage("accountChoice.disabled.description", named.name) : undefined;
 
   const errors = {
-    prompt: prompt ? undefined : t("scheduledTasks.form.prompt.required"),
+    prompt: isBlankPrompt(prompt) ? t("scheduledTasks.form.prompt.required") : undefined,
     runAt: problems.runAt === "missing" ? t("scheduledTasks.form.runAt.required") : problems.runAt === "past" ? t("scheduledTasks.form.runAt.past") : undefined,
     time: problems.time ? t("scheduledTasks.form.time.required") : undefined,
     days: problems.days ? t("scheduledTasks.form.days.required") : undefined,

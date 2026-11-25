@@ -58,6 +58,10 @@ pub struct AgentCliStatus {
     /// CLI is not installed or its version could not be told.
     pub installed_version: Option<String>,
     pub install_method: CliInstallMethod,
+    /// The package that installed the CLI when `install_method` is `npm`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub npm_package: Option<&'static str>,
     /// The latest version published for this install method, as the source names it; null when
     /// there is no source for it (`install_method` `unknown`) or looking it up failed, in which
     /// case `latest_error` says so.

@@ -317,38 +317,40 @@ mod tests {
         assert!(!state.first_remembering());
     }
 
-    #[tokio::test]
+    // The hold waits on a channel and a timer alone, so these run on a paused clock: time passes
+    // only when the wait runs out, and then by exactly the limit.
+
+    #[tokio::test(start_paused = true)]
     async fn the_hold_ends_at_the_first_window_back() {
         let (told, came_back) = mpsc::unbounded_channel();
         told.send(false).unwrap();
         told.send(true).unwrap();
         // Another connection still under way does not keep the hold.
-        let started = std::time::Instant::now();
-        assert_eq!(came_back_within(came_back, Duration::from_secs(5)).await, 1);
-        assert!(started.elapsed() < Duration::from_secs(5));
+        let started = tokio::time::Instant::now();
+        assert_eq!(came_back_within(came_back, HOLD_LIMIT).await, 1);
+        assert_eq!(started.elapsed(), Duration::ZERO);
         drop(told);
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn the_hold_ends_once_every_connection_failed() {
         let (told, came_back) = mpsc::unbounded_channel();
         told.send(false).unwrap();
         told.send(false).unwrap();
         drop(told);
-        let started = std::time::Instant::now();
-        assert_eq!(came_back_within(came_back, Duration::from_secs(5)).await, 0);
-        assert!(started.elapsed() < Duration::from_secs(5));
+        let started = tokio::time::Instant::now();
+        assert_eq!(came_back_within(came_back, HOLD_LIMIT).await, 0);
+        assert_eq!(started.elapsed(), Duration::ZERO);
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_hold_with_no_window_back_in_time_lets_the_main_window_show() {
         let (told, came_back) = mpsc::unbounded_channel();
         // A connection still under way when the limit passes: no window came back in time, so the
         // main window is shown...
-        assert_eq!(
-            came_back_within(came_back, Duration::from_millis(50)).await,
-            0
-        );
+        let started = tokio::time::Instant::now();
+        assert_eq!(came_back_within(came_back, HOLD_LIMIT).await, 0);
+        assert_eq!(started.elapsed(), HOLD_LIMIT);
         // ...and the window that connects later is no concern of the hold's any more.
         assert!(told.send(true).is_err());
     }

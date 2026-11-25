@@ -24,8 +24,16 @@ impl ScreenReader for ClaudeScreen {
         is_placeholder(row)
     }
 
-    fn as_submitted<'a>(&self, typed: &'a str) -> &'a str {
-        crate::text::without_paste_wrapper(typed)
+    /// The paste wrapper Claude Code hands a long paste over in, and the whitespace before the
+    /// text, are taken off what was typed as they are off the hook's prompt (`super::hooks`),
+    /// and invisible characters are ignored on both sides. Claude Code removes them from a prompt
+    /// given on its command line and reports the cleaned text (2.1.330, measured), keeping some
+    /// by rules of its own (a joiner between letters of a script that needs it), while a task is
+    /// passed to it as the user wrote it; comparing with all of them taken out matches whichever
+    /// of them it removed. A message Octoboard writes holds none, so nothing changes for one.
+    fn same_as_submitted(&self, typed: &str, reported: &str) -> bool {
+        use crate::session::term::without_invisible;
+        without_invisible(crate::text::without_paste_wrapper(typed)) == without_invisible(reported)
     }
 
     fn pasted_image_path_loses_enter(&self) -> bool {
@@ -281,7 +289,7 @@ pub(super) fn is_rule(row: &str) -> bool {
 pub(crate) const TRUST: Screen = Screen {
     first_draw: &[&["\u{276F}No,exitYes,Itrustthisfolder"]],
     accept: Some("Yes,Itrustthisfolder"),
-    decline: &["No,exit"],
+    others: &["No,exit"],
     cursor: Some('\u{276F}'),
     press: Press::DownThenEnter,
     next_screen: None,

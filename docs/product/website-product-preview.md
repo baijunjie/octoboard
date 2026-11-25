@@ -67,8 +67,8 @@ active offer, reserve available stock and prevent repeated requests from creatin
 tests and promotion rules.
 These files and check counts are demonstration data.
 
-Every agent counts as installed in the preview, and the rail's account quota panel shows sample readings of each agent's
-default account: Claude Code on the Max plan and Codex on the Plus plan, each with a five-hour and an account-wide
+The preview treats its three sample agents as installed, and the rail's account quota panel shows sample readings
+of their default accounts: Claude Code on the Max plan and Codex on the Plus plan, each with a five-hour and an account-wide
 weekly window, and Grok Build on SuperGrok with a weekly credit pool. Their reset times count from when the preview
 loaded, so no visit finds a reset already past. These readings are demonstration data.
 

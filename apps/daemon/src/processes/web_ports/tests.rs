@@ -421,16 +421,17 @@ fn the_request_is_a_head_for_the_root_with_the_host_a_browser_sends() {
 
     assert!(answered(server.port));
 
+    // A running daemon may ask the port too, with the very same request, so every request the
+    // server got is held to the shape and none is counted.
     let requests = server.requests();
-    assert_eq!(requests.len(), 1, "{requests:?}");
-    assert!(
-        requests[0].starts_with("HEAD / HTTP/1.1\r\n"),
-        "{requests:?}"
-    );
-    assert!(
-        requests[0].contains(&format!("\r\nHost: localhost:{}\r\n", server.port)),
-        "{requests:?}"
-    );
+    assert!(!requests.is_empty());
+    for request in &requests {
+        assert!(request.starts_with("HEAD / HTTP/1.1\r\n"), "{requests:?}");
+        assert!(
+            request.contains(&format!("\r\nHost: localhost:{}\r\n", server.port)),
+            "{requests:?}"
+        );
+    }
 }
 
 #[test]

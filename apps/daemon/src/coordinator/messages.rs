@@ -56,8 +56,9 @@ pub(super) async fn send_message(
 
 /// The user's slash command, written for the session's agent to run as one of its own: one line
 /// beginning with `/`, for a provider that declares `slash_commands`, written without the guard a
-/// message's leading slash gets and always through the terminal. Refused as a message is, and
-/// with `command_not_recognised` where the agent would run another command in its place.
+/// message's leading slash gets and always through the terminal. Refused as a message is, with
+/// `command_not_recognised` where the agent would run another command in its place, and with
+/// `command_not_found` where its list says it has no such command.
 pub(super) async fn send_command(state: &Arc<AppState>, id: &str, command: String) -> Result<()> {
     let agent = state.session_record(id)?.agent;
     if !agent.descriptor().capabilities.slash_commands {
@@ -78,14 +79,13 @@ pub(super) async fn send_command(state: &Arc<AppState>, id: &str, command: Strin
         ));
     }
     // A completion offered for a lone `/word` that is not the word written is cleared from the
-    // input box after it is seen. A provider with no measured key to clear the box cannot take
-    // that back, so a command that may bring a completion up is not written to it at all.
+    // input box after it is seen. A provider with no measured way to clear the box (Ctrl-U, or a
+    // key that empties it at the idle prompt) cannot take that back, so a command that may bring a
+    // completion up is not written to it at all. That holds for a lone command that gets a space
+    // typed after it too (`ScreenReader::writes_lone_command_with_trailing_space`): it is pasted
+    // bare and its completion looked at first.
     let bare = !command.contains(char::is_whitespace);
-    if bare
-        && !crate::adapter::provider(agent)
-            .screen()
-            .clears_input_box_with_ctrl_u()
-    {
+    if bare && !crate::session::screen::clears_input_box(crate::adapter::provider(agent).screen()) {
         return Err(CodedError::provider_unsupported(
             agent,
             ProviderOperation::SlashCommands,

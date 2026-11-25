@@ -114,3 +114,8 @@ in [`docs/structure/daemon.md`](../structure/daemon.md).
   change**: the daemon's refusals and automatic choices, what agents are told before they pick, the work that spends an
   account, and every UI picker and the fixture daemon. A check at only some of them leaves the others putting work on
   the account or offering it unmarked.
+- **An account's sign-in state reaches its consumers only through the account's reading.** For a provider with a plan
+  quota that reading is its quota probe's; for one with none, the account poll publishes `AccountOps::sign_in_state`
+  in the same `AccountQuota`, so every place that reads a quota reading reads the sign-in state with it. Not: a second
+  channel for sign-in beside the reading, or a consumer that asks the provider itself. A provider declares quota window
+  kinds exactly when it hands out a quota probe, which `accounts::ops::tests` enforces.

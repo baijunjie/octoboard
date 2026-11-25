@@ -313,7 +313,8 @@ pub enum Event {
         console: String,
     },
     ProjectUpserted {
-        project: Project,
+        // Boxed: the record holds a value per registered provider.
+        project: Box<Project>,
     },
     ProjectDeleted {
         project: String,
@@ -373,10 +374,16 @@ pub enum Event {
     },
     /// The `session_notice` with `code` about `session` that was broadcast last no longer holds: a
     /// `message_not_sent` whose message the agent has since reported sending. A client still
-    /// showing that notice drops it; one that is not ignores this.
+    /// showing that notice drops it; one that is not ignores this. With `detail`, only the notices
+    /// of that code whose `detail` param is this no longer hold: a `message_not_taken` or
+    /// `message_not_delivered` about one message among several, which the agent has since reported
+    /// sending after all.
     SessionNoticeWithdrawn {
         session: String,
         code: Code,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        detail: Option<String>,
     },
     /// A session of a project the user has not yet agreed Octoboard may press trust confirmations
     /// for — not by its own consent and not through a trusted directory — is sitting at its

@@ -174,6 +174,7 @@ impl ClaudeProvider {
                 spec.launch_id,
                 spec.daemon_port,
                 spec.key_file,
+                None,
             ),
             "async": true,
             "timeout": COMMAND_HOOK_TIMEOUT_SECS,
@@ -301,6 +302,11 @@ impl ClaudeProvider {
 }
 
 impl AgentProvider for ClaudeProvider {
+    #[cfg(test)]
+    fn launch_fixture_version(&self) -> Option<super::AgentVersion> {
+        Some((2, 1, 306))
+    }
+
     fn descriptor(&self) -> &'static ProviderDescriptor {
         AgentId::CLAUDE.descriptor()
     }
@@ -354,9 +360,11 @@ impl AgentProvider for ClaudeProvider {
                 &[".local", "share", "claude", "versions"],
                 &[".local", "bin", "claude.exe"],
             ],
+            native_markers: &[],
             native_update: &["update"],
             native_latest: None,
-            npm_package: Some("@anthropic-ai/claude-code"),
+            native_manifest: None,
+            npm_packages: &["@anthropic-ai/claude-code"],
             homebrew_formula: None,
             homebrew_cask: Some("claude-code"),
         }
@@ -477,14 +485,6 @@ impl AgentProvider for ClaudeProvider {
         let pinned = super::pinned_config_dir(spec, AgentId::CLAUDE)?;
         let mut args = Vec::new();
 
-        // The task goes first, ahead of every flag. `--mcp-config` takes a *list* of values, so
-        // anything non-flag after it is read as another config path — `claude --mcp-config <json>
-        // mcp list` fails with "MCP config file not found: …/mcp" — and a task left at the end
-        // would be swallowed the same way by it or by any other list-valued flag.
-        if let Some(task) = spec.task {
-            args.push(task.to_string());
-        }
-
         match spec.resume_agent_session_id {
             Some(id) => {
                 args.push("--resume".to_string());
@@ -563,13 +563,32 @@ impl AgentProvider for ClaudeProvider {
             args.push("--effort".to_string());
             args.push(effort.to_string());
         }
+        // The prompt, a new session's task or a resume's instruction, comes last, after a bare
+        // `--`: Claude Code refuses a prompt that starts with `-` anywhere else ("unknown
+        // option"), and the `--` also closes the list-valued flags before it (`--mcp-config`
+        // reads a prompt left after it as another config path).
+        //
+        // The text is passed as it was written, invisible characters included: Claude Code
+        // removes those it takes for invisible itself and keeps the ones a script's spelling
+        // needs (2.1.330, measured), and the prompt it then reports is matched with them ignored
+        // (`screen::ClaudeScreen::same_as_submitted`). Nothing is passed of a prompt that is
+        // blank without them.
+        let prompt = spec
+            .task
+            .filter(|prompt| !crate::session::term::is_blank_once_stripped(prompt))
+            .map(prompt_argument);
+        if let Some(prompt) = &prompt {
+            args.push("--".to_string());
+            args.push(prompt.clone());
+        }
+        let shaped_prompt = prompt.filter(|prompt| Some(prompt.as_str()) != spec.task);
 
         let mut env = source_servers.env;
         if let Some(dir) = pinned {
-            env.push((
-                claude::LAYOUT.config_dir_var.to_string(),
-                dir.to_string_lossy().into_owned(),
-            ));
+            let (var, value) = claude::LAYOUT
+                .config_dir_export(dir)
+                .expect("Claude Code's variable names its configuration directory itself");
+            env.push((var.to_string(), value.to_string_lossy().into_owned()));
         }
         // Claude Code writes auto memory into `projects/<key>/memory/` without asking only while
         // the path is spelled inside the account's own directory, so through a linked
@@ -596,6 +615,7 @@ impl AgentProvider for ClaudeProvider {
             args,
             env,
             notice: untrusted_workspace_notice(spec, pinned),
+            shaped_prompt,
             ..LaunchPlan::default()
         })
     }
@@ -623,11 +643,44 @@ impl AgentProvider for ClaudeProvider {
 /// The environment entry that turns Claude Code's auto memory off for one launch.
 const AUTO_MEMORY_OFF: (&str, &str) = ("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "1");
 
+/// `text` as the prompt argument after the bare `--`: as it is, except that one word shaped like
+/// a command's name (ASCII letters, digits, `-` and `_`) gets a leading space. Claude Code still
+/// runs an argument after `--` that names one of its subcommands (`claude <flags> -- update`
+/// updates the CLI, 2.1.330, measured), a prompt of several words never names one, and with the
+/// space the word is the prompt, which the model and the hooks get with the space kept. Any such
+/// word is guarded, not a list of today's subcommands, so that a later release's are covered.
+fn prompt_argument(text: &str) -> String {
+    let command_like = !text.is_empty()
+        && text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if command_like {
+        format!(" {text}")
+    } else {
+        text.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::adapter::tests::spec_fixture;
     use crate::providers::{ProviderSettings, SettingValue};
+
+    /// Claude Code's status comes from its hooks and signals, which win over OSC 7501.
+    #[test]
+    fn it_has_a_status_integration() {
+        assert!(ClaudeProvider.has_status_integration());
+    }
+
+    /// Claude Code says its session has started with its `SessionStart` event and no other.
+    #[test]
+    fn only_session_start_announces_the_session_start() {
+        crate::adapter::tests::only_announces_session_start(
+            crate::protocol::AgentId::CLAUDE,
+            "SessionStart",
+        );
+    }
 
     /// Claude Code's collapsed paste is `[Pasted text #<n>]` or `[Pasted text #<n> +<m> lines]`,
     /// the whole of the box's text and nothing near it.
@@ -909,14 +962,43 @@ mod tests {
         );
     }
 
+    /// A daemon started inside a session of an account that shares the default one's memory, with
+    /// auto memory off, starts a session of an account that shares nothing with auto memory on:
+    /// neither variable of the outer launch reaches it, and its own directory does.
+    #[test]
+    fn a_nested_daemons_launch_inherits_neither_memory_variable_of_the_outer_session() {
+        let mut fixture = spec_fixture();
+        let outer_dir = fixture.scratch.join("claude-outer");
+        let inner_dir = fixture.scratch.join("claude-inner");
+        std::fs::create_dir_all(&outer_dir).expect("config dir");
+        std::fs::create_dir_all(&inner_dir).expect("config dir");
+        fixture.config_dir = Some(outer_dir);
+        fixture.shared_default_dir = Some(fixture.scratch.join("default"));
+        let mut spec = fixture.spec();
+        spec.native_memory_off = true;
+        let outer = ClaudeProvider.plan(&spec).expect("plan");
+        let nested = crate::adapter::tests::nested_shell_env(&fixture.shell_env, &outer);
+
+        fixture.shell_env = nested;
+        fixture.config_dir = Some(inner_dir.clone());
+        fixture.shared_default_dir = None;
+        let inner = ClaudeProvider.plan(&fixture.spec()).expect("plan");
+        let session = crate::adapter::tests::launched(&fixture.shell_env, &inner);
+        assert!(!session.contains_key("CLAUDE_CODE_REMOTE_MEMORY_DIR"));
+        assert!(!session.contains_key(AUTO_MEMORY_OFF.0));
+        assert_eq!(
+            session["CLAUDE_CONFIG_DIR"],
+            inner_dir.to_string_lossy().into_owned()
+        );
+    }
+
     /// Auto memory is turned off through the launch's environment exactly when the launch says so,
     /// on a resume too, and beside the shared memory root of a sharing account, which stays.
     #[test]
     fn auto_memory_is_turned_off_only_when_the_launch_says_so() {
-        assert!(
-            crate::protocol::AgentId::CLAUDE
-                .descriptor()
-                .native_memory_switch
+        assert_eq!(
+            crate::protocol::AgentId::CLAUDE.descriptor().native_memory,
+            crate::providers::NativeMemory::Switchable
         );
         let mut fixture = spec_fixture();
         let shared = fixture.scratch.join("default");
@@ -1296,16 +1378,174 @@ mod tests {
         );
     }
 
-    /// `--mcp-config` takes a list of values, so a task left after the flags is read as another
-    /// config path and never reaches the model.
+    /// A new session's task is the one argument after a bare `--` that ends the arguments, so a
+    /// task that starts with `-` (a list, "--help me with this") is the prompt and not an option,
+    /// and no list-valued flag such as `--mcp-config` takes it as a value.
     #[test]
-    fn the_task_comes_before_every_flag() {
+    fn a_new_sessions_task_is_the_one_argument_after_a_bare_double_dash() {
+        for task in ["do the thing", "- a list", "--help me with this", "-p x"] {
+            let fixture = spec_fixture();
+            let mut spec = fixture.spec();
+            spec.model = Some("model-x");
+            spec.effort = Some("high");
+            spec.task = Some(task);
+            let plan = ClaudeProvider.plan(&spec).expect("plan");
+            assert_eq!(plan.args[plan.args.len() - 2..], ["--", task], "{task:?}");
+            assert_eq!(
+                plan.args.iter().filter(|arg| *arg == "--").count(),
+                1,
+                "{task:?}"
+            );
+            // Nowhere else, and the flags still open the arguments.
+            assert_eq!(
+                plan.args.iter().filter(|arg| *arg == task).count(),
+                1,
+                "{task:?}"
+            );
+            assert_eq!(plan.args[0], "--session-id", "{task:?}");
+            // Passed as given, so nothing else is recorded as submitted.
+            assert_eq!(plan.shaped_prompt, None, "{task:?}");
+        }
+    }
+
+    /// A resume's instruction is placed the same way, after the flags and a bare `--`, so one
+    /// that starts with `-` is not refused as an option either.
+    #[test]
+    fn a_resumes_instruction_is_the_one_argument_after_a_bare_double_dash() {
+        for instruction in ["carry on", "- a list", "--help me with this"] {
+            let fixture = spec_fixture();
+            let mut spec = fixture.spec();
+            spec.resume_agent_session_id = Some("agent-side-id");
+            spec.task = Some(instruction);
+            let plan = ClaudeProvider.plan(&spec).expect("plan");
+            assert_eq!(plan.args[..2], ["--resume", "agent-side-id"]);
+            assert_eq!(
+                plan.args[plan.args.len() - 2..],
+                ["--", instruction],
+                "{instruction:?}"
+            );
+            assert_eq!(
+                plan.args.iter().filter(|arg| *arg == "--").count(),
+                1,
+                "{instruction:?}"
+            );
+            assert_eq!(plan.shaped_prompt, None, "{instruction:?}");
+        }
+    }
+
+    /// Claude Code runs an argument that names a subcommand even after `--`, so a prompt that is
+    /// one command-like word (`update` would update the CLI) is passed with a leading space,
+    /// which makes it a prompt; the plan says so, for the session to record what was passed. A
+    /// prompt of several words, or with any other character, is left as it is.
+    #[test]
+    fn a_prompt_that_could_name_a_subcommand_is_passed_with_a_leading_space() {
+        for (text, passed) in [
+            ("update", Some(" update")),
+            ("mcp", Some(" mcp")),
+            ("setup-token", Some(" setup-token")),
+            ("Doctor", Some(" Doctor")),
+            ("update the deps", None),
+            ("update\n", None),
+            (" update", None),
+            ("update.", None),
+            ("更新", None),
+        ] {
+            for resume in [None, Some("agent-side-id")] {
+                let fixture = spec_fixture();
+                let mut spec = fixture.spec();
+                spec.resume_agent_session_id = resume;
+                spec.task = Some(text);
+                let plan = ClaudeProvider.plan(&spec).expect("plan");
+                assert_eq!(
+                    plan.args[plan.args.len() - 2..],
+                    ["--", passed.unwrap_or(text)],
+                    "{text:?} {resume:?}"
+                );
+                assert_eq!(plan.shaped_prompt.as_deref(), passed, "{text:?} {resume:?}");
+            }
+        }
+    }
+
+    /// A new session's task reaches the argument byte for byte, the invisible characters that are
+    /// part of a script's spelling included: the zero-width non-joiner of a Persian word, the
+    /// joiner that picks a Devanagari conjunct's form. Claude Code keeps those and removes
+    /// others (the isolates), and the recorded submission matches its report either way.
+    #[test]
+    fn a_task_is_passed_as_written_and_matched_whichever_invisible_characters_claude_removes() {
+        use crate::hooks::HookInterpreter;
+        const PERSIAN: &str = "\u{0645}\u{06CC}\u{200C}\u{062E}\u{0648}\u{0627}\u{0647}\u{0645}";
+        const CONJUNCT: &str = "\u{0915}\u{094D}\u{200D}\u{0937}";
+        let task = format!("## Goal\n\n\u{2068}{PERSIAN}\u{2069} {CONJUNCT} now");
         let fixture = spec_fixture();
         let mut spec = fixture.spec();
-        spec.task = Some("do the thing");
+        spec.task = Some(&task);
         let plan = ClaudeProvider.plan(&spec).expect("plan");
-        assert_eq!(plan.args[0], "do the thing");
-        assert!(plan.args[1].starts_with("--"));
+        assert_eq!(plan.args[plan.args.len() - 2..], ["--", task.as_str()]);
+        assert_eq!(plan.shaped_prompt, None);
+        let recorded = crate::session::term::command_line_prompt(
+            plan.first_message.as_deref(),
+            plan.shaped_prompt.as_deref(),
+            spec.task,
+        )
+        .expect("recorded");
+        assert_eq!(recorded, task);
+
+        let matches = |reported: &str| {
+            let payload = json!({ "hook_event_name": "UserPromptSubmit", "prompt": reported });
+            let reported = hooks::ClaudeHooks
+                .submitted_prompt(&payload)
+                .expect("a prompt");
+            ClaudeProvider
+                .screen()
+                .same_as_submitted(&recorded, reported)
+        };
+        // Reported untouched, with the isolates removed and the script's own characters kept (as
+        // measured), and with every one removed.
+        assert!(matches(&task));
+        assert!(matches(&format!("## Goal\n\n{PERSIAN} {CONJUNCT} now")));
+        assert!(matches(
+            &task.replace(['\u{2068}', '\u{2069}', '\u{200C}', '\u{200D}'], "")
+        ));
+        // Another prompt is still another prompt.
+        assert!(!matches("## Goal\n\nsomething else now"));
+    }
+
+    /// The one-word guard holds for a word wrapped in invisible characters only where the word
+    /// itself is the whole argument: wrapped, it names no subcommand and is passed as written.
+    #[test]
+    fn a_word_wrapped_in_invisible_characters_is_passed_as_written() {
+        let fixture = spec_fixture();
+        let mut spec = fixture.spec();
+        spec.task = Some("\u{2068}update\u{2069}");
+        let plan = ClaudeProvider.plan(&spec).expect("plan");
+        assert_eq!(
+            plan.args[plan.args.len() - 2..],
+            ["--", "\u{2068}update\u{2069}"]
+        );
+        assert_eq!(plan.shaped_prompt, None);
+    }
+
+    /// A task of nothing but invisible characters and whitespace is no prompt.
+    #[test]
+    fn a_task_that_is_blank_without_its_invisible_characters_is_no_prompt() {
+        let fixture = spec_fixture();
+        let mut spec = fixture.spec();
+        spec.task = Some(" \u{2068}\u{2069}\u{200B} ");
+        let plan = ClaudeProvider.plan(&spec).expect("plan");
+        assert!(!plan.args.iter().any(|arg| arg == "--"));
+        assert_eq!(plan.shaped_prompt, None);
+        assert_eq!(
+            crate::session::term::command_line_prompt(None, None, spec.task),
+            None
+        );
+    }
+
+    /// Without a task nothing ends the options.
+    #[test]
+    fn a_launch_without_a_task_has_no_double_dash() {
+        let fixture = spec_fixture();
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
+        assert!(!plan.args.iter().any(|arg| arg == "--"));
     }
 
     #[test]

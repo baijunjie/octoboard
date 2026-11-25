@@ -1,0 +1,26 @@
+[?25l[4B[J[35;4H[K
+ [2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[m[K
+ [1menter[m accept · [1mtab[m next · [1mctrl+d[m decline · [1mesc[m cancel
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[35;4H[?25h[?25l[25;40r[25;1HM[r[3;1H[2;90m╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮[m  
+[2C       [4;39H                  [63C 
+[3C[34m╭─╮╭─╮[m                           [5C[1;34mGetting started[m                                              [17C 
+[2C[34m ╰─╯╰─╯[m  Copilot v1.0.114 uses AI.[5CUse the tabs above to explore your sessions and pull requests[17C 
+[3C[35m█ [96m▘▝[35m █[m  Check for mistakes.[7;42H/model — Switch models across providers, or use Auto[26C 
+[2C[35m  ▔▔▔▔ [8;39H[2;90m│[80C[m 
+[2;90m│[m                                                                                                                    [2;90m│[m  
+[2;90m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[m  
+[K
+ [33m![m Model "standin" is not in the built-in catalog. Using defaults for: prompt tokens[K
+   (COPILOT_PROVIDER_MAX_PROMPT_TOKENS), output tokens (COPILOT_PROVIDER_MAX_OUTPUT_TOKENS). Run [37m copilot help [m[K
+   [37mproviders [m for configuration details.[K
+[K
+ [34m●[m MCP Servers reloaded: 1 server connected[K
+[K
+ ❯ CMD:tool ask_user {"message": "Before I go on I need two things from you. Before I go on I need two things    01:50  
+   from you. Before I go on I need two things from you. Before I go on I need two things from you. Before I go[K
+   on I need two things from you.", "requestedSchema": {"type": "object", "properties": {"first": {"type":[K
+[4Cstring", "description": "the first"}, "second": {"type": "string", "description": "the second"}},[K
+   "required": ["first"]}}[K
+[K
+ ○ [1mAsking user [mBefore I go on I need two things from you. Before I go on...[40C11s  [36;4H[?25h[?25l[24;117H2s[36;4H[?25h[?25l[24;117H3s[36;4H[?25h[?25l[24;117H4s[36;4H[?25h

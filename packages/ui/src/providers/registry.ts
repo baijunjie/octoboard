@@ -1,12 +1,17 @@
+import { antigravity } from "./antigravity";
 import { claude } from "./claude";
 import { codex } from "./codex";
+import { copilot } from "./copilot";
 import { GENERIC_MARK } from "./genericMark";
 import { grok } from "./grok";
+import { opencode } from "./opencode";
+import { pi } from "./pi";
+import { qwen } from "./qwen";
 import { testAgent } from "./testAgent";
 import type { ProviderColour, ProviderMark, ProviderMessageName, ProviderPresentation } from "./types";
 
 /** The modules of the providers this build ships. The catalogs' keys and the code records are typed from these. */
-const BUILT_IN = [claude, codex, grok] as const;
+export const BUILT_IN = [claude, codex, grok, antigravity, copilot, opencode, qwen, pi] as const;
 
 /** The presentation modules, in the order the providers are registered: one line registers a provider. The last line is
  * the test-only provider, present under the test runner alone. */

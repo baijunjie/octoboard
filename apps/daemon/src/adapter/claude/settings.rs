@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::adapter::account_cli::{exported_dir, snapshot_home};
+use crate::adapter::account_cli::{exported_config_dir, snapshot_home};
 use crate::adapter::files::{
     canonical_project, is_agent_config_dir, read_bounded_text, read_regular_text, LARGE_FILE_LIMIT,
     SMALL_FILE_LIMIT,
@@ -24,7 +24,7 @@ fn explicit_config_dir(
 ) -> Option<PathBuf> {
     pinned
         .map(PathBuf::from)
-        .or_else(|| exported_dir(shell_env, claude::LAYOUT.config_dir_var))
+        .or_else(|| exported_config_dir(AgentId::CLAUDE, shell_env))
 }
 
 /// A settings file Claude Code reads: one the project keeps, read through `browse::live`, or one

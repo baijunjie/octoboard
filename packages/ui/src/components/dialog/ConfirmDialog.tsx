@@ -27,8 +27,10 @@ export interface ConfirmDialogProps {
   hideCancel?: boolean;
   destructive?: boolean;
   /** A button before Confirm, after Cancel when there is one, for the way out that is neither: it
-   * settles the question itself in `onPress`, so the caller closes the dialog there. */
-  otherAction?: { label: string; onPress: () => void };
+   * settles the question itself in `onPress`, so the caller closes the dialog there. An `onPress` that returns a promise
+   * is an action as `onConfirm` is: while it runs the dialog is busy with this button pending, and a rejection is
+   * reported the same way, the dialog staying open. */
+  otherAction?: { label: string; onPress: () => void | Promise<void> };
   /** For a question the user did not ask for, which can come up while they are typing elsewhere:
    * focus starts on the dialog rather than on Confirm, for every subject it asks about, so an Enter
    * meant for something else (or held down past the previous answer) answers nothing. */
@@ -105,6 +107,22 @@ export function ConfirmDialog({
   const t = useT();
   const language = useCurrentLanguage();
   const { busy, run } = useDialogAction(resetKey, errorTitle, errorRecovery);
+  // Which of the two actions the dialog is busy with: the other action's run, by its number, so that a run that ends
+  // after a later one began does not clear the later one's mark.
+  const [otherRun, setOtherRun] = useState<number>();
+  const otherRuns = useRef(0);
+  const otherPending = busy && otherRun !== undefined;
+  const pressOther = () => {
+    const running = otherAction?.onPress();
+    if (!running) return;
+    const number = ++otherRuns.current;
+    setOtherRun(number);
+    void run(() => running).finally(() => setOtherRun((current) => (current === number ? undefined : current)));
+  };
+  const confirm = () => {
+    setOtherRun(undefined);
+    void run(onConfirm);
+  };
   const [typed, setTyped] = useState("");
   const typedField = useTrimmedField(typed, setTyped);
   const word = typeToConfirm?.toLocaleUpperCase(language);
@@ -144,7 +162,7 @@ export function ConfirmDialog({
         </Button>
       )}
       {otherAction && (
-        <Button type="button" variant="secondary" onPress={otherAction.onPress}>
+        <Button type="button" variant="secondary" pending={otherPending} onPress={pressOther}>
           {otherAction.label}
         </Button>
       )}
@@ -153,7 +171,7 @@ export function ConfirmDialog({
           so Enter confirms at once, unless the action is destructive or the question unprompted:
           there Enter must not be the way in, and focus stays on the dialog until the user moves it.
           A typed word takes focus for its field instead. */}
-      <Button ref={confirmRef} type="submit" variant={destructive ? "danger" : "primary"} pending={busy || waiting}
+      <Button ref={confirmRef} type="submit" variant={destructive ? "danger" : "primary"} pending={(busy && !otherPending) || waiting}
         disabled={!confirmed} autoFocus={opensOnConfirm && confirmed}>
         {confirmLabel ?? t("common.confirm")}
       </Button>
@@ -161,7 +179,7 @@ export function ConfirmDialog({
   );
 
   return (
-    <Dialog title={title} headerLeading={destructive || consequences !== undefined ? <ModalStatusIcon status="warning" /> : undefined} onClose={onCancel} busy={busy} footer={footer} failure={failure} resetKey={resetKey} focusesItselfOnOpen={unprompted} topLayerAtMount={topLayerAtMount} size={size} onSubmit={() => confirmed && !busy && !waiting && void run(onConfirm)} alert>
+    <Dialog title={title} headerLeading={destructive || consequences !== undefined ? <ModalStatusIcon status="warning" /> : undefined} onClose={onCancel} busy={busy} footer={footer} failure={failure} resetKey={resetKey} focusesItselfOnOpen={unprompted} topLayerAtMount={topLayerAtMount} size={size} onSubmit={() => confirmed && !busy && !waiting && confirm()} alert>
       {typeof message === "string" ? (
         // The separator (a space in English, nothing in Chinese) joins the message's own text node: VoiceOver drops a text
         // node that is only whitespace, and would run the two sentences together.

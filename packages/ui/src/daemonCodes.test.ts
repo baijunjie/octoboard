@@ -85,6 +85,7 @@ describe.each(ALL_CODES)("the daemon's code %s", (code) => {
 });
 
 const records = Object.entries(CODES) as Array<[string, CodeRecord]>;
+/** The providers released with the application. */
 /** A code's messages with the facets of their params: its own, and each variant `messageCode` words it under. */
 const messagesOf = (code: string, record: CodeRecord): Array<[string, MessageFacets]> =>
   [[code, record], ...Object.entries(record.variants ?? {}).map(([variant, facets]): [string, MessageFacets] => [`${code}.${variant}`, facets])];
@@ -120,6 +121,30 @@ describe("the registry in errors/codes.ts", () => {
       if (!record.failureNotice) continue;
       expect(REGISTRY.notice_code, code).toContain(code);
       expect(record.alertTitle, code).toBe(true);
+    }
+  });
+
+  // The shared alert is exercised in `shell/Toasts.acknowledgedNotice.test.tsx` and the gallery.
+  it("marks a notice to acknowledge only on a code the daemon sends as a notice, and never on a failure notice", () => {
+    for (const [code, record] of records) {
+      if (!record.acknowledgedNotice) continue;
+      expect(REGISTRY.notice_code, code).toContain(code);
+      expect(record.failureNotice, code).toBeUndefined();
+      expect(noticeKind(code, {}), code).toBe("acknowledged");
+      expect(classifyError(new CodedError("text", code, {})).kind, code).toBe("actionable");
+    }
+  });
+
+  // The mark changes nothing for a code without it: a failure notice is an error alert and any other notice a toast,
+  // as before the mark existed. Only providers declare acknowledged notices.
+  it("leaves every notice without the mark shown as it was", () => {
+    for (const [code, record] of records) {
+      if (record.acknowledgedNotice) {
+        expect(code, code).toMatch(/^provider\./);
+        continue;
+      }
+      if (!REGISTRY.notice_code.includes(code)) continue;
+      expect(noticeKind(code, {}), code).toBe(record.failureNotice ? "error" : "notice");
     }
   });
 

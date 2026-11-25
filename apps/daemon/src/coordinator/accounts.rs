@@ -17,6 +17,7 @@ use crate::hostfs;
 use crate::hostfs::dir_key;
 use crate::protocol::{
     error_code, Account, AgentId, Availability, CodedError, Console, Event, Project,
+    ProviderOperation,
 };
 use crate::state::{broadcast_settings, AppState, RecordKey};
 use crate::store::ReorderOutcome;
@@ -308,6 +309,17 @@ fn check_account_dir_unique(
     Ok(())
 }
 
+/// Refuses an account beyond the default (to add, import or point at another directory) for a
+/// provider whose accounts cannot each have a directory of their own
+/// (`Capabilities::owned_accounts`). The default account is not affected.
+pub(crate) fn require_owned_accounts(agent: AgentId) -> Result<()> {
+    CodedError::require_offered(
+        agent,
+        ProviderOperation::OwnedAccounts,
+        agent.descriptor().capabilities.owned_accounts.then_some(()),
+    )
+}
+
 /// A name as stored: trimmed, and refused if that leaves nothing.
 pub(crate) fn normalize_account_name(name: &str) -> Result<String> {
     required_text("name", name)
@@ -334,6 +346,7 @@ pub(crate) fn insert_new_account(
     config_dir: String,
     disabled: bool,
 ) -> Result<Account> {
+    require_owned_accounts(agent)?;
     let name = normalize_account_name(&name)?;
     let config_dir = normalize_account_dir(agent, &config_dir)?;
     let account = Account {
@@ -385,6 +398,7 @@ fn update_account(
         if let Some(dir) = config_dir {
             let dir = normalize_account_dir(account.agent, &dir)?;
             if dir != account.config_dir {
+                require_owned_accounts(account.agent)?;
                 check_account_dir_unique(state, account.agent, &dir, Some(id))?;
                 left = Some(std::mem::replace(&mut account.config_dir, dir));
                 changed = true;
@@ -423,8 +437,15 @@ pub(super) async fn update_account_requested(
     config_dir: Option<String>,
     base: &BTreeMap<String, u64>,
 ) -> Result<()> {
-    let run_homes = crate::paths::agent_query_homes_dir();
-    update_account_requested_in(state, account, name, config_dir, base, &run_homes).await
+    update_account_requested_in(
+        state,
+        account,
+        name,
+        config_dir,
+        base,
+        &state.agent_query_homes,
+    )
+    .await
 }
 
 /// [`update_account_requested`], with the directory the providers keep their run homes under
@@ -441,8 +462,12 @@ async fn update_account_requested_in(
     // the new directory is known to be acceptable.
     let _sharing = match &config_dir {
         Some(dir) => {
-            let agent = state.store.require_account(&account)?.agent;
+            let current = state.store.require_account(&account)?;
+            let agent = current.agent;
             let dir = normalize_account_dir(agent, dir)?;
+            if dir != current.config_dir {
+                require_owned_accounts(agent)?;
+            }
             check_account_dir_unique(state, agent, &dir, Some(&account))?;
             if let Some(name) = &name {
                 let name = normalize_account_name(name)?;
@@ -524,8 +549,7 @@ pub(super) async fn delete_account_requested(
     account: String,
     trash_directory: bool,
 ) -> Result<()> {
-    let run_homes = crate::paths::agent_query_homes_dir();
-    delete_account_requested_in(state, account, trash_directory, &run_homes).await
+    delete_account_requested_in(state, account, trash_directory, &state.agent_query_homes).await
 }
 
 /// [`delete_account_requested`], with the directory the providers keep their run homes under

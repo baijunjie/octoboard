@@ -14,15 +14,23 @@ import { RecoveryGuidance } from "../../components/alerts/ErrorGuidance";
 import { uncataloguedSummaryKey } from "../../errors/errorPresentation";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { classifyError } from "../../errors/errorRecovery";
+import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
 import { Dialog } from "../../components/dialog/Dialog";
+import { useDialogAction } from "../../components/dialog/dialogHooks";
+import { TextInput } from "../../components/form/TextInput";
 import { useIssueReport } from "../../components/alerts/useIssueReport";
 import { isolate } from "../../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
-import type { AccountLogin, Agent, LoginStatus } from "../../protocol";
-import { dismissAccountLogin, trackAccountLogin, useDaemon, useDaemonStore } from "../../store";
+import type { AccountLogin, Agent, LoginAnswer, LoginQuestion, LoginStatus } from "../../protocol";
+import { dismissAccountLogin, trackAccountLogin, useDaemon, useDaemonStore, useProviders } from "../../store";
+import { display } from "../../format/hostPath";
+import { useHostPathsOrEmpty } from "../../components/hooks/useHostPaths";
 import { ProviderName } from "../../components/text/ProviderName";
 import { ringForAutomaticFocus } from "../../input/lastInput";
+import { accountConfigDir } from "../../accounts/accountDir";
 import { accountLoginOf, loginIsActive } from "../../accounts/accountRecords";
+import { loginQuestionKeys, secretLoginQuestionKeys } from "../../agents/providers";
+import type { MessageKey } from "../../i18n/catalog";
 import { useAccountLoginActions } from "./AccountLogin";
 import { raiseError } from "../../components/alerts/raiseError";
 import { Button, ModalStatusIcon, Spinner } from "../../primitives";
@@ -30,11 +38,61 @@ import { knownValues } from "../../values/knownValue";
 
 const isLoginStatus = knownValues<LoginStatus>({ starting: true, waiting: true, succeeded: true, failed: true, cancelled: true, timed_out: true });
 
+/** A question an agent's login asks, in the provider's own words (`id`): each value the daemon sent with the question
+ * stands where the wording names it, drawn as a technical literal (a path, a file name), which is all a question's
+ * params are. */
+function QuestionText({ question, id }: { question: LoginQuestion; id: MessageKey }): React.ReactElement {
+  const params = Object.fromEntries(Object.entries(question.params).map(([name, value]) => [name, <InlineReference key={name} dir="ltr" monospace wrap>{value ?? ""}</InlineReference>]));
+  // The key is found at run time, from the provider and the question the daemon names, so its placeholders cannot be
+  // checked against the params here: a placeholder the daemon sent no value for is left as written.
+  return <Message id={id} params={params as never} />;
+}
+
+function SecretQuestionDialog({ subject, question, words, url, send, close }: {
+  subject: React.ReactNode;
+  question: LoginQuestion;
+  words: NonNullable<ReturnType<typeof secretLoginQuestionKeys>>;
+  url: string | null | undefined;
+  send: (answer: LoginAnswer) => Promise<void>;
+  close: () => void;
+}): React.ReactElement {
+  const t = useT();
+  const [secret, setSecret] = useState("");
+  const { busy, run } = useDialogAction(question.id, t("settings.accounts.login.answerFailedTitle"));
+  const submit = () => {
+    if (busy || !secret) return;
+    setSecret("");
+    void run(() => send({ secret_text: secret }));
+  };
+  return (
+    <Dialog
+      title={t("settings.accounts.login.questionTitle")}
+      onClose={close}
+      busy={busy}
+      submitLabel={t(words.submit)}
+      submitDisabled={!busy && !secret}
+      onSubmit={submit}
+    >
+      <p>{subject}</p>
+      <p><QuestionText question={question} id={words.question} /></p>
+      {url && <ExternalLink href={url}>{t("settings.accounts.login.reopen")}</ExternalLink>}
+      <TextInput type="password" dir="ltr" label={t(words.field)} value={secret} onChange={setSecret} autoFocus />
+    </Dialog>
+  );
+}
+
 /** The login of one account (`null` for an agent's default account), in a modal of its own. With `start` it asks the
  * daemon to start the login on opening; without, it takes up one that is already running (after a reload, or started by
  * another window). Its title is the plain "Log in"; the body opens with the sentence naming the agent and the account,
  * then shows where the login is, with the device code and the link to open the authorization page again where there is
- * one, and Cancel login. Closing it by any means ends a login that is still running. A login that succeeded closes it:
+ * one, and Cancel login. Closing it by any means ends a login that is still running. While the login waits on a
+ * question of the agent's own, a question dialog stands in its place. A choice opens with focus on the dialog
+ * itself. A secret question opens on its masked field and can offer the authorization link again. Both name the
+ * agent and account, use the provider's wording, and hold their controls while sending the answer. Closing the
+ * question ends the login unanswered. A question the window has no words for is not
+ * offered for an answer and ends what the dialog is for: a failure alert of its own says that the login is waiting for
+ * an answer, that the question cannot be shown, and how to log the account in instead, naming its configuration
+ * directory; Cancel login, its only button, and its close button end the login. A login that succeeded closes it:
  * the account's badge and the row's hidden status region say so. One that failed or timed out, and a refusal to start
  * one, replace it with a failure alert dialog of its own, in the form of the error alert dialog (a close button that
  * does what Close does, but no Escape): the title says what failed in plain words, the body opens with the sentence
@@ -54,6 +112,9 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
   const language = useCurrentLanguage();
   const { store } = useDaemon();
   const actions = useAccountLoginActions();
+  const providers = useProviders();
+  const paths = useHostPathsOrEmpty();
+  const dir = useDaemonStore((s) => accountConfigDir(s.settings.accounts, s.agentAvailability, providers, agent, account));
   const held = useDaemonStore((s) => accountLoginOf(s.accountLogins, agent, account));
   // What the store held for the account when the dialog opened to start a login, if it had ended, is the record of
   // an earlier one (cancelled, succeeded or failed), not of this.
@@ -113,12 +174,24 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
   // form's primary button (Log in again, Cancel login) takes it.
   // Not asked for by the user, so the ring follows the last input, but only where the form changed, not when the
   // dialog first opens.
+  // The question dialog takes focus for itself; the running dialog that comes back once it is answered is a form
+  // changed in the same way.
+  const question = !ended && login?.status === "waiting" ? login.question : undefined;
+  const words = question && question.answer_kind === undefined ? loginQuestionKeys(agent, question.id) : undefined;
+  const secretWords = question?.answer_kind === "secret_text" ? secretLoginQuestionKeys(agent, question.id) : undefined;
+  const asking = words !== undefined || secretWords !== undefined;
+  // A question with no words here cannot be answered here: the failure form says so.
+  const unworded = question !== undefined && !asking;
   const wasEnded = useRef(ended);
+  const wasAsking = useRef(asking);
+  const wasUnworded = useRef(unworded);
   useEffect(() => {
-    if (ended && !wasEnded.current) ringForAutomaticFocus();
+    if ((ended && !wasEnded.current) || (!asking && wasAsking.current) || unworded !== wasUnworded.current) ringForAutomaticFocus();
     wasEnded.current = ended;
-    primaryRef.current?.focus();
-  }, [ended]);
+    wasAsking.current = asking;
+    wasUnworded.current = unworded;
+    if (!asking) primaryRef.current?.focus();
+  }, [ended, asking, unworded]);
 
   const close = () => {
     const pending = pendingStart.current;
@@ -189,6 +262,53 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
         {unexpected ? <p>{issue.guidance}</p> : classification?.kind === "actionable" && classification.recovery !== "none" && <p><RecoveryGuidance recovery={classification.recovery} /></p>}
         {presentation && <DaemonErrorMessage error={presentation} part="further" />}
         {raw ? <DetailsDisclosure>{raw}</DetailsDisclosure> : null}
+      </Dialog>
+    );
+  }
+  if (question && (words || secretWords)) {
+    // An answer the login no longer waits for (another window gave one first, or the login ended) is not a failure:
+    // the login's own updates show where it is.
+    const send = (answer: LoginAnswer) => actions.answer(agent, account, question.id, answer).catch((err: unknown) => {
+      const code = (err as Partial<CodedError>).code;
+      if (code !== "login_question_not_open" && code !== "login_not_running") throw err;
+    });
+    const subject = <Message id="settings.accounts.login.questionLead" params={{ agent: agentChip, name: who }} />;
+    if (secretWords) {
+      return <SecretQuestionDialog key={question.id} subject={subject} question={question} words={secretWords} url={login?.authorization_url} send={send} close={close} />;
+    }
+    if (words) return (
+      <ConfirmDialog
+        key="question"
+        unprompted
+        hideCancel
+        resetKey={question.id}
+        title={t("settings.accounts.login.questionTitle")}
+        subject={subject}
+        message={<p><QuestionText question={question} id={words.question} /></p>}
+        confirmLabel={t(words.yes)}
+        otherAction={{ label: t(words.no), onPress: () => send("no") }}
+        errorTitle={t("settings.accounts.login.answerFailedTitle")}
+        onConfirm={() => send("yes")}
+        onCancel={close}
+      />
+    );
+  }
+  if (unworded) {
+    // A dialog of its own in the failure alert's form, as the ended login's is: its mounting is what is announced.
+    return (
+      <Dialog
+        key="unworded"
+        alert
+        keyboardDismissHeld
+        headerLeading={<ModalStatusIcon status="danger" />}
+        title={t("settings.accounts.login.questionUnwordedTitle")}
+        onClose={close}
+        footer={<Button ref={primaryRef} autoFocus type="button" variant="primary" onPress={close}>{t("settings.accounts.login.cancel")}</Button>}
+      >
+        <p><Message id="settings.accounts.login.questionUnwordedLead" params={{ agent: agentChip, name: who }} /></p>
+        <p>{t("settings.accounts.login.questionUnworded")}</p>
+        {/* Said only for a directory that is known, which the remedy names. */}
+        {dir !== "" && <p><Message id="settings.accounts.login.questionUnwordedRemedy" params={{ dir: <InlineReference dir="ltr" monospace wrap>{display(dir, paths)}</InlineReference> }} /></p>}
       </Dialog>
     );
   }

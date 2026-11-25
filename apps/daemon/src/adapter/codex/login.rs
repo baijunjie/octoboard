@@ -46,11 +46,11 @@ async fn sign_in(flow: &Flow, progress: &Progress, cancel: &Notify) -> Outcome {
             return flow.failed(&format!("creating {} failed: {err}", dir.display()));
         }
     }
-    let mut process = match Process::spawn(
-        flow.command(CODEX_APP_SERVER_ARGS),
-        flow.agent.label(),
-        true,
-    ) {
+    let command = match flow.command(CODEX_APP_SERVER_ARGS) {
+        Ok(command) => command,
+        Err(outcome) => return outcome,
+    };
+    let mut process = match Process::spawn(command, flow.agent.label(), true) {
         Ok(process) => process,
         Err(err) => return flow.failed(&format!("it could not be started: {err}")),
     };

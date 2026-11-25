@@ -96,12 +96,28 @@ impl LineFile {
     pub fn settle(&mut self) {
         self.signature = self.pending;
     }
+
+    /// The byte offset just past the last complete line read, where the next read starts.
+    pub fn offset(&self) -> u64 {
+        self.offset
+    }
 }
 
 /// Reads the complete lines of the first `end` bytes of the file at `path` (decompressed ones for
 /// a compressed file), once and without any cursor.
 pub fn read_to(path: &Path, end: u64, mut visit: impl FnMut(&str)) -> std::io::Result<()> {
     scan_lines(path, 0, Some(end), |_, line| visit(line)).map(drop)
+}
+
+/// Reads the complete lines between bytes `start` and `end` of the file at `path` (decompressed
+/// ones for a compressed file), once and without any cursor, each with its starting byte offset.
+pub fn read_range(
+    path: &Path,
+    start: u64,
+    end: u64,
+    visit: impl FnMut(u64, &str),
+) -> std::io::Result<()> {
+    scan_lines(path, start, Some(end), visit).map(drop)
 }
 
 /// Reads the complete lines after byte `offset` of the file at `path`, once and without any cursor,

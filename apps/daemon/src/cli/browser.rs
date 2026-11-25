@@ -405,7 +405,8 @@ mod tests {
 
     /// A scripted daemon: sends a hello and a snapshot carrying `remote_access`, answers every
     /// request with an ack (or the error `code` for one of the `refused` types), and hands back
-    /// what it was asked on a channel. Serves `connections` connections.
+    /// what it was asked on a channel. Serves `connections` connections, a port probe's not
+    /// among them.
     fn scripted_daemon(
         remote_access: Value,
         refused: &'static str,
@@ -416,7 +417,7 @@ mod tests {
         let (asked, requests) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             for _ in 0..connections {
-                let (stream, _) = listener.accept().unwrap();
+                let stream = crate::test_support::accept_past_probes(&listener);
                 let Ok(mut socket) = tungstenite::accept(stream) else {
                     continue;
                 };
@@ -443,6 +444,11 @@ mod tests {
                 }
             }
         });
+        // Probed before the test uses it, as a running daemon may probe it at any point.
+        assert_eq!(
+            crate::test_support::probe_port(port),
+            "HTTP/1.1 404 Not Found"
+        );
         (port, requests)
     }
 

@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createFixtureDaemon } from "./fixtureDaemon";
-import { consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
+import { consoleOf, projectOf, sameForEveryAgent, sessionOf, snapshotState } from "./builders";
 import type { Fixture } from "./fixture";
 
 const make = (extra: Partial<Fixture> = {}) => createFixtureDaemon({ state: snapshotState({ consoles: [consoleOf("c", "Main")] }), ...extra });
@@ -67,7 +67,7 @@ describe("fixture project writes", () => {
     const project = projectOf("p", "c", "Site", { accounts: { claude: { kind: "account", id: "a" }, codex: { kind: "default" } } });
     const daemon = make({ state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [project] }) });
     await daemon.request({ type: "update_project", project: "p", accounts: { claude: null } });
-    expect(daemon.store.getState().projects.get("p")?.accounts).toEqual({ claude: { kind: "inherit" }, codex: { kind: "default" }, grok: { kind: "inherit" } });
+    expect(daemon.store.getState().projects.get("p")?.accounts).toEqual({ ...sameForEveryAgent({ kind: "inherit" }), codex: { kind: "default" } });
   });
 
   it("associates only listed repositories of a parent and ignores shared single-project text for several", async () => {

@@ -19,6 +19,7 @@ use serde_json::Value;
 
 use crate::adapter::provider;
 use crate::protocol::AgentId;
+use crate::records::branch::{for_each_line_on_branch, for_each_row_on_branch};
 use crate::records::line_file;
 use crate::records::Stretch;
 
@@ -107,16 +108,30 @@ impl Conversation {
 }
 
 /// Reads the conversation made of `stretches` in order, see [`for_each_line`], as `agent`'s store
-/// reads each line (`RecordStore::entries`).
+/// reads each line (`RecordStore::entries`): of a record that is a tree
+/// (`RecordStore::branching`), the lines of its current branch.
 pub fn read_stretches(agent: AgentId, stretches: &[Stretch]) -> std::io::Result<Conversation> {
     let store = provider(agent).records();
     let mut conversation = Conversation::default();
-    for_each_line(stretches, |value| {
+    for_each_line_on_branch(store.branching(), stretches, |value| {
         for entry in store.entries(value) {
             conversation.fold(entry);
         }
     })?;
     Ok(conversation)
+}
+
+/// [`read_stretches`] for a conversation kept as rows (`crate::records::rows`), whose lines are
+/// `rows`.
+pub fn read_rows(agent: AgentId, rows: &[Value]) -> Conversation {
+    let store = provider(agent).records();
+    let mut conversation = Conversation::default();
+    for_each_row_on_branch(store.branching(), rows, |_, row| {
+        for entry in store.entries(row) {
+            conversation.fold(entry);
+        }
+    });
+    conversation
 }
 
 /// Calls `visit` with each line of `stretches` that parses, in order: each file, and of it the
@@ -222,6 +237,52 @@ mod tests {
             text: text.to_owned(),
             status: status.to_owned(),
         }
+    }
+
+    /// The conversation of a record that is a tree is its current branch: what the agent went back
+    /// on is not handed on.
+    #[test]
+    fn a_tree_shaped_record_reads_as_its_current_branch() {
+        use crate::records::fixtures::{test_record, CLAUDE_ID, TREE_BRANCH, TREE_TRUNK};
+        let _declared = crate::providers::test_provider::with_tree_records();
+        let dir = crate::test_support::ScratchDir::new("agent-records-conversation-tree");
+        let lines = format!("{TREE_TRUNK}{TREE_BRANCH}");
+        let record = test_record(&dir.join("account"), CLAUDE_ID, &lines);
+        assert_eq!(
+            read(AgentId::TEST, &record).unwrap().messages,
+            [
+                say(Speaker::User, "first"),
+                say(Speaker::Assistant, "reply one"),
+                say(Speaker::User, "second"),
+                say(Speaker::Assistant, "reply two"),
+            ]
+        );
+    }
+
+    /// A conversation kept as rows reads as one kept in a file does: its current branch, in
+    /// order.
+    #[test]
+    fn a_conversation_kept_as_rows_reads_as_its_current_branch() {
+        use crate::records::fixtures::{row_database, session, ROW_FORK, ROW_ID, ROW_TURNS};
+        let _declared = crate::providers::test_provider::with_row_records();
+        let dir = crate::test_support::ScratchDir::new("agent-records-conversation-rows");
+        let account = dir.join("account");
+        let forked = format!("{ROW_TURNS},{ROW_FORK}");
+        row_database(&account, &[(ROW_ID, forked.as_str())]);
+        let locator = crate::records::Locator::with_shell(std::collections::HashMap::new());
+        let own = session(AgentId::TEST, ROW_ID, Some(&account));
+        let rows = crate::records::rows::read(&locator, &own)
+            .expect("row-shaped")
+            .unwrap();
+        assert_eq!(
+            read_rows(AgentId::TEST, &rows).messages,
+            [
+                say(Speaker::User, "first"),
+                say(Speaker::Assistant, "reply one"),
+                say(Speaker::User, "third"),
+                say(Speaker::Assistant, "reply three"),
+            ]
+        );
     }
 
     /// Nothing the records carry as tool output, reasoning or injected context is in `text`.

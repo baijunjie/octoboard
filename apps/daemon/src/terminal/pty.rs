@@ -13,7 +13,6 @@ use crate::platform::term::{self, Foreground, Input, PartialWrite, Size};
 use crate::terminal::backend::{Backend, Started};
 use crate::terminal::display::{DisplayFacts, DisplaySeed};
 use crate::terminal::fan::{Attached, Delivery, Fan};
-use crate::terminal::program_status::ReportedState;
 use crate::terminal::saved_screen::{ReplayRule, SavedScreen};
 use crate::terminal::snapshot::is_supported_size;
 use crate::terminal::title::TitleChange;
@@ -713,13 +712,20 @@ impl PtyCore {
 
     /// The state of the program's root status record as it stands; see
     /// [`Fan::program_status_root`].
-    pub fn program_status_root(&self) -> Option<ReportedState> {
+    pub fn program_status_root(&self) -> crate::terminal::program_status::RootMove {
         self.fan.program_status_root()
+    }
+
+    pub(crate) fn record_program_status(
+        &self,
+        record: crate::terminal::program_status::Record,
+    ) -> Option<crate::terminal::program_status::RootMove> {
+        self.fan.record_program_status(record)
     }
 
     /// The states the program's root status record moved to since the last call; see
     /// [`Fan::take_program_status`].
-    pub fn take_program_status(&self) -> Vec<Option<ReportedState>> {
+    pub fn take_program_status(&self) -> Vec<crate::terminal::program_status::RootMove> {
         self.fan.take_program_status()
     }
 

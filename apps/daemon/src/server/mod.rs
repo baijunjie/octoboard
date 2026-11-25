@@ -31,7 +31,7 @@ pub(crate) mod relay;
 mod system_changes;
 mod terminal;
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 pub(crate) mod ui;
 
 use std::sync::Arc;
@@ -108,6 +108,7 @@ fn routes(state: Arc<AppState>) -> Router {
             post(callbacks::context_window_callback),
         )
         .route("/mcp/:token", post(callbacks::mcp_call))
+        .route("/channel/:session", post(callbacks::channel_poll))
         .route("/shutdown", post(callbacks::shutdown))
         .route("/restart", post(callbacks::restart))
         .route("/restart-check", post(callbacks::restart_check))

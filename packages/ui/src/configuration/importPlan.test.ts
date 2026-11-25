@@ -8,6 +8,7 @@ import { TEST_PROVIDERS } from "../test/testProviders";
 import {
   accountChoicesFor,
   accountResolutionsOf,
+  accountReviewForInspection,
   agentImported,
   accountsNeedAttention,
   applyToAll,
@@ -19,6 +20,8 @@ import {
   directoryProblem,
   documentShortcuts,
   hasAccountDirectoryProblem,
+  hasForeignDirectoryProblem,
+  hasUnfixableProblem,
   importedAgents,
   importedParts,
   importedSections,
@@ -277,6 +280,35 @@ describe("accounts", () => {
     expect(review.rows.map((rows) => rows.map((row) => row.choice))).toEqual([["leave_out"]]);
   });
 
+  it("finds a problem no other directory fixes only in an invalid account whose agent has the default account only, whose name is taken or blank", () => {
+    const failed = (code: string, params: Record<string, string>): InspectedAccount => ({ ...account("A", "invalid"), error: { code, params, message: "refused" } });
+    expect(hasUnfixableProblem(failed("provider_unsupported", { agent: "claude", operation: "owned_accounts" }))).toBe(true);
+    expect(hasUnfixableProblem(failed("provider_unsupported", { agent: "claude", operation: "config_sharing" }))).toBe(false);
+    expect(hasUnfixableProblem(failed("account_name_taken", {}))).toBe(true);
+    expect(hasUnfixableProblem(failed("field_required", { field: "name" }))).toBe(true);
+    expect(hasUnfixableProblem(failed("field_required", { field: "config_dir" }))).toBe(false);
+    expect(hasUnfixableProblem(failed("config_dir_not_absolute", {}))).toBe(false);
+    // The reason counts only on an account that is invalid.
+    expect(hasUnfixableProblem({ ...failed("provider_unsupported", { operation: "owned_accounts" }), status: "new" })).toBe(false);
+    expect(hasUnfixableProblem(account("A", "invalid"))).toBe(false);
+    // A foreign directory is no better a reason than the refusal of an agent's owned accounts.
+    const foreign = { ...failed("provider_unsupported", { operation: "owned_accounts" }), foreign_directory: true };
+    expect(hasForeignDirectoryProblem(foreign)).toBe(false);
+    expect(hasForeignDirectoryProblem({ ...failed("config_dir_not_absolute", {}), foreign_directory: true })).toBe(true);
+  });
+
+  it("starts an account of an agent that has the default account only left out, and asks for no directory for it", () => {
+    const refused = { ...account("A", "invalid"), error: { code: "provider_unsupported", params: { agent: "claude", operation: "owned_accounts" }, message: "unsupported" } };
+    const unsupported = { ...accounts, agents: [{ ...accounts.agents[0], accounts: [refused] }] };
+    const review = initialAccountReview(unsupported);
+    expect(review.rows[0][0].choice).toBe("leave_out");
+    expect(accountResolutionsOf(unsupported, review)).toEqual([{ agent: "claude", account: 0, leave_out: true }]);
+    expect(hasAccountDirectoryProblem(unsupported, review)).toBe(false);
+    // A review kept across a fresh inspection does not hold it on a directory choice, which it no longer allows.
+    const stale = { rows: [[{ choice: "directory" as const, directory: "~/a" }]], leftOut: [] };
+    expect(accountReviewForInspection(stale, unsupported).rows[0][0].choice).toBe("leave_out");
+  });
+
   it("creates what can be created as proposed and leaves out what cannot", () => {
     expect(initialAccountReview(accounts).rows.map((rows) => rows.map((row) => row.choice))).toEqual([["create", "create", "leave_out", "leave_out"], ["create"]]);
     expect(initialAccountReview(accounts).leftOut).toEqual([]);
@@ -379,9 +411,20 @@ describe("accounts", () => {
       expect(accountChoicesFor(account("A", "invalid"))).toEqual(["directory", "leave_out"]);
       const blankName = { ...account("A", "invalid"), error: { code: "field_required", params: { field: "name" }, message: "blank" } };
       expect(accountChoicesFor(blankName)).toEqual(["leave_out"]);
+      const unsupported = { ...account("A", "invalid"), error: { code: "provider_unsupported", params: { agent: "test_agent", operation: "owned_accounts" }, message: "unsupported" } };
+      expect(accountChoicesFor(unsupported)).toEqual(["leave_out"]);
+      const otherOperation = { ...account("A", "invalid"), error: { code: "provider_unsupported", params: { agent: "test_agent", operation: "kick" }, message: "unsupported" } };
+      expect(accountChoicesFor(otherOperation)).toEqual(["directory", "leave_out"]);
       const blankDirectory = { ...account("A", "invalid"), error: { code: "field_required", params: { field: "config_dir" }, message: "blank" } };
       expect(accountChoicesFor(blankDirectory)).toEqual(["directory", "leave_out"]);
       const [hub] = withEffectiveFallbacks(referencing, named, { rows: [[{ choice: "directory", directory: "~/a" }]], leftOut: [] }, true);
+      expect(hub.account_fallbacks.map((fallback) => fallback.name)).toContain("A");
+    });
+
+    it("keeps the fallback for an account of an agent that has the default account only, which no directory cures", () => {
+      const refused = { ...account("A", "invalid"), error: { code: "provider_unsupported", params: { agent: "claude", operation: "owned_accounts" }, message: "unsupported" } };
+      const unsupported = { ...accounts, agents: [{ ...accounts.agents[0], accounts: [refused] }] };
+      const [hub] = withEffectiveFallbacks(referencing, unsupported, { rows: [[{ choice: "directory", directory: "~/a" }]], leftOut: [] }, true);
       expect(hub.account_fallbacks.map((fallback) => fallback.name)).toContain("A");
     });
 

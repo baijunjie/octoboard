@@ -77,7 +77,12 @@ struct StartingSession {
     claim: crate::state::LaunchClaim,
     session: Session,
     cwd: PathBuf,
+    /// The prompt the launch starts with: a new session's first task, or the instruction of a
+    /// resume whose provider takes it there.
     task: Option<String>,
+    /// The instruction of a resume whose provider takes no launch prompt, queued as a message
+    /// once the launch begins.
+    queued_instruction: Option<String>,
     /// The outside conversation the session continues, if it was opened with one.
     resume_agent_session_id: Option<String>,
     /// The login-shell snapshot that conversation's record was found with, which the launch must
@@ -457,7 +462,20 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
     }
     let claim = state.begin_launch(&session.id)?;
     recorded.keep();
-    if task.is_some() {
+    // A task of nothing but whitespace is no task: no agent sends an empty prompt.
+    let task = task.filter(|task| !term::is_blank_once_stripped(task));
+    // A task given with a conversation to resume is that resume's instruction, and reaches the
+    // agent as a relaunch's does: as the launch prompt where the provider takes one on a resume,
+    // queued as a message otherwise, since a plan gives a resume no prompt of its own accord.
+    let (task, queued_instruction) = match resume_agent_session_id {
+        Some(_) => {
+            let (prompt, queued) =
+                super::launch::route_instruction(session.agent, true, task.as_deref());
+            (prompt, queued.map(str::to_string))
+        }
+        None => (task, None),
+    };
+    if task.is_some() || queued_instruction.is_some() {
         state.expect_prompt_on_launch(&session.id);
     }
     state.publish_session(&session);
@@ -466,6 +484,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         session,
         cwd,
         task,
+        queued_instruction,
         resume_agent_session_id,
         resume_shell_env,
         terminal_appearance,
@@ -525,6 +544,7 @@ async fn finish_open(
         session,
         cwd,
         task,
+        queued_instruction,
         resume_agent_session_id,
         resume_shell_env,
         terminal_appearance,
@@ -537,6 +557,11 @@ async fn finish_open(
         // want it, and there is nothing to end.
         if recorded.status != SessionStatus::Starting {
             return Ok(Some(recorded));
+        }
+        // Queued once the launch is certain to be tried, so an opening that never launched
+        // leaves nothing behind; a launch that fails discards the queue below.
+        if let Some(instruction) = &queued_instruction {
+            state.queue_relaunch_instruction(&session.id, instruction);
         }
         start_process(
             state,
@@ -561,7 +586,13 @@ async fn finish_open(
     .await;
     match started {
         Ok(Some(archived)) => Ok(archived),
-        Ok(None) => settle_started(state, &session, task.is_some()).map_err(OpenError::Settling),
+        Ok(None) => settle_started(
+            state,
+            &session,
+            task.is_some(),
+            queued_instruction.is_some(),
+        )
+        .map_err(OpenError::Settling),
         Err(err) => {
             state.revoke_mcp_tokens(&session.id);
             state.discard_outbox(&session.id);
@@ -587,18 +618,39 @@ fn mark_interrupted(state: &Arc<AppState>, id: &str) {
 
 /// Moves a session whose process is up from `starting` to what the launch implies, and returns its
 /// record.
-fn settle_started(state: &Arc<AppState>, session: &Session, has_task: bool) -> Result<Session> {
+fn settle_started(
+    state: &Arc<AppState>,
+    session: &Session,
+    has_task: bool,
+    instruction_queued: bool,
+) -> Result<Session> {
     // A session opened without a task is sitting at its prompt, not working. This also matters for
     // Codex specifically: its `SessionStart` hook does not fire until the first prompt submission,
     // so an optimistic `working` here would stay until the user typed. Conditional on it still
     // starting: the agent's own first hook may have moved it on already, and an archive that landed
     // while the process was being forked stands.
-    let up = if has_task {
+    // A first task the launch queued as a message (`LaunchPlan::first_message`) has started no
+    // turn yet: the agent sits at its prompt, or at a startup screen the trust watch shows, as a
+    // session opened without a task does, and its own hook says it works once the message is in.
+    let first_task_queued = state
+        .live_session(&session.id)
+        .is_some_and(|live| live.first_task_queued());
+    let up = if has_task && !first_task_queued {
         SessionStatus::Working
     } else {
         SessionStatus::Idle
     };
-    if !state.apply_reported_status_if(&session.id, SessionStatus::Starting, up)? {
+    let settled = state.apply_reported_status_if(&session.id, SessionStatus::Starting, up)?;
+    // A resume's instruction that was queued (`StartingSession::queued_instruction`) is in the
+    // same place: the session is idle until it is written.
+    if first_task_queued || instruction_queued {
+        // The queue is written only to a session that reads as idle or working, which a drain
+        // asked for while it still read as starting found it not to be.
+        if let Ok(record) = state.session_record(&session.id) {
+            state.spawn_flush_outbox(&session.id, state.agent_status(&record));
+        }
+    }
+    if !settled {
         let record = state.session_record(&session.id)?;
         if record.status == SessionStatus::Archived {
             // Archived while the process was being forked, when there was none to end.

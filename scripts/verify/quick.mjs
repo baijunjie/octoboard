@@ -50,6 +50,7 @@ export const UI_DISK_TESTS_COVERED = [
   "src/fixtures/fixtureProviders.test.ts",
   "src/i18n/bundleLocalizations.test.ts",
   "src/lifecycle/useAppExit.test.ts",
+  "src/scheduledTasks/blankPrompt.test.ts",
   "src/settings/commandLineTool.test.ts",
   "scripts/generate-licenses.test.mjs",
 ];
@@ -66,6 +67,7 @@ export const UI_READERS = [
   { match: "apps/daemon/src/providers/", tests: ["src/daemonCodes.test.ts", "src/fixtures/fixtureProviders.test.ts"] },
   { match: "apps/daemon/testdata/restart_impact_cases.json", tests: ["src/lifecycle/useAppExit.test.ts"] },
   { match: "apps/daemon/testdata/quit_holders_cases.json", tests: ["src/lifecycle/useAppExit.test.ts"] },
+  { match: "apps/daemon/testdata/blank_prompt_cases.json", tests: ["src/scheduledTasks/blankPrompt.test.ts"] },
   { match: "apps/desktop/src-tauri/Info.template.plist", tests: ["src/i18n/bundleLocalizations.test.ts"] },
   { match: "apps/desktop/src-tauri/src/command_line/macos.rs", tests: ["src/settings/commandLineTool.test.ts"] },
   { match: "LICENSE", tests: ["src/appConfig.test.ts"] },

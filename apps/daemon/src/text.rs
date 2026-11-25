@@ -54,9 +54,55 @@ fn is_closing_tag(line: &str) -> bool {
     line.starts_with("</pasted_content") && line.ends_with('>')
 }
 
+/// `text` percent-encoded as UTF-8, leaving as they are the characters a URI never reserves (ASCII
+/// letters and digits, and `-._~`) and the ASCII characters in `keep`.
+pub(crate) fn percent_encode(text: &str, keep: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        let c = byte as char;
+        if c.is_ascii_alphanumeric() || "-._~".contains(c) || (byte.is_ascii() && keep.contains(c))
+        {
+            out.push(c);
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The characters of `keep` stay as they are and nothing else reserved does; a character outside
+    /// ASCII is always encoded byte by byte, even where `keep` holds the character a byte of it
+    /// reads as on its own.
+    #[test]
+    fn a_percent_encoding_keeps_only_the_unreserved_and_the_kept_ascii() {
+        assert_eq!(percent_encode("a/b:c@d", ""), "a%2Fb%3Ac%40d");
+        assert_eq!(percent_encode("a/b:c@d", ":/@"), "a/b:c@d");
+        assert_eq!(percent_encode("a/b:c@d", ":"), "a%2Fb:c%40d");
+        assert_eq!(percent_encode("a b&c=d", ":/@"), "a%20b%26c%3Dd");
+        assert_eq!(percent_encode("-._~Az09", ""), "-._~Az09");
+        assert_eq!(percent_encode("", ":/@"), "");
+        // `\u{c3}` is what the first byte of `é` reads as when taken for a character.
+        assert_eq!(percent_encode("\u{e9}", "\u{c3}\u{a9}"), "%C3%A9");
+        assert_eq!(percent_encode("\u{e9}/", "/"), "%C3%A9/");
+        // A value that goes in a query: nothing in it can end or split the query.
+        for (text, encoded) in [
+            ("SessionStart", "SessionStart"),
+            ("a-b.c_d~E9", "a-b.c_d~E9"),
+            ("a b", "a%20b"),
+            ("a&b=c?d#e", "a%26b%3Dc%3Fd%23e"),
+            ("100%", "100%25"),
+            ("a+b", "a%2Bb"),
+            ("caf\u{e9}", "caf%C3%A9"),
+            ("\u{4e2d}", "%E4%B8%AD"),
+            ("\n\0", "%0A%00"),
+        ] {
+            assert_eq!(percent_encode(text, ""), encoded, "{text:?}");
+        }
+    }
 
     /// Text within the limit is returned whole; longer text is cut to the limit in characters, never
     /// inside one, and marked.

@@ -9,6 +9,7 @@ use super::dialogs::DialogPattern;
 use super::title_activity::Shown;
 use super::trust::Screen as TrustScreen;
 use crate::adapter::{LaunchPlan, LaunchSpec};
+use crate::platform::term::Input;
 
 /// How one provider's terminal screens, input box and terminal title read.
 pub trait ScreenReader: Send + Sync {
@@ -18,11 +19,22 @@ pub trait ScreenReader: Send + Sync {
         &[]
     }
 
-    /// The rows of the provider's input box as `screen` (the visible rows, faint cells blanked)
-    /// shows them, each trimmed and the prompt mark off the first, empty rows kept; `None` where no
-    /// input box is recognised (`crate::session::input_box`).
+    /// The rows of the provider's input box as `screen` (the visible rows, as
+    /// [`Self::input_box_screen`] asks for them) shows them, each trimmed and the prompt mark off
+    /// the first, empty rows kept; `None` where no input box is recognised
+    /// (`crate::session::input_box`).
     fn input_box_rows(&self, _screen: &str) -> Option<Vec<String>> {
         None
+    }
+
+    /// Which screen [`Self::input_box_rows`] is given wherever the box is read for what it holds:
+    /// the one with faint cells blanked, on which a hint the provider draws faint in an empty box
+    /// is no text, unless the provider's box can only be found by something it draws faint, such
+    /// as the rules that frame it. A reader given the screen as drawn tells the box's own text
+    /// from a faint hint by itself, or names the hint in [`Self::input_placeholder`], which is
+    /// then applied on every host.
+    fn input_box_screen(&self) -> ScreenText {
+        ScreenText::FaintBlanked
     }
 
     /// Whether `row`, the first row of the input box as [`Self::input_box_rows`] gives it and the
@@ -32,11 +44,13 @@ pub trait ScreenReader: Send + Sync {
         false
     }
 
-    /// A draft typed into the input box as the provider reports it once submitted, for telling a
-    /// prompt the provider reports sending apart from one sent before the draft
-    /// (`crate::session::draft`).
-    fn as_submitted<'a>(&self, typed: &'a str) -> &'a str {
-        typed
+    /// Whether `reported`, a prompt the provider reports sending, is `typed`, a prompt recorded
+    /// as submitted (a draft typed into the input box, a message written, the prompt of the
+    /// launch), for telling a prompt the provider reports sending apart from one sent before it
+    /// (`crate::session::draft`). The same text, unless the provider changes a prompt between
+    /// taking it and reporting it; then what it changes is ignored on both sides.
+    fn same_as_submitted(&self, typed: &str, reported: &str) -> bool {
+        typed == reported
     }
 
     /// Whether a pasted piece that ends in an image file's extension is read as an image, and the
@@ -65,6 +79,34 @@ pub trait ScreenReader: Send + Sync {
     /// `None` where no completion is up (`send_command`).
     fn command_completion(&self, _screen: &str) -> Option<String> {
         None
+    }
+
+    /// Whether a list the provider draws by its input box (a slash-command completion, a menu) is
+    /// up on `screen` (the visible rows), or `None` where the reader cannot tell. A provider that
+    /// declares [`Self::writes_lone_command_with_trailing_space`] answers it: the space after a
+    /// lone command is typed only over `Some(true)`, and the Enter after the space waits for
+    /// `Some(false)`; neither is pressed without it (`crate::session::composer`).
+    fn list_shown(&self, _screen: &str) -> Option<bool> {
+        None
+    }
+
+    /// Whether the slash-command list up on `screen` (the visible rows) says that no command
+    /// matches what the box holds, as a list that offers no completion at all: a lone command
+    /// written then is one the agent does not have, refused as not recognised with the box
+    /// cleared rather than run or sent to the model (`crate::session::composer`). False by
+    /// default, for a provider whose list offers a command or is not drawn.
+    fn list_offers_no_command(&self, _screen: &str) -> bool {
+        false
+    }
+
+    /// Whether a lone command (`/name`, with no arguments) gets a space typed after it before its
+    /// Enter: where the provider's first Enter on a lone `/name` takes its completion into the box
+    /// rather than running it, and `/name ` runs on one Enter, as measured. The command is pasted
+    /// and its completion looked at as for any provider; the space follows as a key of its own,
+    /// and the Enter waits for the list to be read closed ([`Self::list_shown`]), which such a
+    /// provider answers (`crate::session::composer`).
+    fn writes_lone_command_with_trailing_space(&self) -> bool {
+        false
     }
 
     /// What goes before a message's leading slash in a paste so that the provider reads it as text
@@ -112,9 +154,67 @@ pub trait ScreenReader: Send + Sync {
     /// Whether Ctrl-U is measured to delete a line of the provider's input box a press (the line
     /// break before the cursor at the start of a line) and to do nothing else, so that a draft can
     /// be cleared out of the way of a message past the draft's grace
-    /// (`crate::session::draft_clear`). Where it is not, such a message waits for the box to be
-    /// emptied by the user, for a bounded time, and then goes in as the box stands.
+    /// (`crate::session::draft_clear`): the key is pressed again, each press seen on the screen
+    /// before the next, until the box reads empty (`crate::session::input_box_clear`), so a box
+    /// of several rows needs no key that empties it at once. Where it is not, such a message
+    /// waits for the box to be emptied by the user, for a bounded time, and then goes in as the
+    /// box stands.
     fn clears_input_box_with_ctrl_u(&self) -> bool {
+        false
+    }
+
+    /// A key measured to empty the provider's whole input box at once, however many rows it
+    /// holds, at its idle prompt, and to do nothing else there while the box holds text, or `None`
+    /// where there is none. It is pressed once a clear, only while the session reads at its idle
+    /// prompt ([`crate::session::turn_reading::TurnReading::at_idle_prompt`]) and the box holds
+    /// text, since such a key may mean something else mid-turn or at an empty box (Copilot's
+    /// Ctrl-C interrupts a turn, and at an empty prompt arms its exit); a clear mid-turn falls
+    /// back to [`Self::clears_input_box_with_ctrl_u`] where that is declared
+    /// (`crate::session::input_box_clear`).
+    fn input_box_clearing_key(&self) -> Option<Input> {
+        None
+    }
+
+    /// Whether a cancel puts the messages the provider still held for the end of the turn
+    /// (written into its input box while the turn ran, and taken out of it) back into the box,
+    /// unsent. A box that then begins with messages Octoboard wrote while the turn ran, the
+    /// latest alone or several in the order written, holds messages the provider gave back
+    /// rather than ones left unsent: it is cleared out of the way of the next message as a draft
+    /// is, the messages are queued to be written again, and only text the user typed after them
+    /// is told as a draft (`crate::session::draft_clear`).
+    fn cancel_restores_held_messages(&self) -> bool {
+        false
+    }
+
+    /// Whether a cancel can drop the messages the provider still held for the end of the turn
+    /// (written into its input box while the turn ran, and taken out of it), with nothing put
+    /// back in the box. Where it can, the messages Octoboard wrote into a turn the provider then
+    /// reports cancelled are queued to be written again after the next message
+    /// (`crate::messaging::cleared_messages`), and one that cannot be is told to the user. A
+    /// provider can answer otherwise for one launch
+    /// (`crate::adapter::AgentProvider::launch_cancel_drops_held_messages`): such a launch has
+    /// none written again, and each is told to the user as one that may not have been carried
+    /// out.
+    ///
+    /// Declared only by a provider that reports a held message it takes into the turn as a
+    /// prompt sent, with its text: that is all that tells a message the cancel dropped from one
+    /// the turn had taken before it, and without it a message taken would be written twice. It
+    /// may be declared beside [`Self::cancel_restores_held_messages`], by a provider one of whose
+    /// cancel keys gives the messages back and another drops them: what is then found in the box
+    /// is cleared as what is left of messages already queued again.
+    fn cancel_drops_held_messages(&self) -> bool {
+        false
+    }
+
+    /// Whether an input box that reads empty off a whole frame, after a write the agent did not
+    /// report sending, is measured to mean the message went elsewhere: into a dialog the reader
+    /// does not recognise, drawn over the whole empty box. Where it is, the message is told to its
+    /// sender and the user as not delivered and possibly lost, nothing holds the queue for it, and
+    /// no submit key is retried into the empty box
+    /// (`crate::session::LiveSession::write_went_elsewhere`).
+    /// Where it is not, an empty box tells nothing (the agent may have sent the message and be
+    /// late reporting it), and the message is left unsent as any other.
+    fn empty_box_means_write_went_elsewhere(&self) -> bool {
         false
     }
 
@@ -123,6 +223,12 @@ pub trait ScreenReader: Send + Sync {
     /// fallback.
     fn trust_screen(&self) -> &'static TrustScreen {
         &super::trust::NO_SCREEN
+    }
+
+    /// The heading and footer that enclose the options on the rendered trust screen, when the
+    /// provider also draws the cursor glyph elsewhere during the confirmation.
+    fn trust_cursor_bounds(&self) -> Option<(&'static str, &'static str)> {
+        None
     }
 
     /// What a completed terminal title that started with `glyph` (one of the activity glyphs
@@ -164,12 +270,29 @@ pub trait ScreenReader: Send + Sync {
     fn interrupt(&self) -> Option<&'static Interrupt> {
         None
     }
+
+    /// A draw the provider makes only during a turn, for terminals without a running title or
+    /// status report. The interrupt uses it alongside hook status and the dialog check.
+    fn interrupt_running_screen(&self) -> Option<fn(&str) -> bool> {
+        None
+    }
 }
 
 /// The reader of a provider nothing has been measured of.
 pub struct NoScreen;
 
 impl ScreenReader for NoScreen {}
+
+/// Which text of the screen a reading is made from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScreenText {
+    /// The visible rows with every faint cell shown as a space
+    /// (`crate::terminal::snapshot::TerminalSnapshot::visible_text_undimmed`).
+    FaintBlanked,
+    /// The visible rows as drawn, faint cells included
+    /// (`crate::terminal::snapshot::TerminalSnapshot::visible_text`).
+    AsDrawn,
+}
 
 /// What a turn that went back to the prompt in the terminal title with no hook is closed as.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -186,10 +309,11 @@ pub enum TitleCancel {
 #[derive(Debug, Clone, Copy)]
 pub struct Interrupt {
     pub key: InterruptKey,
-    /// Whether the provider puts the interrupted prompt back in its input box when the key lands
-    /// before the model has shown anything, for the interrupt to clear it. Its input box is read
-    /// before the key only then: treating an unread screen as permission to clear could erase a
-    /// user's pending edit.
+    /// Whether the provider puts text back in its input box at a cancel, for the interrupt to
+    /// clear it: the interrupted prompt, when the key lands before the model has shown anything,
+    /// or the messages it still held ([`ScreenReader::cancel_restores_held_messages`]). Its input
+    /// box is read before the key only then: treating an unread screen as permission to clear
+    /// could erase a user's pending edit.
     pub restores_prompt: bool,
     /// What the caller is told became of the `written` messages Octoboard wrote into the session's
     /// terminal during the turn the key stopped, as a sentence to follow the interrupt's own.
@@ -206,6 +330,13 @@ pub struct Interrupt {
 pub enum InterruptKey {
     /// One Esc.
     Esc,
+    /// Esc pressed twice, for a provider whose first Esc only arms the interrupt and whose second
+    /// makes it. The second goes in a tenth of a second after the first, and only while the turn
+    /// still runs.
+    EscTwice,
+    /// One Ctrl-C, for a provider whose Ctrl-C stops a running turn whatever its input box holds,
+    /// and leaves a draft there as it was: nothing is cleared first.
+    CtrlC,
     /// Ctrl-C, which with text in the input box clears the text instead, so the box is emptied
     /// with Ctrl-U first.
     CtrlCAfterClearing {
@@ -244,6 +375,13 @@ pub(crate) fn strip_image_placeholders(text: &str) -> String {
     rest
 }
 
+/// Whether the provider of `reader` has a way to clear its input box: Ctrl-U a line a press
+/// ([`ScreenReader::clears_input_box_with_ctrl_u`]), or a key that empties it at once at the idle
+/// prompt ([`ScreenReader::input_box_clearing_key`]).
+pub(crate) fn clears_input_box(reader: &dyn ScreenReader) -> bool {
+    reader.clears_input_box_with_ctrl_u() || reader.input_box_clearing_key().is_some()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::adapter::{provider, tests::spec_fixture};
@@ -264,11 +402,15 @@ mod tests {
         assert!(screen.dialogs().is_empty());
         assert!(crate::session::dialogs::recognise(AgentId::TEST, text).is_none());
         assert!(screen.input_box_rows(text).is_none());
-        assert_eq!(screen.as_submitted("typed"), "typed");
+        assert_eq!(screen.input_box_screen(), super::ScreenText::FaintBlanked);
+        assert!(!screen.cancel_restores_held_messages());
+        assert!(screen.same_as_submitted("typed", "typed"));
+        assert!(!screen.same_as_submitted(" typed", "typed"));
         assert!(!screen.pasted_image_path_loses_enter());
         assert_eq!(screen.leading_slash_guard(), " ");
         assert_eq!(screen.image_placeholders("[Image #1] text"), 0);
         assert!(screen.command_completion("/help Show help").is_none());
+        assert!(!screen.writes_lone_command_with_trailing_space());
         assert!(!screen.stash_shown(text));
         assert_eq!(screen.stash_indicator_row(text), None);
         assert!(!screen.clears_input_box_with_ctrl_u());

@@ -1,0 +1,516 @@
+[?2026h[?25l[4B[1G[24A[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[24A[G
+  [38;5;74m ▄[38;5;110m▄▄▄▄▄  ▄▄   [38;5;104m  [38;5;140m▄▄ ▄▄▄▄▄[38;5;139m▄▄ ▄▄▄ [38;5;175m   ▄[38;5;174m▄[39m   [38;5;145m┌──────────────────────────────────────────────────────────┐[39m
+  [38;5;74m██[38;5;110m╔═══██╗██║   [38;5;104m █[38;5;140m█║██╔═══[38;5;139m═╝████╗[38;5;175m  ██[38;5;174m║[39m  [38;5;145m│[39m [1m[38;5;141m>_ Qwen Code[22m[38;5;145m (v0.28.3)[39m                                   [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║   ██║██║ █╗[38;5;104m █[38;5;140m█║█████╗[38;5;139m  ██╔██[38;5;175m╗ ██[38;5;174m║[39m  [38;5;145m│[39m                                                          [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║▄▄ ██║██║███[38;5;104m╗█[38;5;140m█║██╔══╝[38;5;139m  ██║╚█[38;5;175m█╗██[38;5;174m║[39m  [38;5;145m│[39m [38;5;145mAPI Key | stub (/model to change)[39m                        [38;5;145m│[39m
+  [38;5;74m╚█[38;5;110m█████╔╝╚███╔█[38;5;104m██[38;5;140m╔╝██████[38;5;139m█╗██║ ╚[38;5;175m████[38;5;174m║[39m  [38;5;145m│[39m [38;5;145m/scratch/q26-run/work[39m                                    [38;5;145m│[39m
+  [38;5;74m ╚[38;5;110m══▀▀═╝  ╚══╝╚[38;5;104m══[38;5;140m╝ ╚═════[38;5;139m═╝╚═╝  [38;5;175m╚═══[38;5;174m╝[39m  [38;5;145m└──────────────────────────────────────────────────────────┘[39m
+
+  [38;5;145mTips: Add a QWEN.md file to give Qwen Code persistent project context.[39m
+  ●︎ Extensions changed on disk. Run /reload-plugins to apply updates.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descriptio[39m
+    [38;5;141mn":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [1m[38;5;178m-[39m[22m [9m[1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m[29m
+
+[38;5;75m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+[38;5;141m> [39mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you
+  prefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm
+  one"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes
+  fit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Larg
+  e","description":"L"},{"label":"Huge","description":"XL"}]}]};[48;5;237m [49m​
+[38;5;75m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+  [38;5;141m➜ work · stub[39m
+  [38;5;145m⏸ Ask permissions (shift + tab to cycle)[39m
+[4A[65G[?25h[?2026l[?2026h[?25l[4B[1G[28A[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[28A[G
+  [38;5;74m ▄[38;5;110m▄▄▄▄▄  ▄▄   [38;5;104m  [38;5;140m▄▄ ▄▄▄▄▄[38;5;139m▄▄ ▄▄▄ [38;5;175m   ▄[38;5;174m▄[39m   [38;5;145m┌──────────────────────────────────────────────────────────┐[39m
+  [38;5;74m██[38;5;110m╔═══██╗██║   [38;5;104m █[38;5;140m█║██╔═══[38;5;139m═╝████╗[38;5;175m  ██[38;5;174m║[39m  [38;5;145m│[39m [1m[38;5;141m>_ Qwen Code[22m[38;5;145m (v0.28.3)[39m                                   [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║   ██║██║ █╗[38;5;104m █[38;5;140m█║█████╗[38;5;139m  ██╔██[38;5;175m╗ ██[38;5;174m║[39m  [38;5;145m│[39m                                                          [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║▄▄ ██║██║███[38;5;104m╗█[38;5;140m█║██╔══╝[38;5;139m  ██║╚█[38;5;175m█╗██[38;5;174m║[39m  [38;5;145m│[39m [38;5;145mAPI Key | stub (/model to change)[39m                        [38;5;145m│[39m
+  [38;5;74m╚█[38;5;110m█████╔╝╚███╔█[38;5;104m██[38;5;140m╔╝██████[38;5;139m█╗██║ ╚[38;5;175m████[38;5;174m║[39m  [38;5;145m│[39m [38;5;145m/scratch/q26-run/work[39m                                    [38;5;145m│[39m
+  [38;5;74m ╚[38;5;110m══▀▀═╝  ╚══╝╚[38;5;104m══[38;5;140m╝ ╚═════[38;5;139m═╝╚═╝  [38;5;175m╚═══[38;5;174m╝[39m  [38;5;145m└──────────────────────────────────────────────────────────┘[39m
+
+  [38;5;145mTips: Add a QWEN.md file to give Qwen Code persistent project context.[39m
+  ●︎ Extensions changed on disk. Run /reload-plugins to apply updates.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descriptio[39m
+    [38;5;141mn":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [1m[38;5;178m-[39m[22m [9m[1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m[29m
+
+
+  [2mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you prefer?","header":"Colour","multiSelect":fa…[22m
+  [3m[2mCtrl+Q to queue · ↑ to edit queued messages[22m[23m
+[38;5;75m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+[38;5;141m> [39m[48;5;237m [49m[38;5;145m Type your message or @path/to/file[39m
+[38;5;75m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+  [38;5;141m➜ work · stub[39m
+  [38;5;145m⏸ Ask permissions (shift + tab to cycle) ⏳ 1 queued[39m
+[4A[3G[?25h[?2026l]7501;state=working:app=qwen-code\]0;◐︎ Qwen - work                                                                  ]2;◐︎ Qwen - work                                                                  [?2026h[?25l[4B[1G[27A[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[27A[G
+  [38;5;74m ▄[38;5;110m▄▄▄▄▄  ▄▄   [38;5;104m  [38;5;140m▄▄ ▄▄▄▄▄[38;5;139m▄▄ ▄▄▄ [38;5;175m   ▄[38;5;174m▄[39m   [38;5;145m┌──────────────────────────────────────────────────────────┐[39m
+  [38;5;74m██[38;5;110m╔═══██╗██║   [38;5;104m █[38;5;140m█║██╔═══[38;5;139m═╝████╗[38;5;175m  ██[38;5;174m║[39m  [38;5;145m│[39m [1m[38;5;141m>_ Qwen Code[22m[38;5;145m (v0.28.3)[39m                                   [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║   ██║██║ █╗[38;5;104m █[38;5;140m█║█████╗[38;5;139m  ██╔██[38;5;175m╗ ██[38;5;174m║[39m  [38;5;145m│[39m                                                          [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║▄▄ ██║██║███[38;5;104m╗█[38;5;140m█║██╔══╝[38;5;139m  ██║╚█[38;5;175m█╗██[38;5;174m║[39m  [38;5;145m│[39m [38;5;145mAPI Key | stub (/model to change)[39m                        [38;5;145m│[39m
+  [38;5;74m╚█[38;5;110m█████╔╝╚███╔█[38;5;104m██[38;5;140m╔╝██████[38;5;139m█╗██║ ╚[38;5;175m████[38;5;174m║[39m  [38;5;145m│[39m [38;5;145m/scratch/q26-run/work[39m                                    [38;5;145m│[39m
+  [38;5;74m ╚[38;5;110m══▀▀═╝  ╚══╝╚[38;5;104m══[38;5;140m╝ ╚═════[38;5;139m═╝╚═╝  [38;5;175m╚═══[38;5;174m╝[39m  [38;5;145m└──────────────────────────────────────────────────────────┘[39m
+
+  [38;5;145mTips: Add a QWEN.md file to give Qwen Code persistent project context.[39m
+  ●︎ Extensions changed on disk. Run /reload-plugins to apply updates.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descriptio[39m
+    [38;5;141mn":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [1m[38;5;178m-[39m[22m [9m[1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m[29m
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+
+  ⠋ [38;5;141mPondering the orb...[38;5;145m (0s · esc to cancel)[39m
+[38;5;75m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+[38;5;141m> [39m[48;5;237m [49m[38;5;145m Type your message or @path/to/file[39m
+[38;5;75m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+  [38;5;141m➜ work · stub[39m
+  [38;5;145mEnter to steer · Ctrl+Q to queue · ⏸ Ask permissions (shift + tab to cycle)[39m
+[4A[3G[?25h[?2026l[?2026h[?25l[4B[1G[28A[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[28A[G
+  [38;5;74m ▄[38;5;110m▄▄▄▄▄  ▄▄   [38;5;104m  [38;5;140m▄▄ ▄▄▄▄▄[38;5;139m▄▄ ▄▄▄ [38;5;175m   ▄[38;5;174m▄[39m   [38;5;145m┌──────────────────────────────────────────────────────────┐[39m
+  [38;5;74m██[38;5;110m╔═══██╗██║   [38;5;104m █[38;5;140m█║██╔═══[38;5;139m═╝████╗[38;5;175m  ██[38;5;174m║[39m  [38;5;145m│[39m [1m[38;5;141m>_ Qwen Code[22m[38;5;145m (v0.28.3)[39m                                   [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║   ██║██║ █╗[38;5;104m █[38;5;140m█║█████╗[38;5;139m  ██╔██[38;5;175m╗ ██[38;5;174m║[39m  [38;5;145m│[39m                                                          [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║▄▄ ██║██║███[38;5;104m╗█[38;5;140m█║██╔══╝[38;5;139m  ██║╚█[38;5;175m█╗██[38;5;174m║[39m  [38;5;145m│[39m [38;5;145mAPI Key | stub (/model to change)[39m                        [38;5;145m│[39m
+  [38;5;74m╚█[38;5;110m█████╔╝╚███╔█[38;5;104m██[38;5;140m╔╝██████[38;5;139m█╗██║ ╚[38;5;175m████[38;5;174m║[39m  [38;5;145m│[39m [38;5;145m/scratch/q26-run/work[39m                                    [38;5;145m│[39m
+  [38;5;74m ╚[38;5;110m══▀▀═╝  ╚══╝╚[38;5;104m══[38;5;140m╝ ╚═════[38;5;139m═╝╚═╝  [38;5;175m╚═══[38;5;174m╝[39m  [38;5;145m└──────────────────────────────────────────────────────────┘[39m
+
+  [38;5;145mTips: Add a QWEN.md file to give Qwen Code persistent project context.[39m
+  ●︎ Extensions changed on disk. Run /reload-plugins to apply updates.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descriptio[39m
+    [38;5;141mn":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [1m[38;5;178m-[39m[22m [9m[1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m[29m
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descriptio[39m
+    [38;5;141mn":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+
+  ⠋ [38;5;141mPondering the orb...[38;5;145m (0s · esc to cancel)[39m
+[38;5;75m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+[38;5;141m> [39m[48;5;237m [49m[38;5;145m Type your message or @path/to/file[39m
+[38;5;75m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+  [38;5;141m➜ work · stub[39m
+  [38;5;145mEnter to steer · Ctrl+Q to queue · ⏸ Ask permissions (shift + tab to cycle)[39m
+[4A[3G[?25h[?2026l[?2026h[?25l[4B[1G[31A[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[31A[G
+  [38;5;74m ▄[38;5;110m▄▄▄▄▄  ▄▄   [38;5;104m  [38;5;140m▄▄ ▄▄▄▄▄[38;5;139m▄▄ ▄▄▄ [38;5;175m   ▄[38;5;174m▄[39m   [38;5;145m┌──────────────────────────────────────────────────────────┐[39m
+  [38;5;74m██[38;5;110m╔═══██╗██║   [38;5;104m █[38;5;140m█║██╔═══[38;5;139m═╝████╗[38;5;175m  ██[38;5;174m║[39m  [38;5;145m│[39m [1m[38;5;141m>_ Qwen Code[22m[38;5;145m (v0.28.3)[39m                                   [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║   ██║██║ █╗[38;5;104m █[38;5;140m█║█████╗[38;5;139m  ██╔██[38;5;175m╗ ██[38;5;174m║[39m  [38;5;145m│[39m                                                          [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║▄▄ ██║██║███[38;5;104m╗█[38;5;140m█║██╔══╝[38;5;139m  ██║╚█[38;5;175m█╗██[38;5;174m║[39m  [38;5;145m│[39m [38;5;145mAPI Key | stub (/model to change)[39m                        [38;5;145m│[39m
+  [38;5;74m╚█[38;5;110m█████╔╝╚███╔█[38;5;104m██[38;5;140m╔╝██████[38;5;139m█╗██║ ╚[38;5;175m████[38;5;174m║[39m  [38;5;145m│[39m [38;5;145m/scratch/q26-run/work[39m                                    [38;5;145m│[39m
+  [38;5;74m ╚[38;5;110m══▀▀═╝  ╚══╝╚[38;5;104m══[38;5;140m╝ ╚═════[38;5;139m═╝╚═╝  [38;5;175m╚═══[38;5;174m╝[39m  [38;5;145m└──────────────────────────────────────────────────────────┘[39m
+
+  [38;5;145mTips: Add a QWEN.md file to give Qwen Code persistent project context.[39m
+  ●︎ Extensions changed on disk. Run /reload-plugins to apply updates.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descriptio[39m
+    [38;5;141mn":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [1m[38;5;178m-[39m[22m [9m[1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m[29m
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descriptio[39m
+    [38;5;141mn":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+
+  ⠙ [38;5;141mPondering the orb...[38;5;145m (0s · esc to cancel)[39m
+[38;5;75m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+[38;5;141m> [39m[48;5;237m [49m[38;5;145m Type your message or @path/to/file[39m
+[38;5;75m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+  [38;5;141m➜ work · stub[39m
+  [38;5;145mEnter to steer · Ctrl+Q to queue · ⏸ Ask permissions (shift + tab to cycle)[39m
+[4A[3G[?25h[?2026l[?2026h[?25l[4B[1G[31A[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[31A[G
+  [38;5;74m ▄[38;5;110m▄▄▄▄▄  ▄▄   [38;5;104m  [38;5;140m▄▄ ▄▄▄▄▄[38;5;139m▄▄ ▄▄▄ [38;5;175m   ▄[38;5;174m▄[39m   [38;5;145m┌──────────────────────────────────────────────────────────┐[39m
+  [38;5;74m██[38;5;110m╔═══██╗██║   [38;5;104m █[38;5;140m█║██╔═══[38;5;139m═╝████╗[38;5;175m  ██[38;5;174m║[39m  [38;5;145m│[39m [1m[38;5;141m>_ Qwen Code[22m[38;5;145m (v0.28.3)[39m                                   [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║   ██║██║ █╗[38;5;104m █[38;5;140m█║█████╗[38;5;139m  ██╔██[38;5;175m╗ ██[38;5;174m║[39m  [38;5;145m│[39m                                                          [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║▄▄ ██║██║███[38;5;104m╗█[38;5;140m█║██╔══╝[38;5;139m  ██║╚█[38;5;175m█╗██[38;5;174m║[39m  [38;5;145m│[39m [38;5;145mAPI Key | stub (/model to change)[39m                        [38;5;145m│[39m
+  [38;5;74m╚█[38;5;110m█████╔╝╚███╔█[38;5;104m██[38;5;140m╔╝██████[38;5;139m█╗██║ ╚[38;5;175m████[38;5;174m║[39m  [38;5;145m│[39m [38;5;145m/scratch/q26-run/work[39m                                    [38;5;145m│[39m
+  [38;5;74m ╚[38;5;110m══▀▀═╝  ╚══╝╚[38;5;104m══[38;5;140m╝ ╚═════[38;5;139m═╝╚═╝  [38;5;175m╚═══[38;5;174m╝[39m  [38;5;145m└──────────────────────────────────────────────────────────┘[39m
+
+  [38;5;145mTips: Add a QWEN.md file to give Qwen Code persistent project context.[39m
+  ●︎ Extensions changed on disk. Run /reload-plugins to apply updates.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descriptio[39m
+    [38;5;141mn":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [1m[38;5;178m-[39m[22m [9m[1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m[29m
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descriptio[39m
+    [38;5;141mn":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+
+  ⠹ [38;5;141mPondering the orb...[38;5;145m (0s · esc to cancel)[39m
+[38;5;75m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+[38;5;141m> [39m[48;5;237m [49m[38;5;145m Type your message or @path/to/file[39m
+[38;5;75m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+  [38;5;141m➜ work · stub[39m
+  [38;5;145mEnter to steer · Ctrl+Q to queue · ⏸ Ask permissions (shift + tab to cycle)[39m
+[4A[3G[?25h[?2026l[?2026h[?25l[4B[1G[31A[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[31A[G
+  [38;5;74m ▄[38;5;110m▄▄▄▄▄  ▄▄   [38;5;104m  [38;5;140m▄▄ ▄▄▄▄▄[38;5;139m▄▄ ▄▄▄ [38;5;175m   ▄[38;5;174m▄[39m   [38;5;145m┌──────────────────────────────────────────────────────────┐[39m
+  [38;5;74m██[38;5;110m╔═══██╗██║   [38;5;104m █[38;5;140m█║██╔═══[38;5;139m═╝████╗[38;5;175m  ██[38;5;174m║[39m  [38;5;145m│[39m [1m[38;5;141m>_ Qwen Code[22m[38;5;145m (v0.28.3)[39m                                   [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║   ██║██║ █╗[38;5;104m █[38;5;140m█║█████╗[38;5;139m  ██╔██[38;5;175m╗ ██[38;5;174m║[39m  [38;5;145m│[39m                                                          [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║▄▄ ██║██║███[38;5;104m╗█[38;5;140m█║██╔══╝[38;5;139m  ██║╚█[38;5;175m█╗██[38;5;174m║[39m  [38;5;145m│[39m [38;5;145mAPI Key | stub (/model to change)[39m                        [38;5;145m│[39m
+  [38;5;74m╚█[38;5;110m█████╔╝╚███╔█[38;5;104m██[38;5;140m╔╝██████[38;5;139m█╗██║ ╚[38;5;175m████[38;5;174m║[39m  [38;5;145m│[39m [38;5;145m/scratch/q26-run/work[39m                                    [38;5;145m│[39m
+  [38;5;74m ╚[38;5;110m══▀▀═╝  ╚══╝╚[38;5;104m══[38;5;140m╝ ╚═════[38;5;139m═╝╚═╝  [38;5;175m╚═══[38;5;174m╝[39m  [38;5;145m└──────────────────────────────────────────────────────────┘[39m
+
+  [38;5;145mTips: Add a QWEN.md file to give Qwen Code persistent project context.[39m
+  ●︎ Extensions changed on disk. Run /reload-plugins to apply updates.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descriptio[39m
+    [38;5;141mn":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [1m[38;5;178m-[39m[22m [9m[1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m[29m
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descriptio[39m
+    [38;5;141mn":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+
+[38;5;75m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+[38;5;141m> [39m[48;5;237m [49m[38;5;145m Type your message or @path/to/file[39m
+[38;5;75m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+  [38;5;141m➜ work · stub[39m
+  [38;5;145m⏸ Ask permissions (shift + tab to cycle)[39m
+[4A[3G[?25h[?2026l]7501;state=done:app=qwen-code\]0;Qwen - work                                                                     ]2;Qwen - work                                                                     [?2026h[?25l[4B[1G[30A[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[30A[G  [38;5;74m ╚[38;5;110m══▀▀═╝  ╚══╝╚[38;5;104m══[38;5;140m╝ ╚═════[38;5;139m═╝╚═╝  [38;5;175m╚═══[38;5;174m╝[39m  [38;5;145m└──────────────────────────────────────────────────────────┘[39m
+
+  [38;5;145mTips: Add a QWEN.md file to give Qwen Code persistent project context.[39m
+  ●︎ Extensions changed on disk. Run /reload-plugins to apply updates.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m
+    [38;5;141mn":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [1m[38;5;178m-[39m[22m [9m[1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m[29m
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m
+    [38;5;141mn":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [38;5;178m?[39m [1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m ←
+
+   [1m[38;5;141m▸ Colour[39m[22m [2m  Size[22m [2m Submit[22m
+
+   Which colour do you prefer?
+
+   [1m[38;5;141m❯ 1. Red[39m[22m
+        [2mThe warm one[22m
+     2. Blue
+        [2mThe cool one[22m
+   [2m  3. Type something...[22m
+
+
+   [2m↑/↓: Navigate | ←/→: Switch tabs | Enter: Select | Esc: Cancel[22m
+
+
+
+  ⠏ [38;5;141mI'm Feeling Lucky[39m
+[?2026l]7501;state=blocked:kind=question:app=qwen-code:msg=V2FpdGluZyBmb3IgeW91ciBhbnN3ZXI=\]0;✳︎ Qwen - work                                                                  ]2;✳︎ Qwen - work                                                                  [?2026h[36A[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[36A[G  [38;5;74m ▄[38;5;110m▄▄▄▄▄  ▄▄   [38;5;104m  [38;5;140m▄▄ ▄▄▄▄▄[38;5;139m▄▄ ▄▄▄ [38;5;175m   ▄[38;5;174m▄[39m   [38;5;145m┌──────────────────────────────────────────────────────────┐[39m                  [2m│[22m
+  [38;5;74m██[38;5;110m╔═══██╗██║   [38;5;104m █[38;5;140m█║██╔═══[38;5;139m═╝████╗[38;5;175m  ██[38;5;174m║[39m  [38;5;145m│[39m [1m[38;5;141m>_ Qwen Code[22m[38;5;145m (v0.28.3)[39m                                   [38;5;145m│[39m                  █
+  [38;5;74m██[38;5;110m║   ██║██║ █╗[38;5;104m █[38;5;140m█║█████╗[38;5;139m  ██╔██[38;5;175m╗ ██[38;5;174m║[39m  [38;5;145m│[39m                                                          [38;5;145m│[39m                  █
+  [38;5;74m██[38;5;110m║▄▄ ██║██║███[38;5;104m╗█[38;5;140m█║██╔══╝[38;5;139m  ██║╚█[38;5;175m█╗██[38;5;174m║[39m  [38;5;145m│[39m [38;5;145mAPI Key | stub (/model to change)[39m                        [38;5;145m│[39m                  █
+  [38;5;74m╚█[38;5;110m█████╔╝╚███╔█[38;5;104m██[38;5;140m╔╝██████[38;5;139m█╗██║ ╚[38;5;175m████[38;5;174m║[39m  [38;5;145m│[39m [38;5;145m/scratch/q26-run/work[39m                                    [38;5;145m│[39m                  █
+  [38;5;74m ╚[38;5;110m══▀▀═╝  ╚══╝╚[38;5;104m══[38;5;140m╝ ╚═════[38;5;139m═╝╚═╝  [38;5;175m╚═══[38;5;174m╝[39m  [38;5;145m└──────────────────────────────────────────────────────────┘[39m                  █
+                                                                                                                       █
+  [38;5;145mTips: You can resume a previous conversation by running qwen --continue or qwen --resume.[39m                            █
+  ●︎ Extensions changed on disk. Run /reload-plugins to apply updates.                                                  █
+  ●︎ Read context files: ~/.qwen/output-language.md                                                                     █
+                                                                                                                       █
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m                                         █
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m                  █
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m                                    █
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m█
+    [38;5;141mon":"L"},{"label":"Huge","description":"XL"}]}]};[39m                                                                  █
+  [1m[38;5;178m-[39m[22m [9m[1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m[29m                                                                               █
+                                                                                                                       █
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m                                         █
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m                  █
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m                                    █
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m█
+    [38;5;141mon":"L"},{"label":"Huge","description":"XL"}]}]};[39m                                                                  █
+  [38;5;178m?[39m [1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m ←                                                                             █
+                                                                                                                       █
+   [1m[38;5;141m▸ Colour[39m[22m [2m  Size[22m [2m Submit[22m                                                                                             █
+                                                                                                                       █
+   Which colour do you prefer?                                                                                         █
+                                                                                                                       █
+   [1m[38;5;141m❯ 1. Red[39m[22m                                                                                                            █
+        [2mThe warm one[22m                                                                                                   █
+     2. Blue                                                                                                           █
+        [2mThe cool one[22m                                                                                                   █
+   [2m  3. Type something...[22m                                                                                              █
+                                                                                                                       █
+                                                                                                                       █
+   [2m↑/↓: Navigate | ←/→: Switch tabs | Enter: Select | Esc: Cancel[22m                                                      █
+                                                                                                                       █
+
+  ⠏ [38;5;141mWaiting for user confirmation...[39m[?2026l[?2026h[39A[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[39A[G  [38;5;74m ▄[38;5;110m▄▄▄▄▄  ▄▄   [38;5;104m  [38;5;140m▄▄ ▄▄▄▄▄[38;5;139m▄▄ ▄▄▄ [38;5;175m   ▄[38;5;174m▄[39m   [38;5;145m┌──────────────────────────────────────────────────────────┐[39m                  [2m│[22m
+  [38;5;74m██[38;5;110m╔═══██╗██║   [38;5;104m █[38;5;140m█║██╔═══[38;5;139m═╝████╗[38;5;175m  ██[38;5;174m║[39m  [38;5;145m│[39m [1m[38;5;141m>_ Qwen Code[22m[38;5;145m (v0.28.3)[39m                                   [38;5;145m│[39m                  █
+  [38;5;74m██[38;5;110m║   ██║██║ █╗[38;5;104m █[38;5;140m█║█████╗[38;5;139m  ██╔██[38;5;175m╗ ██[38;5;174m║[39m  [38;5;145m│[39m                                                          [38;5;145m│[39m                  █
+  [38;5;74m██[38;5;110m║▄▄ ██║██║███[38;5;104m╗█[38;5;140m█║██╔══╝[38;5;139m  ██║╚█[38;5;175m█╗██[38;5;174m║[39m  [38;5;145m│[39m [38;5;145mAPI Key | stub (/model to change)[39m                        [38;5;145m│[39m                  █
+  [38;5;74m╚█[38;5;110m█████╔╝╚███╔█[38;5;104m██[38;5;140m╔╝██████[38;5;139m█╗██║ ╚[38;5;175m████[38;5;174m║[39m  [38;5;145m│[39m [38;5;145m/scratch/q26-run/work[39m                                    [38;5;145m│[39m                  █
+  [38;5;74m ╚[38;5;110m══▀▀═╝  ╚══╝╚[38;5;104m══[38;5;140m╝ ╚═════[38;5;139m═╝╚═╝  [38;5;175m╚═══[38;5;174m╝[39m  [38;5;145m└──────────────────────────────────────────────────────────┘[39m                  █
+                                                                                                                       █
+  [38;5;145mTips: You can resume a previous conversation by running qwen --continue or qwen --resume.[39m                            █
+  ●︎ Extensions changed on disk. Run /reload-plugins to apply updates.                                                  █
+  ●︎ Read context files: ~/.qwen/output-language.md                                                                     █
+                                                                                                                       █
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m                                         █
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m                  █
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m                                    █
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m█
+    [38;5;141mon":"L"},{"label":"Huge","description":"XL"}]}]};[39m                                                                  █
+  [1m[38;5;178m-[39m[22m [9m[1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m[29m                                                                               █
+                                                                                                                       █
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m                                         █
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m                  █
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m                                    █
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m█
+    [38;5;141mon":"L"},{"label":"Huge","description":"XL"}]}]};[39m                                                                  █
+  [38;5;178m?[39m [1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m ←                                                                             █
+                                                                                                                       █
+   [1m[38;5;141m▸ Colour[39m[22m [2m  Size[22m [2m Submit[22m                                                                                             █
+                                                                                                                       █
+   Which colour do you prefer?                                                                                         █
+                                                                                                                       █
+     1. Red                                                                                                            █
+        [2mThe warm one[22m                                                                                                   █
+   [1m[38;5;141m❯ 2. Blue[39m[22m                                                                                                           █
+        [2mThe cool one[22m                                                                                                   █
+   [2m  3. Type something...[22m                                                                                              █
+                                                                                                                       █
+                                                                                                                       █
+   [2m↑/↓: Navigate | ←/→: Switch tabs | Enter: Select | Esc: Cancel[22m                                                      █
+                                                                                                                       █
+
+  ⠏ [38;5;141mWaiting for user confirmation...[39m[?2026l[?2026h[39A[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[39A[G  [38;5;74m ▄[38;5;110m▄▄▄▄▄  ▄▄   [38;5;104m  [38;5;140m▄▄ ▄▄▄▄▄[38;5;139m▄▄ ▄▄▄ [38;5;175m   ▄[38;5;174m▄[39m   [38;5;145m┌──────────────────────────────────────────────────────────┐[39m
+  [38;5;74m██[38;5;110m╔═══██╗██║   [38;5;104m █[38;5;140m█║██╔═══[38;5;139m═╝████╗[38;5;175m  ██[38;5;174m║[39m  [38;5;145m│[39m [1m[38;5;141m>_ Qwen Code[22m[38;5;145m (v0.28.3)[39m                                   [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║   ██║██║ █╗[38;5;104m █[38;5;140m█║█████╗[38;5;139m  ██╔██[38;5;175m╗ ██[38;5;174m║[39m  [38;5;145m│[39m                                                          [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║▄▄ ██║██║███[38;5;104m╗█[38;5;140m█║██╔══╝[38;5;139m  ██║╚█[38;5;175m█╗██[38;5;174m║[39m  [38;5;145m│[39m [38;5;145mAPI Key | stub (/model to change)[39m                        [38;5;145m│[39m
+  [38;5;74m╚█[38;5;110m█████╔╝╚███╔█[38;5;104m██[38;5;140m╔╝██████[38;5;139m█╗██║ ╚[38;5;175m████[38;5;174m║[39m  [38;5;145m│[39m [38;5;145m/scratch/q26-run/work[39m                                    [38;5;145m│[39m
+  [38;5;74m ╚[38;5;110m══▀▀═╝  ╚══╝╚[38;5;104m══[38;5;140m╝ ╚═════[38;5;139m═╝╚═╝  [38;5;175m╚═══[38;5;174m╝[39m  [38;5;145m└──────────────────────────────────────────────────────────┘[39m
+
+  [38;5;145mTips: You can resume a previous conversation by running qwen --continue or qwen --resume.[39m
+  ●︎ Extensions changed on disk. Run /reload-plugins to apply updates.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m
+    [38;5;141mon":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [1m[38;5;178m-[39m[22m [9m[1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m[29m
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m
+    [38;5;141mon":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [38;5;178m?[39m [1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m ←
+
+   [1m[38;5;141m▸ Colour[39m[22m [2m  Size[22m [2m Submit[22m
+
+   Which colour do you prefer?
+
+     1. Red
+        [2mThe warm one[22m
+   [1m[38;5;141m❯ 2. Blue[39m[22m
+        [2mThe cool one[22m
+   [2m  3. Type something...[22m
+
+
+   [2m↑/↓: Navigate | ←/→: Switch tabs | Enter: Select | Esc: Cancel[22m
+
+
+  ⠏ [38;5;141mWaiting for user confirmation...[39m[?2026l[?2026h[39A[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[39A[G  [38;5;74m ▄[38;5;110m▄▄▄▄▄  ▄▄   [38;5;104m  [38;5;140m▄▄ ▄▄▄▄▄[38;5;139m▄▄ ▄▄▄ [38;5;175m   ▄[38;5;174m▄[39m   [38;5;145m┌──────────────────────────────────────────────────────────┐[39m
+  [38;5;74m██[38;5;110m╔═══██╗██║   [38;5;104m █[38;5;140m█║██╔═══[38;5;139m═╝████╗[38;5;175m  ██[38;5;174m║[39m  [38;5;145m│[39m [1m[38;5;141m>_ Qwen Code[22m[38;5;145m (v0.28.3)[39m                                   [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║   ██║██║ █╗[38;5;104m █[38;5;140m█║█████╗[38;5;139m  ██╔██[38;5;175m╗ ██[38;5;174m║[39m  [38;5;145m│[39m                                                          [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║▄▄ ██║██║███[38;5;104m╗█[38;5;140m█║██╔══╝[38;5;139m  ██║╚█[38;5;175m█╗██[38;5;174m║[39m  [38;5;145m│[39m [38;5;145mAPI Key | stub (/model to change)[39m                        [38;5;145m│[39m
+  [38;5;74m╚█[38;5;110m█████╔╝╚███╔█[38;5;104m██[38;5;140m╔╝██████[38;5;139m█╗██║ ╚[38;5;175m████[38;5;174m║[39m  [38;5;145m│[39m [38;5;145m/scratch/q26-run/work[39m                                    [38;5;145m│[39m
+  [38;5;74m ╚[38;5;110m══▀▀═╝  ╚══╝╚[38;5;104m══[38;5;140m╝ ╚═════[38;5;139m═╝╚═╝  [38;5;175m╚═══[38;5;174m╝[39m  [38;5;145m└──────────────────────────────────────────────────────────┘[39m
+
+  [38;5;145mTips: You can resume a previous conversation by running qwen --continue or qwen --resume.[39m
+  ●︎ Extensions changed on disk. Run /reload-plugins to apply updates.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m
+    [38;5;141mon":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [1m[38;5;178m-[39m[22m [9m[1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m[29m
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m
+    [38;5;141mon":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [38;5;178m?[39m [1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m ←
+
+   [1m[38;5;141m▸ Colour[39m[22m [2m  Size[22m [2m Submit[22m
+
+   Which colour do you prefer?
+
+     1. Red
+        [2mThe warm one[22m
+     2. Blue
+        [2mThe cool one[22m
+   [1m[38;5;141m❯ 3. [22m> [39m[48;5;237mT[49m[38;5;188mype something...[39m
+
+
+   [2m↑/↓: Navigate | ←/→: Switch tabs | Enter: Select | Esc: Cancel[22m
+
+
+  ⠏ [38;5;141mWaiting for user confirmation...[39m[?2026l[?2026h[39A[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[39A[G  [38;5;74m ▄[38;5;110m▄▄▄▄▄  ▄▄   [38;5;104m  [38;5;140m▄▄ ▄▄▄▄▄[38;5;139m▄▄ ▄▄▄ [38;5;175m   ▄[38;5;174m▄[39m   [38;5;145m┌──────────────────────────────────────────────────────────┐[39m
+  [38;5;74m██[38;5;110m╔═══██╗██║   [38;5;104m █[38;5;140m█║██╔═══[38;5;139m═╝████╗[38;5;175m  ██[38;5;174m║[39m  [38;5;145m│[39m [1m[38;5;141m>_ Qwen Code[22m[38;5;145m (v0.28.3)[39m                                   [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║   ██║██║ █╗[38;5;104m █[38;5;140m█║█████╗[38;5;139m  ██╔██[38;5;175m╗ ██[38;5;174m║[39m  [38;5;145m│[39m                                                          [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║▄▄ ██║██║███[38;5;104m╗█[38;5;140m█║██╔══╝[38;5;139m  ██║╚█[38;5;175m█╗██[38;5;174m║[39m  [38;5;145m│[39m [38;5;145mAPI Key | stub (/model to change)[39m                        [38;5;145m│[39m
+  [38;5;74m╚█[38;5;110m█████╔╝╚███╔█[38;5;104m██[38;5;140m╔╝██████[38;5;139m█╗██║ ╚[38;5;175m████[38;5;174m║[39m  [38;5;145m│[39m [38;5;145m/scratch/q26-run/work[39m                                    [38;5;145m│[39m
+  [38;5;74m ╚[38;5;110m══▀▀═╝  ╚══╝╚[38;5;104m══[38;5;140m╝ ╚═════[38;5;139m═╝╚═╝  [38;5;175m╚═══[38;5;174m╝[39m  [38;5;145m└──────────────────────────────────────────────────────────┘[39m
+
+  [38;5;145mTips: You can resume a previous conversation by running qwen --continue or qwen --resume.[39m
+  ●︎ Extensions changed on disk. Run /reload-plugins to apply updates.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m
+    [38;5;141mon":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [1m[38;5;178m-[39m[22m [9m[1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m[29m
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m
+    [38;5;141mon":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [38;5;178m?[39m [1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m ←
+
+   [1m[38;5;141m▸ Colour[39m[22m [2m  Size[22m [2m Submit[22m
+
+   Which colour do you prefer?
+
+     1. Red
+        [2mThe warm one[22m
+     2. Blue
+        [2mThe cool one[22m
+   [1m[38;5;141m❯ 3. [22m> [38;5;188mType something...[39m
+
+
+   [2m↑/↓: Navigate | ←/→: Switch tabs | Enter: Select | Esc: Cancel[22m
+
+
+  ⠏ [38;5;141mWaiting for user confirmation...[39m[?2026l[?2026h[39A[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[39A[G  [38;5;74m ▄[38;5;110m▄▄▄▄▄  ▄▄   [38;5;104m  [38;5;140m▄▄ ▄▄▄▄▄[38;5;139m▄▄ ▄▄▄ [38;5;175m   ▄[38;5;174m▄[39m   [38;5;145m┌──────────────────────────────────────────────────────────┐[39m
+  [38;5;74m██[38;5;110m╔═══██╗██║   [38;5;104m █[38;5;140m█║██╔═══[38;5;139m═╝████╗[38;5;175m  ██[38;5;174m║[39m  [38;5;145m│[39m [1m[38;5;141m>_ Qwen Code[22m[38;5;145m (v0.28.3)[39m                                   [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║   ██║██║ █╗[38;5;104m █[38;5;140m█║█████╗[38;5;139m  ██╔██[38;5;175m╗ ██[38;5;174m║[39m  [38;5;145m│[39m                                                          [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║▄▄ ██║██║███[38;5;104m╗█[38;5;140m█║██╔══╝[38;5;139m  ██║╚█[38;5;175m█╗██[38;5;174m║[39m  [38;5;145m│[39m [38;5;145mAPI Key | stub (/model to change)[39m                        [38;5;145m│[39m
+  [38;5;74m╚█[38;5;110m█████╔╝╚███╔█[38;5;104m██[38;5;140m╔╝██████[38;5;139m█╗██║ ╚[38;5;175m████[38;5;174m║[39m  [38;5;145m│[39m [38;5;145m/scratch/q26-run/work[39m                                    [38;5;145m│[39m
+  [38;5;74m ╚[38;5;110m══▀▀═╝  ╚══╝╚[38;5;104m══[38;5;140m╝ ╚═════[38;5;139m═╝╚═╝  [38;5;175m╚═══[38;5;174m╝[39m  [38;5;145m└──────────────────────────────────────────────────────────┘[39m
+
+  [38;5;145mTips: You can resume a previous conversation by running qwen --continue or qwen --resume.[39m
+  ●︎ Extensions changed on disk. Run /reload-plugins to apply updates.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m
+    [38;5;141mon":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [1m[38;5;178m-[39m[22m [9m[1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m[29m
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m
+    [38;5;141mon":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [38;5;178m?[39m [1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m ←
+
+   [1m[38;5;141m▸ Colour[39m[22m [2m  Size[22m [2m Submit[22m
+
+   Which colour do you prefer?
+
+     1. Red
+        [2mThe warm one[22m
+     2. Blue
+        [2mThe cool one[22m
+   [1m[38;5;141m❯ 3. [22m> [39mpurple
+
+
+   [2m↑/↓: Navigate | ←/→: Switch tabs | Enter: Select | Esc: Cancel[22m
+
+
+  ⠏ [38;5;141mWaiting for user confirmation...[39m[?2026l[?2026h[39A[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[1B[2K[39A[G  [38;5;74m ▄[38;5;110m▄▄▄▄▄  ▄▄   [38;5;104m  [38;5;140m▄▄ ▄▄▄▄▄[38;5;139m▄▄ ▄▄▄ [38;5;175m   ▄[38;5;174m▄[39m   [38;5;145m┌──────────────────────────────────────────────────────────┐[39m
+  [38;5;74m██[38;5;110m╔═══██╗██║   [38;5;104m █[38;5;140m█║██╔═══[38;5;139m═╝████╗[38;5;175m  ██[38;5;174m║[39m  [38;5;145m│[39m [1m[38;5;141m>_ Qwen Code[22m[38;5;145m (v0.28.3)[39m                                   [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║   ██║██║ █╗[38;5;104m █[38;5;140m█║█████╗[38;5;139m  ██╔██[38;5;175m╗ ██[38;5;174m║[39m  [38;5;145m│[39m                                                          [38;5;145m│[39m
+  [38;5;74m██[38;5;110m║▄▄ ██║██║███[38;5;104m╗█[38;5;140m█║██╔══╝[38;5;139m  ██║╚█[38;5;175m█╗██[38;5;174m║[39m  [38;5;145m│[39m [38;5;145mAPI Key | stub (/model to change)[39m                        [38;5;145m│[39m
+  [38;5;74m╚█[38;5;110m█████╔╝╚███╔█[38;5;104m██[38;5;140m╔╝██████[38;5;139m█╗██║ ╚[38;5;175m████[38;5;174m║[39m  [38;5;145m│[39m [38;5;145m/scratch/q26-run/work[39m                                    [38;5;145m│[39m
+  [38;5;74m ╚[38;5;110m══▀▀═╝  ╚══╝╚[38;5;104m══[38;5;140m╝ ╚═════[38;5;139m═╝╚═╝  [38;5;175m╚═══[38;5;174m╝[39m  [38;5;145m└──────────────────────────────────────────────────────────┘[39m
+
+  [38;5;145mTips: You can resume a previous conversation by running qwen --continue or qwen --resume.[39m
+  ●︎ Extensions changed on disk. Run /reload-plugins to apply updates.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m
+    [38;5;141mon":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [1m[38;5;178m-[39m[22m [9m[1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m[29m
+
+  [38;5;141m>[39m [38;5;141mCALLTOOL:ask_user_question:{"questions":[{"question":"Which colour do you [39m
+    [38;5;141mprefer?","header":"Colour","multiSelect":false,"options":[{"label":"Red","description":"The warm [39m
+    [38;5;141mone"},{"label":"Blue","description":"The cool one"}]},{"question":"Which sizes [39m
+    [38;5;141mfit?","header":"Size","multiSelect":true,"options":[{"label":"Small","description":"S"},{"label":"Large","descripti[39m
+    [38;5;141mon":"L"},{"label":"Huge","description":"XL"}]}]};[39m
+  [38;5;178m?[39m [1mAskUserQuestion[22m [38;5;145mAsk user 2 questions[39m ←
+
+   [1m[38;5;141m▸ Colour[39m[22m [2m  Size[22m [2m Submit[22m
+
+   Which colour do you prefer?
+
+     1. Red
+        [2mThe warm one[22m
+     2. Blue
+        [2mThe cool one[22m
+   [1m[38;5;141m❯ 3. [22m> [39mpurple[48;5;237m [49m
+
+
+   [2m↑/↓: Navigate | ←/→: Switch tabs | Enter: Select | Esc: Cancel[22m
+
+
+  ⠏ [38;5;141mWaiting for user confirmation...[39m[?2026l

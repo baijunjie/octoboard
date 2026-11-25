@@ -41,6 +41,40 @@ fn helper_child() {
     let cli =
         Cli::try_parse_from(["octoboardd"].into_iter().chain(arguments.split(SEPARATOR))).unwrap();
     super::run(cli.command.expect("a mode")).unwrap();
+    // A helper mode runs inside a session and leaves that session's environment as it is.
+    if let Ok(kept) = std::env::var(KEPT) {
+        let (name, value) = kept.split_once('=').unwrap();
+        assert_eq!(std::env::var(name).as_deref(), Ok(value));
+        assert!(std::env::var_os("OCTOBOARD_SESSION_EXPORTS").is_some());
+    }
+}
+
+/// Names, as `NAME=value`, a variable [`helper_child`] is to find unchanged once its mode has run,
+/// with the record of the session's launch still beside it.
+const KEPT: &str = "OCTOBOARD_TEST_HELPER_KEPT";
+
+/// Only the daemon puts its environment back as it stands outside a session
+/// (`env_shell::forget_inherited_session`): a helper mode, started inside a session for that
+/// session, still has what the session's launch set, and the launch's record of it.
+#[test]
+fn a_helper_mode_keeps_the_environment_of_the_session_it_runs_in() {
+    let user = std::collections::HashMap::from([(
+        "OCTOBOARD_TEST_HELPER_VALUE".to_string(),
+        "the user's".to_string(),
+    )]);
+    let session = crate::env_shell::session_environment(
+        &user,
+        &[(
+            "OCTOBOARD_TEST_HELPER_VALUE".to_string(),
+            "the session's".to_string(),
+        )],
+    );
+    let mut command = helper(&["git-ref", "--session", "a"], None);
+    command
+        .envs(&session)
+        .env(KEPT, "OCTOBOARD_TEST_HELPER_VALUE=the session's");
+    let (output, _) = run(command, b"");
+    assert!(output.status.success(), "{}", text(&output.stderr));
 }
 
 /// One request the stand-in daemon received.

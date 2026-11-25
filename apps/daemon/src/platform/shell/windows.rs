@@ -357,9 +357,15 @@ fn write_batch(
         lines.push("exit /b 0".to_owned());
     }
     lines.push(String::new());
-    let script = path.with_extension("cmd");
+    let script = runnable_path(path);
     std::fs::write(&script, lines.join("\r\n"))?;
     Ok(script)
+}
+
+/// Where [`write_runnable`] writes the script asked for at `path`: next to it, with the extension
+/// `.cmd`.
+pub fn runnable_path(path: &Path) -> PathBuf {
+    path.with_extension("cmd")
 }
 
 /// `value` as one argument of a program started from a batch file: in quotation marks, its

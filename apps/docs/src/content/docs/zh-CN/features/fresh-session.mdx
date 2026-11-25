@@ -13,7 +13,7 @@ import Screenshot from "../../../../components/Screenshot.astro";
 
 ## 功能说明
 
-- <strong>显示的是智能体自己报告的数字。</strong>这个数字是智能体对主对话最近一次请求所报告的大小：Claude Code 状态栏里的数字、Codex 的 <code dir="ltr">/status</code> 里的数字、Grok Build 页脚里的数字。回复流式输出时，{productName} 不做估算，所以数字可能比屏幕上的内容稍慢一点，智能体运行期间大约每秒刷新一次。压缩、回退或回溯之后，数字会降下来。
+- <strong>显示的是智能体自己报告的数字。</strong>这个数字是智能体对主对话最近一次请求所报告的大小：Claude Code 状态栏里的数字、Codex 的 <code dir="ltr">/status</code> 里的数字、以及 Grok Build 页脚里的数字。Pi 通过扩展报告运行中的上下文。Qwen Code、GitHub Copilot CLI 和 Antigravity CLI 显示最近一次请求的输入词元数。OpenCode 显示最近一次已完成的助手请求的词元数。Antigravity CLI 和 OpenCode 不报告上下文窗口大小。回复流式输出时，{productName} 不做估算，所以数字可能比屏幕上的内容稍慢一点，智能体运行期间大约每秒刷新一次。压缩、回退或回溯之后，数字会降下来。
 - <strong>它是上下文的大小，不是账单。</strong>每一轮都会把整段对话再发一次，所以上下文的大小决定了继续下去的成本。这个数字不是累计的 token 用量，也不是费用或时长。智能体的子智能体和辅助调用不计入。
 - <strong>新会话就是新会话，别无其他。</strong>{productName} 不会替你总结对话，也不会把对话带过去。先前的会话保留着它的记录，你可以读一读，再告诉新会话它需要知道什么。
 - <strong>历史来自智能体的记录。</strong>它列出你和智能体说过的话（你发的消息，以及智能体对每一轮的最终回复），不包括工具调用、命令输出和模型的推理过程。如果智能体的记录已被删除或无法读取，历史会提示不可用。Grok Build 只保留压缩之前内容的摘要，所以它的历史只列出压缩之后的轮次。

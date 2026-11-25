@@ -116,6 +116,15 @@ export const SCENARIOS: Scenario[] = [
     description: "Each button size (xs, sm, md, lg) in the primary, secondary and danger variants, idle and then pending: the pending one hides its content while keeping its width and shows only a centered spinner. Then a link drawn as a button (xs and sm, secondary and outline), whose spinner stands ahead of its label and before the external-link glyph. Below, the console dialog's avatar field idle and while a picked image is read, where only the centered spinner is visible and the button keeps its width. The same button as it waits in a dialog or a row is in the scenarios of the dialog or the row, e.g. the import's progress, Updates while it checks and the Trash check of Remove account.",
     pendingButtons: true,
   },
+  {
+    id: "provider-marks",
+    group: "Component colors",
+    category: "normal",
+    title: "Provider marks and colours, every built-in provider",
+    description:
+      "One row per provider in registry order. Marks at the two sizes the window draws them at (16px, 20px). The colour on the compact usage bar (drawn at its real 2rem width and wider) and on the quota meter, on a Settings or dialog surface and on a popover or menu surface; a provider without a colour draws its bars in the text colour. The mark as the menu's picture, on a light and on a dark menu: a mark in the text colour is a template picture the system tints, so it is black on the light menu and white on the dark one. Judge each against the others in light and in dark with the theme control.",
+    sheet: () => import("../providerMarksGallery"),
+  },
   ...PREVIEW_SCENARIOS,
 ];
 

@@ -26,7 +26,8 @@ function alertTitleKey({ daemonError, daemonTitle }: NotificationRequest): Alert
 
 /** The title, body, "Error details" and attached block an error alert takes from an error request. The title is a plain name for what
  * failed and never carries a name; the code's own `alertTitle` wins over the one the call site names, unless the
- * request keeps its own (`keepTitle`); which session it is about is for the caller to say ahead of the body. The body
+ * request keeps its own (`keepTitle`), and a notice to acknowledge that neither titles takes the title all such
+ * notices share; which session it is about is for the caller to say ahead of the body. The body
  * is the daemon's structure where it words the message, else the message as worded in this language; the raw text it
  * carries is the details, never the body. Text the user wrote that the failure carries (`detailLabel`) is `attached`:
  * left out of the body and shown after it, outside the alert's description. */
@@ -37,7 +38,7 @@ export function errorAlertParts(t: Translate, request: NotificationRequest): { t
   // Text the user wrote that the failure carries goes after the body, outside what describes the alert.
   const attached = request.content === undefined ? ownTextOf(shown) : undefined;
   return {
-    title: titleKey && !request.keepTitle ? t(titleKey) : request.title,
+    title: titleKey && !request.keepTitle ? t(titleKey) : request.title ?? (request.kind === "acknowledged" ? t("notice.acknowledged.title") : undefined),
     body: request.content ?? <DaemonErrorMessage error={shown} ownTextApart={attached !== undefined} />,
     details: rawErrorDetails(daemonError ?? request.message),
     remedyInBody: remedyInBody(request.content, shown),

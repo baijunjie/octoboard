@@ -53,6 +53,26 @@ fn swap_now() -> Instant {
 #[cfg_attr(test, allow(dead_code))]
 const OWN_MESSAGE_SETTLE: Duration = Duration::from_millis(500);
 
+/// Ends the wait a write makes for the message written before it to leave the box
+/// ([`OWN_MESSAGE_SETTLE_OVERRIDE`]), which under test lasts as long as a test allows, for a test
+/// in which that message stays in the box: the write would otherwise spend the whole of it before
+/// it looks at the box. The wait is back when the guard drops; it holds on the thread that took it.
+#[cfg(test)]
+pub(super) struct MessageSeenAtOnce;
+
+#[cfg(test)]
+pub(super) fn message_seen_at_once() -> MessageSeenAtOnce {
+    OWN_MESSAGE_SETTLE_OVERRIDE.with(|settle| settle.set(Some(Duration::ZERO)));
+    MessageSeenAtOnce
+}
+
+#[cfg(test)]
+impl Drop for MessageSeenAtOnce {
+    fn drop(&mut self) {
+        OWN_MESSAGE_SETTLE_OVERRIDE.with(|settle| settle.set(None));
+    }
+}
+
 /// How long the composer is waited on after a message went into it: [`OWN_MESSAGE_SETTLE`], except
 /// under test, where a stand-in's screen is fed by a test thread that a loaded machine can hold up
 /// past half a second, so tests wait up to `PATIENCE` (the wait ends as soon as the box empties) and
@@ -321,11 +341,6 @@ impl LiveSession {
     /// was in the box, so it went with that prompt, and nothing is left for a later message to
     /// join. Compared without whitespace, as the agent may wrap or trim it.
     pub(super) fn end_hold_forced_through(&self, reported: Option<&str>) {
-        let bare = |text: &str| {
-            text.chars()
-                .filter(|c| !c.is_whitespace())
-                .collect::<String>()
-        };
         let mut swap = self.swap.lock().expect("input swap lock poisoned");
         let Some(forced) = swap.forced.as_deref() else {
             return;
@@ -333,7 +348,7 @@ impl LiveSession {
         if !matches!(
             swap.phase,
             Some(RecoveryPhase::Fragmented | RecoveryPhase::TakenOver)
-        ) || !reported.is_some_and(|reported| bare(reported).contains(&bare(forced)))
+        ) || !reported.is_some_and(|reported| text::bare(reported).contains(&text::bare(forced)))
         {
             return;
         }
@@ -403,14 +418,14 @@ impl LiveSession {
         Ok(InputRoute::Buffered)
     }
 
-    /// The text in the agent's input box as the screen shows it now, read with faint cells blanked
-    /// as every reading of the box is (`screen_text_undimmed`, never a blanking of its own). It is
+    /// The text in the agent's input box as the screen shows it now, read off the screen every
+    /// reading of the box is ([`Self::box_screen`], never a blanking of its own). It is
     /// only a cheap first look, as is [`Self::settled_composer`]: a decision on a key, or on
     /// writing because the box is empty, is made from a box read off a whole frame
     /// (`wait_for_whole_frame`, then `read_box` or `composer_for_draft` under the input lock),
     /// refused, to be retried, where that reading has no output total.
     fn composer(&self) -> Option<String> {
-        self.input_box(&self.screen_text_undimmed())
+        self.input_box(&self.box_screen())
     }
 
     pub(super) fn note_message_written(&self) {
@@ -755,16 +770,11 @@ impl LiveSession {
                 self.set_swap_phase(RecoveryPhase::Submitted);
                 return false;
             }
-            // A command the agent would have run as another, cleared from the box again: nothing
-            // of it is left, so the stash is restored with a key as for a payload refused whole;
-            // one left in the box waits, as an unsent message does, for the prompt that restores.
-            Err(error)
-                if error
-                    .error
-                    .get_ref()
-                    .and_then(|error| error.downcast_ref::<super::term::CommandNotRecognised>())
-                    .is_some_and(|refused| refused.cleared) =>
-            {
+            // A command the agent would have run as another, or has none of, cleared from the box
+            // again: nothing of it is left, so the stash is restored with a key as for a payload
+            // refused whole; one left in the box waits, as an unsent message does, for the prompt
+            // that restores.
+            Err(error) if error.error.get_ref().is_some_and(refused_command_cleared) => {
                 self.set_swap_phase(RecoveryPhase::RestoreRequested);
                 let _ = self.swap_key();
             }
@@ -793,14 +803,25 @@ impl LiveSession {
                     "the session cannot take a message while a dialog or trust confirmation is open",
                 ));
             }
+            // Read before the typing record is locked, as a key's is.
+            let mid_turn = self.turn_reading().escape_mid_turn();
             let mut draft = self.draft.lock().expect("draft lock poisoned");
             if finish.is_none_or(|tail| tail.records_prompt) {
                 draft.submission(None, prompt.to_string());
             }
-            let box_before = finish.map(|_| self.input_box(&self.screen_text_undimmed()));
+            let box_before = finish.map(|_| self.input_box(&self.box_screen()));
             self.input_writes.fetch_add(1, Ordering::AcqRel);
             self.pty.write_input_locked(&input, now)?;
-            draft.message_written(Instant::now(), prompt);
+            if mid_turn {
+                draft.message_written_mid_turn(
+                    Instant::now(),
+                    prompt,
+                    finish.is_none_or(|tail| tail.records_prompt),
+                );
+            } else {
+                draft.message_written(Instant::now(), prompt);
+            }
+            draft.message_written_as(self.queued_as());
             self.end_unclearable_wait();
             box_before.map(|box_before| super::Written {
                 writes: self.input_writes.load(Ordering::Acquire),
@@ -835,12 +856,13 @@ impl LiveSession {
             .map_err(|partial| {
                 // A message written in full and left in the box is no fragment: nothing is missing
                 // from it for what comes next to join.
-                // Nor is a command refused because the agent would have run another one: it was
-                // cleared again, or left whole in the box.
+                // Nor is a command refused because the agent would have run another one, or has
+                // none of it: it was cleared again, or left whole in the box.
                 if partial.written == 0
                     || partial.error.get_ref().is_some_and(|error| {
                         error.is::<super::NotSubmitted>()
                             || error.is::<super::term::CommandNotRecognised>()
+                            || error.is::<super::term::CommandNotFound>()
                     })
                 {
                     return partial;
@@ -1065,6 +1087,20 @@ enum Way {
 
 fn stash_marker(agent: AgentId, screen: &str) -> bool {
     crate::adapter::provider(agent).screen().stash_shown(screen)
+}
+
+/// Whether `error` refuses a slash command whose box was cleared again
+/// ([`super::term::CommandNotRecognised`], [`super::term::CommandNotFound`]).
+fn refused_command_cleared(error: &(dyn std::error::Error + Send + Sync + 'static)) -> bool {
+    error
+        .downcast_ref::<super::term::CommandNotRecognised>()
+        .map(|refused| refused.cleared)
+        .or_else(|| {
+            error
+                .downcast_ref::<super::term::CommandNotFound>()
+                .map(|refused| refused.cleared)
+        })
+        .unwrap_or(false)
 }
 
 #[cfg(test)]

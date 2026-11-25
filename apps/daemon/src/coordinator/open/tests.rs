@@ -25,7 +25,8 @@ fn launch_after(
         Ok(term::Launch {
             session: live,
             agent_session_id: None,
-            notice: None,
+            notices: Vec::new(),
+            first_message: None,
         })
     }
 }
@@ -234,6 +235,155 @@ async fn a_conversation_to_resume_reaches_the_launch_after_the_reply() {
     assert_eq!(resumed.flatten().as_deref(), Some(ID));
 }
 
+/// What a launch was asked to start with, and what was queued and expected of it by then.
+struct Asked {
+    task: Option<String>,
+    queued: usize,
+    prompted: bool,
+}
+
+/// Opens a project session of `agent` with `task`, continuing `resume` when one is given, and
+/// returns what its launch was asked. The launch fails, as there is no agent in the tests.
+async fn asked_of_the_launch(
+    name: &str,
+    agent: AgentId,
+    account: &str,
+    record: Option<(&str, &str)>,
+    task: &str,
+) -> Asked {
+    let (state, dir) = console_with_project_and_accounts(name);
+    if let Some((path, _)) = record {
+        let record = dir.join(account).join(path);
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        std::fs::write(&record, "").unwrap();
+    }
+    let (asked_tx, asked) = std::sync::mpsc::channel();
+    open_started(
+        &state,
+        OpenRequest {
+            project_id: Some("project-1".to_string()),
+            agent: Some(agent),
+            account: Some(Some(account.to_string())),
+            resume_agent_session_id: record.map(|(_, id)| id.to_string()),
+            task: Some(task.to_string()),
+            ..open_request()
+        },
+        {
+            let state = state.clone();
+            move |request| {
+                asked_tx
+                    .send(Asked {
+                        queued: state.queued_count(&request.session_id),
+                        prompted: state.is_prompted_on_launch(&request.session_id),
+                        task: request.task,
+                    })
+                    .unwrap();
+                Err(anyhow::anyhow!("no agent in the tests"))
+            }
+        },
+    )
+    .await
+    .expect("opened");
+    let mut given = None;
+    wait_until(|| {
+        given = asked.try_recv().ok();
+        given.is_some()
+    })
+    .await;
+    given.unwrap()
+}
+
+/// A task given with a conversation to resume is that resume's instruction. A provider that takes
+/// a resume's instruction as its launch prompt is launched with it, shaped as a relaunch's is (a
+/// leading `/` guarded) and with nothing queued.
+#[tokio::test]
+async fn a_task_given_with_a_conversation_to_resume_is_the_launch_prompt_where_the_provider_takes_one(
+) {
+    const ID: &str = "11111111-2222-3333-4444-555555555551";
+    let record = format!("projects/slug/{ID}.jsonl");
+    for (name, task, launched_with) in [
+        ("dash", "- a list", "- a list"),
+        ("slash", "/clear it", " /clear it"),
+    ] {
+        let asked = asked_of_the_launch(
+            &format!("coordinator-resume-task-prompt-{name}"),
+            AgentId::CLAUDE,
+            "claude-a",
+            Some((&record, ID)),
+            task,
+        )
+        .await;
+        assert_eq!(asked.task.as_deref(), Some(launched_with), "{name}");
+        assert_eq!(asked.queued, 0, "{name}");
+        assert!(asked.prompted, "{name}");
+    }
+}
+
+/// A provider whose plan gives a resume no prompt has the task queued as a message instead of
+/// lost: its launch is asked for no prompt, and the instruction is on the queue by then.
+#[tokio::test]
+async fn a_task_given_with_a_conversation_to_resume_is_queued_where_the_provider_takes_no_prompt() {
+    const ID: &str = "11111111-2222-3333-4444-555555555552";
+    let record = format!("sessions/2026/11/22/rollout-2026-11-22T00-00-00-{ID}.jsonl");
+    let asked = asked_of_the_launch(
+        "coordinator-resume-task-queued",
+        AgentId::CODEX,
+        "codex-a",
+        Some((&record, ID)),
+        "- a list",
+    )
+    .await;
+    assert_eq!(asked.task, None);
+    assert_eq!(asked.queued, 1);
+    assert!(asked.prompted);
+}
+
+/// A new session's task reaches the launch as it was given, and one of nothing but whitespace is
+/// no task: the launch is asked for none and the session is not marked as handed a prompt.
+#[tokio::test]
+async fn a_new_sessions_task_reaches_the_launch_as_given_and_a_blank_one_is_none() {
+    let asked = asked_of_the_launch(
+        "coordinator-open-task-given",
+        AgentId::CLAUDE,
+        "claude-a",
+        None,
+        "- a list",
+    )
+    .await;
+    assert_eq!(asked.task.as_deref(), Some("- a list"));
+    assert_eq!(asked.queued, 0);
+    assert!(asked.prompted);
+
+    let asked = asked_of_the_launch(
+        "coordinator-open-task-blank",
+        AgentId::CLAUDE,
+        "claude-a",
+        None,
+        " \u{1}\n ",
+    )
+    .await;
+    assert_eq!(asked.task, None);
+    assert_eq!(asked.queued, 0);
+    assert!(!asked.prompted);
+}
+
+/// A session opened with an instruction that was queued comes up idle, as a relaunch does: no
+/// turn has started until the message is written.
+#[tokio::test]
+async fn a_session_whose_instruction_was_queued_settles_idle() {
+    use crate::test_support::{project_session, watched_live_session};
+
+    let (state, _dir) = console_with_project_and_accounts("coordinator-settle-instruction-queued");
+    let session = project_session("s", AgentId::TEST, SessionStatus::Starting);
+    state.store.insert_session(&session).unwrap();
+    let live = watched_live_session("s", AgentId::TEST, 80, 24, "sleep 30", None);
+    state.register_live(live.clone());
+
+    let settled = settle_started(&state, &session, false, true).unwrap();
+
+    assert_eq!(settled.status, SessionStatus::Idle);
+}
+
 /// A session that is starting cannot be deleted or relaunched out from under its launch.
 #[tokio::test]
 async fn a_starting_session_is_not_deleted_or_resumed() {
@@ -324,7 +474,8 @@ async fn a_session_opened_with_a_task_shows_as_prompting_until_it_is_launched() 
                 Ok(term::Launch {
                     session: live_rx.recv().expect("a process"),
                     agent_session_id: None,
-                    notice: None,
+                    notices: Vec::new(),
+                    first_message: None,
                 })
             },
         )
@@ -449,4 +600,33 @@ fn a_session_opened_under_a_console_is_a_coordinator_and_one_under_a_coordinator
         resolve_open(&state, &request_under(None)).unwrap().role,
         Role::Coordinator
     );
+}
+
+/// A session whose process is up with its first task queued as a message reads as idle, as one
+/// opened without a task does: the agent is at its prompt until the message is written. One whose
+/// task went on the command line reads as working.
+#[tokio::test]
+async fn a_started_session_whose_first_task_waits_as_a_message_reads_as_idle() {
+    use crate::test_support::{project_session, watched_live_session};
+    for (name, queued, expected) in [
+        ("coordinator-settle-first-queued", true, SessionStatus::Idle),
+        (
+            "coordinator-settle-first-given",
+            false,
+            SessionStatus::Working,
+        ),
+    ] {
+        let (state, _dir) = console_with_project_and_accounts(name);
+        let session = project_session("s", AgentId::TEST, SessionStatus::Starting);
+        state.store.insert_session(&session).unwrap();
+        let live = watched_live_session("s", AgentId::TEST, 80, 24, "sleep 30", None);
+        state.register_live(live.clone());
+        if queued {
+            live.note_first_task_queued();
+        }
+
+        let settled = settle_started(&state, &session, true, false).unwrap();
+
+        assert_eq!(settled.status, expected, "{name}");
+    }
 }

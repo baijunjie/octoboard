@@ -14,7 +14,7 @@ impl AppState {
     /// while a change of its model restarts it, or dormant while its screen shows a view of its
     /// background agents over a working or idle session.
     pub(crate) fn shown_status(&self, session: &Session) -> SessionStatus {
-        self.status_when(session, LiveSession::waits_for_user_outside_agents_view)
+        self.status_when(session, LiveSession::waits_for_user_outside_views)
     }
 
     /// [`Self::shown_status`] as an automatic account switch judges it: a session whose only wait
@@ -291,6 +291,55 @@ impl AppState {
             }
             Some(_) => Ok(false),
             None => Ok(self.published_if_moved(self.store.pause_session_if(id, expected)?)),
+        }
+    }
+
+    /// Puts the agent of session `id` back to working for a reporter that watches the agent's own
+    /// status and has found, outside the hooks, that what it waited on the user for was answered
+    /// and its turn carries on. Only while the agent is still waiting on the user, in one step, so
+    /// that a turn's end that came meanwhile is not undone. With a session request's hand held and
+    /// the agent remembered as waiting on the user, working replaces what is remembered and the
+    /// record keeps the request's `WaitingUser`; otherwise it is the record that is moved, and
+    /// published. Says whether the agent's own status moved. Flushing what was held for the
+    /// session is the caller's to do.
+    pub fn report_working_if_waiting(&self, id: &str) -> Result<bool> {
+        self.report_from_waiting(id, SessionStatus::Working)
+    }
+
+    /// Puts the agent of session `id` at its prompt for a reporter that watches the agent's own
+    /// status and has found, outside the hooks, that what it waited on the user for was answered
+    /// and its turn is over: a hand raised late, by an event the agent posted after the turn's
+    /// end. Only while the agent is still waiting on the user, in one step, so that whatever moved
+    /// it on meanwhile is not undone. With a session request's hand held and the agent remembered
+    /// as waiting on the user, idle replaces what is remembered and the record keeps the request's
+    /// `WaitingUser`; otherwise it is the record that is moved, and published. The paused flag is
+    /// left as the turn's end set it: nothing ended abnormally here ([`Self::report_paused_if`] is
+    /// the reporter's for a turn that did). Says whether the agent's own status moved. Flushing
+    /// what was held for the session is the caller's to do.
+    pub fn report_idle_if_waiting(&self, id: &str) -> Result<bool> {
+        self.report_from_waiting(id, SessionStatus::Idle)
+    }
+
+    /// Moves the agent of session `id` off `WaitingUser` to `to`, only while it is still waiting
+    /// on the user, under the request hands' lock: what [`Self::report_working_if_waiting`] and
+    /// [`Self::report_idle_if_waiting`] share. Says whether the agent's own status moved.
+    fn report_from_waiting(&self, id: &str, to: SessionStatus) -> Result<bool> {
+        // Held across the fall-through, for the reason [`Self::apply_hook_status`] holds it.
+        let mut hands = self
+            .request_hands
+            .lock()
+            .expect("request hands lock poisoned");
+        match hands.get_mut(id) {
+            Some(remembered) if *remembered == SessionStatus::WaitingUser => {
+                *remembered = to;
+                Ok(true)
+            }
+            Some(_) => Ok(false),
+            None => Ok(self.published_if_moved(self.store.update_session_status_if(
+                id,
+                SessionStatus::WaitingUser,
+                to,
+            )?)),
         }
     }
 
@@ -599,6 +648,195 @@ mod tests {
             .apply_reported_status_if("s", SessionStatus::Idle, SessionStatus::Working)
             .unwrap());
         assert!(!state.last_turn_abnormal("s"));
+    }
+
+    fn published(events: &mut tokio::sync::broadcast::Receiver<Event>) -> usize {
+        std::iter::from_fn(|| events.try_recv().ok())
+            .filter(|event| matches!(event, Event::SessionUpserted { .. }))
+            .count()
+    }
+
+    /// Working is reported only for an agent that is waiting on the user, in one step: with no
+    /// request's hand, the record is moved and published when it was waiting, and left alone,
+    /// with nothing published, when it was at any other status.
+    #[test]
+    fn working_is_reported_for_a_record_that_is_waiting_on_the_user_alone() {
+        let (state, dir) = app_state("status-working-if-waiting");
+        insert_record(&state, &dir, "s", SessionStatus::WaitingUser);
+        let mut events = state.subscribe();
+        assert!(state.report_working_if_waiting("s").unwrap());
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::Working
+        );
+        assert_eq!(published(&mut events), 1);
+
+        for status in [
+            SessionStatus::Working,
+            SessionStatus::Idle,
+            SessionStatus::Interrupted,
+        ] {
+            let (state, dir) = app_state("status-working-not-waiting");
+            insert_record(&state, &dir, "s", status);
+            let mut events = state.subscribe();
+            assert!(!state.report_working_if_waiting("s").unwrap(), "{status:?}");
+            assert_eq!(state.session_record("s").unwrap().status, status);
+            assert_eq!(published(&mut events), 0, "{status:?}");
+        }
+    }
+
+    /// Under a session request's hand, working replaces the status remembered beneath it when that
+    /// was waiting on the user, and the record stays at the request's `WaitingUser`, with nothing
+    /// published; withdrawing the request afterwards lowers the record to working. A remembered
+    /// working or idle is not waiting: nothing changes.
+    #[tokio::test]
+    async fn working_is_reported_beneath_a_request_hand_without_touching_the_record() {
+        let (state, dir) = app_state("status-working-request-hand");
+        insert_record(&state, &dir, "s", SessionStatus::WaitingUser);
+        state
+            .request_hands
+            .lock()
+            .unwrap()
+            .insert("s".to_string(), SessionStatus::WaitingUser);
+        let mut events = state.subscribe();
+        assert!(state.report_working_if_waiting("s").unwrap());
+        assert_eq!(
+            state.request_hands.lock().unwrap().get("s").copied(),
+            Some(SessionStatus::Working)
+        );
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::WaitingUser,
+            "the request's hand stays up"
+        );
+        assert_eq!(published(&mut events), 0);
+        assert_eq!(
+            state.agent_status(&state.session_record("s").unwrap()),
+            SessionStatus::Working
+        );
+        state.lower_request_hand("s");
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::Working
+        );
+
+        for remembered in [SessionStatus::Working, SessionStatus::Idle] {
+            let (state, dir) = app_state("status-working-request-not-waiting");
+            insert_record(&state, &dir, "s", SessionStatus::WaitingUser);
+            state
+                .request_hands
+                .lock()
+                .unwrap()
+                .insert("s".to_string(), remembered);
+            let mut events = state.subscribe();
+            assert!(
+                !state.report_working_if_waiting("s").unwrap(),
+                "{remembered:?}"
+            );
+            assert_eq!(
+                state.request_hands.lock().unwrap().get("s").copied(),
+                Some(remembered)
+            );
+            assert_eq!(
+                state.session_record("s").unwrap().status,
+                SessionStatus::WaitingUser
+            );
+            assert_eq!(published(&mut events), 0, "{remembered:?}");
+        }
+    }
+
+    /// Idle is reported only for an agent that is waiting on the user, in one step: with no
+    /// request's hand, the record is moved and published when it was waiting, the paused flag
+    /// left as it was, and left alone, with nothing published, when it was at any other status.
+    #[test]
+    fn idle_is_reported_for_a_record_that_is_waiting_on_the_user_alone() {
+        for paused in [false, true] {
+            let (state, dir) = app_state("status-idle-if-waiting");
+            insert_record(&state, &dir, "s", SessionStatus::WaitingUser);
+            state.store.set_last_turn_abnormal("s", paused).unwrap();
+            let mut events = state.subscribe();
+            assert!(state.report_idle_if_waiting("s").unwrap());
+            assert_eq!(
+                state.session_record("s").unwrap().status,
+                SessionStatus::Idle
+            );
+            assert_eq!(published(&mut events), 1);
+            assert_eq!(state.last_turn_abnormal("s"), paused, "the flag is left");
+        }
+
+        for status in [
+            SessionStatus::Working,
+            SessionStatus::Idle,
+            SessionStatus::Interrupted,
+        ] {
+            let (state, dir) = app_state("status-idle-not-waiting");
+            insert_record(&state, &dir, "s", status);
+            let mut events = state.subscribe();
+            assert!(!state.report_idle_if_waiting("s").unwrap(), "{status:?}");
+            assert_eq!(state.session_record("s").unwrap().status, status);
+            assert_eq!(published(&mut events), 0, "{status:?}");
+        }
+    }
+
+    /// Under a session request's hand, idle replaces the status remembered beneath it when that
+    /// was waiting on the user, and the board's hand stays up: the record keeps the request's
+    /// `WaitingUser` with nothing published, and withdrawing the request afterwards lowers the
+    /// record to idle, not back to a wait the agent is no longer in. A remembered working or idle
+    /// is not waiting: nothing changes.
+    #[tokio::test]
+    async fn idle_beneath_a_request_hand_leaves_the_boards_hand_up() {
+        let (state, dir) = app_state("status-idle-request-hand");
+        insert_record(&state, &dir, "s", SessionStatus::WaitingUser);
+        state
+            .request_hands
+            .lock()
+            .unwrap()
+            .insert("s".to_string(), SessionStatus::WaitingUser);
+        let mut events = state.subscribe();
+        assert!(state.report_idle_if_waiting("s").unwrap());
+        assert_eq!(
+            state.request_hands.lock().unwrap().get("s").copied(),
+            Some(SessionStatus::Idle)
+        );
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::WaitingUser,
+            "the request's hand stays up"
+        );
+        assert_eq!(published(&mut events), 0);
+        assert_eq!(
+            state.agent_status(&state.session_record("s").unwrap()),
+            SessionStatus::Idle
+        );
+        state.lower_request_hand("s");
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::Idle
+        );
+
+        for remembered in [SessionStatus::Working, SessionStatus::Idle] {
+            let (state, dir) = app_state("status-idle-request-not-waiting");
+            insert_record(&state, &dir, "s", SessionStatus::WaitingUser);
+            state
+                .request_hands
+                .lock()
+                .unwrap()
+                .insert("s".to_string(), remembered);
+            let mut events = state.subscribe();
+            assert!(
+                !state.report_idle_if_waiting("s").unwrap(),
+                "{remembered:?}"
+            );
+            assert_eq!(
+                state.request_hands.lock().unwrap().get("s").copied(),
+                Some(remembered)
+            );
+            assert_eq!(
+                state.session_record("s").unwrap().status,
+                SessionStatus::WaitingUser
+            );
+            assert_eq!(published(&mut events), 0, "{remembered:?}");
+        }
     }
 
     /// A session stored at `stored` whose process of `agent` shows `screen`, as a client receives it.

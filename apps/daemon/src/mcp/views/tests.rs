@@ -106,3 +106,22 @@ fn the_stored_role_is_what_the_record_and_the_wire_carry() {
         assert_eq!(record["owned_sessions"], 0);
     }
 }
+
+/// A hold for a view the person opened themselves is explained as that view, which a message
+/// would go to, not as a dialog only the user can answer.
+#[test]
+fn a_hold_for_a_view_the_person_opened_is_explained_as_the_view() {
+    use crate::session::dialogs::{Dialog, DialogKind, WrittenMessage};
+    let dialog = |kind| {
+        crate::state::WriteHold::AgentDialog(Dialog {
+            code: "test_view",
+            written: WrittenMessage::Draft,
+            kind,
+        })
+    };
+    let view = write_hold_explanation(dialog(DialogKind::OwnView));
+    assert!(view.contains("a view of its agent's own open"), "{view}");
+    assert!(!view.contains("only the user can answer"), "{view}");
+    let question = write_hold_explanation(dialog(DialogKind::Question));
+    assert!(question.contains("only the user can answer"), "{question}");
+}

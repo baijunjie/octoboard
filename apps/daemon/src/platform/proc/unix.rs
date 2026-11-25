@@ -241,6 +241,15 @@ impl ChildHandle {
         unreaped_state(self.pid).map(|state| state != Unreaped::Running)
     }
 
+    /// Whether the child, exited and not yet reaped, ended with status 0, found out without
+    /// reaping it; `None` while it runs, once it is reaped, and when the host cannot say.
+    pub fn exited_successfully(&self) -> Option<bool> {
+        match unreaped_state(self.pid)? {
+            Unreaped::Exited { success } => Some(success),
+            Unreaped::Running => None,
+        }
+    }
+
     /// Asks the child itself to end as `how` says, leaving what it started alone.
     pub fn stop(&self, how: Polite) -> Sent {
         signal_process(self.pid, Signal::Polite(how))
@@ -1084,9 +1093,8 @@ mod handed_listener_tests {
             "adopt-and-accept" => {
                 let port: u16 = std::env::var(PORT).unwrap().parse().unwrap();
                 let listener = listener_handover::adopt(HANDED_FD, port).expect("taken over");
-                let (mut stream, _) = listener
-                    .accept()
-                    .expect("the connection that waited in the backlog");
+                // The connection that waited in the backlog; a port probe can wait there too.
+                let mut stream = crate::test_support::accept_past_probes(&listener);
                 // The accepted stream may inherit the listener's non-blocking mode.
                 stream.set_nonblocking(false).unwrap();
                 stream.set_read_timeout(Some(PATIENCE)).unwrap();

@@ -1,7 +1,8 @@
 import { Bot, Gauge, KeyRound } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
-import { noAgentState, pickableAgents } from "../agents/agents";
+import { listedAgents, noAgentState, pickableAgents, servedAgents } from "../agents/agents";
+import { hasPlanQuota } from "../agents/providers";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { Button, Tabs } from "../primitives";
@@ -14,9 +15,9 @@ import { useDaemonStore, useProviders } from "../store";
 import { AgentPanel } from "./AgentPanel";
 import type { ResetRequest } from "./QuotaAccount";
 
-/** The panel's contents: one tab per agent that is added and installed and has an account to list, in the order they were
+/** The panel's contents: one tab per agent that is added and installed, whose provider declares a plan quota and that has an account to list, in the order they were
  * added, each listing the agent's accounts that are not turned off (bar the selected running session's own, `inUse`), and
- * the way into Settings' accounts section. The panel mounts afresh on each opening, so the tab starts on `shownAgent`
+ * the way into Settings' accounts section. With agents added and installed but none having a plan quota it says so (`noReporting`), under the way into Settings. The panel mounts afresh on each opening, so the tab starts on `shownAgent`
  * (the first tab if it is not listed or none is given) and the user's own choice lasts only until it closes. */
 export function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, emphasiseShown, onMouseEnter, onOpenAccounts, onAddAgent, onUseReset }: { shownAgent?: Agent; shownAccount: string | null; inUse?: { agent: Agent; account: string | null }; focusSelectedTab: boolean; emphasiseShown: boolean; onMouseEnter: () => void; onOpenAccounts: () => void; onAddAgent: () => void; onUseReset: ResetRequest }): React.ReactElement {
   const t = useT();
@@ -31,7 +32,9 @@ export function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, 
   const focused = useRef(false);
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   // An agent whose accounts are all turned off has no tab, as it has no submenu in the menu bar, unless the selected running session is on one.
-  const listed = listedQuotaAccounts(pickableAgents(availability, addedAgents, providers), { accounts, accountOrder, disabledDefaultAccounts: disabledDefaults }, inUse);
+  // An agent whose provider declares no plan quota has no tab and does not count towards the empty states.
+  const hasQuota = (agent: Agent) => hasPlanQuota(providers, agent);
+  const listed = listedQuotaAccounts(pickableAgents(availability, addedAgents, providers).filter(hasQuota), { accounts, accountOrder, disabledDefaultAccounts: disabledDefaults }, inUse);
   const selected = listed.find(({ agent }) => agent === chosen)?.agent ?? listed[0]?.agent;
   const focusOnce = (tab: HTMLElement | null) => {
     if (!tab || focused.current) return;
@@ -49,12 +52,19 @@ export function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, 
   const handoff = useFocusHandoff(() => {
     (root.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ?? root.current?.querySelector<HTMLElement>("button"))?.focus();
   });
-  const noAgents = noAgentState(availability, addedAgents, providers);
+  const noAgents = noAgentState(availability, addedAgents, providers, hasQuota);
+  // Every agent added is one whose provider declares no plan quota, and one of them is installed: the panel has nothing
+  // to list although something is added, which "No agent added" and "No agent available" would misstate. With any added
+  // agent that has a quota (one not installed, say) those states stay, as they say what is missing for it.
+  const added = listedAgents(addedAgents, servedAgents(providers));
+  const noReporting = noAgents !== undefined && added.length > 0 && !added.some(hasQuota) && noAgentState(availability, addedAgents, providers) === undefined;
   return (
     <div ref={root} className="flex flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur} onPointerEnter={(event) => event.pointerType === "mouse" && onMouseEnter()}>
       {selected === undefined ? (
         <div className="p-4">
-          {noAgents === "add" ? (
+          {noReporting ? (
+            <EmptyPanel icon={Gauge} message={t("rail.quota.noReporting")} description={<Message id="rail.quota.noReportingHint" />} />
+          ) : noAgents === "add" ? (
             <EmptyPanel icon={Bot} message={t("rail.quota.none")} description={t("rail.quota.noneHint")} action={{ label: t("agents.addAction"), onPress: onAddAgent }} />
           ) : noAgents === undefined ? (
             <EmptyPanel icon={Gauge} message={t("rail.quota.noEnabled")} description={t("rail.quota.noEnabledHint")} action={{ label: t("rail.quota.manage"), onPress: onOpenAccounts }} />
@@ -87,7 +97,7 @@ export function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, 
         </Tabs>
       )}
       {/* The empty states that ask to add an agent or to manage the accounts have that button already; this link would say the same. */}
-      {!(selected === undefined && (noAgents === "add" || noAgents === undefined)) && (
+      {!(selected === undefined && !noReporting && (noAgents === "add" || noAgents === undefined)) && (
         <div className="groove-t flex justify-end p-2">
           <Button size="sm" variant="ghost" className="text-app-muted hover:text-foreground ui-keyboard-focus:text-foreground" focusOnPress={false} onPress={onOpenAccounts}>
             <KeyRound className="size-4 shrink-0" />

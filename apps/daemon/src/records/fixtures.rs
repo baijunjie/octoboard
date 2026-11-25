@@ -23,6 +23,76 @@ pub(crate) fn touch(path: &Path) {
     std::fs::write(path, "{}\n").unwrap();
 }
 
+/// A record of the test-only provider's tree-shaped variant
+/// (`crate::providers::test_provider::with_tree_records`) as it stands after two turns: a line
+/// outside the tree, then a prompt and its reply twice over.
+pub(crate) const TREE_TRUNK: &str = concat!(
+    r#"{"header":true}"#,
+    "\n",
+    r#"{"id":"a","parent":null,"user":"first"}"#,
+    "\n",
+    r#"{"id":"b","parent":"a","assistant":"reply one","tokens":100}"#,
+    "\n",
+    r#"{"id":"c","parent":"b","user":"abandoned"}"#,
+    "\n",
+    r#"{"id":"d","parent":"c","assistant":"abandoned reply","tokens":900}"#,
+    "\n",
+);
+
+/// What going back to the first reply of [`TREE_TRUNK`] and carrying on from there appends: the
+/// second turn stays in the file, off the conversation.
+pub(crate) const TREE_BRANCH: &str = concat!(
+    r#"{"id":"e","parent":"b","user":"second"}"#,
+    "\n",
+    r#"{"id":"f","parent":"e","assistant":"reply two","tokens":200}"#,
+    "\n",
+);
+
+/// Writes `lines` as the record of conversation `agent_id` of the test-only provider in the
+/// account directory `root`, and answers its path.
+pub(crate) fn test_record(root: &Path, agent_id: &str, lines: &str) -> std::path::PathBuf {
+    let record = root.join("sessions").join(format!("{agent_id}.jsonl"));
+    std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+    std::fs::write(&record, lines).unwrap();
+    record
+}
+
+/// The id of a conversation of the test-only provider's row-shaped variant
+/// (`crate::providers::test_provider::with_row_records`): not a UUID, as an agent's own ids need
+/// not be.
+pub(crate) const ROW_ID: &str = "row_0a1b2c";
+
+/// The rows of a conversation of that variant after two turns, as the elements of a JSON array:
+/// lines of the shape the tree-shaped variant's record has.
+pub(crate) const ROW_TURNS: &str = concat!(
+    r#"{"id":"a","parent":null,"user":"first"},"#,
+    r#"{"id":"b","parent":"a","assistant":"reply one","tokens":100},"#,
+    r#"{"id":"c","parent":"b","user":"second"},"#,
+    r#"{"id":"d","parent":"c","assistant":"reply two","tokens":900}"#,
+);
+
+/// What going back to the first reply of [`ROW_TURNS`] and carrying on from there adds: the
+/// second turn's rows stay in the database, off the conversation.
+pub(crate) const ROW_FORK: &str = concat!(
+    r#"{"id":"e","parent":"b","user":"third"},"#,
+    r#"{"id":"f","parent":"e","assistant":"reply three","tokens":200}"#,
+);
+
+/// Writes the database of the test-only provider's row-shaped variant in the account directory
+/// `root`, whole: each of `conversations` is an id and its rows, as the elements of a JSON array.
+pub(crate) fn row_database(root: &Path, conversations: &[(&str, &str)]) {
+    let held: Vec<String> = conversations
+        .iter()
+        .map(|(id, rows)| format!("{}:[{rows}]", serde_json::json!(id)))
+        .collect();
+    std::fs::create_dir_all(root).unwrap();
+    std::fs::write(
+        root.join(crate::adapter::test_provider::ROW_DATABASE),
+        format!("{{{}}}", held.join(",")),
+    )
+    .unwrap();
+}
+
 /// One agent's record of a session whose hook reported no prompt: where its conversation file
 /// sits in an account of the agent's own, what the file holds while no prompt has been sent, and
 /// a line that is a prompt the user sent.
@@ -108,10 +178,14 @@ pub(crate) fn unreported(dir: &Path) -> Vec<Unreported> {
                     2,
                 ),
             });
-        } else if agent == AgentId::TEST {
-            // Says nothing of which lines are prompts: its records are never told.
         } else {
-            panic!("{agent:?} has no record of an unreported prompt: add one from a capture");
+            assert!(
+                crate::adapter::provider(agent)
+                    .records()
+                    .is_user_prompt("{}")
+                    .is_none(),
+                "{agent:?} has no fixture for its prompt recognition"
+            );
         }
     }
     all

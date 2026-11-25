@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 
 import { accountTrashFailedCause } from "../../errors/causes";
 import { CodedError } from "../../errors/codedError";
@@ -118,6 +118,7 @@ export function RemoveAccountDialog({ account, onRemoved, onCancel }: { account:
   const inspection = useAccountTrashInspection(account.id, trash);
   const afterErrorAlert = useAfterErrorAlert();
   const alertId = useId();
+  const trashOption = useRef<HTMLDivElement>(null);
   const runningId = useId();
   const refusal = trash ? trashRefusal(inspection.outcome) : undefined;
   const problem = trash && (refusal !== undefined || inspection.failure !== undefined);
@@ -138,13 +139,15 @@ export function RemoveAccountDialog({ account, onRemoved, onCancel }: { account:
       resetKey={account.id}
       extraControl={(
         <>
-          <ConfirmOption
-            isSelected={trash}
-            onChange={setTrash}
-            label={t("settings.accounts.removeTrash")}
-            hint={t(trash && inspection.outcome?.status === "missing" ? "settings.accounts.removeTrashHintMissing" : "settings.accounts.removeTrashHint")}
-            describedBy={describedBy || undefined}
-          />
+          <div ref={trashOption} className="contents">
+            <ConfirmOption
+              isSelected={trash}
+              onChange={setTrash}
+              label={t("settings.accounts.removeTrash")}
+              hint={t(trash && inspection.outcome?.status === "missing" ? "settings.accounts.removeTrashHintMissing" : "settings.accounts.removeTrashHint")}
+              describedBy={describedBy || undefined}
+            />
+          </div>
           {/* A reason the removal cannot go ahead is an Alert under the option, announced as it appears. */}
           {trash && refusal !== undefined && (
             <ErrorAlert textId={alertId} status="warning" announce announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} title={refusal} />
@@ -158,6 +161,7 @@ export function RemoveAccountDialog({ account, onRemoved, onCancel }: { account:
                 message={inspection.failure}
                 onRetry={inspection.retry}
                 pending={inspection.pending}
+                focusFallback={() => trashOption.current?.querySelector("input")}
                 attempt={inspection.answered}
                 announce
                 announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}

@@ -606,15 +606,16 @@ it("uses name chips for fixed agent and product references while leaving plain m
   // to an item under the sentence that introduces them.
   const list = container.querySelector("[role=list]")!;
   expect(document.getElementById(list.getAttribute("aria-labelledby")!)?.textContent).toBe("To open a session, make sure one of these supported agents is on your PATH:");
-  expect(Array.from(list.querySelectorAll("[role=listitem] bdi"), (item) => item.textContent)).toEqual(["Claude Code", "Codex", "Grok Build", "Test Agent"]);
+  const labels = TEST_PROVIDERS.map((provider) => provider.label);
+  expect(Array.from(list.querySelectorAll("[role=listitem] bdi"), (item) => item.textContent)).toEqual(labels);
   // Read as part of the alert's description, the names keep the language's separators between them.
-  expect(Array.from(list.querySelectorAll("[role=listitem]"), (item) => item.textContent)).toEqual(["Claude Code, ", "Codex, ", "Grok Build, ", "Test Agent"]);
+  expect(Array.from(list.querySelectorAll("[role=listitem]"), (item) => item.textContent)).toEqual(labels.map((label, index) => (index < labels.length - 1 ? `${label}, ` : label)));
   // The remedy alone stays phrasing content, as the paragraphs and Alert descriptions that hold it require.
   const remedy = mount(<DaemonProvider value={daemon}><p data-remedy><DaemonErrorMessage error={error} part="remedy" /></p></DaemonProvider>).querySelector("[data-remedy]")!;
-  expect(remedy.querySelectorAll("[role=listitem]")).toHaveLength(4);
+  expect(remedy.querySelectorAll("[role=listitem]")).toHaveLength(labels.length);
   expect(remedy.querySelector("div,p,ul,li")).toBeNull();
   const plain = daemonMessage("en", error.code, error.params, error.message, daemon.store.getState());
-  expect(plain.replace(/[\u2066-\u2069]/g, "")).toContain("make sure one of these supported agents is on your PATH: Claude Code, Codex, Grok Build, Test Agent.");
+  expect(plain.replace(/[\u2066-\u2069]/g, "")).toContain(`make sure one of these supported agents is on your PATH: ${labels.join(", ")}.`);
 });
 
 it("names the agent of a refused operation by the label the daemon serves when it has no presentation module", () => {
@@ -1123,6 +1124,144 @@ describe("a draft cleared from an input box", () => {
     const { body } = mountApart(error);
     expect(body.querySelector("pre")).toBeNull();
     expect(label(body, "Draft content")).toBeUndefined();
+  });
+});
+
+describe("a message the agent gave back at a cancel, cleared from an input box", () => {
+  const MESSAGE = "Instruction from your parent session\nرسالة second line";
+  const label = (body: Element, text: string) => [...body.querySelectorAll("span[id]")].find((span) => span.textContent === text);
+  const cleared = (params: Record<string, string> = {}) => new CodedError("plain", "message_cleared_after_cancel", { agent: "Claude Code", detail: MESSAGE, ...params });
+
+  it("says the message was not carried out, never that a draft was cleared, with the message whole under its own label", () => {
+    const error = cleared();
+    const { body, raw } = mountApart(error);
+    expect(hasErrorDetails(error)).toBe(true);
+    expect(hasRawDetails(error)).toBe(false);
+    expect(raw.textContent).toBe("");
+    expect(body.textContent).toContain("Claude Code");
+    expect(body.textContent).toContain("was not carried out");
+    expect(body.textContent).toContain("send it again");
+    expect(body.textContent).not.toContain("draft");
+    const block = body.querySelector("pre")!;
+    expect(block.textContent).toBe(MESSAGE);
+    expect(block.getAttribute("dir")).toBe("auto");
+    expect(label(body, "Message content")?.parentElement?.contains(block)).toBe(true);
+    expect(label(body, "Draft content")).toBeUndefined();
+    expect(body.textContent).not.toContain("Error details");
+  });
+
+  it("titles its alert for the message, and describes it by the explanation alone", () => {
+    raiseError(cleared(), { title: "Message" });
+    mount(<ErrorAlerts />);
+    const alert = document.querySelector('[role="alertdialog"]')!;
+    expect(alert.querySelector("h2")?.textContent).toBe("Message not carried out");
+    const description = document.getElementById(alert.getAttribute("aria-describedby")!)!;
+    expect(description.textContent).toContain("was not carried out");
+    expect(description.textContent).not.toContain(MESSAGE);
+    expect(alert.querySelector("pre")!.textContent).toBe(MESSAGE);
+  });
+
+  it("says when only part of the message was cleared, under a title that still says what did not get done, and nothing of what became of the next message", () => {
+    const error = cleared({ cleared: "part" });
+    const { body } = mountApart(error);
+    expect(body.textContent).toContain("cleared part of it");
+    expect(body.textContent).not.toContain("waits");
+    expect(body.textContent).toContain("part of it may still be in the input box");
+    expect(body.querySelector("pre")!.textContent).toBe(MESSAGE);
+    raiseError(error, { title: "Message" });
+    mount(<ErrorAlerts />);
+    expect(document.querySelector('[role="alertdialog"]')!.querySelector("h2")?.textContent).toBe("Message not carried out");
+  });
+
+  it.each<Record<string, string>>([{}, { cleared: "part" }])("puts the message on a line of its own after the text as plain text, with every placeholder filled (%j)", (params) => {
+    const text = daemonMessage("en", "message_cleared_after_cancel", { agent: "Claude Code", detail: MESSAGE, ...params }, "fallback", createStateStore({}).getState());
+    expect(text.endsWith(`\n${MESSAGE}`)).toBe(true);
+    expect(text).not.toMatch(/\{[a-zA-Z_]+\}/);
+    expect(text).toContain("Claude Code");
+  });
+
+  it("words the label and the title in the language in use", () => {
+    const { body } = mountApart(cleared());
+    act(() => setLanguage("zh-CN"));
+    const localized = format("zh-CN", "daemon.message_cleared_after_cancel.detailLabel");
+    expect(localized).not.toBe(format("en", "daemon.message_cleared_after_cancel.detailLabel"));
+    expect(label(body, localized)?.parentElement?.contains(body.querySelector("pre"))).toBe(true);
+    expect(format("zh-CN", "daemon.message_cleared_after_cancel.alertTitle")).not.toBe(format("en", "daemon.message_cleared_after_cancel.alertTitle"));
+  });
+});
+
+describe("a message the agent took through its own server or channel and gave back", () => {
+  const MESSAGE = "Instruction from your parent session\nرسالة second line";
+  const givenBack = () => new CodedError("plain", "message_given_back_unsent", { agent: "Codex", detail: MESSAGE });
+
+  it("says the agent gave the message back and it was not carried out, never that an input box held it or was cleared", () => {
+    const error = givenBack();
+    const { body, raw } = mountApart(error);
+    expect(hasErrorDetails(error)).toBe(true);
+    expect(hasRawDetails(error)).toBe(false);
+    expect(raw.textContent).toBe("");
+    expect(body.textContent).toContain("Codex");
+    expect(body.textContent).toContain("gave it back without acting on it");
+    // "Unsent" belongs to a message left in the input box, which this one never was.
+    expect(body.textContent).not.toContain("unsent");
+    expect(body.textContent).toContain("was not carried out");
+    expect(body.textContent).toContain("send it again");
+    expect(body.textContent).not.toContain("input box");
+    expect(body.textContent).not.toContain("cleared");
+    const block = body.querySelector("pre")!;
+    expect(block.textContent).toBe(MESSAGE);
+    expect(block.getAttribute("dir")).toBe("auto");
+    expect([...body.querySelectorAll("span[id]")].find((span) => span.textContent === "Message content")?.parentElement?.contains(block)).toBe(true);
+  });
+
+  it("titles its alert for the message, and puts the message after the text as plain text with every placeholder filled", () => {
+    raiseError(givenBack(), { title: "Message" });
+    mount(<ErrorAlerts />);
+    expect(document.querySelector('[role="alertdialog"]')!.querySelector("h2")?.textContent).toBe("Message not carried out");
+    const text = daemonMessage("en", "message_given_back_unsent", { agent: "Codex", detail: MESSAGE }, "fallback", createStateStore({}).getState());
+    expect(text.endsWith(`\n${MESSAGE}`)).toBe(true);
+    expect(text).not.toMatch(/\{[a-zA-Z_]+\}/);
+  });
+});
+
+describe("a message the agent held and dropped when its turn was cancelled", () => {
+  const MESSAGE = "Instruction from your parent session\nرسالة second line";
+  const dropped = () => new CodedError("plain", "message_dropped_at_cancel", { agent: "Codex", detail: MESSAGE });
+
+  it("says the agent dropped the message and it was not carried out, never that it was given back, held in an input box or cleared", () => {
+    const error = dropped();
+    const { body, raw } = mountApart(error);
+    expect(hasErrorDetails(error)).toBe(true);
+    expect(hasRawDetails(error)).toBe(false);
+    expect(raw.textContent).toBe("");
+    expect(body.textContent).toContain("Codex");
+    expect(body.textContent).toContain("was holding a message");
+    expect(body.textContent).toContain("dropped it when it was interrupted");
+    expect(body.textContent).not.toContain("unsent");
+    expect(body.textContent).toContain("was not carried out");
+    expect(body.textContent).toContain("send it again");
+    expect(body.textContent).not.toContain("gave it back");
+    expect(body.textContent).not.toContain("input box");
+    expect(body.textContent).not.toContain("cleared");
+    const block = body.querySelector("pre")!;
+    expect(block.textContent).toBe(MESSAGE);
+    expect(block.getAttribute("dir")).toBe("auto");
+    expect([...body.querySelectorAll("span[id]")].find((span) => span.textContent === "Message content")?.parentElement?.contains(block)).toBe(true);
+  });
+
+  it("titles its alert for the message, and puts the message after the text as plain text with every placeholder filled", () => {
+    raiseError(dropped(), { title: "Message" });
+    mount(<ErrorAlerts />);
+    expect(document.querySelector('[role="alertdialog"]')!.querySelector("h2")?.textContent).toBe("Message not carried out");
+    const text = daemonMessage("en", "message_dropped_at_cancel", { agent: "Codex", detail: MESSAGE }, "fallback", createStateStore({}).getState());
+    expect(text.endsWith(`\n${MESSAGE}`)).toBe(true);
+    expect(text).not.toMatch(/\{[a-zA-Z_]+\}/);
+  });
+
+  it("is worded apart from a message given back, in every language", () => {
+    for (const language of LANGUAGES) {
+      expect(format(language, "daemon.message_dropped_at_cancel.summary"), language).not.toBe(format(language, "daemon.message_given_back_unsent.summary"));
+    }
   });
 });
 

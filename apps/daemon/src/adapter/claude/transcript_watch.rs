@@ -554,21 +554,12 @@ fn still_at(state: &AppState, session_id: &str, status: SessionStatus) -> Owed {
     }
 }
 
-/// Lets a transcript watch poll [`TEST_POLLS`] times, for a test on tokio's paused clock
-/// (`#[tokio::test(start_paused = true)]`) that then reads what the polls did. A poll's reads are
-/// blocking tasks, which hold that clock until they end, so each poll it reaches has run to its
-/// end when this returns, however slowly the machine ran it; the last one falls due as this
-/// returns and may not have run yet. A test that waits on the watch this way must not hold the
-/// clock with a blocking wait of its own (`test_support::within`).
+/// Lets a transcript watch make its polls (`watch::polls_ran`), for a test on tokio's paused
+/// clock that then reads what the polls did.
 #[cfg(test)]
 pub(crate) async fn polls_ran() {
-    tokio::time::sleep(POLL_INTERVAL * TEST_POLLS).await;
+    watch::polls_ran(POLL_INTERVAL).await;
 }
-
-/// How many polls [`polls_ran`] lets a watch make: a few, so that a write the test made is read
-/// by at least two.
-#[cfg(test)]
-const TEST_POLLS: u32 = 3;
 
 #[cfg(test)]
 mod tests {
@@ -966,9 +957,9 @@ mod tests {
 
         std::fs::write(&fixture.path, REJECTION).expect("write rejection");
 
-        // Nothing is expected to happen, so there is no event to wait for: the watch is given
-        // its polls, and what they did is read after them.
-        polls_ran().await;
+        // The watch is owed nothing and stops at its next poll: its end is the signal that it
+        // will never read the rejection.
+        watch::last_ended().await;
         assert_eq!(
             status_of(&fixture.state, "s"),
             Some(SessionStatus::Working),
@@ -1101,7 +1092,7 @@ mod tests {
 
         std::fs::write(&fixture.path, REJECTION).expect("write rejection");
 
-        polls_ran().await;
+        watch::last_ended().await;
         assert_eq!(
             status_of(&fixture.state, "s"),
             Some(SessionStatus::WaitingUser),

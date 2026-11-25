@@ -179,7 +179,7 @@ mod tests {
     }
 
     /// A thread database is catalogued only where a registry keeps its rows in step, and a
-    /// provider with no account operations shares nothing and keeps no registry.
+    /// provider whose account operations offer no items shares nothing and keeps no registry.
     #[test]
     fn a_thread_database_is_catalogued_only_with_a_registry_for_its_rows() {
         for agent in AgentId::ALL {
@@ -193,7 +193,8 @@ mod tests {
                 );
             }
         }
-        assert!(provider(AgentId::TEST).accounts().is_none());
+        let accounts = provider(AgentId::TEST).accounts().expect("accounts");
+        assert!(accounts.shared_items().is_empty() && accounts.thread_registry().is_none());
         assert!(catalogued_items(AgentId::TEST).is_empty());
         assert!(crate::accounts::thread_registry::thread_registry(AgentId::TEST).is_none());
         assert!(super::super::registries::registries(AgentId::TEST).is_empty());

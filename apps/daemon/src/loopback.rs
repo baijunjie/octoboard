@@ -37,8 +37,8 @@ pub fn connect(port: u16, timeout: Duration) -> std::io::Result<TcpStream> {
 }
 
 /// Posts a body over a stream from [`connect`] and returns the response body, or an error when the
-/// daemon answered with an error status (see [`error_status`]). `path` has no query of its own: the
-/// key is appended as one.
+/// daemon answered with an error status (see [`error_status`]). The key is added to `path`'s query,
+/// which `path` may carry already, its values percent-encoded (`crate::text::percent_encode`).
 pub fn exchange(
     mut stream: &TcpStream,
     port: u16,
@@ -46,8 +46,12 @@ pub fn exchange(
     path: &str,
     body: &[u8],
 ) -> std::io::Result<Vec<u8>> {
+    let target = match path.split_once('?') {
+        Some((path, query)) => format!("{path}?key={key}&{query}"),
+        None => format!("{path}?key={key}"),
+    };
     let request = format!(
-        "POST {path}?key={key} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\n\
+        "POST {target} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\n\
          Content-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     );
@@ -198,5 +202,59 @@ mod tests {
         let err = super::split_body(b"garbage".to_vec()).unwrap_err();
         assert_eq!(super::error_status(&err), None);
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    /// What request line an [`super::exchange`] sends for `path`, read from a listener standing in
+    /// for the daemon, which answers with an empty `200`.
+    fn request_line_for(path: &str) -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback port");
+        let port = listener.local_addr().expect("an address").port();
+        let daemon = std::thread::spawn(move || {
+            use std::io::{BufRead, BufReader, Read, Write};
+            let mut stream = crate::test_support::accept_past_probes(&listener);
+            let mut reader = BufReader::new(stream.try_clone().expect("a clone"));
+            let mut request_line = String::new();
+            reader.read_line(&mut request_line).expect("a request line");
+            let mut length = 0;
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).expect("a header");
+                if line == "\r\n" {
+                    break;
+                }
+                if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                    length = value.trim().parse().expect("a length");
+                }
+            }
+            let mut body = vec![0; length];
+            reader.read_exact(&mut body).expect("the body");
+            assert_eq!(body, b"{}");
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+                .expect("an answer");
+            request_line
+        });
+        // A running daemon may probe the port at any point: the probe is not the request.
+        assert_eq!(
+            crate::test_support::probe_port(port),
+            "HTTP/1.1 404 Not Found"
+        );
+        let answered = super::post(port, "the-key", path, b"{}", crate::test_support::PATIENCE);
+        assert!(answered.expect("answered").is_empty());
+        daemon.join().expect("the stand-in daemon ran")
+    }
+
+    /// The key goes first in the path's query, whether the path has one of its own or not, and the
+    /// path's own query follows it untouched.
+    #[test]
+    fn the_key_is_put_first_in_a_path_that_has_a_query_already() {
+        assert_eq!(
+            request_line_for("/hook/s"),
+            "POST /hook/s?key=the-key HTTP/1.1\r\n"
+        );
+        assert_eq!(
+            request_line_for("/hook/s?event=Pre%20Tool"),
+            "POST /hook/s?key=the-key&event=Pre%20Tool HTTP/1.1\r\n"
+        );
     }
 }

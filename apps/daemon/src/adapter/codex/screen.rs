@@ -24,8 +24,10 @@ impl ScreenReader for CodexScreen {
         row == "Ask Codex to do anything"
     }
 
-    fn as_submitted<'a>(&self, typed: &'a str) -> &'a str {
-        typed.trim()
+    /// Codex reports a prompt without the whitespace at its ends (0.163.0), and its hook's
+    /// prompt is read the same way (`super::hooks`).
+    fn same_as_submitted(&self, typed: &str, reported: &str) -> bool {
+        typed.trim() == reported
     }
 
     /// `[Pasted Content <n> chars]`, as Codex 0.167.1 draws a long paste in its composer (under
@@ -495,7 +497,7 @@ pub(crate) const TRUST: Screen = Screen {
         ],
     ],
     accept: Some("1.Trustandcontinue"),
-    decline: &["2.Quit", "2.BacktoAgentCommandCenter"],
+    others: &["2.Quit", "2.BacktoAgentCommandCenter"],
     cursor: Some('\u{203A}'),
     press: Press::Enter,
     // Its banner, ">_ OpenAI Codex (v…)", drawn whole over the screen it replaces.

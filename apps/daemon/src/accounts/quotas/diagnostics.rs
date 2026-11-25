@@ -28,7 +28,7 @@ pub(super) const MAX_NOTES: usize = 3;
 
 /// What one probe run left to log, collected while it ran. All text is already redacted.
 #[derive(Debug, Default)]
-pub(super) struct ProbeTrace {
+pub(crate) struct ProbeTrace {
     /// The agent process's pid; `None` when it was never started.
     pub pid: Option<u32>,
     pub elapsed: Duration,
@@ -43,6 +43,9 @@ pub(super) struct ProbeTrace {
     pub reason: Option<String>,
     /// Lines the agent printed besides the reply that look like an error or a sign-in status.
     pub notes: Vec<String>,
+    /// The reading is a sign-in reading (a provider with no quota probe) that could not tell: it
+    /// says nothing of the sign-in, though it carries no reason.
+    pub sign_in_unknown: bool,
 }
 
 /// What a reading says of the account's sign-in.
@@ -54,6 +57,8 @@ pub(super) enum Outcome {
     SignedOut,
     /// The reading failed, which says nothing of the sign-in. Holds the redacted message.
     Failed(String),
+    /// A sign-in reading that could not tell: nothing changes, nothing is logged.
+    Unknown,
 }
 
 /// What is known of an account from the readings so far.
@@ -96,6 +101,9 @@ pub(super) fn classify(quota: &AccountQuota) -> Outcome {
 /// signed-out account and not a repeated failure: only a change.
 pub(super) fn advance(observed: &mut Observed, outcome: &Outcome) -> Vec<Event> {
     let mut events = Vec::new();
+    if *outcome == Outcome::Unknown {
+        return events;
+    }
     if let Outcome::Failed(message) = outcome {
         if observed.failure.as_ref() != Some(message) {
             events.push(Event::Failing);

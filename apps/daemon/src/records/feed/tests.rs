@@ -759,3 +759,132 @@ fn a_failure_after_lines_were_handed_on_rebuilds_once_the_file_changes() {
     append(&head, "more garbage");
     assert_eq!(follower.read_new(), Read::Restarted);
 }
+
+/// The feed of a conversation kept as rows is built from the rows as read and shown them again
+/// on each reading: rows added are appended, and a row that forks off, or rows that no longer
+/// begin as they did, restart the conversation along what they now hold.
+#[test]
+fn a_conversation_kept_as_rows_is_followed_from_reading_to_reading() {
+    use crate::records::fixtures::{row_database, session, ROW_FORK, ROW_ID, ROW_TURNS};
+    let _declared = crate::providers::test_provider::with_row_records();
+    let dir = ScratchDir::new("agent-records-feed-rows");
+    let account = dir.join("account");
+    let own = session(AgentId::TEST, ROW_ID, Some(&account));
+    let locator = crate::records::Locator::with_shell(std::collections::HashMap::new());
+    let read = |rows: &str| -> Vec<serde_json::Value> {
+        row_database(&account, &[(ROW_ID, rows)]);
+        crate::records::rows::read(&locator, &own)
+            .expect("row-shaped")
+            .unwrap()
+    };
+
+    let (first, second) = ROW_TURNS.split_at(ROW_TURNS.find(r#"{"id":"c""#).unwrap());
+    let mut built = Follower::build_rows(AgentId::TEST, read(first.trim_end_matches(',')));
+    assert_eq!(texts(&built.out), ["first", "reply one"]);
+    assert_eq!(
+        built.follower.read_rows(&read(first.trim_end_matches(','))),
+        Read::Unchanged
+    );
+    // The file-shaped look finds nothing to read for it.
+    assert_eq!(built.follower.read_new(), Read::Unchanged);
+
+    // Rows added after those read are new lines.
+    let Read::Lines(lines) = built.follower.read_rows(&read(ROW_TURNS)) else {
+        panic!("the added rows are read, of {second}");
+    };
+    built.follower.apply(lines, &mut built.out);
+    assert_eq!(
+        texts(&built.out),
+        ["first", "reply one", "second", "reply two"]
+    );
+
+    // Going back to the first reply forks off: the conversation is read again from its start.
+    let forked = read(&format!("{ROW_TURNS},{ROW_FORK}"));
+    assert_eq!(built.follower.read_rows(&forked), Read::Restarted);
+    let mut rebuilt = Follower::build_rows(AgentId::TEST, forked);
+    assert_eq!(
+        texts(&rebuilt.out),
+        ["first", "reply one", "third", "reply three"]
+    );
+    assert_eq!(
+        rebuilt.out.entries().last().map(|entry| entry.turn),
+        Some(2)
+    );
+
+    // A row changed in place is no addition either.
+    let changed = format!("{ROW_TURNS},{ROW_FORK}").replace("reply one", "reply one, edited");
+    assert_eq!(rebuilt.follower.read_rows(&read(&changed)), Read::Restarted);
+}
+
+/// The feed of a record that is a tree shows its current branch: the first pass leaves out what
+/// the agent abandoned, a line that carries on is appended, and one that forks off an earlier
+/// line restarts the conversation along the new branch.
+#[test]
+fn a_tree_shaped_record_is_followed_along_its_current_branch() {
+    use crate::records::fixtures::{test_record, CLAUDE_ID, TREE_BRANCH, TREE_TRUNK};
+    let _declared = crate::providers::test_provider::with_tree_records();
+    let dir = ScratchDir::new("agent-records-feed-tree");
+    let record = test_record(&dir.join("account"), CLAUDE_ID, TREE_TRUNK);
+    let stretches = || {
+        vec![Stretch {
+            path: record.clone(),
+            cut: None,
+        }]
+    };
+    let append = |lines: &str| {
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&record)
+            .unwrap();
+        file.write_all(lines.as_bytes()).unwrap();
+    };
+    let texts = |out: &FeedOut| -> Vec<String> {
+        out.entries()
+            .iter()
+            .map(|entry| match &entry.body {
+                ConversationBody::User { text } | ConversationBody::Assistant { text } => {
+                    text.clone()
+                }
+                other => format!("{other:?}"),
+            })
+            .collect()
+    };
+
+    let mut built = Follower::build(AgentId::TEST, stretches());
+    assert_eq!(
+        texts(&built.out),
+        ["first", "reply one", "abandoned", "abandoned reply"]
+    );
+    assert_eq!(built.follower.read_new(), Read::Unchanged);
+
+    // A line that carries on from the last one is new lines, as in any record.
+    append("{\"id\":\"d2\",\"parent\":\"d\",\"user\":\"more\"}\n");
+    let Read::Lines(lines) = built.follower.read_new() else {
+        panic!("the appended line is read");
+    };
+    built.follower.apply(lines, &mut built.out);
+    assert_eq!(texts(&built.out).last().map(String::as_str), Some("more"));
+
+    // Going back to the first reply forks off: the conversation is read again from its start.
+    append(TREE_BRANCH);
+    assert_eq!(built.follower.read_new(), Read::Restarted);
+    let mut rebuilt = Follower::build(AgentId::TEST, stretches());
+    assert_eq!(
+        texts(&rebuilt.out),
+        ["first", "reply one", "second", "reply two"]
+    );
+    assert_eq!(
+        rebuilt.out.entries().last().map(|entry| entry.turn),
+        Some(2)
+    );
+    // From there the record carries on, and so does the feed.
+    append("{\"id\":\"g\",\"parent\":\"f\",\"user\":\"third\"}\n");
+    let Read::Lines(lines) = rebuilt.follower.read_new() else {
+        panic!("the appended line is read");
+    };
+    rebuilt.follower.apply(lines, &mut rebuilt.out);
+    assert_eq!(
+        texts(&rebuilt.out),
+        ["first", "reply one", "second", "reply two", "third"]
+    );
+}

@@ -1,0 +1,44 @@
+]7501;state=working:app=copilot\[H
+
+[2;90m╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮[m  
+[119C 
+[2;90m│[m [34m ╭─╮╭─╮[m                             [2;90m│[m  [1;34mGetting started[m                                                             [2;90m│[m  
+[2;90m│[m [34m ╰─╯╰─╯[m  Copilot v1.0.114 uses AI.  [2;90m│[m  Use the tabs above to explore your sessions and pull requests[15C[2;90m│[m  
+[2;90m│[m [35m █ [96m▘▝[35m █[m  Check for mistakes.        [2;90m│[m  /model — Switch models across providers, or use Auto[24C[2;90m│[m  
+[2;90m│[m [35m  ▔▔▔▔ [m                             [2;90m│[m                                                                        [6C[2;90m│[m  
+[2;90m│[m                                       [77C[2;90m│[m  
+[2;90m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[m  
+[K
+ [33m![m Model "standin" is not in the built-in catalog. Using defaults for: prompt tokens[K
+   (COPILOT_PROVIDER_MAX_PROMPT_TOKENS), output tokens (COPILOT_PROVIDER_MAX_OUTPUT_TOKENS). Run [37m copilot help [m[K
+   [37mproviders [m for configuration details.[K
+[K
+ [34m●[m MCP Servers reloaded: 1 server connected[K
+[K
+ ❯ CMD:tool view {"path": "/etc/hosts"}[74C00:52  
+[K
+ ○ [1mRead [mhosts[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+ /private/tmp/nap-r5-cop/work[K
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[m❯[K
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[m [34m●[m [34mWorking[m · 26 B [1mctrl+c[m interrupt                                                                              standin[?7l [?7h[38;3H[?25h]7501;state=idle:app=copilot\[?25l
+
+ [1m←[m open sidebar · Interactive · Manual Approval · [1m/[m commands · [1m?[m help · [1mtab[m next tab[38;3H[?25h[?25l[18A[31m✗[20;14H The user rejected this tool call.
+
+[C[34m●[m Operation cancelled by user[38;3H[?25h

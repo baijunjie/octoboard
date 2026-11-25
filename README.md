@@ -18,7 +18,7 @@
 
 **Your agents. Your accounts. One workspace.**
 
-Octoboard is a local, open source development workspace for **Claude Code**, **Codex**, and **Grok Build**.
+Octoboard is a local, open source development workspace for **Claude Code**, **Codex**, **Grok Build**, **Antigravity CLI**, **GitHub Copilot CLI**, **OpenCode**, **Qwen Code**, and **Pi**.
 Bring your existing agents and accounts together, switch accounts while keeping the conversation, and hand tasks
 between providers. Work on one project or choose an agent to coordinate work across several projects.
 
@@ -66,7 +66,7 @@ to a coordinator, let each project agent work with its own context, and follow t
 
 **Octoboard is in beta, still in development.** Features and workflows are still being refined.
 
-1. Install and configure the coding-agent CLIs you want to use: Claude Code, Codex, or Grok Build.
+1. Install and configure the coding-agent CLIs you want to use: Claude Code, Codex, Grok Build, Antigravity CLI, GitHub Copilot CLI, OpenCode, Qwen Code, or Pi.
 2. Download the newest version of the app for [macOS](https://octoboard.dev/download/macos/) (a `.dmg`) or
    [Windows](https://octoboard.dev/download/windows/) (an installer; see [Installing on Windows](#installing-on-windows)),
    or pick one from the [releases](https://github.com/baijunjie/octoboard/releases). On a Linux server, install the
@@ -102,7 +102,8 @@ an SSH forward. Projects and agents run on the machine hosting their daemon. Eac
 - **Requirements**: Windows 10 version 21H2 or later on x64, or Windows 11 on Arm with the native arm64 build; Windows
   11 is the version it has been tested on. The installer downloads and installs Microsoft Edge WebView2 if it is
   missing, which needs an internet connection.
-- **Agents**: install the agent CLIs you want to use yourself, as on macOS; Claude Code and Codex also need
+- **Agents**: install the agent CLIs you want to use, as on macOS. On Windows, Octoboard supports Claude Code, Codex,
+  Grok Build, Antigravity CLI, GitHub Copilot CLI, OpenCode, Qwen Code, and Pi. Claude Code and Codex also need
   [Git for Windows](https://gitforwindows.org/). Sharing the default account's configuration with additional accounts
   needs Windows' Developer Mode turned on (then quit Octoboard and open it again); without it, sharing is unavailable
   and each additional account keeps a configuration of its own.

@@ -371,6 +371,46 @@ it("has one tab per added agent and lists each agent's accounts with plan and qu
   expect(text()).not.toContain("Pro");
 });
 
+it("has no tab for an agent whose provider declares no plan quota, and shows its usage bar nowhere", () => {
+  fakeTimers();
+  const { button } = mount({ claude: "available", test_agent: "available" }, ["claude", "test_agent"]);
+  openPanel(button);
+  expect(tabs().map((tab) => tab.textContent)).toEqual(["Claude Code"]);
+  expect(document.querySelector('[role="tabpanel"]')!.textContent).not.toContain("Test Agent");
+});
+
+it("says no agent reports usage, not that none is added, when the agents added and installed have no plan quota", () => {
+  fakeTimers();
+  const { button } = mount({ claude: "available", test_agent: "available" }, ["test_agent"]);
+  openPanel(button);
+  expect(tabs()).toEqual([]);
+  expect(panel()!.textContent).toContain("No agent reports usage");
+  expect(panel()!.textContent).toContain("Octoboard does not read the usage of the agents that are added.");
+  // The application's name is a reference, not plain text.
+  expect([...panel()!.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["Octoboard"]);
+  expect(panel()!.textContent).not.toContain("No agent added");
+  // No button of its own in the state; the footer still leads to the accounts.
+  expect(panel()!.textContent).not.toContain("Add agent");
+  expect(panel()!.textContent).toContain("Manage accounts");
+});
+
+it("keeps the states of an added agent that has a plan quota, though an added one without is installed", () => {
+  fakeTimers();
+  const { button } = mount({ claude: "unavailable", test_agent: "available" }, ["claude", "test_agent"]);
+  openPanel(button);
+  expect(tabs()).toEqual([]);
+  expect(panel()!.textContent).not.toContain("No agent reports usage");
+  expect(panel()!.textContent).toContain("No agent added");
+});
+
+it("still says no agent is added or available when the only agent added with no plan quota is not installed", () => {
+  fakeTimers();
+  const { button } = mount({ claude: "available", test_agent: "unavailable" }, ["test_agent"]);
+  openPanel(button);
+  expect(panel()!.textContent).toContain("No agent added");
+  expect(panel()!.textContent).not.toContain("No agent reports usage");
+});
+
 it("mounts each agent's account list once, not again in the hidden copy the tabs build their collection from", () => {
   fakeTimers();
   const { button } = mount();
@@ -583,11 +623,14 @@ it("leaves out an added agent that is not installed", () => {
   expect(tabs().map((tab) => tab.textContent)).toEqual(["Codex"]);
 });
 
-it("lists every installed agent while the daemon has not decided the added list", () => {
+it("lists every installed agent that has a plan quota while the daemon has not decided the added list", () => {
   fakeTimers();
-  const { button } = mount(undefined, null);
+  const availability = Object.fromEntries(TEST_AGENTS.map((agent) => [agent, "available"] as const));
+  const { button } = mount(availability, null);
   openPanel(button);
-  expect(tabs().map((tab) => tab.textContent)).toEqual(["Claude Code", "Codex", "Test Agent"]);
+  expect(tabs().map((tab) => tab.textContent)).toEqual(
+    TEST_PROVIDERS.filter((provider) => provider.quota_windows.kinds.length > 0).map((provider) => provider.label),
+  );
 });
 
 it("says so, pointing to Settings, when agents are installed but none is added", () => {
@@ -607,7 +650,8 @@ it("says so, pointing to Settings, when agents are installed but none is added",
 
 it("says that no agent is available when the added ones are not installed and nothing else is", () => {
   fakeTimers();
-  const { button } = mount({ claude: "unavailable", codex: "unavailable", grok: "unavailable", test_agent: "unavailable" }, ["claude"]);
+  const availability = Object.fromEntries(TEST_AGENTS.map((agent) => [agent, "unavailable"] as const));
+  const { button } = mount(availability, ["claude"]);
   openPanel(button);
   expect(tabs()).toHaveLength(0);
   expect(panel()!.textContent).toContain("No agent available");

@@ -2,6 +2,7 @@
 // running them, and listing their runs.
 import { CodedError } from "../errors/codedError";
 import { type Schedule, type ScheduledRunOutcome, type ScheduledTask, type ScheduledTaskLaunch, type ScheduledTaskRun } from "../protocol";
+import { isBlankPrompt } from "../scheduledTasks/blankPrompt";
 import { applyDaemonEvent } from "../store";
 import { refuseUnfillable } from "./banner";
 import type { FixtureContext, Handler, Handlers } from "./fixtureContext";
@@ -92,7 +93,7 @@ export function createScheduledTaskReplies({ scenario, store, fail }: FixtureCon
    * checked as `open_session` checks them; the fixture takes them as given. */
   const checked = (definition: { console_id: string; project_id: string | null; launch: ScheduledTaskLaunch; prompt: string; schedule: Schedule }, checkOnce: boolean) => {
     const prompt = definition.prompt.trim();
-    if (!prompt) return fail({ code: "field_required", params: { field: "prompt" }, message: "prompt is required" });
+    if (isBlankPrompt(prompt)) return fail({ code: "field_required", params: { field: "prompt" }, message: "prompt is required" });
     const { schedule } = definition;
     if (schedule.kind === "once" && checkOnce && schedule.run_at <= Date.now()) {
       return fail({ code: "scheduled_time_passed", params: { run_at: String(schedule.run_at) }, message: "the one-off time is not in the future" });

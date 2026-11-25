@@ -5,17 +5,16 @@
 use crate::accounts::shared_config::{
     config_dir, config_file, history_dir, history_lines, SharedItem,
 };
-use crate::protocol::AgentId;
 use crate::providers::claude::{
-    CLAUDE_CHECKPOINTS_DIR, CLAUDE_KEY_BINDINGS, CLAUDE_PROMPT_HISTORY, CLAUDE_RECORDS_DIR,
-    CLAUDE_SETTINGS_FILE,
+    CLAUDE_CHECKPOINTS_DIR, CLAUDE_INSTRUCTION_FILE, CLAUDE_KEY_BINDINGS, CLAUDE_PROMPT_HISTORY,
+    CLAUDE_RECORDS_DIR, CLAUDE_SETTINGS_FILE,
 };
 
 // Left out on purpose: `plans` (plan mode's writes lose their automatic permission through a
 // link) and `sessions` (a registry of running processes, not history).
 pub(super) const ITEMS: &[SharedItem] = &[
     config_file(CLAUDE_SETTINGS_FILE),
-    config_file(AgentId::CLAUDE.descriptor().instruction_file),
+    config_file(CLAUDE_INSTRUCTION_FILE),
     config_file(CLAUDE_KEY_BINDINGS),
     config_file("loop.md"),
     config_dir("agents"),

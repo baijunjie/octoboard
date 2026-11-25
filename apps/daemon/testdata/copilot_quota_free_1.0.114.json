@@ -1,0 +1,66 @@
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "snapshots": {
+      "chat": {
+        "isUnlimitedEntitlement": false,
+        "entitlementRequests": 200.0,
+        "usedRequests": 1.0,
+        "usageAllowedWithExhaustedQuota": false,
+        "overage": 0.0,
+        "overageAllowedWithExhaustedQuota": false,
+        "remainingPercentage": 99.5,
+        "resetDateEpochMs": 1796083200000.0,
+        "hasQuota": true,
+        "tokenBasedBilling": true
+      }
+    },
+    "isFreeUser": true,
+    "isTbbUser": true,
+    "planTier": "free",
+    "premiumRequestsBillable": false,
+    "modelCostColumnVisible": false,
+    "delegateAvailable": false,
+    "canSignupForCopilotFree": false,
+    "dynamicWorkflowsEnabled": true,
+    "dynamicWorkflowsUiVisible": false,
+    "providerQuotas": [
+      {
+        "provider": {
+          "id": "copilot",
+          "label": "GitHub Copilot",
+          "kind": "copilot"
+        },
+        "quotaId": "chat",
+        "unit": "ai_credits",
+        "accessState": "allowed",
+        "capacityState": "available",
+        "observationKind": "account_snapshot",
+        "quantityKind": "authoritative_budget",
+        "acquisitionStatus": "succeeded",
+        "observedAt": "2026-11-24T04:42:32.095Z",
+        "budgetMetadata": {
+          "unlimited": false,
+          "entitlement": 200.0,
+          "consumed": 1.0,
+          "remainingPercentage": 99.5,
+          "usageAllowedWhenExhausted": false,
+          "overage": 0.0,
+          "overageAllowedWhenExhausted": false,
+          "resetAtEpochMs": 1796083200000.0,
+          "tokenBasedBilling": true
+        },
+        "compatibilityKey": "chat",
+        "hasQuota": true,
+        "entitledQuantity": 200,
+        "availableQuantity": 199
+      }
+    ],
+    "upgradeUrl": "https://github.com/settings/copilot",
+    "delegateWarning": {
+      "text": "Copilot CLI lets you delegate tasks to GitHub and keep coding locally.\nUpgrade your plan to enable this feature.",
+      "url": "https://github.com/settings/copilot"
+    }
+  }
+}

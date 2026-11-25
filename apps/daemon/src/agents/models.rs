@@ -73,6 +73,12 @@ pub trait ModelCatalogue: Send + Sync {
         timeout: Duration,
     ) -> Listing;
 
+    /// How long [`load`] gives one listing. A provider whose listing is more than one short
+    /// command (a conversation with its CLI, say) names the longer time it was measured to need.
+    fn deadline(&self) -> Duration {
+        COMMAND_TIMEOUT
+    }
+
     /// Whether Octoboard names a default model for a session with no model setting (the first
     /// listed model the account may use, [`Listing::default_model`]), because the provider's own
     /// default is not checked against what the account may use. A provider that does is listed
@@ -185,7 +191,7 @@ impl Listing {
 
 /// The listing for `agent` under `config_dir` (the pinned account's directory, `None` for the
 /// default account), in the user's shell environment. Blocking: it may run a subprocess.
-pub fn load(agent: AgentId, config_dir: Option<&Path>) -> Listing {
+pub fn load(agent: AgentId, config_dir: Option<&Path>, run_homes: &Path) -> Listing {
     // Human-paced, but the result is cached anyway, so the cached snapshot keeps a dialog from
     // forking a login shell on top of the command.
     match env_shell::cached_snapshot() {
@@ -193,8 +199,8 @@ pub fn load(agent: AgentId, config_dir: Option<&Path>) -> Listing {
             agent,
             &shell_env,
             config_dir,
-            &crate::paths::agent_query_homes_dir(),
-            COMMAND_TIMEOUT,
+            run_homes,
+            provider(agent).catalogue().deadline(),
         ),
         Err(err) => {
             let detail = format!("{err:#}");
@@ -310,24 +316,8 @@ fn catalogue_stdout(
     output: Result<std::process::Output, QueryFailure>,
 ) -> Result<String, ModelsUnavailable> {
     let output = output.map_err(|failure| match failure {
-        QueryFailure::NotRun(refused) => match refused {
-            NotRun::DirMissing(_) | NotRun::HomeNotPrepared(_) => failed(agent, &refused.detail()),
-            NotRun::BinaryNotFound(binary) => ModelsUnavailable::new(
-                code::BINARY_NOT_FOUND,
-                refused.detail(),
-                &[("binary", binary)],
-            ),
-            NotRun::BinaryRefused(refusal) => ModelsUnavailable {
-                code: refusal.code,
-                params: refusal.params,
-                message: refusal.message,
-            },
-        },
-        QueryFailure::Bounded(BoundedFailure::TimedOut(_)) => ModelsUnavailable::new(
-            code::TIMED_OUT,
-            format!("{} did not list its models in time", agent.label()),
-            &[("agent", agent.label())],
-        ),
+        QueryFailure::NotRun(refused) => not_run(agent, refused),
+        QueryFailure::Bounded(BoundedFailure::TimedOut(_)) => timed_out(agent),
         QueryFailure::Bounded(other) => failed(agent, &other.to_string()),
     })?;
     if !output.status.success() {
@@ -340,6 +330,33 @@ fn catalogue_stdout(
         return Err(failed(agent, &detail));
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Why there are no models when the agent's CLI was not started.
+pub(crate) fn not_run(agent: AgentId, refused: NotRun) -> ModelsUnavailable {
+    match refused {
+        NotRun::DirMissing(_) | NotRun::DirNotExportable(..) | NotRun::HomeNotPrepared(_) => {
+            failed(agent, &refused.detail())
+        }
+        NotRun::BinaryNotFound(binary) => ModelsUnavailable::new(
+            code::BINARY_NOT_FOUND,
+            refused.detail(),
+            &[("binary", binary)],
+        ),
+        NotRun::BinaryRefused(refusal) => ModelsUnavailable {
+            code: refusal.code,
+            params: refusal.params,
+            message: refusal.message,
+        },
+    }
+}
+
+pub(crate) fn timed_out(agent: AgentId) -> ModelsUnavailable {
+    ModelsUnavailable::new(
+        code::TIMED_OUT,
+        format!("{} did not list its models in time", agent.label()),
+        &[("agent", agent.label())],
+    )
 }
 
 pub(crate) fn failed(agent: AgentId, detail: &str) -> ModelsUnavailable {
@@ -451,6 +468,7 @@ mod tests {
         assert_eq!(listing.unavailable, None);
         assert!(!NoCatalogue.names_default_model());
         assert!(NoCatalogue.fixed_model_ids().is_empty());
+        assert_eq!(NoCatalogue.deadline(), COMMAND_TIMEOUT);
     }
 
     /// The test-only provider has no catalogue of its own, so the registry gives it the default:

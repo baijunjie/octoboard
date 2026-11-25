@@ -1,15 +1,13 @@
 # Per-agent settings
 
 Settings that apply to every account of one agent, the default account included, rather than to a single account: the
-agent's tags, and the settings each agent's provider declares for itself — how Claude Code, Codex and Grok Build handle
-permission requests, whether Codex and Grok Build load Claude Code's configuration, whether Claude Code and Grok
-Build load Codex's, and whether Claude Code's sessions are asked to keep their shell commands simple. Each is set in a
+agent’s tags and its declared permission, compatibility and shell-command settings. Each is set in a
 row of the agent's **Agent settings** dialog, opened from the Settings entry of the agent's menu in Settings' **Agent
 accounts** section (see "The agent settings dialog" in `docs/product/agent-accounts.md`).
 
 ## Agent tags
 
-The user can put tags on each agent — Claude Code, Codex and Grok Build: short free-form labels saying what the agent
+The user can put tags on each supported agent: short free-form labels saying what the agent
 is good for, such as "review" or "ui". They are **one list per agent**, applied to every account of that agent, the
 default account included, not to an account or a model. They are information for agents; Octoboard itself selects
 nothing by them. A tag follows the rules of a project's tag (see "Project tags" in `docs/product/project-tags.md`):
@@ -66,6 +64,13 @@ for the sessions they cover, by a console, a project or a session, whose value w
 | Grok Build | **Permission approval** (see "Approval modes" below) | `approval_mode` | Choice of `ask`, `auto` or `always_approve` | Yes | No |
 | Grok Build | **Claude compatibility** (see "Claude compatibility" below) | `claude_compatibility` | Switch, off until chosen | Yes | Yes |
 | Grok Build | **Codex compatibility** (see "Codex compatibility" below) | `codex_compatibility` | Switch, off until chosen | Yes | Yes |
+| Antigravity CLI | **Permission approval** | `approval_mode` | Choice of `accept_edits`, `auto` or `skip_permissions` | Yes | No |
+| GitHub Copilot CLI | **Permission approval** | `approval_mode` | Choice of `allow_all` | Yes | No |
+| OpenCode | **Permission approval** | `approval_mode` | Choice of `ask` or `auto` | Yes | No |
+| OpenCode | **Claude compatibility** | `claude_compatibility` | Switch, off until chosen | Yes | Yes |
+| Qwen Code | **Permission approval** | `approval_mode` | Choice of `plan`, `default`, `auto_edit`, `auto` or `yolo` | Yes | No |
+| Qwen Code | **Claude instructions** | `claude_instructions` | Switch, off until chosen | Yes | Yes |
+| Pi | Only the common Tags row | — | — | — | — |
 
 A setting is one of two kinds:
 
@@ -89,8 +94,10 @@ window has no wording for is not shown; a choice the window has no name for is o
 `read_only` as "Read only"). Each row holds only the setting's name with a "?" help tip saying what it does and, at
 the row's end, a selector for a choice or a switch for a switch, named for the setting and the agent ("Permission
 approval for Codex"); no row carries a line of its own saying that it applies to every account of the agent, which the
-dialog says once for all its rows (see "The agent settings dialog" in `docs/product/agent-accounts.md`). A choice is
-saved when selected, its choices unavailable while the save is unanswered; a switch is saved when turned, unavailable while the save is unanswered — it
+dialog says once for all its rows (see "The agent settings dialog" in `docs/product/agent-accounts.md`). A provider can
+add a general note about its sessions that applies whatever its settings are. The dialog shows it as a second line
+of secondary text below the scope line. A choice is saved when selected, and its options are unavailable while the
+save is unanswered. A switch is saved when turned and is unavailable while the save is unanswered — it
 looks disabled but stays focusable — and keeps its position when the save fails. The switch always shows the value in
 effect. A failed save is shown in an error alert titled for the setting ("Could not save the permission approval",
 "Could not save Claude compatibility").
@@ -116,6 +123,8 @@ offer is refused as an unreadable request (`unreadable_request`). The confirmati
 window, not by the daemon, so this request saves such a choice at once.
 
 ## Approval modes
+
+Antigravity CLI offers Accept edits, Auto and Skip permissions. It offers no Plan setting because the measured Plan mode still let a file edit reach the approval prompt. GitHub Copilot CLI can ask as usual or approve all tools. OpenCode offers Ask and Auto. Qwen Code exposes its native approval modes. Pi follows its native approval behavior and has no approval-mode setting.
 
 How Claude Code, Codex and Grok Build handle permission requests and access: the **Permission approval** row of each
 agent's settings dialog, a provider setting of the choice kind (see "Provider settings" above).
@@ -202,6 +211,8 @@ review names the choice beforehand (see "The agent account settings are applied 
 `docs/product/settings-in-a-configuration.md`). No session can read or change these settings.
 
 ## Claude compatibility
+
+Qwen Code offers a **Claude instructions** switch. It includes Claude instructions among its launch’s context files. OpenCode controls Claude instruction and skill discovery for the launch. For the limits of native compatibility in Antigravity CLI, GitHub Copilot CLI and Pi, see “Compatibility for Pi, Qwen Code, GitHub Copilot CLI, Antigravity CLI and OpenCode” in `docs/product/compatibility-between-agents.md`.
 
 Whether an agent other than Claude Code — Codex and Grok Build — has its sessions load Claude Code's configuration as
 well as its own: Claude Code's instructions (`CLAUDE.md` and rules), skills, agents, commands and MCP servers, and

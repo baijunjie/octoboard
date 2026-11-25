@@ -587,7 +587,7 @@ test("agent entry links resolve and language bundles contain only their own page
       for (const name of ["Claude Code", "Codex"]) {
         assert.ok(catalog.codingAgentsSeoTitle.includes(name), `${locale.code}: ${name}`);
       }
-      for (const name of ["Claude Code", "Codex", "Grok Build", "macOS", "Windows"]) {
+      for (const name of ["Claude Code", "Codex", "Grok Build", "Antigravity CLI", "GitHub Copilot CLI", "OpenCode", "Qwen Code", "Pi", "macOS", "Windows"]) {
         assert.ok(catalog.workspaceSeoSummary.includes(name), `${locale.code}: ${name}`);
       }
     }

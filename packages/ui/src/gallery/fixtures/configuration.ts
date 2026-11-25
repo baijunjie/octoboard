@@ -679,6 +679,45 @@ const ACCOUNTS_UNUSABLE = inspected({
   },
 });
 
+/** The machine with OpenCode added, for an import that asks for an account it cannot have. */
+const defaultAccountOnlyMachine: Scenario["state"] = {
+  ...snapshotState({
+    ...layout,
+    settings: { ...DEFAULT_SETTINGS, added_agents: [...FIXTURE_AGENTS], default_clone_dir: DEFAULT_CLONE_DIR, accounts },
+  }),
+};
+
+/** A document of accounts alone that holds an account of the provider with the default account only: the daemon marks it
+ * invalid, refusing owned accounts for that agent, and no other directory fixes that. */
+const ACCOUNT_OF_DEFAULT_ACCOUNT_ONLY = inspected({
+  consoles: [],
+  accounts: {
+    agents_to_add: [],
+    agents: [
+      {
+        agent: "opencode",
+        default_name: null,
+        default_name_applies: false,
+        default_disabled: null,
+        default_disabled_applies: false,
+        accounts: [
+          inspectedAccount({
+            name: "Scratch",
+            directory: "~/.local/share/opencode-scratch",
+            status: "invalid",
+            error: failure(
+              "provider_unsupported",
+              { agent: "opencode", operation: "owned_accounts" },
+              "OpenCode supports only the default account",
+            ),
+          }),
+        ],
+      },
+    ],
+    agent_settings: null,
+  },
+});
+
 /** `object` with only the `keys` it has. */
 const pick = <T extends object, K extends keyof T>(object: T, keys: K[]): Pick<T, K> => Object.fromEntries(keys.filter((key) => key in object).map((key) => [key, object[key]])) as Pick<T, K>;
 
@@ -1336,6 +1375,16 @@ export const configurationScenarios: Scenario[] = [
     state: accountsMachine,
     configuration: { file: fileOf(ACCOUNT_FOREIGN_DIRECTORY), inspection: ACCOUNT_FOREIGN_DIRECTORY },
     steps: [...importFromSettings, chooseFile, hoverAccountMark("invalidMark", "Laptop")],
+  },
+  {
+    id: "configuration-import-review-account-default-only",
+    group: GROUP,
+    category: "normal",
+    title: "Import, review of an account of an agent that has the default account only",
+    description: "A document of accounts alone, whose Scratch account belongs to OpenCode, an agent that cannot have accounts beyond the default one. Scratch has no status badge, and its choice is Leave out with nothing else to pick (no directory choice). The mouse rests on the warning mark after the Scratch name: its popover opens above it with no click and no focus taken, saying that OpenCode supports only the default account, so other accounts cannot be added or imported, then that the account is left out.",
+    state: defaultAccountOnlyMachine,
+    configuration: { file: fileOf(ACCOUNT_OF_DEFAULT_ACCOUNT_ONLY), inspection: ACCOUNT_OF_DEFAULT_ACCOUNT_ONLY },
+    steps: [...importFromSettings, chooseFile, hoverAccountMark("invalidMark", "Scratch")],
   },
   {
     id: "configuration-import-review-foreign-clone-dir",

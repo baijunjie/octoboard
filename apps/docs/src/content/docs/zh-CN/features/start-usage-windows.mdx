@@ -14,7 +14,7 @@ import Screenshot from "../../../../components/Screenshot.astro";
 ## 功能说明
 
 - <strong>重置后的窗口要等一个请求。</strong>在账户发出下一次请求之前，智能体报告这个窗口时不带重置时间，所以它不显示倒计时。它等得越久，下一次重置就来得越晚。
-- <strong>由 {productName} 替你发出这第一个请求。</strong>开启<strong>自动启动用量窗口</strong>后，当某次读取显示有窗口已经重置却还没开始计时，{productName} 会在那个账户上发出一个很小的请求，然后重新读取该账户，倒计时就显示出来了。这项设置对所有智能体一视同仁。
+- <strong>由 {productName} 替你发出这第一个请求。</strong>开启<strong>自动启动用量窗口</strong>后，当某次读取显示有窗口已经重置却还没开始计时，{productName} 会在那个账户上发出一个很小的请求，然后重新读取该账户，倒计时就显示出来了。此设置适用于 Claude Code、Codex 和 Grok Build。Antigravity CLI 和 GitHub Copilot CLI 可报告额度，但不支持用请求启动用量窗口。OpenCode、Qwen Code 和 Pi 没有可启动的套餐用量窗口。
 - <strong>请求尽可能小。</strong>它是一个单词的提示词、一个轮次，用智能体最便宜的模型、最低的推理强度，并在智能体能限制的情况下限制回复长度。没有哪个智能体会把这次请求留在自己的历史里：Claude Code 不保留对话，Codex 不写会话文件，Grok Build 的请求在 {productName} 自己的文件夹里运行，而不是在账户的文件夹里；请求结束后，{productName} 会清空自己的那个文件夹。Grok Build 还会另外发出两个很小的请求来给会话起标题。
 - <strong>局限：</strong>它在读取账户之后才会动作，而 {productName} 大约每 5 分钟读取一次，所以窗口可能在重置后最多约一个间隔才被启动，倒计时也要到之后的读取才显示。已停用、未登录、最近一次读取失败或没有套餐额度的账户会被跳过，某个模型自己的每周限额也不会被启动。请求失败不会重试，也不会在窗口里显示，只会写入 {productName} 的日志。配置选择了其他凭据存储或模型提供方的 Codex 账户无法用这种方式启动。
 

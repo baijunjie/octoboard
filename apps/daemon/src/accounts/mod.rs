@@ -1,6 +1,7 @@
 //! The agent accounts: how two account names are compared (`account_name_key`, and
 //! `clears_default_account_name` for the default account's), where each keeps its configuration,
-//! signing one in, its plan quota, moving a removed one's directory to the Trash, sharing the
+//! signing one in, whether the host's credential store holds an item of one
+//! (`credential_presence`), its plan quota, moving a removed one's directory to the Trash, sharing the
 //! default account's configuration, which agent and account a session opens with (`choice`), and
 //! switching a session to another account (copying its conversation over; whether it carries on
 //! with its turn is `crate::records::switch_continue`'s), with what keeps a provider's thread
@@ -8,6 +9,7 @@
 
 pub(crate) mod background_cli;
 pub(crate) mod choice;
+pub(crate) mod credential_presence;
 pub(crate) mod dirs;
 pub(crate) mod login;
 pub(crate) mod mcp_inventory;

@@ -69,6 +69,44 @@ pub struct Stat {
     changed: i64,
 }
 
+impl Stat {
+    /// The file's change time (contents or attributes) in milliseconds since the Unix epoch,
+    /// computed as Node computes `ctimeMs` (whole seconds times 1000 plus the nanoseconds over a
+    /// million, in double precision), so that the two compare equal: on Windows from the file's
+    /// basic information, as libuv reads it. `None` where the host gives no change time.
+    pub fn change_time_ms(&self) -> Option<f64> {
+        host_change_time_ms(self)
+    }
+}
+
+/// The change time of the file at `path`, a link there followed ([`Stat::change_time_ms`]);
+/// `None` where it cannot be read.
+pub fn change_time_ms(path: &Path) -> Option<f64> {
+    stat(path, Links::Follow).ok()?.change_time_ms()
+}
+
+/// Node's `ctimeMs` of a change time `seconds` and `nanoseconds` past the Unix epoch.
+fn node_ms(seconds: i64, nanoseconds: i64) -> f64 {
+    seconds as f64 * 1000.0 + nanoseconds as f64 / 1_000_000.0
+}
+
+/// The 100-nanosecond intervals between 1601-01-01, where a `FILETIME` counts from, and the Unix
+/// epoch.
+const UNIX_EPOCH_FILETIME: i64 = 116_444_736_000_000_000;
+
+/// Node's `ctimeMs` of a Windows `FILETIME`, turned into a `timespec` as libuv does
+/// (`uv__filetime_to_timespec`): whole seconds and a non-negative remainder. `None` for 0, the
+/// value of a file system that keeps no change time. Host-independent so every host tests it.
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
+fn filetime_node_ms(filetime: i64) -> Option<f64> {
+    if filetime == 0 {
+        return None;
+    }
+    let since = filetime - UNIX_EPOCH_FILETIME;
+    let (seconds, rest) = (since.div_euclid(10_000_000), since.rem_euclid(10_000_000));
+    Some(node_ms(seconds, rest * 100))
+}
+
 /// [`Stat`] of the file at `path`, following a link there or not as `links` says.
 pub fn stat(path: &Path, links: Links) -> io::Result<Stat> {
     host_stat(path, links)

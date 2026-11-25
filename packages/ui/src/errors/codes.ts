@@ -43,6 +43,11 @@ export interface CodeRecord extends MessageFacets {
   nested?: "failure" | "failureAndRemedy";
   /** A session notice that is a failure, shown as an error alert rather than a toast (`noticeKind`). */
   failureNotice?: true;
+  /** A session notice that is no failure and has to be read: shown in the shared alert until the user dismisses it,
+   * rather than as a toast that closes by itself (`noticeKind`). It keeps its record's remedy where it has one, and is
+   * otherwise a notice with nothing to do (`classifyError`); with no `alertTitle` of its own it takes the title every
+   * such notice shares. Never beside `failureNotice`. */
+  acknowledgedNotice?: true;
   /** `daemon.<code>.alertTitle` exists: the alert's own title, which wins over the caller's except in a dialog's
    * submit or confirmation (and in a dialog's closing, after-the-fact alert for `handoff_archive_failed` and
    * `handoff_move_failed`, whose title is the code's: "Could not finish the handoff"). Checked against the catalog by
@@ -85,7 +90,7 @@ export interface CodeRecord extends MessageFacets {
 }
 
 /** The operations `provider_unsupported` is worded under, as its variants. */
-const UNSUPPORTED_OPERATIONS: Record<string, MessageFacets> = { sign_in: {}, kick: {}, reset_credit: {}, config_sharing: {}, cli_update: {}, mcp_sign_in: {}, interactions: {}, message_images: {}, slash_commands: {} };
+const UNSUPPORTED_OPERATIONS: Record<string, MessageFacets> = { sign_in: {}, kick: {}, reset_credit: {}, config_sharing: {}, cli_update: {}, mcp_sign_in: {}, owned_accounts: {}, interactions: {}, message_images: {}, slash_commands: {}, mcp_inventory: {}, native_app: {} };
 
 /** The variant of a message about a directory the daemon cannot read or reach, on a host that is not a Mac: the
  * per-volume file access prompts its own wording explains are macOS's, and elsewhere the daemon reads with the
@@ -141,6 +146,7 @@ const CORE_CODES = {
   // download page is the way to it.
   binary_not_found: { origin: "daemon", recovery: "tool", codeParams: ["binary", "pathVar"], uiParams: { pathVar: "PATH", git: "Git" }, variants: { git: { codeParams: ["pathVar"] } }, variantOf: (params) => params.binary === "git" ? "git" : undefined },
   clean_filtered: { origin: "daemon", recovery: "scope", codeParams: ["path", "filter"] },
+  command_not_found: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, codeParams: ["command"] },
   command_not_recognised: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, codeParams: ["command", "offered"] },
   config_dir_not_absolute: { origin: "daemon", recovery: "path", codeParams: ["tilde"], uiParams: { tilde: "~/" } },
   config_dir_taken: { origin: "daemon", recovery: "accountDirectory", defaultAccountParams: ["name"], nameParams: ["name"] },
@@ -259,6 +265,8 @@ const CORE_CODES = {
   login_failed: { origin: "daemon", detailBlock: true },
   login_not_confirmed: { origin: "daemon" },
   login_not_running: { origin: "daemon", recovery: "none" },
+  // The login dialog ignores it too: the question went with another window's answer or with the login.
+  login_question_not_open: { origin: "daemon", recovery: "none" },
   mcp_server_auth_busy: { origin: "daemon", recovery: "none" },
   mcp_sign_in_not_running: { origin: "daemon", recovery: "none" },
   memory_changed: { origin: "daemon", recovery: "none", nameParams: ["summary"] },
@@ -274,6 +282,16 @@ const CORE_CODES = {
   message_not_sent: { origin: "daemon", recovery: "unsentMessage", failureNotice: true, alertTitle: true, variantOf: (params) => params.submit_retry === "once" ? "retry" : undefined },
   message_sent_with_draft: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, detailLabel: true, variantOf: (params) => (params.held === "message" ? "previous" : params.held === "message_and_draft" ? "previousAndDraft" : params.detail ? undefined : "unread") },
   message_waits_on_input: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
+  message_cleared_after_cancel: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, detailLabel: true, variantOf: (params) => (params.cleared === "part" ? "part" : undefined) },
+  // Never in the input box and nothing cleared, unlike `message_cleared_after_cancel`: the agent's own server or
+  // extension channel took it, and the agent gave it back.
+  message_given_back_unsent: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, detailLabel: true },
+  // Nothing given back and nothing cleared, unlike the two above: the agent held the message for the turn and
+  // dropped it when the turn was cancelled.
+  message_dropped_at_cancel: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, detailLabel: true },
+  message_maybe_dropped_at_cancel: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, detailLabel: true },
+  message_not_delivered: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, detailLabel: true },
+  message_not_taken: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, detailLabel: true },
   // A relaunch that ends at once with a new model most likely does not take that model, and leaves the session not
   // running.
   model_change_did_not_come_up: { origin: "daemon", recovery: "modelChange" },
@@ -428,7 +446,7 @@ const CORE_CODES = {
   unknown_session: { origin: "daemon", recovery: "session", recordIds: ["session"], nameParams: ["session"] },
   unknown_shell_terminal: { origin: "daemon", recovery: "refresh", recordIds: ["shell_terminal"], nameParams: ["shell_terminal"] },
   unreadable_request: { origin: "daemon", unexpected: "the window sends only requests of the shapes it knows", detailBlock: true },
-  unshared_state_database: { origin: "daemon", recovery: "none", codeParams: ["path"], nameParams: ["name"] },
+  unshared_state_database: { origin: "daemon", codeParams: ["path"], nameParams: ["name"] },
   unsupported_file_type: { origin: "daemon", recovery: "scope", codeParams: ["path"], variants: { unmerged: { codeParams: ["path"] } }, variantOf: (params) => params.file_type === "unmerged" ? "unmerged" : undefined },
   upload_parts_mismatch: { origin: "daemon", unexpected: "the window sends an upload's parts in order and saves after the last, so only a window bug, or an upload that expired after 60 seconds without a part, meets it" },
   upload_unavailable: { origin: "daemon", unexpected: "the window sends an upload's parts in order and saves after the last, so only a window bug, or an upload that expired after 60 seconds without a part, meets it" },

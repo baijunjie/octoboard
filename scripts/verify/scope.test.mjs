@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
@@ -29,6 +29,9 @@ const CASES = [
   ["apps/docs/astro.config.ts", ["docs"]],
   ["apps/docs/src/content/docs/index.md", ["verify", "web", "docs"]],
   ["apps/daemon/src/main.rs", ["daemon"]],
+  // The scripts the daemon compiles in and the node tests beside them: the daemon's steps run those tests.
+  ["apps/daemon/src/adapter/pi/extension.js", ["daemon"]],
+  ["apps/daemon/src/adapter/opencode/plugin.test.mjs", ["daemon"]],
   ["apps/desktop/src-tauri/src/lib.rs", ["native"]],
   ["apps/desktop/scripts/bundle.mjs", ["desktop"]],
   ["apps/desktop/package.json", ["ui", "desktop", "native"], ["ui"]],
@@ -221,39 +224,18 @@ test("cross-package file reads are all named by a rule", () => {
   assert.ok(reads.some(([, target]) => target === "apps/daemon/PROTOCOL.md"), "the scan no longer finds the daemon's read of its protocol document; its patterns are stale");
 });
 
-// `WEB_IMPORTS_FROM_UI` and `DOCS_IMPORTS_FROM_UI` are kept by hand: this finds what `apps/web` and `apps/docs` import
-// from `packages/ui/src`, and what that imports in turn, so a new import fails here instead of going unnoticed.
-test("everything apps/web and apps/docs import from the UI package is counted as a cross-package relation", () => {
-  const exported = JSON.parse(readFileSync(path.join(root, "packages/ui/package.json"), "utf8")).exports;
-  // A `@octoboard/ui/<name>` import resolves through the UI package's `exports` map.
-  const target = (specifier) => {
-    if (!specifier.startsWith("@octoboard/ui/")) return specifier;
-    return path.join(root, "packages/ui", exported[`./${specifier.slice("@octoboard/ui/".length)}`]);
-  };
-  for (const [name, dir] of [["web", "apps/web"], ["docs", "apps/docs"]]) {
-    const seen = new Set();
-    const visit = (file) => {
-      for (const match of readFileSync(file, "utf8").matchAll(/(?:from|import)\s*\(?\s*["']([.@][^"']*)["']/g)) {
-        const base = path.resolve(path.dirname(file), target(match[1]));
-        const resolved = [".ts", ".tsx", ""].map((ext) => base + ext).find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
-        if (resolved && resolved.includes(`${path.sep}packages${path.sep}ui${path.sep}src${path.sep}`) && !seen.has(resolved)) {
-          seen.add(resolved);
-          visit(resolved);
-        }
-      }
-    };
-    const sources = [];
-    const walk = (current) => {
-      for (const entry of readdirSync(current, { withFileTypes: true })) {
-        if ([".nuxt", ".output", ".astro", "dist", "node_modules", "public"].includes(entry.name)) continue;
-        const full = path.join(current, entry.name);
-        if (entry.isDirectory()) walk(full);
-        else if (/\.(ts|vue|mjs|astro)$/.test(entry.name)) sources.push(full);
-      }
-    };
-    walk(path.join(root, dir));
-    sources.forEach(visit);
-    for (const file of seen) assert.ok(planScope([path.relative(root, file)]).packages.includes(name), file);
-    assert.ok(seen.size > 0, `${dir} imports nothing from the UI package; the scan's patterns are stale`);
+// `WEB_IMPORTS_FROM_UI` and `DOCS_IMPORTS_FROM_UI` are read from the importers' sources (`ui-imports.mjs`), so these hold
+// the derivation to the real tree: an empty list, or one without the modules named here, means it has gone stale.
+test("what apps/web and apps/docs import from the UI package selects them, the provider modules behind the agent marks included", () => {
+  for (const file of ["packages/ui/src/providers/agentMarks.ts", "packages/ui/src/providers/types.ts", "packages/ui/src/i18n/matchLanguage.ts", "packages/ui/src/i18n/languages.ts"]) {
+    assert.ok(WEB_IMPORTS_FROM_UI.includes(file), file);
   }
+  // No provider module is named in `scope.mjs`: each is found through the marks' own imports.
+  const marks = readFileSync(path.join(root, "packages/ui/src/providers/agentMarks.ts"), "utf8");
+  const providers = [...marks.matchAll(/from\s*["']\.\/([^"']+)["']/g)].map(([, name]) => `packages/ui/src/providers/${name}.ts`);
+  assert.ok(providers.length > 0, "the agent marks import no provider module; the pattern is stale");
+  for (const file of providers) assert.deepEqual(planScope([file]).packages, ["verify", "ui", "web"], file);
+  assert.ok(!readFileSync(path.join(root, "scripts/verify/scope.mjs"), "utf8").includes("packages/ui/src/providers/"), "a provider module is named by hand in scope.mjs");
+  assert.ok(DOCS_IMPORTS_FROM_UI.includes("packages/ui/src/i18n/languages.ts"));
+  assert.deepEqual(planScope(["packages/ui/src/i18n/languages.ts"]).packages, ["verify", "ui", "web", "docs", "desktop", "daemon"]);
 });

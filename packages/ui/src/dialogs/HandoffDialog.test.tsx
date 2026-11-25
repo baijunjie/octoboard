@@ -14,7 +14,7 @@ import { createStateStore, DaemonProvider, type Daemon, type State } from "../st
 import { buttons, withoutIsolates } from "../test/dom";
 import { availabilityOf } from "../fixtures/fixtureProviders";
 import { testDaemon } from "../test/testDaemon";
-import { TEST_PROVIDERS } from "../test/testProviders";
+import { TEST_AGENTS, TEST_PROVIDERS } from "../test/testProviders";
 import { HandoffDialog } from "./HandoffDialog";
 import { fakeTimers, fakeTimersKeepingFrames, flushPromises } from "../test/clock";
 import { framesAsTimers, settleFrames } from "../components/dialog/dialogTestSupport";
@@ -207,7 +207,7 @@ it("keeps focus inside the dialog when a retry of the check succeeds and takes t
 });
 
 it("turns into an acknowledgement-only failure modal when no other agent can be picked", async () => {
-  const { request, onClose } = mount(hub, [], [], { codex: "unavailable", grok: "unavailable", test_agent: "unavailable" });
+  const { request, onClose } = mount(hub, [], [], Object.fromEntries(TEST_AGENTS.filter((agent) => agent !== "claude").map((agent) => [agent, "unavailable" as const])));
   await settle();
   const dialog = document.body.querySelector('[role="alertdialog"]');
   expect(dialog?.textContent).toContain("No other agent is available to take this session over.");

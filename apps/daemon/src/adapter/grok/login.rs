@@ -9,7 +9,7 @@ use std::pin::Pin;
 use tokio::sync::Notify;
 
 use crate::accounts::background_cli::Process;
-use crate::accounts::login::flows::{Flow, LoginFlow, Outcome, Progress};
+use crate::accounts::login::flows::{looks_like_device_code, Flow, LoginFlow, Outcome, Progress};
 use crate::providers::grok::GROK_SIGN_IN_FILE;
 
 pub(super) struct GrokLogin;
@@ -26,11 +26,11 @@ impl LoginFlow for GrokLogin {
 }
 
 async fn sign_in(flow: &Flow, progress: &Progress, cancel: &Notify) -> Outcome {
-    let mut process = match Process::spawn(
-        flow.command(&["login", "--device-auth"]),
-        flow.agent.label(),
-        false,
-    ) {
+    let command = match flow.command(&["login", "--device-auth"]) {
+        Ok(command) => command,
+        Err(outcome) => return outcome,
+    };
+    let mut process = match Process::spawn(command, flow.agent.label(), false) {
         Ok(process) => process,
         Err(err) => return flow.failed(&format!("it could not be started: {err}")),
     };
@@ -94,18 +94,6 @@ fn user_code_in(url: &str) -> Option<String> {
         .find_map(|pair| pair.strip_prefix("user_code="))
         .filter(|code| !code.is_empty())
         .map(str::to_string)
-}
-
-/// A line that is only a code of two groups of four letters or digits, as Grok Build prints it
-/// under "Confirm this code in your browser".
-fn looks_like_device_code(line: &str) -> bool {
-    let mut groups = line.split('-');
-    let is_group = |group: Option<&str>| {
-        group.is_some_and(|group| {
-            group.len() == 4 && group.chars().all(|c| c.is_ascii_alphanumeric())
-        })
-    };
-    is_group(groups.next()) && is_group(groups.next()) && groups.next().is_none()
 }
 
 #[cfg(test)]

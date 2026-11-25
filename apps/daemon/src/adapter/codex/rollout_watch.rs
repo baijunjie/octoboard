@@ -35,7 +35,6 @@ use serde_json::Value;
 
 use crate::hooks::TurnEnd;
 use crate::messaging::capacity_retry::{self, Judgement};
-use crate::protocol::SessionStatus;
 use crate::records::watch::{self, Owed, Start, Then, Watch};
 use crate::state::{AppState, TurnClose};
 use crate::text::trimmed_or_none;
@@ -129,18 +128,42 @@ pub fn watch_for_failure(
         },
         |_, _| Owed::Yes,
         move |line| ending_in_line(line, &turn_id),
-        |state, session_id, _, ending| {
-            match ending {
-                // `Stop` is on its way and ends the turn in the usual way.
-                Ending::Completed => {}
-                Ending::Failed {
-                    message,
-                    at_capacity,
-                } => end_failed_turn(state, session_id, message, at_capacity),
-            }
+        |state, session_id, generation, ending| {
+            end_watched_turn(state, session_id, generation, ending);
             Then::Stop
         },
     );
+}
+
+/// Acts on the `ending` watch `generation` found for its turn: a failed turn is ended, while the
+/// watch is still the session's current one.
+///
+/// The watch's own check that it is current comes before this is called, and the next prompt's
+/// hook retires the watch and opens its turn from another thread, so without the bookkeeping held
+/// across the write (`AppState::while_record_watch_current`) a prompt submitted in between would
+/// have the turn it opened closed as the failed one. Held, the hook waits and opens its turn
+/// after the failed one is closed; already retired, nothing is written. Nothing on the way starts
+/// or ends a watch, which that hold forbids: the retry is armed as a task of its own.
+fn end_watched_turn(state: &Arc<AppState>, session_id: &str, generation: u64, ending: Ending) {
+    match ending {
+        // `Stop` is on its way and ends the turn in the usual way.
+        Ending::Completed => {}
+        Ending::Failed {
+            message,
+            at_capacity,
+        } => {
+            let ended = state.while_record_watch_current(session_id, generation, || {
+                end_failed_turn_or_retry(state, session_id, message, at_capacity)
+            });
+            if ended.is_none() {
+                tracing::debug!(
+                    session = %session_id,
+                    "a failed turn was found in the rollout, but the next prompt had retired \
+                     the watch"
+                );
+            }
+        }
+    }
 }
 
 /// Ends the open turn as a failed one, as if the agent had fired a failure event for it: the turn
@@ -150,7 +173,7 @@ pub fn watch_for_failure(
 /// A turn that failed because the model was at capacity is retried by `capacity_retry` while it
 /// has retries left, and its owner is told of that in place of the report; with none left the
 /// report says so.
-pub(crate) fn end_failed_turn(
+pub(crate) fn end_failed_turn_or_retry(
     state: &Arc<AppState>,
     session_id: &str,
     message: Option<String>,
@@ -164,7 +187,7 @@ pub(crate) fn end_failed_turn(
             if matches!(close, TurnClose::OwesReport | TurnClose::Reported) {
                 crate::messaging::usage_limit::turn_failed_otherwise(state, session_id);
             }
-            if !settle_failed_turn(state, session_id, close) {
+            if !watch::settle_failed_turn(state, session_id, close) {
                 state.capacity_retries.forget(session_id);
             } else {
                 capacity_retry::arm(
@@ -189,40 +212,7 @@ pub(crate) fn end_failed_turn(
         backstop: false,
     };
     let close = crate::messaging::reporting::close_turn_and_report(state, session_id, turn);
-    settle_failed_turn(state, session_id, close);
-}
-
-/// Puts the session back at its prompt, paused, after the turn it ended as failed was closed with
-/// `close`. Whether it did: no turn open means a hook ended it first, and the session is already
-/// where it belongs.
-fn settle_failed_turn(state: &Arc<AppState>, session_id: &str, close: TurnClose) -> bool {
-    match close {
-        // `NotThisTurn` cannot come back for an end that is not clock-attributed; it is grouped
-        // here only to keep the match exhaustive.
-        TurnClose::NoTurn | TurnClose::NotThisTurn => {
-            tracing::debug!(
-                session = %session_id,
-                "a failed turn was found in the rollout, but no turn was open"
-            );
-            false
-        }
-        TurnClose::OwesReport | TurnClose::Reported => {
-            tracing::debug!(
-                session = %session_id,
-                "a turn ended in an error; the agent is back at its prompt"
-            );
-            // Before the status write, so the record it publishes carries the flag.
-            state.set_paused(session_id, true);
-            if let Err(err) = state.apply_hook_status(session_id, SessionStatus::Idle) {
-                tracing::debug!(
-                    session = %session_id, %err,
-                    "applying the status after a failed turn failed"
-                );
-            }
-            state.spawn_flush_outbox(session_id, SessionStatus::Idle);
-            true
-        }
-    }
+    watch::settle_failed_turn(state, session_id, close);
 }
 
 #[cfg(test)]
@@ -232,7 +222,7 @@ mod tests {
     use std::path::Path;
 
     use super::*;
-    use crate::protocol::{AgentId, Console, Session, SessionKind};
+    use crate::protocol::{AgentId, Console, Session, SessionKind, SessionStatus};
     use crate::test_support::{bare_session, idle_stand_in, ScratchDir, ScratchFile, StandIn};
 
     /// Two failed turns of one Codex 0.160.0 session whose account was at its usage limit, taken
@@ -471,11 +461,15 @@ mod tests {
         }
 
         fn watch(&self) {
+            self.watch_turn(FAILED_TURN);
+        }
+
+        fn watch_turn(&self, turn: &str) {
             watch_for_failure(
                 &self.state,
                 "s",
                 Some(&self.path.to_string_lossy()),
-                Some(FAILED_TURN),
+                Some(turn),
             );
         }
 
@@ -494,6 +488,24 @@ mod tests {
             })
             .await
             .unwrap()
+        }
+
+        fn status(&self) -> SessionStatus {
+            self.state.store.get_session("s").unwrap().unwrap().status
+        }
+
+        fn paused(&self) -> bool {
+            self.state
+                .wire_session(self.state.session_record("s").unwrap())
+                .paused
+        }
+
+        /// The session is as the fixture made it: working, not paused, its turn still open.
+        /// Closes the turn to find that out, so it is the last thing a test asks.
+        fn assert_untouched(&self) {
+            assert_eq!(self.status(), SessionStatus::Working);
+            assert!(!self.paused());
+            assert_ne!(self.state.close_turn("s", false), TurnClose::NoTurn);
         }
     }
 
@@ -544,29 +556,73 @@ mod tests {
         assert!(fixture.went_idle(crate::test_support::PATIENCE).await);
     }
 
-    /// A turn that completed normally is `Stop`'s to end, not the watch's; one still running is not
-    /// over. Neither may move the session.
-    #[tokio::test]
-    async fn a_turn_that_has_not_failed_leaves_the_session_working() {
-        for (name, content) in [("running", RUNNING), ("completed", COMPLETED)] {
-            let fixture = Fixture::new(name);
-            fixture.watch();
-            write_rollout(&fixture.path, content);
-            assert!(
-                !fixture.went_idle(POLL_INTERVAL * 6).await,
-                "{name} must not move the session"
-            );
-        }
+    /// A turn still running is not over, and the watch goes on watching it: the session is read
+    /// after the watch has made its polls over the whole rollout.
+    #[tokio::test(start_paused = true)]
+    async fn a_turn_still_running_leaves_the_session_working() {
+        let fixture = Fixture::new("running");
+        fixture.watch();
+        write_rollout(&fixture.path, RUNNING);
+        watch::polls_ran(POLL_INTERVAL).await;
+        fixture.assert_untouched();
+    }
+
+    /// A turn that completed normally is `Stop`'s to end, not the watch's: the watch finds the
+    /// completion and stops without moving the session, and its end is the signal that it never
+    /// will.
+    #[tokio::test(start_paused = true)]
+    async fn a_turn_that_completed_leaves_the_session_working() {
+        let fixture = Fixture::new("completed");
+        fixture.watch_turn(COMPLETED_TURN);
+        write_rollout(&fixture.path, COMPLETED);
+        watch::last_ended().await;
+        fixture.assert_untouched();
     }
 
     /// The next prompt's submission retires the watch, so a failure written afterwards moves
-    /// nothing.
-    #[tokio::test]
+    /// nothing: the retired watch ends without acting on it, and its end is the signal that it
+    /// never will.
+    #[tokio::test(start_paused = true)]
     async fn a_watch_retired_by_the_next_prompt_does_not_write() {
         let fixture = Fixture::new("retired");
         fixture.watch();
         fixture.state.end_record_watch("s");
         write_rollout(&fixture.path, failed_turn());
-        assert!(!fixture.went_idle(POLL_INTERVAL * 6).await);
+        watch::last_ended().await;
+        fixture.assert_untouched();
+    }
+
+    /// The watch's poll checks that it is current before it acts on what it found, and the next
+    /// prompt can retire it right after that check: the failure it found is then not written, by
+    /// the same hold on the bookkeeping, and the turn the prompt opened stays open.
+    #[tokio::test]
+    async fn a_failure_found_by_a_watch_retired_since_its_check_is_not_written() {
+        let fixture = Fixture::new("retired-after-check");
+        let generation = fixture.state.begin_record_watch("s");
+        fixture.state.end_record_watch("s");
+        for at_capacity in [false, true] {
+            let ending = Ending::Failed {
+                message: Some("it failed".to_string()),
+                at_capacity,
+            };
+            end_watched_turn(&fixture.state, "s", generation, ending);
+        }
+        fixture.assert_untouched();
+        assert_eq!(fixture.state.capacity_retries.failures_for_test("s"), 0);
+    }
+
+    /// Found by the session's current watch, the same failure ends the turn.
+    #[tokio::test]
+    async fn a_failure_found_by_the_current_watch_ends_the_turn() {
+        let fixture = Fixture::new("current");
+        let generation = fixture.state.begin_record_watch("s");
+        let ending = Ending::Failed {
+            message: Some("it failed".to_string()),
+            at_capacity: false,
+        };
+        end_watched_turn(&fixture.state, "s", generation, ending);
+        assert_eq!(fixture.status(), SessionStatus::Idle);
+        assert!(fixture.paused());
+        assert_eq!(fixture.state.close_turn("s", false), TurnClose::NoTurn);
     }
 }

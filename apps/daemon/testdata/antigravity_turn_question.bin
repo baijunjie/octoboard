@@ -1,0 +1,188 @@
+[?25lCALL ask_question {"questions":[{"question":"Which target?","options":["Alpha","Beta"],"is_multi_select":false}]}
+
+[16D[1K [2mG[m[2A[14C[?25h[?25l[36A[K
+  Stub: hello.[K
+[?5W]7501;state=working:app=antigravity[J
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> SLOW please[m
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL run_command {"CommandLine":"echo octo > made.txt","toolSummary":"make a file","WaitMsBeforeAsync":5000}[m
+
+[32m●[m [33;1mRan[m [37m(echo octo > made.txt)[m [37m(ctrl+o to expand)[m
+
+  Stub: tool finished.
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL run_command {"CommandLine":"echo octo > other.txt","toolSummary":"make another","WaitMsBeforeAsync":5000}[m
+
+[31m●[m [33;1mRan[m [37m(echo octo > other.txt)[m [37mfailed[m [37m(ctrl+o to expand)[m
+
+[34;1mCommand[m
+[34;1m  ⎿  [37;22mUser declined the tool call[m
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL write_file {"Path":"/scratch/project/note.txt","Content":"hi"}[m
+
+[32m●[m [33;1mEdited[m 1 file [37m(note.txt)[m [37m(ctrl+o to expand)[m
+
+  Stub: tool finished.
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL edit_file {"Path":"/scratch/project/note.txt","Target":"hi","Replacement":"ho"}[m
+
+[32m●[m [33;1mEdited[m 1 file [37m(note.txt)[m [37m(ctrl+o to expand)[m
+
+  Stub: tool finished.
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL ask_question {"questions":[{"question":"Which target?","options":["Alpha","Beta"],"is_multi_select":false}]}[m
+⣻  [90mG[94menera[90mting...[m
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[94m>[m
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l
+
+
+
+[?5W[6A[K
+[33m○[m [33;1mAskQuestion[37;22m(Which target?)[m[K
+⣻  [94mWork[90ming...[m
+
+[94m>[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l[2A⣽ 
+
+[?25h[?25l[0 q]7501;state=blocked:kind=question:app=antigravity:msg=V2hpY2ggdGFyZ2V0Pw==[37A  Stub: tool finished.
+
+
+[25C[34;1mother.txt","toolSummary":"make another","WaitMsBeforeAsync":5000}[m
+
+[31m●[m [33;1mRan[m [37m(echo octo > other.txt)[m [37mfailed[m [37m(ctrl+o to expand)[m
+
+[34;1mCommand[m[K
+[34;1m  ⎿  [37;22mUser declined the tool call[m
+[K
+[90m────────────────────────────────────────────────────────────[m[K
+[34;1m> CALL write_file {"Path":"/scratch/project/note.txt","Content":"hi"}[m
+[K
+[32m●[m [33;1mEdited[m 1 file [37m(note.txt)[m [37m(ctrl+o to expand)[m
+[K
+  Stub: tool finished.[K
+
+
+[15D[34;1medit_file {"Path":"/scratch/project/note.txt","Target":"hi","Replacement":"ho"}[m
+
+
+
+
+
+
+[89D[34;1mask_question {"questions":[{"question":"Which target?","options":["Alpha","Beta"],"is_multi_select":false}]}[m
+
+[33;1m?[m Which target?[K
+
+[33;1mQuestion[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[K
+[1mQuestion 1/1: Which target?[K[m
+
+[94m> 1. Alpha[K[m
+  2. Beta[K
+  3. Write-in...[K
+[K
+  [94;1m↑/↓[90;22m Navigate · [94;1menter[90;22m Select · [94;1mesc[90;22m Skip[m[K[4A[35D[94m✓ Alpha[m[34A[1;34m> SLOW please[m[K
+[?5W[0 q]7501;state=working:app=antigravity[J[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL run_command {"CommandLine":"echo octo > made.txt","toolSummary":"make a file","WaitMsBeforeAsync":5000}[m
+
+[32m●[m [33;1mRan[m [37m(echo octo > made.txt)[m [37m(ctrl+o to expand)[m
+
+  Stub: tool finished.
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL run_command {"CommandLine":"echo octo > other.txt","toolSummary":"make another","WaitMsBeforeAsync":5000}[m
+
+[31m●[m [33;1mRan[m [37m(echo octo > other.txt)[m [37mfailed[m [37m(ctrl+o to expand)[m
+
+[34;1mCommand[m
+[34;1m  ⎿  [37;22mUser declined the tool call[m
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL write_file {"Path":"/scratch/project/note.txt","Content":"hi"}[m
+
+[32m●[m [33;1mEdited[m 1 file [37m(note.txt)[m [37m(ctrl+o to expand)[m
+
+  Stub: tool finished.
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL edit_file {"Path":"/scratch/project/note.txt","Target":"hi","Replacement":"ho"}[m
+
+[32m●[m [33;1mEdited[m 1 file [37m(note.txt)[m [37m(ctrl+o to expand)[m
+
+  Stub: tool finished.
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL ask_question {"questions":[{"question":"Which target?","options":["Alpha","Beta"],"is_multi_select":false}]}[m
+
+[33;1m?[m Which target?
+[34;1m> Alpha[m
+⣷  [90mWorking...[m
+[90m└ Tip: Press ctrl+r to review pending artifacts.[m
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[94m>[m
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l[3A⣯ 
+
+
+[?25h[?25l[37A[K
+[90m────────────────────────────────────────────────────────────[m[K
+[1;34m> CALL run_command {"CommandLine":"echo octo > made.txt","toolSummary":"make a file","WaitMsBeforeAsync":5000}[m[K
+[?5W[J
+[32m●[m [33;1mRan[m [37m(echo octo > made.txt)[m [37m(ctrl+o to expand)[m
+
+  Stub: tool finished.
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL run_command {"CommandLine":"echo octo > other.txt","toolSummary":"make another","WaitMsBeforeAsync":5000}[m
+
+[31m●[m [33;1mRan[m [37m(echo octo > other.txt)[m [37mfailed[m [37m(ctrl+o to expand)[m
+
+[34;1mCommand[m
+[34;1m  ⎿  [37;22mUser declined the tool call[m
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL write_file {"Path":"/scratch/project/note.txt","Content":"hi"}[m
+
+[32m●[m [33;1mEdited[m 1 file [37m(note.txt)[m [37m(ctrl+o to expand)[m
+
+  Stub: tool finished.
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL edit_file {"Path":"/scratch/project/note.txt","Target":"hi","Replacement":"ho"}[m
+
+[32m●[m [33;1mEdited[m 1 file [37m(note.txt)[m [37m(ctrl+o to expand)[m
+
+  Stub: tool finished.
+
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL ask_question {"questions":[{"question":"Which target?","options":["Alpha","Beta"],"is_multi_select":false}]}[m
+
+[33;1m?[m Which target?
+[34;1m> Alpha[m
+
+  Stub: tool finished.
+⣯  [90mWorking...[m
+[90m└ Tip: Press ctrl+r to review pending artifacts.[m
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[94m>[m
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l[3A⣟ 
+
+
+[?25h[?25l]7501;state=done:app=antigravity:msg=U3R1YjogdG9vbCBmaW5pc2hlZC4=
+
+[J[5A[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[94m>[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90m? for shortcuts[m[85X[85C[2mGemini 3.1 Pro · low[m[2A[2C[?25h

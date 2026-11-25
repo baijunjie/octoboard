@@ -3722,11 +3722,8 @@ mod real_fetcher {
             "{err:?}"
         );
         assert!(body.is_empty());
-        let accepted = listener.accept();
-        assert!(
-            matches!(&accepted, Err(err) if err.kind() == std::io::ErrorKind::WouldBlock),
-            "something connected: {accepted:?}"
-        );
+        // A running daemon may probe the port; nothing else connected.
+        crate::test_support::assert_only_probes_connected(&listener);
     }
 
     #[test]

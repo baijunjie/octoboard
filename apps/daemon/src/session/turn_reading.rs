@@ -8,9 +8,10 @@
 //!
 //! The consumers differ on purpose in which way they err, each toward the side a wrong reading
 //! costs least on. The interrupt key would cancel whatever turn it lands in, so it goes in only on
-//! a running title the agent is still sending ([`TitleActivity::shows_running`]); an Esc read as
-//! typed at the prompt lets a message in without waiting for the agent to draw the prompt a cancel
-//! puts back, so an Esc counts as mid-turn on any running title not yet followed by the prompt,
+//! a running title the agent is still sending ([`TitleActivity::shows_running`]) or an equivalent
+//! report or screen reading. An Esc read as typed at the prompt lets a message in without waiting
+//! for the agent to redraw the prompt after a cancel. An Esc therefore counts as mid-turn on any
+//! running title not yet followed by the prompt,
 //! however old ([`TitleActivity::last_said_running`]). See `docs/product/interrupting-turns.md`,
 //! section "When a key is sent", and `docs/product/draft-preservation.md`, section "Keys that leave
 //! the composer empty are confirmed by the screen".
@@ -121,14 +122,31 @@ impl TurnReading<'_> {
     }
 
     /// Whether an interrupt key may go in: the record and the agent's status both read `Working`,
-    /// the terminal shows the turn running by a title still being sent or a `working` report, and
-    /// nothing of the agent's own is up that the key would answer: a dialog, or Codex's title
+    /// the terminal shows the turn running by a current title, a `working` report or a provider's
+    /// screen, and nothing of the agent's own is up that the key would answer: a dialog, or a title
     /// waiting on the user. Read under the input lock, right before the key.
     pub(crate) fn interrupt_may_press(&self) -> bool {
-        self.terminal_running_fresh()
-            && !self.dialog_up
+        !self.dialog_up
             && !self.action_title
             && self.statuses() == Some((SessionStatus::Working, SessionStatus::Working))
+            && (self.terminal_running_fresh()
+                || crate::adapter::provider(self.live.agent)
+                    .screen()
+                    .interrupt_running_screen()
+                    .is_some_and(|running| running(&self.live.screen_text())))
+    }
+
+    /// Whether the session is at its agent's idle prompt, for a key that means something else
+    /// mid-turn ([`crate::session::screen::ScreenReader::input_box_clearing_key`]): it errs toward
+    /// a turn running, which such a key would interrupt. The title or the reports last said the
+    /// agent was at its prompt, no dialog is up, nothing of the agent's own waits on the user, and
+    /// the record and the agent's status both read `Idle`. Read under the input lock, right before
+    /// the key.
+    pub(crate) fn at_idle_prompt(&self) -> bool {
+        !self.terminal_last_said_running()
+            && !self.dialog_up
+            && !self.action_title
+            && self.statuses() == Some((SessionStatus::Idle, SessionStatus::Idle))
     }
 
     /// Whether a lone Esc typed now is typed mid-turn, where it cancels the turn and the prompt the

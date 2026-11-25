@@ -19,7 +19,8 @@
 //! from [`context`] (the context size), [`titles`] (the titles) and [`observed`] (the model and
 //! effort), with [`default_effort`] standing in for an effort the records do not name. [`history`]
 //! is a session's history for the user and [`conversation`] the common sequence both it and the
-//! handoff read, whichever agent wrote the record. [`line_file`] reads a growing file
+//! handoff read, whichever agent wrote the record, and [`branch`] which of a record's lines are
+//! the conversation as it stands, for a record that is a tree. [`line_file`] reads a growing file
 //! incrementally, and [`watch`] is the mechanism behind the watchers a provider's store arms
 //! (`RecordStore::arm_watch`) for what the agents' hooks never report.
 //!
@@ -28,8 +29,10 @@
 //! deletion removes are [`removal`], whether a conversation can be resumed is
 //! [`mod@resumability`], whether a record holds a prompt the user sent is [`user_prompt`], and
 //! whether a relaunched session is sent a prompt to carry on is [`switch_continue`]. [`store`] is
-//! the interface each provider answers them through.
+//! the interface each provider answers them through. The rows module handles conversations kept in
+//! a database: the provider lists, reads and removes them, and they are read as lines like any record.
 
+pub(crate) mod branch;
 pub(crate) mod carried;
 pub(crate) mod collector;
 pub(crate) mod context;
@@ -44,6 +47,7 @@ pub(crate) mod locate;
 pub(crate) mod observed;
 pub(crate) mod removal;
 pub(crate) mod resumability;
+pub(crate) mod rows;
 pub(crate) mod store;
 pub(crate) mod switch_continue;
 pub(crate) mod titles;

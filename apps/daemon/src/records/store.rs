@@ -15,11 +15,13 @@ use serde_json::Value;
 
 use crate::hooks::RecordWatch;
 use crate::protocol::Session;
+use crate::records::branch::{Branching, StepIndex};
 use crate::records::context::{Context, Figure};
 use crate::records::conversation::Entry;
 use crate::records::feed::FeedReader;
 use crate::records::locate::{modified, newest, Branch, Locator};
 use crate::records::observed::Observed;
+use crate::records::rows::RowRecords;
 use crate::records::Stretch;
 use crate::state::AppState;
 
@@ -31,13 +33,37 @@ pub(crate) fn transcript_path_hint(payload: &Value) -> Option<(String, PathBuf)>
     Some((agent_id.to_owned(), PathBuf::from(path)))
 }
 
+/// A directory a launch can select through its inherited environment, with the record search
+/// depth measured from that directory.
+pub struct RecordRootOverride {
+    pub variable: &'static str,
+    pub search_depth: usize,
+}
+
 /// How one provider's own records of a session are found, read and watched
 /// (`crate::adapter::AgentProvider::records`). Names and depths come from the provider's records
 /// layout (`crate::providers::layout`); what is answered here is how a record is recognised among
 /// them and what its lines say. Every method has a default, so a provider without records
 /// implements nothing ([`NoRecords`]).
 pub trait RecordStore: Send + Sync {
+    // -- Records that are rows -------------------------------------------------------------------
+
+    /// How the provider lists, reads and removes its conversations itself, for an agent that
+    /// keeps them as rows of a database of its own (`crate::records::rows`). Such a store is not
+    /// asked to find, name or follow a record file: a conversation is looked for, read whole and
+    /// removed through what this hands out, and its rows are read as lines by
+    /// [`Self::entries`], [`Self::fold_line`], [`Self::branching`] and the feed reader. Whether a
+    /// conversation missing from its account is gone is still [`Self::absence_is_conclusive`].
+    /// `None` (the default) for a provider whose records are files, or that keeps none.
+    fn rows(&self) -> Option<&dyn RowRecords> {
+        None
+    }
+
     // -- Finding a record ------------------------------------------------------------------------
+
+    fn record_root_override(&self) -> Option<RecordRootOverride> {
+        None
+    }
 
     /// The agent session id and the path of the session's record a hook event of the session's
     /// own reports, taken as a hint of where the record is; `None` when the event reports none, or
@@ -149,6 +175,15 @@ pub trait RecordStore: Send + Sync {
         Vec::new()
     }
 
+    /// Whether deleting a session also removes what [`Self::beside_records`] names: for a
+    /// provider that keeps part of the conversation itself outside the records directory, so
+    /// that removing the record alone would leave the conversation behind. Each such path is
+    /// taken only inside the account directory, below directories that are not links. Not by
+    /// default: nothing beside the records is removed.
+    fn removes_beside_records(&self) -> bool {
+        false
+    }
+
     /// The record among `records`, the conversation's files under the records directory relative
     /// to `root`, that a switch of accounts carries. By default the regular file written to last.
     fn carried_head(&self, root: &Path, records: &[PathBuf]) -> Option<PathBuf> {
@@ -199,8 +234,24 @@ pub trait RecordStore: Send + Sync {
     ) {
     }
 
-    /// Takes the title summary file beside the record (`AgentLayout::title_summary`) into
-    /// `observed`.
+    /// The summary file of the conversation whose indexed record is `record`, for a provider
+    /// whose summary file is named for the record, so that no one name in its layout
+    /// (`AgentLayout::title_summary`, the file of that name beside the record) can say it. `None`
+    /// (the default) leaves it to the layout.
+    fn summary_file(&self, _record: &Path) -> Option<PathBuf> {
+        None
+    }
+
+    /// What the summary file's content `bytes` holds, as the value
+    /// `crate::adapter::AgentProvider::summary_title` and [`Self::observe_summary`] read. JSON by
+    /// default; a provider that writes its summary in another form reads it here. `None` for
+    /// content that cannot be read, which is then no summary.
+    fn summary_in(&self, bytes: &[u8]) -> Option<Value> {
+        serde_json::from_slice(bytes).ok()
+    }
+
+    /// Takes the conversation's summary file (`AgentLayout::title_summary`, or
+    /// [`Self::summary_file`]) into `observed`.
     fn observe_summary(&self, _summary: &Value, _observed: &mut Observed) {}
 
     /// A JSON file beside the record that gives the context window.
@@ -262,6 +313,27 @@ pub trait RecordStore: Send + Sync {
     }
 
     // -- Conversation and history ---------------------------------------------------------------
+
+    /// How the lines of a record that is a tree link: one file whose lines each name the line
+    /// they follow, in which the agent goes back to an earlier point and carries on from there
+    /// without removing what it abandons. The conversation, its history, its context size and its
+    /// live feed are then read from the current branch alone (`crate::records::branch`), and
+    /// [`Self::entries`], [`Self::fold_line`] and the feed reader are handed only its lines.
+    /// `None` (the default) for a record read top to bottom.
+    fn branching(&self) -> Option<&dyn Branching> {
+        None
+    }
+
+    /// The ordinal on a history line, where writing an earlier ordinal replaces the suffix.
+    /// The default keeps the branch already selected by the record reader.
+    fn history_step_index(&self) -> Option<StepIndex> {
+        None
+    }
+
+    /// When the record dates this line, in milliseconds since the epoch.
+    fn history_at(&self, line: &Value) -> Option<i64> {
+        crate::records::conversation::at_of(line)
+    }
 
     /// The entries one parsed line of the conversation holds.
     fn entries(&self, _line: &Value) -> Vec<Entry> {

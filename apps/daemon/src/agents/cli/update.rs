@@ -10,8 +10,10 @@ use std::time::Duration;
 use anyhow::Result;
 
 use super::install::ToolCommand;
-use super::latest::Registry;
-use super::{bounded, check, inspect, registry, tool_reach, Claim, STDERR_LIMIT, TERM_GRACE};
+use super::latest::VersionSources;
+use super::{
+    bounded, check, inspect, tool_reach, version_sources, Claim, STDERR_LIMIT, TERM_GRACE,
+};
 use crate::accounts::choice::refuse_unless_agent_added_to;
 use crate::adapter::{self, CliPackaging};
 use crate::paths;
@@ -67,6 +69,7 @@ pub(crate) fn prepare(agent: AgentId, shell_env: HashMap<String, String>) -> Res
             agent,
             installed_version,
             install_method: install.method,
+            npm_package: install.npm_package(),
             latest_version: None,
             latest_error: None,
             latest_detail: None,
@@ -106,7 +109,7 @@ pub(crate) async fn update_requested(state: &Arc<AppState>, agent: AgentId) -> R
         state,
         prepared,
         UPDATE_TIMEOUT,
-        registry(),
+        version_sources(),
         Box::new(refreshed_shell),
         &paths::agent_cli_updates_dir(),
     )
@@ -120,7 +123,7 @@ pub(crate) fn start_update(
     state: &Arc<AppState>,
     prepared: Prepared,
     timeout: Duration,
-    registry: &'static dyn Registry,
+    sources: &'static dyn VersionSources,
     refresh: Refresh,
     output_dir: &Path,
 ) -> Result<()> {
@@ -138,7 +141,7 @@ pub(crate) fn start_update(
     // its own so a stop need not wait for it: a stop waits for an update rather than cut it off
     // (see the module doc of `super`). It is the only such work.
     tokio::task::spawn_blocking(move || {
-        run_update(&state, claim, prepared, timeout, registry, refresh, &output)
+        run_update(&state, claim, prepared, timeout, sources, refresh, &output)
     });
     Ok(())
 }
@@ -153,7 +156,7 @@ pub(super) fn run_update(
     claim: Claim,
     prepared: Prepared,
     timeout: Duration,
-    registry: &dyn Registry,
+    sources: &dyn VersionSources,
     refresh: Refresh,
     output: &Path,
 ) {
@@ -196,7 +199,7 @@ pub(super) fn run_update(
             prepared.shell_env.clone()
         });
         crate::agents::availability::redetermine(state, prepared.agent, &shell_env);
-        check(prepared.agent, &shell_env, registry)
+        check(prepared.agent, &shell_env, sources)
     };
     status.update = Some(match outcome {
         Ok(()) => AgentCliUpdate {

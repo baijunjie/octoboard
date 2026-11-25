@@ -1,0 +1,18 @@
+[>4;2m[?u[?2026$p[?1049h[?2004h[?1004h[?1003h[?1006h[?25l[?12$p[?1007$p[c[H[2J[>q[14t]10;?\]11;?\]4;0;?\]4;1;?\]4;2;?\]4;3;?\]4;4;?\]4;5;?\]4;6;?\]4;7;?\]4;8;?\]4;9;?\]4;10;?\]4;11;?\]4;12;?\]4;13;?\]4;14;?\]4;15;?\[?25l[22;0t]0;GitHub Copilot]7501;state=idle:app=copilot\[H[2J [1;97;44m[Current][m  Sessions  [2m Issues [m [2m Pull requests [m  Gists[?996n
+
+[2;90m╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│[116C│
+│[m [34m ╭─╮╭─╮[5;39H[2;90m│[m  [1;34mGetting started[61C[0;2;90m│
+│[m [34m ╰─╯╰─╯[m  Copilot v1.0.114 uses AI.  [2;90m│[m  Use the tabs above to explore your sessions and pull requests[15C[2;90m│
+│[m [35m █ [96m▘▝[35m █[m  Check for mistakes.[7;39H[2;90m│[m  /model — Switch models across providers, or use Auto[24C[2;90m│
+│[m [35m  ▔▔▔▔ [8;39H[2;90m│[78C│
+│[116C│
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[m[36;2H/private/tmp/copilot-probe/w120[36;73HRun on: This computer [1mctrl+e[m change environment
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[m❯
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[C[0;94m●[m [94mL[34moading:[101C[mstandin[38;3H[?25h[?25l[40;12H[34m 3 skills[m[38;3H[?25h[?25l
+
+ [1m←[m open sidebar · Interactive · Manual Approval · [1m/[m commands · [1m?[m help · [1mtab[m next tab[38;3H[?25h[?25l[26A[33m![m Model "standin" is not in the built-in catalog. Using defaults for: prompt tokens
+   (COPILOT_PROVIDER_MAX_PROMPT_TOKENS), output tokens (COPILOT_PROVIDER_MAX_OUTPUT_TOKENS). Run [37m copilot help 
+[3Cproviders [m for configuration details.[38;3H[?25h[?25l[7;6H[96m╴╶[35m [m[38;3H[?25h[?25l[7;6H[96m  [35m [m[38;3H[?25h[?25l[7;6H[96m╴╶[35m [m[38;3H[?25h[?25l[7;6H[96m▘▝[35m [m[38;3H[?25h[?25l[7;6H[96m╴╶[35m [m[38;3H[?25h[?25l[7;6H[96m  [35m [m[38;3H[?25h[?25l[7;6H[96m╴╶[35m [m[38;3H[?25h[?25l[7;6H[96m▘▝[35m [m[38;3H[?25h[?25l[7;6H[96m╴╶[35m [m[38;3H[?25h[?25l[7;6H[96m  [35m [m[38;3H[?25h[?25l[7;6H[96m╴╶[35m [m[38;3H[?25h[?25l[7;6H[96m▘▝[35m [m[38;3H[?25h

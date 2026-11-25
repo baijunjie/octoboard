@@ -7,7 +7,7 @@ import { Aside, Steps } from "@astrojs/starlight/components";
 import { productName } from "../../../commands.ts";
 import Screenshot from "../../../components/Screenshot.astro";
 
-Each agent keeps a memory of its own, split by agent and by account, so a session on another agent or account never sees what an earlier one learned. {productName} keeps a memory that every agent shares: a session saves what is worth keeping, and later sessions start knowing it, whatever their agent or account. You can read it and correct it any time.
+An agent’s own memory, when it has one, belongs to that agent and account. {productName} keeps a memory that every agent shares: a session saves what is worth keeping, and later sessions start knowing it, whatever their agent or account. You can read it and correct it any time.
 
 <Screenshot id="memory-dialog" alt="The “Console memory” dialog, listing entries with a one-line summary each, when and by whom each was updated, and “Add entry” and “Delete all” buttons." />
 
@@ -28,7 +28,7 @@ Each agent keeps a memory of its own, split by agent and by account, so a sessio
 
 ## Why it works this way
 
-- <strong>Its own memory is turned off, so nothing is learned twice.</strong> While the shared memory is on, each session {productName} launches has its agent's own memory turned off for that launch, so it keeps what it learns in the shared one. Nothing is written into the agent's configuration, and what the agent wrote before is left alone.
+- <strong>Shared memory takes the place of the agent’s own memory where the agent supports it.</strong> For Claude Code, Codex, Grok Build, and Qwen Code, {productName} turns off the agent’s memory for that launch. GitHub Copilot CLI keeps its own memory setting. Antigravity CLI, OpenCode, and Pi have no memory of their own to turn off.
 - <strong>Nobody overwrites a change they never saw.</strong> A save that edits an entry is refused when the entry was saved by someone else since it was read, and nothing is lost: the session, or your form, gets the current entry to merge and save again.
 - <strong>A project's memory belongs to the folder, not to the project.</strong> Every project at the same place on the same computer shares it, and removing a project keeps its memory unless you tick <strong>Also delete this project’s memory</strong> in the removal confirmation, so adding the project again at the same folder finds it again.
 

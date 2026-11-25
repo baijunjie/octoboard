@@ -48,10 +48,10 @@ pub fn companions(
 
 /// The record among `files`, the conversation's files relative to `root`.
 fn head_of(agent: AgentId, root: &Path, files: &[PathBuf]) -> Option<PathBuf> {
-    let records_dir = Path::new(layout(agent).records_dir);
+    let records_dir = layout(agent).records();
     let records: Vec<PathBuf> = files
         .iter()
-        .filter(|relative| relative.starts_with(records_dir))
+        .filter(|relative| records_dir.is_some_and(|dir| relative.starts_with(dir)))
         .cloned()
         .collect();
     provider(agent).records().carried_head(root, &records)
@@ -76,4 +76,62 @@ fn conversation_of(
         .filter_map(|path| path.strip_prefix(root).ok().map(Path::to_path_buf))
         .filter(|relative| !archived.is_some_and(|archived| relative.starts_with(archived)))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::records::fixtures::*;
+
+    /// A conversation kept partly outside the records directory is carried whole: the record is
+    /// the one under the records directory, and what lies beside it travels as its companion,
+    /// another conversation's left where it is.
+    #[test]
+    fn what_lies_outside_the_records_directory_travels_with_the_record() {
+        use crate::adapter::test_provider::TREE_STATE_DIR;
+        let _declared = crate::providers::test_provider::with_tree_records();
+        let dir = crate::test_support::ScratchDir::new("agent-records-carried-beside");
+        let root = dir.join("account");
+        test_record(&root, CLAUDE_ID, TREE_TRUNK);
+        touch(&root.join(TREE_STATE_DIR).join(format!("{CLAUDE_ID}.db")));
+        touch(&root.join(TREE_STATE_DIR).join(format!("{CODEX_ID}.db")));
+
+        let record = locate_record(&mut Locator::default(), AgentId::TEST, &root, CLAUDE_ID)
+            .expect("the record");
+        assert_eq!(
+            record,
+            PathBuf::from("sessions").join(format!("{CLAUDE_ID}.jsonl"))
+        );
+        assert_eq!(
+            companions(AgentId::TEST, &root, &record, CLAUDE_ID),
+            [PathBuf::from(TREE_STATE_DIR).join(format!("{CLAUDE_ID}.db"))]
+        );
+    }
+
+    /// An agent that keeps no record files carries no record: with an empty records directory the
+    /// conversation's files that sit outside it (what the agent keeps beside its records, and the
+    /// stray files the account directory holds) are not the records directory's, and none of them
+    /// is taken for the record, though the test-only provider's variant would take any file for
+    /// one.
+    #[test]
+    fn a_layout_with_no_records_directory_carries_no_record() {
+        let _declared = crate::providers::test_provider::without_records();
+        let dir = crate::test_support::ScratchDir::new("agent-records-carried-none");
+        let root = dir.join("account");
+        touch(&root.join(format!("{CLAUDE_ID}.jsonl")));
+        touch(&root.join(CLAUDE_ID).join("usage.json"));
+        touch(&root.join(format!("{CLAUDE_ID}.sidecar")));
+        let mut locator = Locator::default();
+
+        // What the agent keeps beside its records is still the conversation's, ...
+        assert_eq!(
+            conversation_of(&mut locator, AgentId::TEST, &root, CLAUDE_ID),
+            [PathBuf::from(format!("{CLAUDE_ID}.sidecar"))]
+        );
+        // ... but none of it is a record.
+        assert_eq!(
+            locate_record(&mut locator, AgentId::TEST, &root, CLAUDE_ID),
+            None
+        );
+    }
 }

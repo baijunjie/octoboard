@@ -76,6 +76,9 @@ failed run (below) and is never an error alert in a window.
   account a new session that names none would get (see "Automatically select an account" in
   `docs/product/opening-sessions.md`). With the switch off, or when that account is not usable either, the run fails
   with the account's refusal rather than starting a session that cannot work.
+- **A task stored with a prompt that saving now refuses** — nothing but whitespace once its control and invisible
+  characters are ignored, saved before that was checked — starts no session: the run fails for the missing prompt, as
+  saving such a prompt is refused (see "Saving a task" below).
 - **A Report to session that cannot take a session at that moment** — archived, deleted or still starting — does not
   fail the run: the session starts independent, reporting to no one, and the run's record says so.
 - **While the daemon is stopping**, nothing is started (see "Quitting" in `docs/product/application-lifecycle.md`): a
@@ -112,7 +115,10 @@ is the same as for the raised hand (see "The raised hand" in `docs/product/sessi
 Creating or changing a task checks it as a whole, and a task that fails a check is not saved:
 
 - the console exists, and the project, where there is one, belongs to it;
-- the prompt is not blank (it is saved without the blanks around it, and so is the name);
+- the prompt is not blank: one that is nothing but whitespace once its control and invisible characters are ignored is
+  refused as a missing prompt, since a launch would hand the session no task (see "How each agent is given the
+  injection" in `docs/product/per-agent-launch-specifics.md`); it is saved without the blanks around it, and so is the
+  name;
 - an Every week schedule has at least one day; hours, minutes and days of the month are in range;
 - a one-off's time is in the future — when the task is created, and when an edit changes its schedule, so a one-off
   that has run can still be edited otherwise;

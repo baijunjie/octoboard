@@ -10,6 +10,7 @@ import { windowAttention } from "../../components/announce/windowTestSupport";
 import { press } from "../../components/hint/tooltipTestSupport";
 import { ActionableError } from "../../errors/actionableError";
 import { CodedError } from "../../errors/codedError";
+import { daemonError } from "../../test/daemonError";
 import { isolate } from "../../i18n/isolate";
 import { readMcpInventory, request } from "./agentAccountsSectionTestState";
 import { buttonNamed, mount, openMcpOf } from "./agentAccountsSectionTestSupport";
@@ -209,14 +210,13 @@ it("rereads with the refresh flag, keeping the last reading while it runs and ig
   expect(refresh.querySelector("svg")!.classList.contains("motion-safe:animate-spin-slow")).toBe(false);
 });
 
-it.each<[AccountMcpInventory["unavailable"] & object, string, string, boolean]>([
-  [{ reason: "not_signed_in", detail: null }, "Account not logged in", "Log in to the account, then try again.", true],
-  [{ reason: "cli_missing", detail: null }, "Claude Code is not available", "Its command-line tool could not be found or started.", true],
-  [{ reason: "timed_out", detail: null }, "Reading timed out", "Claude Code did not answer in time.", true],
-  [{ reason: "unsupported_agent", detail: null }, "Not supported", "Claude Code cannot list its MCP servers or connectors.", false],
-  [{ reason: "failed", detail: "claude exited with status 1" }, "Could not read connectors and MCP servers", "Try again in a moment.", true],
-  [{ reason: "from_a_newer_daemon", detail: "something new went wrong" }, "Could not read connectors and MCP servers", "Try again in a moment.", true],
-])("words a reading that failed as %j, offering Try again where it can change the answer", async (unavailable, title, line, retries) => {
+it.each<[AccountMcpInventory["unavailable"] & object, string, string]>([
+  [{ reason: "not_signed_in", detail: null }, "Account not logged in", "Log in to the account, then try again."],
+  [{ reason: "cli_missing", detail: null }, "Claude Code is not available", "Its command-line tool could not be found or started."],
+  [{ reason: "timed_out", detail: null }, "Reading timed out", "Claude Code did not answer in time."],
+  [{ reason: "failed", detail: "claude exited with status 1" }, "Could not read connectors and MCP servers", "Try again in a moment."],
+  [{ reason: "from_a_newer_daemon", detail: "something new went wrong" }, "Could not read connectors and MCP servers", "Try again in a moment."],
+])("words a reading that failed as %j, offering Try again, which reads it anew", async (unavailable, title, line) => {
   const reading = nextReading();
   const { container } = mount();
   const dialog = await openMcpOf(container, "claude-work");
@@ -225,13 +225,10 @@ it.each<[AccountMcpInventory["unavailable"] & object, string, string, boolean]>(
   expect(text).toContain(title);
   expect(text).toContain(line);
   expect(text).not.toContain("Updated");
-  expect(!!buttonNamed(dialog, "Try again")).toBe(retries);
   expect(!!buttonNamed(dialog, "Details")).toBe(unavailable.detail !== null);
-  if (retries) {
-    nextReading();
-    press(buttonNamed(dialog, "Try again")!);
-    expect(readMcpInventory.mock.calls.at(-1)![0].refresh).toBe(true);
-  }
+  nextReading();
+  press(buttonNamed(dialog, "Try again")!);
+  expect(readMcpInventory.mock.calls.at(-1)![0].refresh).toBe(true);
 });
 
 it("reads a connector, sign-in or runtime state this build does not know as the state it has for none known", async () => {
@@ -538,8 +535,70 @@ it("hands focus to Refresh when an Alert with no Try again replaces the one that
   const tryAgain = buttonNamed(dialog, "Try again")!;
   act(() => tryAgain.focus());
   press(tryAgain);
-  await retry.answer(inventoryOf({ unavailable: { reason: "unsupported_agent", detail: null } }));
+  // No retry changes what a provider does not offer, so its refusal has no Try again to take the focus.
+  await retry.fail(daemonError("provider_unsupported", { agent: "claude", operation: "mcp_inventory" }));
+  expect(buttonNamed(dialog, "Try again")).toBeFalsy();
   expect(document.activeElement).toBe(buttonNamed(dialog, "Refresh connectors and MCP servers"));
+});
+
+it("hands focus on Details to the new Alert's Try again when a reading with nothing behind Details replaces it", async () => {
+  const reading = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await reading.answer(inventoryOf({ unavailable: { reason: "failed", detail: "claude exited with status 1" } }));
+  const details = buttonNamed(dialog, "Details")!;
+  act(() => details.focus());
+  const again = nextReading();
+  // Refresh takes no focus from a press, so focus is still on Details when the answer takes Details away.
+  press(buttonNamed(dialog, "Refresh connectors and MCP servers")!);
+  expect(document.activeElement).toBe(details);
+  await again.answer(inventoryOf({ unavailable: { reason: "failed", detail: null } }));
+  expect(buttonNamed(dialog, "Details")).toBeFalsy();
+  expect(document.activeElement).toBe(buttonNamed(dialog, "Try again"));
+});
+
+it("hands focus on a failure's link out to the new Alert's Try again when a failure with no link replaces it", async () => {
+  const linkOut = () => [...dialog.querySelectorAll<HTMLAnchorElement>("a")].find((a) => a.textContent?.includes("Download Git"));
+  const reading = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await reading.fail(daemonError("binary_not_found", { binary: "git" }));
+  const link = linkOut()!;
+  act(() => link.focus());
+  const again = nextReading();
+  press(buttonNamed(dialog, "Refresh connectors and MCP servers")!);
+  expect(document.activeElement).toBe(link);
+  await again.fail(CONNECTION_CLOSED());
+  expect(linkOut()).toBeUndefined();
+  expect(document.activeElement).toBe(buttonNamed(dialog, "Try again"));
+});
+
+it("keeps Try again and its Alert mounted when a retry removes Details, then announces the answer", async () => {
+  fakeTimers();
+  const reading = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await reading.answer(inventoryOf({ unavailable: { reason: "failed", detail: "claude exited with status 1" } }));
+  await act(async () => vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS));
+
+  const alert = alertRole(dialog)!.closest('[data-slot="alert-root"]');
+  const retry = buttonNamed(dialog, "Try again")!;
+  const again = nextReading();
+  act(() => retry.focus());
+  press(retry);
+  expect(retry.hasAttribute("data-pending")).toBe(true);
+  await again.answer(inventoryOf({ unavailable: { reason: "failed", detail: null } }));
+
+  expect(buttonNamed(dialog, "Details")).toBeFalsy();
+  expect(buttonNamed(dialog, "Try again")).toBe(retry);
+  expect(retry.hasAttribute("data-pending")).toBe(false);
+  expect(document.activeElement).toBe(retry);
+  expect(alertRole(dialog)).toBeNull();
+  await act(async () => vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS));
+  const announcement = alertRole(dialog)!;
+  expect(announcement.textContent).toBe("Could not read connectors and MCP servers");
+  expect(announcement.closest('[data-slot="alert-root"]')).toBe(alert);
+  expect(document.activeElement).toBe(retry);
 });
 
 it("hands focus on a server's button to the Alert's Try again when the rereading after a sign-in fails", async () => {

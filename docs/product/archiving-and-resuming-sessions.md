@@ -209,6 +209,11 @@ does not count. The answer is one of three:
   | Claude Code | no project directory of the account holds the transcript `<id>.jsonl`; a directory of the session's subagents' transcripts left without it does not count |
   | Codex | no rollout of the conversation, plain (`.jsonl`) or compressed (`.jsonl.zst`), is under the account's `sessions/` or `archived_sessions/`; a thread that had a turn reverted is one conversation, so any of its files (the first rollout or a later history segment) keeps it from being unresumable |
   | Grok Build | never: a session directory missing locally is unknown, since Grok Build restores sessions from its own remote registry |
+  | Pi | a complete search finds no matching record in the account's sessions tree or the alternate directory set by `PI_CODING_AGENT_SESSION_DIR` |
+  | Qwen Code | a complete search finds no chat file. Title or runtime sidecars alone do not make a conversation resumable |
+  | GitHub Copilot CLI | the session directory is absent from the searchable records directory. An index entry alone does not make it resumable |
+  | Antigravity CLI | the per-conversation database is absent from the readable records directory |
+  | OpenCode | a successful native listing of the default account omits the conversation |
 
 - **Unknown**: neither can be proven — the account directory cannot be read (missing, unmounted, permission denied),
   or holds none of the agent's records directories at all; the default account's location cannot be determined; the

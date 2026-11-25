@@ -219,7 +219,7 @@ mod tests {
             .unwrap();
         for (input, reason) in [
             (json!({}), "`agent` is required"),
-            (json!({ "agent": "gemini" }), "is not one of"),
+            (json!({ "agent": "no-such-agent" }), "is not one of"),
             (
                 json!({ "agent": "claude", "account": "missing" }),
                 "missing",

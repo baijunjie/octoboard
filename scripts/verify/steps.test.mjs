@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { planScope } from "./scope.mjs";
-import { checkSteps } from "./steps.mjs";
+import { checkSteps, DAEMON_NODE_TESTS_GLOB } from "./steps.mjs";
 
 const steps = (files) => checkSteps(planScope(files));
 const labels = (files) => steps(files).map((step) => step.label);
@@ -21,6 +24,26 @@ test("any Rust change runs the combined Rust checks, since the tests always cove
     assert.deepEqual(steps([file]).filter((step) => /rust/.test(step.label)).map((step) => step.cmd), pair, file);
   }
   assert.deepEqual(labels(["packages/ui/src/App.tsx"]).filter((label) => /rust/.test(label)), []);
+});
+
+test("a daemon change runs the node tests beside the daemon's scripts as a light step, and a change elsewhere does not", () => {
+  for (const file of ["apps/daemon/src/adapter/pi/extension.js", "apps/daemon/src/adapter/opencode/plugin.test.mjs", "apps/daemon/src/main.rs"]) {
+    const step = steps([file]).find((item) => item.label === "daemon node tests");
+    assert.deepEqual(step?.cmd, ["node", "--test", DAEMON_NODE_TESTS_GLOB], file);
+    assert.ok(!step.heavy, file);
+  }
+  for (const file of ["packages/ui/src/App.tsx", "apps/desktop/src-tauri/src/lib.rs", "scripts/verify/steps.mjs", "apps/daemon/README.md"]) {
+    assert.ok(!labels([file]).includes("daemon node tests"), file);
+  }
+});
+
+// The step's pattern is what runs these files: a `node:test` file of the daemon that it does not match is run by nothing.
+test("the daemon's node tests step matches every node test file the daemon tracks, and there is one", () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+  const tracked = execFileSync("git", ["ls-files", "-z", "--", "apps/daemon"], { cwd: root, encoding: "utf8" }).split("\0").filter((file) => /\.test\.[cm]?js$/.test(file));
+  assert.ok(tracked.length > 0, "the daemon tracks no node test; the step and this test are stale");
+  assert.equal(DAEMON_NODE_TESTS_GLOB, "apps/daemon/src/**/*.test.mjs");
+  for (const file of tracked) assert.match(file, /^apps\/daemon\/src\/(?:.+\/)?[^/]+\.test\.mjs$/, `${file} is not matched by ${DAEMON_NODE_TESTS_GLOB}`);
 });
 
 test("web builds precede output tests", () => {
@@ -62,7 +85,7 @@ test("--full lists every consumer's steps, light steps before heavy ones", () =>
   const full = checkSteps({ mode: "full" });
   assert.deepEqual(full.map((step) => step.label), [
     "identity check", "provider-neutral core", "registered writes", "verify lint", "verify tests", "ui lint", "ui type check", "web lint", "web type check", "web locales", "docs lint",
-    "docs type check", "desktop lint", "desktop script tests", "rustfmt check", "ui tests", "web build", "web tests", "docs build", "docs tests", "rust clippy",
+    "docs type check", "desktop lint", "desktop script tests", "daemon node tests", "rustfmt check", "ui tests", "web build", "web tests", "docs build", "docs tests", "rust clippy",
     "rust tests",
   ]);
   const firstHeavy = full.findIndex((step) => step.heavy);
@@ -83,12 +106,12 @@ test("UI reruns remain narrowed and release checks exclude website and gallery s
   const ui = steps(["packages/ui/src/App.tsx"]).find((step) => step.label === "ui tests");
   assert.deepEqual(ui.rerun(["packages/ui/src/a/X.test.tsx"]), [["pnpm", "--filter", "@octoboard/ui", "test", "src/a/X.test.tsx"]]);
   const release = checkSteps({ mode: "release" });
-  assert.deepEqual(release.map((step) => step.label), ["identity check", "provider-neutral core", "registered writes", "application lint", "application type check", "desktop script tests", "rustfmt check", "application UI tests", "rust clippy", "rust tests", "windows cross-check"]);
-  assert.ok(release[3].cmd.includes("**/src/gallery/**"));
-  assert.ok(release[3].cmd.includes("**/src/fixtures/**"));
-  assert.ok(release[4].cmd.includes("typecheck:app"));
-  assert.ok(release[7].cmd.includes("test:app"));
-  assert.ok(release.slice(7).every((step) => step.heavy));
+  assert.deepEqual(release.map((step) => step.label), ["identity check", "provider-neutral core", "registered writes", "application lint", "application type check", "desktop script tests", "daemon node tests", "rustfmt check", "application UI tests", "rust clippy", "rust tests", "windows cross-check"]);
+  assert.ok(release.find((step) => step.label === "application lint").cmd.includes("**/src/gallery/**"));
+  assert.ok(release.find((step) => step.label === "application lint").cmd.includes("**/src/fixtures/**"));
+  assert.ok(release.find((step) => step.label === "application type check").cmd.includes("typecheck:app"));
+  assert.ok(release.find((step) => step.label === "application UI tests").cmd.includes("test:app"));
+  assert.ok(release.slice(release.findIndex((step) => step.label === "application UI tests")).every((step) => step.heavy));
 });
 
 test("the UI build runs only for the scope that names it", () => {
@@ -104,7 +127,7 @@ test("release groups together run every release check with identical commands an
   const commands = (items) => [...new Set(items.map((step) => JSON.stringify(step.cmd)))].sort();
   assert.deepEqual(commands([...frontend, ...native, ...windows]), commands(all));
   assert.deepEqual(frontend.map((step) => step.label), ["identity check", "provider-neutral core", "registered writes", "application lint", "application type check", "application UI tests"]);
-  assert.deepEqual(native.map((step) => step.label), ["identity check", "provider-neutral core", "registered writes", "desktop script tests", "rustfmt check", "rust clippy", "rust tests"]);
+  assert.deepEqual(native.map((step) => step.label), ["identity check", "provider-neutral core", "registered writes", "desktop script tests", "daemon node tests", "rustfmt check", "rust clippy", "rust tests"]);
   assert.deepEqual(windows.map((step) => step.label), ["identity check", "provider-neutral core", "registered writes", "windows cross-check"]);
   assert.throws(() => checkSteps({ mode: "release", group: "unknown" }), /Unknown release check group/);
 });

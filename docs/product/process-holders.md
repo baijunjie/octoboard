@@ -206,7 +206,9 @@ program drew before those last bytes is missing.
   `docs/product/terminals-on-several-clients.md`).
 - **What that output asked or reported is not acted on again**: the terminal queries in it are not answered, and its
   program status reports (see `docs/product/program-status-reports.md`) move no status, since the daemon that read
-  them first may already have; only what the program prints after the takeover does.
+  them first may already have; only what the program prints after the takeover does, and the root record they leave
+  standing, taken as the program's last report (see "Reports as the sign that a turn is running" and "What reports can
+  say beside an agent's hooks" in `docs/product/program-status-reports.md`).
 
 ## The screen of a terminal handed over
 

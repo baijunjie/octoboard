@@ -143,16 +143,16 @@ fn the_parsed_screen_recognises_each_first_drawing_the_output_does() {
 #[test]
 fn the_cursor_on_the_parsed_screen_is_where_the_latest_redraw_left_it() {
     for (screen, frames, cursor) in [
-        (&CLAUDE, &[SCREEN][..], Some(Cursor::Decline)),
+        (&CLAUDE, &[SCREEN][..], Some(Cursor::Other)),
         (&CLAUDE, &[AFTER_DOWN][..], Some(Cursor::Accept)),
         (&CLAUDE, &[SCREEN, AFTER_DOWN][..], Some(Cursor::Accept)),
         (&CLAUDE, &[DISMISSED][..], None),
         (&CODEX, &[CODEX_SCREEN][..], Some(Cursor::Accept)),
-        (&CODEX, &[CODEX_AFTER_DOWN][..], Some(Cursor::Decline)),
+        (&CODEX, &[CODEX_AFTER_DOWN][..], Some(Cursor::Other)),
         (
             &CODEX,
             &[CODEX_SCREEN, CODEX_AFTER_DOWN][..],
-            Some(Cursor::Decline),
+            Some(Cursor::Other),
         ),
         (&CODEX, &[CODEX_FOLDER_ACCESS][..], Some(Cursor::Accept)),
         (
@@ -161,7 +161,7 @@ fn the_cursor_on_the_parsed_screen_is_where_the_latest_redraw_left_it() {
                 CODEX_FOLDER_ACCESS,
                 "› 2. Back to Agent Command Center".as_bytes(),
             ][..],
-            Some(Cursor::Decline),
+            Some(Cursor::Other),
         ),
         (&GROK, &[GROK_SCREEN][..], None),
     ] {
@@ -217,7 +217,7 @@ fn the_option_drawn_in_inverse_video_is_where_the_cursor_is() {
     );
     assert_eq!(
         CODEX.cursor_in_inverse(&inverse(&[&screen, &after_down])),
-        Some(Cursor::Decline)
+        Some(Cursor::Other)
     );
     assert_eq!(
         CODEX.cursor_in_inverse(&inverse(&[CODEX_SCREEN])),
@@ -329,7 +329,7 @@ fn the_inbox_console_host_s_repaint_of_each_screen_reads_as_the_macos_capture_do
     let shown = |capture: &[u8]| screen_of(capture).visible_text().into_bytes();
     let inverse = |capture: &[u8]| screen_of(capture).visible_text_inverse().into_bytes();
     for (screen, capture, first, cursor, up) in [
-        (&CLAUDE, CONHOST_SCREEN, true, Some(Cursor::Decline), true),
+        (&CLAUDE, CONHOST_SCREEN, true, Some(Cursor::Other), true),
         (
             &CLAUDE,
             CONHOST_AFTER_DOWN,
@@ -349,7 +349,7 @@ fn the_inbox_console_host_s_repaint_of_each_screen_reads_as_the_macos_capture_do
             &CODEX,
             CONHOST_CODEX_AFTER_DOWN,
             false,
-            Some(Cursor::Decline),
+            Some(Cursor::Other),
             true,
         ),
         (&CODEX, CONHOST_CODEX_STARTED, false, None, false),
@@ -361,7 +361,7 @@ fn the_inbox_console_host_s_repaint_of_each_screen_reads_as_the_macos_capture_do
     }
     for (capture, cursor) in [
         (CONHOST_CODEX_SCREEN, Some(Cursor::Accept)),
-        (CONHOST_CODEX_AFTER_DOWN, Some(Cursor::Decline)),
+        (CONHOST_CODEX_AFTER_DOWN, Some(Cursor::Other)),
         (CONHOST_CODEX_STARTED, None),
     ] {
         assert_eq!(CODEX.cursor_in_inverse(&inverse(capture)), cursor);
@@ -370,7 +370,7 @@ fn the_inbox_console_host_s_repaint_of_each_screen_reads_as_the_macos_capture_do
     assert_eq!(CODEX.cursor_on(&shown(&glyphless)), None);
     assert_eq!(
         CODEX.cursor_in_inverse(&inverse(&glyphless)),
-        Some(Cursor::Decline)
+        Some(Cursor::Other)
     );
     for (screen, at_key, started) in [
         (&CLAUDE, CONHOST_AFTER_DOWN, CONHOST_STARTED),

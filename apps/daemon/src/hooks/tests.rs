@@ -1086,5 +1086,108 @@ fn a_provider_with_no_hook_interpreter_does_not_infer_edit_targets_or_a_denial()
     let payload = json!({ "cwd": "/work", "tool_input": { "file_path": "/foreign/file" } });
     assert_eq!(hooks.edit_targets(&payload), (Vec::new(), None));
     assert_eq!(hooks.deny_edit("refused"), None);
-    assert!(!hooks.starts_conversation("UserPromptSubmit"));
+    assert!(!hooks.starts_conversation("UserPromptSubmit", &payload));
+}
+
+/// The three agents read the session id in either spelling, a non-empty string only.
+#[test]
+fn each_agent_reads_its_session_id_in_either_spelling() {
+    for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
+        let hooks = of(agent);
+        for payload in [json!({"session_id": "abc"}), json!({"sessionId": "abc"})] {
+            assert_eq!(
+                hooks.agent_session_id(&payload).as_deref(),
+                Some("abc"),
+                "{agent:?} {payload}"
+            );
+        }
+        for payload in [
+            json!({}),
+            json!({"session_id": ""}),
+            json!({"session_id": 7}),
+            json!({"session_id": null}),
+            json!({"id": "abc"}),
+            Value::Null,
+        ] {
+            assert_eq!(
+                hooks.agent_session_id(&payload),
+                None,
+                "{agent:?} {payload}"
+            );
+        }
+    }
+}
+
+/// The three agents read a subagent in each of the three fields a payload names one in, and a field
+/// with no value names none.
+#[test]
+fn each_agent_reads_a_named_subagent_in_any_of_its_three_fields() {
+    for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
+        for field in ["subagentType", "subagent_type", "agent_type"] {
+            assert!(
+                of(agent).is_subagent(&json!({ field: "worker" })),
+                "{agent:?} {field}"
+            );
+            assert!(
+                !of(agent).is_subagent(&json!({ field: "" })),
+                "{agent:?} {field}"
+            );
+            assert!(
+                !of(agent).is_subagent(&json!({ field: null })),
+                "{agent:?} {field}"
+            );
+        }
+        assert!(
+            !of(agent).is_subagent(&json!({"hook_event_name": "Stop"})),
+            "{agent:?}"
+        );
+    }
+}
+
+/// Without a prompt, or with one that is not text, there is nothing submitted; Grok Build's comes
+/// through exactly as it was written, whitespace and all.
+#[test]
+fn a_submitted_prompt_is_text_only_and_grok_s_is_kept_as_written() {
+    for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
+        for payload in [
+            json!({}),
+            json!({"prompt": 7}),
+            json!({"prompt": null}),
+            Value::Null,
+        ] {
+            assert_eq!(
+                of(agent).submitted_prompt(&payload),
+                None,
+                "{agent:?} {payload}"
+            );
+        }
+    }
+    let padded = json!({"prompt": "  two\nlines \n"});
+    assert_eq!(
+        of(AgentId::GROK).submitted_prompt(&padded),
+        Some("  two\nlines \n")
+    );
+}
+
+/// A provider whose interpreter reads nothing claims nothing of a payload, whatever it carries:
+/// not a subagent, no submitted prompt, no agent session id. The trait's defaults are those of
+/// `NoHooks` and of the test-only provider.
+#[test]
+fn an_interpreter_that_reads_nothing_claims_nothing_of_a_payload() {
+    let payload = json!({
+        "hook_event_name": "UserPromptSubmit",
+        "session_id": "abc",
+        "sessionId": "abc",
+        "prompt": "hello",
+        "agent_type": "worker",
+        "subagent_type": "worker",
+        "subagentType": "worker",
+        "agent_id": "a1",
+    });
+    for hooks in [of(AgentId::TEST), &NoHooks as &dyn HookInterpreter] {
+        assert!(!hooks.is_subagent(&payload));
+        assert_eq!(hooks.submitted_prompt(&payload), None);
+        assert_eq!(hooks.agent_session_id(&payload), None);
+        assert!(!hooks.announces_session_start("SessionStart", &payload));
+    }
 }

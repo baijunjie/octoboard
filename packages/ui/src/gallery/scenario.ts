@@ -1,3 +1,5 @@
+import type { ComponentType } from "react";
+
 import type { ThirdPartyLicenses } from "../about/thirdPartyLicenses";
 import type { StartupCause } from "../daemon";
 import type { Language } from "../i18n/languages";
@@ -180,6 +182,8 @@ export interface Scenario extends Fixture {
   semanticColours?: boolean;
   /** Shows the shared button in its pending state, in every size and variant and as the icon-only avatar field, instead of the application. */
   pendingButtons?: boolean;
+  /** Shows a page of the gallery's own, loaded when the scenario opens, instead of the application. */
+  sheet?: () => Promise<{ default: ComponentType }>;
   preferences?: Preferences;
   /** The choices the desktop shell holds (Keep running in the background, Show menu bar icon) as the window starts, as
    * the shell would hand them over; the app's defaults (off, on) for one left out. The window keeps them in memory only. */

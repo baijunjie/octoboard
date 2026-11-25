@@ -43,6 +43,12 @@ pub(crate) fn start_of(pid: i32) -> Option<u64> {
     bsd_info(pid).map(|info| start_micros(&info))
 }
 
+/// The pid of the parent of the process `pid`, or `None` when there is no such process or it is a
+/// zombie.
+pub(crate) fn parent_of(pid: i32) -> Option<i32> {
+    bsd_info(pid).map(|info| info.pbi_ppid as i32)
+}
+
 /// A process's start in microseconds since the epoch, as the system recorded it when the process
 /// started: a step of the wall clock since does not change it.
 fn start_micros(info: &libc::proc_bsdinfo) -> u64 {

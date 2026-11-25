@@ -10,14 +10,17 @@ import { providerLabel, providerMessageKey } from "./providers";
 
 /** The provider `id`'s message `name` from its presentation module, with its `{agent}` the provider's name and each of
  * the module's references for it set apart as monospace (`unbroken` keeps one from wrapping inside). Where the module
- * has none, the `fallback` message is shown with `{agent}` alone, or nothing without one. */
-export function ProviderMessage({ providers, id, name, fallback, unbroken }: {
+ * has none, the `fallback` message is shown with `{agent}` alone, or nothing without one (both with the further `params`). */
+export function ProviderMessage({ providers, id, name, fallback, unbroken, params: given }: {
   /** The providers the daemon serves, which name a provider that has no presentation module. */
   providers: readonly ProviderInfo[];
   id: string;
   name: ProviderMessageName;
   fallback?: MessageKey;
   unbroken?: boolean;
+  /** Further placeholders the window fills, for the module's message and the fallback alike (the module's references win
+   * over a name they share). */
+  params?: Readonly<Record<string, React.ReactNode>>;
 }): React.ReactElement | null {
   const t = useT();
   const key = providerMessageKey(id, name);
@@ -26,6 +29,7 @@ export function ProviderMessage({ providers, id, name, fallback, unbroken }: {
   const references = key ? Object.entries(providerReferences(id, name)) : [];
   const params = {
     agent: <InlineReference dir="auto" wrap>{providerLabel(t, providers, id)}</InlineReference>,
+    ...given,
     ...Object.fromEntries(references.map(([placeholder, text]) => [placeholder, <InlineReference key={placeholder} dir="ltr" monospace wrap unbroken={unbroken}>{text}</InlineReference>])),
   };
   return <Message id={shown} params={params as never} />;

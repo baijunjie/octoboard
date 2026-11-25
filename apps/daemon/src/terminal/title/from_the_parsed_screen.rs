@@ -80,48 +80,93 @@ fn the_parsed_screen_reports_the_titles_the_output_completes() {
     assert!(titled >= 20, "{titled} captures with titles");
 }
 
+/// The titles each capture sets before it has drawn anything, as the files of
+/// `testdata/titles_before_drawing` declare them, one file per owner of captures: a row is a
+/// capture's file name (or a prefix of names ending in `*`), a title and the glyph it starts with
+/// as `U+XXXX` (or nothing), tab-separated, the rows of one capture in the order its titles come;
+/// a title of `*` says every title of the capture comes before anything is drawn. A capture with no
+/// row loses none.
+struct LostTitles(Vec<(String, Option<Seen>)>);
+
+impl LostTitles {
+    fn declared() -> Self {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("testdata")
+            .join("titles_before_drawing");
+        let mut files: Vec<_> = std::fs::read_dir(&dir)
+            .expect("the declarations of lost titles")
+            .map(|entry| entry.expect("a declaration").path())
+            .collect();
+        files.sort();
+        let mut rows = Vec::new();
+        for file in files {
+            let text = std::fs::read_to_string(&file).expect("a declaration");
+            for line in text
+                .lines()
+                .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            {
+                let mut fields = line.split('\t');
+                let capture = fields.next().expect("a capture").to_string();
+                let title = fields.next().unwrap_or_else(|| panic!("{line}: no title"));
+                let glyph = fields
+                    .next()
+                    .filter(|glyph| !glyph.is_empty())
+                    .map(|glyph| {
+                        let code = glyph.strip_prefix("U+").expect("a glyph as U+XXXX");
+                        char::from_u32(u32::from_str_radix(code, 16).expect("a code point"))
+                            .expect("a character")
+                    });
+                let seen = (title != "*").then(|| (Some(title.to_string()), glyph));
+                rows.push((capture, seen));
+            }
+        }
+        Self(rows)
+    }
+
+    fn names(pattern: &str, capture: &str) -> bool {
+        match pattern.strip_suffix('*') {
+            Some(prefix) => capture.starts_with(prefix),
+            None => pattern == capture,
+        }
+    }
+
+    /// The titles `capture` loses, of the `expected` ones its output completes.
+    fn of(&self, capture: &str, expected: &[Seen]) -> Vec<Seen> {
+        let mut rows = self
+            .0
+            .iter()
+            .filter(|(pattern, _)| Self::names(pattern, capture));
+        match rows.next() {
+            None => Vec::new(),
+            Some((_, None)) => expected.to_vec(),
+            Some((_, Some(first))) => std::iter::once(first.clone())
+                .chain(rows.map(|(_, seen)| seen.clone().expect("a title beside others")))
+                .collect(),
+        }
+    }
+}
+
 /// A title that comes before anything is drawn is not reported: a host that renders what the
-/// program draws may set one of its own as it starts. Each agent sets its own as it starts, before
-/// it draws anything, and so loses it: Claude Code's `✳ Claude Code` and Grok Build's `grok`, which
-/// Grok sets again once it has drawn; Codex sets its first once it has drawn. The inbox console
-/// host's captures (`testdata/conhost-captures.md`) hold the host's own titles: `claude` before
-/// Claude Code's first drawing, which is lost, and Codex's path after its first frame, which is
-/// not. The title captures keep only the title sequences, so on their own every title in them
-/// comes first.
+/// program draws may set one of its own as it starts. An agent that sets its title as it starts,
+/// before it draws anything, loses it, and a capture that keeps only title sequences loses every
+/// one; which titles each capture loses is declared beside the captures ([`LostTitles`]), and every
+/// declaration names a capture.
 #[test]
 fn a_title_before_anything_is_drawn_is_not_reported() {
-    let at_prompt = (Some("Claude Code".to_string()), Some('\u{2733}'));
-    let grok = (Some("grok".to_string()), None);
-    let host_claude = (Some("claude".to_string()), None);
-    for (name, output) in captures() {
+    let declared = LostTitles::declared();
+    let captures = captures();
+    for (pattern, _) in &declared.0 {
+        assert!(
+            captures
+                .iter()
+                .any(|(name, _)| LostTitles::names(pattern, name)),
+            "{pattern}: declared for no capture"
+        );
+    }
+    for (name, output) in captures {
         let expected = off_the_output(&output, 1);
         let reported = off_the_parsed_screen(b"", &output, 1);
-        let lost: &[Seen] = match name.as_str() {
-            "claude_input_placeholder.bin"
-            | "claude_input_queued.bin"
-            | "claude_input_queued_draft.bin"
-            | "claude_input_restored.bin"
-            | "claude_interaction_composer.bin" => std::slice::from_ref(&at_prompt),
-            "grok_composer_draft.bin"
-            | "grok_composer_restored.bin"
-            | "grok_native_stashed.bin"
-            | "grok_trust_screen.bin"
-            | "grok_slash_space_guarded.bin"
-            | "grok_slash_zwsp_guarded.bin"
-            | "grok_interaction_mcp_card.bin"
-            | "grok_interaction_shell_card.bin" => std::slice::from_ref(&grok),
-            name if name.starts_with("conhost_claude_") => std::slice::from_ref(&host_claude),
-            "claude_title_cancel.bin"
-            | "claude_title_idle.bin"
-            | "claude_title_permission.bin"
-            | "claude_trust_dismissed.bin"
-            | "codex_approval_title.bin"
-            | "codex_working_title.bin"
-            | "grok_title_cancel_before_output.bin"
-            | "grok_title_tool.bin"
-            | "grok_title_turn_end.bin" => &expected,
-            _ => &[],
-        };
+        let lost = declared.of(&name, &expected);
         assert_eq!(&expected[..lost.len()], lost, "{name}: what comes first");
         assert_eq!(reported, &expected[lost.len()..], "{name}");
     }

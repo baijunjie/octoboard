@@ -788,3 +788,46 @@ fn a_refusal_for_another_reason_neither_starts_nor_ends_the_torn_frame_run() {
     unreadable(&live);
     assert_eq!(*live.draft_hold.torn_since.lock().unwrap(), run);
 }
+
+/// The watch looks for the box drawn empty only while a message a drain may take is queued: one
+/// held until the next message is written waits for no draft, so the hold the user's keys left
+/// stays through the watch's looks, and ends at the look after a message is queued beside it.
+#[tokio::test(start_paused = true)]
+async fn the_watch_releases_no_draft_hold_for_a_held_message_alone() {
+    use crate::protocol::{AgentId, SessionStatus};
+    use crate::session::input_box::captures::DRAFT;
+    let (state, dir) = crate::test_support::app_state("draft-release-held-alone");
+    crate::state::test_support::insert_record(&state, &dir, "s", SessionStatus::Working);
+    let live = crate::test_support::fake_live_session("s", AgentId::CLAUDE, 140, 45, "sleep 30")
+        .with_composer();
+    state.register_live(live.clone());
+    draw(&live, &empty_box(AgentId::CLAUDE));
+    live.write_terminal_input(b"draft text").unwrap();
+    draw(&live, &drawn(DRAFT));
+    state.outbox.queue_held("s", "given back");
+    crate::session::dialogs::watch(&state, &live);
+    live.write_terminal_input(b"\x15").unwrap();
+    draw(&live, &empty_box(AgentId::CLAUDE));
+    settle(&live);
+    // Each look and the release it would start are over by the next one, as in the test above.
+    for _ in 0..4 {
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
+    assert!(
+        live.draft.lock().unwrap().holds(),
+        "the watch released the draft hold with nothing to write"
+    );
+    assert_eq!(state.outbox.len("s"), 1);
+
+    state.queue_message("s", "peer message");
+    for _ in 0..4 {
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        if !live.draft.lock().unwrap().holds() {
+            break;
+        }
+    }
+    assert!(
+        !live.draft.lock().unwrap().holds(),
+        "a message queued beside the held one did not have the watch release the hold"
+    );
+}

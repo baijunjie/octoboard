@@ -250,7 +250,7 @@ mod tests {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let server = std::thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
+            let mut stream = crate::test_support::accept_past_probes(&listener);
             stream.set_read_timeout(Some(TIMEOUT)).unwrap();
             let mut request = Vec::new();
             let mut buffer = [0; 4096];
@@ -262,6 +262,11 @@ mod tests {
             stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").unwrap();
             String::from_utf8(request).unwrap()
         });
+        // A running daemon may probe the port at any point: the probe is not the report.
+        assert_eq!(
+            crate::test_support::probe_port(port),
+            "HTTP/1.1 404 Not Found"
+        );
         report(port, "k".to_owned(), "session-1", 200_000)
             .join()
             .unwrap();
@@ -270,11 +275,9 @@ mod tests {
             .unwrap()
             .starts_with("POST /context-window/session-1?key=k HTTP/1.1\r\n"));
 
-        let gone = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = gone.local_addr().unwrap().port();
-        drop(gone);
+        let gone = crate::test_support::ClosedPort::new();
         let started = std::time::Instant::now();
-        report(port, "k".to_owned(), "session-1", 200_000)
+        report(gone.port(), "k".to_owned(), "session-1", 200_000)
             .join()
             .unwrap();
         // Bounded by the timeout, which a refused connection on Windows takes up in full.

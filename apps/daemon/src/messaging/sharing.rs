@@ -63,6 +63,7 @@ pub fn deliver_info(
         state,
         &receiver.id,
         &render_info(&sender, standing, receiver.bound_to.is_some(), text),
+        Some(&sender.id),
     )?;
 
     let copy = match receiver
@@ -84,7 +85,7 @@ pub fn deliver_info(
                 Standing::Other
             };
             let message = render_info_copy(&sender, standing, &receiver, text);
-            match write_or_hold(state, owner_id, &message) {
+            match write_or_hold(state, owner_id, &message, None) {
                 Ok(delivery) => OwnerCopy::Sent(delivery),
                 Err(err) => OwnerCopy::Failed(copy_failure(&err)),
             }
@@ -97,10 +98,16 @@ pub fn deliver_info(
 /// message kept in the store until a resume puts it on the session's queue, so it is not lost
 /// with the daemon or a failed relaunch. It is kept with the line that dates it, after the
 /// closing line; archiving or deleting the session drops it. An archived session is refused,
-/// since nothing says it will ever be resumed.
+/// since nothing says it will ever be resumed. `sender` is the session that sent it, where one did
+/// ([`delivery::write_message_from`]).
 ///
 /// **Blocks** like [`delivery::write_message`].
-fn write_or_hold(state: &Arc<AppState>, id: &str, text: &str) -> Result<Delivery> {
+fn write_or_hold(
+    state: &Arc<AppState>,
+    id: &str,
+    text: &str,
+    sender: Option<&str>,
+) -> Result<Delivery> {
     delivery::write_or_keep(
         state,
         id,
@@ -108,6 +115,7 @@ fn write_or_hold(state: &Arc<AppState>, id: &str, text: &str) -> Result<Delivery
         "this session is archived, so it takes no information until it is reopened",
         || format!("{text}\n\n{}", delivery::kept_dating()),
         None,
+        sender,
     )
 }
 

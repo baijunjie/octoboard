@@ -328,7 +328,9 @@ what importing it would come to:
 - **Cannot be created** — the Add account form would refuse it (see "Adding, editing and removing an account" in
   `docs/product/agent-accounts.md`): its name is blank, is the word "Default", is the name this machine's default
   account of that agent has been given, or is taken by an earlier account of the document; or its directory is not
-  absolute once resolved. The inspection gives the form's reason.
+  absolute once resolved. The inspection gives the form's reason. Every account of an agent that has only its default
+  account (see "The accounts the user owns" in `docs/product/agent-accounts.md`) cannot be created, whatever its name
+  and directory, the reason being that refusal (`provider_unsupported`, operation `owned_accounts`).
 
 A directory is resolved on the daemon's host: `~` and a path starting with `~/` under its home directory, an absolute
 path as it is; a bare name is not a directory. A directory that does not exist yet is fine, as it is for the Add account
@@ -337,7 +339,8 @@ system" under "Where an imported project goes" above) names nothing on the daemo
 the account cannot be created as the document has it, with the form's reason that the directory is not absolute; the
 inspection marks such an account (`foreign_directory`) so the review can say why instead. Any account but an existing
 one can be left out. An account whose directory is in use or cannot be used can be given **another directory** instead,
-absolute or starting with `~/`; one whose name is the problem can only be left out, since no directory would help.
+absolute or starting with `~/`; one whose name is the problem, or whose agent has only its default account, can only
+be left out, since no directory would help.
 
 The inspection also says which of the document's added agents this machine has not added (none while this machine's
 list is undecided), and, for each agent, the name the document gives its default account and whether an import would

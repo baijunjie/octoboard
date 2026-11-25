@@ -18,8 +18,11 @@
 //! dialog is a set of strings that must all be on the screen at once, a title and its footer where
 //! the screen has one, so a transcript that quotes a title does not match; an entry whose screen
 //! has no measured footer relies on its title and options together instead, and one whose text a
-//! quote or a task's name could contain must be a whole row of the screen. Nothing here sends a
-//! key to a dialog. The ages, token counts and model names the screens print vary, so no string
+//! quote or a task's name could contain must be a whole row of the screen. A dialog drawn over
+//! the middle of the screen, with the conversation's text left on its rows to either side, has no
+//! row of its own: its title row is asked for as strings in order on one row with nothing but a
+//! run of blanks between them, judged on the row as drawn, where the blanks still tell a title
+//! bar from a sentence. Nothing here sends a key to a dialog. The ages, token counts and model names the screens print vary, so no string
 //! uses them.
 //!
 //! Each provider's dialogs are its own, listed by its screen reader
@@ -29,6 +32,7 @@ use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
 use crate::protocol::AgentId;
+use crate::session::text::bare;
 use crate::session::LiveSession;
 use crate::state::AppState;
 
@@ -61,6 +65,11 @@ pub enum DialogKind {
     /// question put to them, so a session showing one reads as dormant rather than waiting for
     /// the user, though it holds its writes all the same.
     AgentsView,
+    /// A view the person opened themselves over the conversation: a list of commands, a picker,
+    /// a help screen. Nothing is put to them and nothing of the agent's waits on it, so the
+    /// session reads as it did before the view came up and nobody is told it waits; it holds its
+    /// writes all the same, since what is written would go to the view.
+    OwnView,
 }
 
 /// A dialog on an agent's screen.
@@ -84,6 +93,45 @@ impl Dialog {
     pub fn is_agents_view(&self) -> bool {
         self.kind == DialogKind::AgentsView
     }
+
+    /// Whether this is a view the person opened themselves ([`DialogKind::OwnView`]).
+    pub fn is_own_view(&self) -> bool {
+        self.kind == DialogKind::OwnView
+    }
+}
+
+/// Strings asked for in order on one row of the screen as drawn ([`DialogPattern::with_row_run`]).
+#[derive(Debug, Clone, Copy)]
+struct RowRun {
+    /// The strings as drawn, their own blanks included.
+    parts: &'static [&'static str],
+    /// How many blank cells at least stand between one string and the next.
+    min_gap: usize,
+}
+
+impl RowRun {
+    /// Whether `row`, a row of the screen as drawn, holds the strings in order with nothing but
+    /// blanks between one and the next, at least [`Self::min_gap`] of them. Whatever stands on
+    /// the row before the first and after the last is not looked at.
+    fn on(&self, row: &str) -> bool {
+        let Some((first, rest)) = self.parts.split_first() else {
+            return false;
+        };
+        row.match_indices(*first).any(|(at, _)| {
+            let mut after = &row[at + first.len()..];
+            rest.iter().all(|part| {
+                let text = after.trim_start_matches(char::is_whitespace);
+                let gap = after[..after.len() - text.len()].chars().count();
+                match text.strip_prefix(*part) {
+                    Some(left) if gap >= self.min_gap.max(1) => {
+                        after = left;
+                        true
+                    }
+                    _ => false,
+                }
+            })
+        })
+    }
 }
 
 /// How one dialog is recognised on a provider's screen: an entry of the provider's
@@ -95,6 +143,9 @@ pub struct DialogPattern {
     /// A whitespace-free row that must be on the screen as a row of its own, for text that would
     /// also match as part of a longer row (a task named after it, or a sentence quoting it).
     row: Option<&'static str>,
+    /// Strings that must stand in order on one row of the screen as drawn, with only blanks
+    /// between them.
+    row_run: Option<RowRun>,
 }
 
 impl DialogPattern {
@@ -113,6 +164,7 @@ impl DialogPattern {
             },
             all_of,
             row: None,
+            row_run: None,
         }
     }
 
@@ -126,12 +178,26 @@ impl DialogPattern {
             },
             all_of: &[],
             row: Some(row),
+            row_run: None,
         }
     }
 
     /// The same dialog, also requiring `row`, whitespace-free, as a row of its own.
     pub const fn with_row(mut self, row: &'static str) -> Self {
         self.row = Some(row);
+        self
+    }
+
+    /// The same dialog, also requiring `parts` in order on one row of the screen as drawn, with
+    /// nothing but blanks between one and the next, at least `min_gap` cells of them (one at
+    /// least, whatever is given): the title row of a dialog drawn over the middle of the screen,
+    /// which the conversation's text shares to the left and right, so that no whole row is the
+    /// dialog's. Each part is given as it is drawn, with its own blanks, since the row is judged
+    /// before whitespace is removed: the run of blanks is what tells a title and the key at the
+    /// far end of its bar from a sentence that spells the two together. `min_gap` is the
+    /// narrowest run measured on the provider's screens.
+    pub const fn with_row_run(mut self, parts: &'static [&'static str], min_gap: usize) -> Self {
+        self.row_run = Some(RowRun { parts, min_gap });
         self
     }
 
@@ -144,9 +210,9 @@ impl DialogPattern {
 
 /// The dialog `agent` is showing on a screen with this text, if any.
 pub fn recognise(agent: AgentId, screen: &str) -> Option<Dialog> {
-    let strip = |text: &str| -> String { text.chars().filter(|c| !c.is_whitespace()).collect() };
-    let rows: Vec<String> = screen.lines().map(strip).collect();
-    let screen = strip(screen);
+    let drawn: Vec<&str> = screen.lines().collect();
+    let rows: Vec<String> = drawn.iter().map(|row| bare(row)).collect();
+    let screen = bare(screen);
     crate::adapter::provider(agent)
         .screen()
         .dialogs()
@@ -156,6 +222,9 @@ pub fn recognise(agent: AgentId, screen: &str) -> Option<Dialog> {
                 && pattern
                     .row
                     .is_none_or(|row| rows.iter().any(|candidate| candidate == row))
+                && pattern
+                    .row_run
+                    .is_none_or(|run| drawn.iter().any(|row| run.on(row)))
         })
         .map(|pattern| pattern.dialog)
 }
@@ -215,9 +284,9 @@ pub fn watch(state: &Arc<AppState>, live: &Arc<LiveSession>) {
 /// Whether `dialog` is the session waiting for the user, which its owner is told of. A usage-limit
 /// dialog is not: the session stopped on the limit, and neither a permission nor a question is
 /// open for the user to answer. Nor is a view of the background agents, which the session is
-/// shown at dormant for.
+/// shown at dormant for, nor a view the person opened themselves, which puts nothing to them.
 fn is_a_wait_for_the_user(dialog: &Dialog) -> bool {
-    !dialog.is_usage_limit() && !dialog.is_agents_view()
+    !dialog.is_usage_limit() && !dialog.is_agents_view() && !dialog.is_own_view()
 }
 
 async fn poll(state: Arc<AppState>, live: Weak<LiveSession>) {
@@ -235,7 +304,7 @@ async fn poll(state: Arc<AppState>, live: Weak<LiveSession>) {
         }
         // A message held for what the user typed goes in once the input box is drawn empty, not
         // at the next retry, which can be past the draft's grace and then no longer checks the box.
-        if state.outbox.len(&live.id) > 0 {
+        if state.outbox.takeable(&live.id) > 0 {
             live.schedule_draft_release();
         }
         let total = live.output_total();
@@ -644,5 +713,131 @@ mod tests {
         ] {
             assert_eq!(recognise(AgentId::CODEX, line), None, "{line}");
         }
+    }
+
+    /// A provider whose dialogs are drawn over the middle of the screen, the conversation's text
+    /// left on their rows to either side, and are views the person opens themselves: the
+    /// test-only provider, reading through this reader.
+    struct Overlays;
+
+    static OVERLAYS: Overlays = Overlays;
+
+    const OVERLAY_DIALOGS: &[DialogPattern] = &[
+        DialogPattern::all_of("test_commands", WrittenMessage::Discarded, &[])
+            .with_row_run(&["Commands", "esc"], 20)
+            .of_kind(DialogKind::OwnView),
+        DialogPattern::all_of(
+            "test_select_model",
+            WrittenMessage::Discarded,
+            &["Connectprovider"],
+        )
+        .with_row_run(&["Select model", "esc"], 20)
+        .of_kind(DialogKind::OwnView),
+        DialogPattern::all_of("test_three", WrittenMessage::Discarded, &[])
+            .with_row_run(&["One", "two", "three"], 0),
+    ];
+
+    impl crate::session::screen::ScreenReader for Overlays {
+        fn dialogs(&self) -> &'static [DialogPattern] {
+            OVERLAY_DIALOGS
+        }
+    }
+
+    /// The title row of a dialog drawn over the conversation, `title` and `esc` with `gap`
+    /// blanks between them and the conversation's text on both sides.
+    fn title_row(title: &str, gap: usize) -> String {
+        format!("line 381 xxxx    {title}{}esc    xxxx\n", " ".repeat(gap))
+    }
+
+    /// A title and the key at the far end of its bar are a dialog only on one row with a run of
+    /// blanks between them, as wide as the provider states: the same words in a sentence, run
+    /// together, or on two rows are the conversation's.
+    #[test]
+    fn a_title_row_is_told_by_the_run_of_blanks_between_its_parts() {
+        let _reader = crate::test_support::test_provider::declaring_screen(&OVERLAYS);
+        let code = |screen: &str| recognise(AgentId::TEST, screen).map(|dialog| dialog.code);
+        assert_eq!(code(&title_row("Commands", 41)), Some("test_commands"));
+        assert_eq!(code(&title_row("Commands", 20)), Some("test_commands"));
+        assert_eq!(
+            code(&title_row("Commands", 19)),
+            None,
+            "narrower than stated"
+        );
+        for screen in [
+            "The Commands esc key closes it.\n",
+            "Commandsesc\n",
+            "Status escalated; see Commands\n                         esc to close\n",
+            "esc                         Commands\n",
+            "Commands                    x                    esc\n",
+        ] {
+            assert_eq!(code(screen), None, "{screen}");
+        }
+        // A part keeps its own blanks, and the other strings of the pattern are still asked for.
+        let model = title_row("Select model", 30);
+        assert_eq!(code(&model), None, "its other string is missing");
+        assert_eq!(
+            code(&format!("{model}  Connect provider ctrl+a\n")),
+            Some("test_select_model")
+        );
+        assert_eq!(code(&title_row("Selectmodel", 30)), None);
+    }
+
+    /// More than two parts stand in their order with a run between each two, one blank at least
+    /// whatever gap is stated; the first part is looked for at every place it stands on the row.
+    #[test]
+    fn every_part_of_a_row_run_follows_the_one_before_after_blanks() {
+        let _reader = crate::test_support::test_provider::declaring_screen(&OVERLAYS);
+        let code = |screen: &str| recognise(AgentId::TEST, screen).map(|dialog| dialog.code);
+        assert_eq!(code("One two   three\n"), Some("test_three"));
+        assert_eq!(code("One x. One  two three\n"), Some("test_three"));
+        assert_eq!(code("Onetwo three\n"), None);
+        assert_eq!(code("One two x three\n"), None);
+        assert_eq!(code("One three two\n"), None);
+    }
+
+    /// A view the person opened themselves holds the session's writes and is no wait for the
+    /// user: the session is shown as it was, its owner is not told it waits, and an interrupt is
+    /// refused as one that would go to the view.
+    #[tokio::test]
+    async fn a_view_the_person_opened_holds_writes_without_raising_a_hand() {
+        use crate::protocol::SessionStatus;
+        let _reader = crate::test_support::test_provider::declaring_screen(&OVERLAYS);
+        let (state, dir) = crate::test_support::app_state("dialogs-own-view");
+        crate::state::test_support::insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = crate::test_support::fake_live_session("s", AgentId::TEST, 120, 40, "sleep 30");
+        state.register_live(live.clone());
+        live.on_output(title_row("Commands", 41).replace('\n', "\r\n").as_bytes());
+        let view = live.look_for_dialog().current.expect("the view is up");
+        assert!(view.is_own_view() && !view.is_agents_view() && !view.is_usage_limit());
+        assert!(!is_a_wait_for_the_user(&view));
+
+        assert!(live.waits_for_user(), "something is on the screen");
+        assert!(!live.waits_for_user_outside_views());
+        assert!(!live.waits_for_user_beyond_usage_limit());
+        let session = state.session_record("s").unwrap();
+        assert_eq!(state.shown_status(&session), SessionStatus::Idle);
+        assert!(matches!(
+            state.write_hold("s"),
+            Some(crate::state::WriteHold::AgentDialog(dialog)) if dialog.is_own_view()
+        ));
+        react_to_dialog(&state, "s", Some(view));
+        assert!(state.claim_waiting_notice("s"), "nobody was told it waits");
+
+        let refused = crate::session::interrupt::interrupt_session(&state, "s")
+            .await
+            .expect_err("a key would go to the view");
+        let code = refused
+            .downcast_ref::<crate::protocol::CodedError>()
+            .map(|coded| coded.code.to_string());
+        assert_eq!(
+            code,
+            Some(crate::protocol::error_code::SESSION_WAITING_FOR_USER.to_string())
+        );
+        let message = refused.to_string();
+        assert!(
+            message.contains("a view of the agent's own open"),
+            "{message}"
+        );
+        assert!(!message.contains("who alone can answer"), "{message}");
     }
 }

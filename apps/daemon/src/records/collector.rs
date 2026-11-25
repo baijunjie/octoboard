@@ -9,6 +9,13 @@
 //! each line to the three modules above, and asks `default_effort.rs` for the effort a session's
 //! agent runs it at where the records give the model alone.
 //!
+//! A conversation kept as rows (`records::rows`) has no file to read as it grows: its rows are
+//! read whole through the provider and folded line by line like a file's, while the session has a
+//! process, when an event of the session says they may have changed (`Hints::stirred`), and once
+//! more after the process ends. One with no process is not read at a daemon's start: what its
+//! rows gave was stored while it ran. Reads run independently so a command that is still
+//! running does not delay the rest of a collector pass.
+//!
 //! A change of a session's model restarts it on the same conversation, so its records go on
 //! naming the old model up to where the old process stopped. The change stores an observation
 //! boundary for the session ([`ObservedBoundary`], taken by [`observed_boundary`] once the old
@@ -27,6 +34,7 @@ use serde_json::Value;
 use crate::adapter::provider;
 use crate::protocol::{AgentId, Session};
 use crate::providers::layout::layout;
+use crate::records::branch::Leaf;
 use crate::records::context::Context;
 use crate::records::default_effort::DefaultEfforts;
 use crate::records::line_file::{Change, LineFile, Signature, JSON_FILE_LIMIT};
@@ -37,11 +45,16 @@ use crate::records::Locator;
 use crate::state::AppState;
 use crate::store::RecordUpdate;
 
+mod row_reads;
+use row_reads::{RowReads, Version};
+
 #[derive(Default)]
 struct Cursor {
     identity: Option<(AgentId, Option<String>, Option<String>)>,
     path: Option<PathBuf>,
     file: LineFile,
+    /// Where the lines read stand in a record that is a tree (`RecordStore::branching`).
+    leaf: Leaf,
     context: Context,
     without_process: bool,
     titles: Titles,
@@ -61,11 +74,18 @@ struct Cursor {
     /// since that reads the whole of what the file held at the boundary; not kept while it cannot
     /// be told.
     boundary_start: Option<(PathBuf, u64)>,
-    /// The summary file beside the record (`AgentLayout::title_summary`), which names the
+    /// The conversation's summary file ([`summary_path`]), which names the
     /// conversation and may name its configured model.
     summary: JsonFile,
     /// The file beside the record that gives the context window (`RecordStore::window_file`).
     window: JsonFile,
+    rows_read: Option<Version>,
+    /// A process that ends before its first row read completes still needs a final read.
+    rows_seen_live: bool,
+    /// For a conversation kept as rows whose observation boundary could not count its lines
+    /// (`ObservedBoundary::rows`): how many it held at the first reading against that boundary,
+    /// which stand for the ones the old process wrote.
+    rows_held: Option<usize>,
     /// The conversation file, followed for a prompt the user sent while the session counts as
     /// having no conversation.
     user_prompt: user_prompt::Search,
@@ -85,6 +105,19 @@ struct Cursor {
 #[derive(Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ObservedBoundary {
     files: HashMap<String, Vec<Held>>,
+    /// For a conversation kept as rows (`records::rows`): how many lines it held, the lines
+    /// after them being the relaunched process's. `None` when they could not be read: the
+    /// collector then counts them at its first reading of the conversation against this boundary
+    /// ([`Cursor::rows_held`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rows: Option<usize>,
+    /// Set, to a value of its own, where the rows could not be counted: without it every such
+    /// boundary is the same text, so a second model change whose rows could not be read either
+    /// would store what is already stored, the collector would not take it up as a new boundary
+    /// and would go on counting the rows held at the first, letting the model the process before
+    /// wrote after them stand for the new process's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    uncounted: Option<uuid::Uuid>,
 }
 
 /// The first `len` bytes of a file (decompressed, for a compressed one), by length and digest,
@@ -228,24 +261,29 @@ pub(crate) fn observed_boundary(
     shell: Option<HashMap<String, String>>,
 ) -> ObservedBoundary {
     let mut boundary = ObservedBoundary::default();
-    let mut locator = shell.map(Locator::with_shell).unwrap_or_default();
+    let mut locator = shell
+        .map(Locator::with_shell)
+        .unwrap_or_default()
+        .with_store(&state.store);
+    if let Some(rows) = crate::records::rows::read(&locator, session) {
+        boundary.rows = rows.ok().map(|rows| rows.len());
+        if boundary.rows.is_none() {
+            boundary.uncounted = Some(uuid::Uuid::new_v4());
+        }
+        return boundary;
+    }
     let mut records = Vec::new();
     if let Some(path) = state.record_hints.hint(session) {
         records.push(path);
     }
-    if let (Some(root), Some(id)) = (
-        locator.root(session.agent, session.config_dir.as_deref()),
-        session.agent_session_id.as_deref(),
-    ) {
-        if let Some(path) = locator.current_record(session.agent, &root, id) {
-            records.push(path);
-        }
+    if let Some(path) = locator.current_session_record(session) {
+        records.push(path);
     }
     let observes_lines = provider(session.agent).records().observes_record_lines();
     let mut files = Vec::new();
     for path in records {
-        if let Some(summary) = layout(session.agent).title_summary {
-            files.push(path.with_file_name(summary));
+        if let Some(summary) = summary_path(session.agent, &path) {
+            files.push(summary);
         }
         if observes_lines {
             files.push(path);
@@ -260,24 +298,96 @@ pub(crate) fn observed_boundary(
     boundary
 }
 
-/// A small JSON file read again whenever it changes.
+/// The summary file of the conversation whose indexed record is `record`: where the provider's
+/// store puts it (`RecordStore::summary_file`), else the file of the layout's one name beside the
+/// record (`AgentLayout::title_summary`); `None` for an agent that keeps none.
+fn summary_path(agent: AgentId, record: &Path) -> Option<PathBuf> {
+    provider(agent).records().summary_file(record).or_else(|| {
+        layout(agent)
+            .title_summary
+            .map(|name| record.with_file_name(name))
+    })
+}
+
+/// Reads the summary file of the conversation whose indexed record is `record`, when it changed,
+/// into the cursor's titles and, unless it is as the observation boundary held it, its observed
+/// model and effort.
+fn fold_summary(agent: AgentId, record: &Path, cursor: &mut Cursor) {
+    let Some(summary_path) = summary_path(agent, record) else {
+        return;
+    };
+    let store = provider(agent).records();
+    let Some(summary) = cursor
+        .summary
+        .read_as(&summary_path, |bytes| store.summary_in(bytes))
+    else {
+        return;
+    };
+    cursor.titles.fold_summary(provider(agent), &summary);
+    // Rewritten in place rather than appended to: as it was at the boundary, it still names the
+    // old process's model.
+    let old = cursor
+        .observed_boundary
+        .as_ref()
+        .is_some_and(|boundary| boundary.unchanged(&summary_path));
+    if !old {
+        store.observe_summary(&summary, &mut cursor.observed);
+    }
+}
+
+/// Reads the file beside the indexed record `record` that gives the context window
+/// (`RecordStore::window_file`), when it changed, into the cursor's context.
+fn fold_window(agent: AgentId, record: &Path, cursor: &mut Cursor) {
+    let store = provider(agent).records();
+    let Some(file) = store.window_file() else {
+        return;
+    };
+    if let Some(window) = cursor.window.read(&record.with_file_name(file)) {
+        cursor.context.set_window(store.window_in(&window));
+    }
+}
+
+/// A small file holding one value, JSON unless its reader says otherwise, read again whenever it
+/// changes.
 #[derive(Default)]
 struct JsonFile(Option<Signature>);
 
 impl JsonFile {
     /// What the file holds, when it differs from the last read.
     fn read(&mut self, path: &Path) -> Option<Value> {
+        self.read_as(path, |bytes| serde_json::from_slice(bytes).ok())
+    }
+
+    /// [`Self::read`], with `parse` reading the file's content. Content `parse` cannot read is
+    /// tried again at the next look, as content that is not JSON is.
+    fn read_as(
+        &mut self,
+        path: &Path,
+        parse: impl FnOnce(&[u8]) -> Option<Value>,
+    ) -> Option<Value> {
         let metadata = std::fs::metadata(path).ok()?;
         let signature = (metadata.len(), metadata.modified().ok());
         if self.0 == Some(signature) || metadata.len() > JSON_FILE_LIMIT {
             return None;
         }
-        let value = serde_json::from_slice(
-            &crate::hostfs::read_regular(path, JSON_FILE_LIMIT as usize).ok()?,
-        )
-        .ok()?;
+        let value = parse(&crate::hostfs::read_regular(path, JSON_FILE_LIMIT as usize).ok()?)?;
         self.0 = Some(signature);
         Some(value)
+    }
+}
+
+impl Cursor {
+    /// Forgets everything folded from the record and the files beside it, for a record that is
+    /// read again from its start: the context with its window, the titles with the name the
+    /// summary gave, the observed model and effort, and what was read of the summary and window
+    /// files, which are otherwise not read again while they stay as they are. Where the record
+    /// itself is read from is the caller's.
+    fn forget_folded(&mut self) {
+        self.context.forget();
+        self.titles.clear();
+        self.observed = Observed::default();
+        self.summary = JsonFile::default();
+        self.window = JsonFile::default();
     }
 }
 
@@ -287,14 +397,19 @@ struct Cursors {
     /// Each account's shared title file, by agent and account directory.
     shared_titles: HashMap<(AgentId, PathBuf), SharedTitles>,
     default_efforts: DefaultEfforts,
+    row_reads: RowReads,
 }
 
-/// One bounded blocking job owns all cursors, rather than starting a task per historical session.
+/// One blocking pass owns the cursors. Slow row queries occupy a bounded number of separate
+/// blocking tasks across passes.
 /// The weak reference lets a test or daemon shutdown release its state without a timer retaining it.
 pub fn spawn(state: &Arc<AppState>) {
     let weak = Arc::downgrade(state);
     tokio::spawn(async move {
-        let mut cursors = Cursors::default();
+        let mut cursors = Cursors {
+            row_reads: RowReads::with_background(),
+            ..Cursors::default()
+        };
         loop {
             let Some(state) = weak.upgrade() else { return };
             let result = tokio::task::spawn_blocking(move || {
@@ -310,6 +425,13 @@ pub fn spawn(state: &Arc<AppState>) {
 }
 
 fn collect(state: &AppState, cursors: &mut Cursors) {
+    // Default homes resolve through the same login-shell snapshot as agent launches.
+    collect_with(state, cursors, Locator::default());
+}
+
+/// [`collect`], resolving the accounts through `locator`.
+fn collect_with(state: &AppState, cursors: &mut Cursors, locator: Locator) {
+    let mut locator = locator.with_store(&state.store);
     let Ok(sessions) = state.store.list_sessions() else {
         return;
     };
@@ -319,12 +441,12 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
     };
     let ids: HashSet<_> = sessions.iter().map(|session| session.id.as_str()).collect();
     cursors.sessions.retain(|id, _| ids.contains(id.as_str()));
+    cursors.row_reads.begin_pass(&ids);
     state.retain_default_efforts(&ids);
     cursors.default_efforts.begin_pass();
     let hints = state.record_hints.retain(&ids);
     let windows = state.context_windows.retain(&ids);
-    // Default homes resolve through the same login-shell snapshot as agent launches.
-    let mut locator = Locator::default();
+    state.launch_context.retain(&ids);
     // The sessions each account's shared title file is read for.
     let mut wanted: HashMap<(AgentId, PathBuf), HashSet<String>> = HashMap::new();
     let mut shared_keys: HashMap<String, (AgentId, PathBuf)> = HashMap::new();
@@ -377,7 +499,9 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                 ..Default::default()
             };
         }
-        let live = state.live_session(&session.id).is_some();
+        let process = state.live_session(&session.id);
+        let launch = process.as_ref().map(|process| process.launch_id.as_str());
+        let live = launch.is_some();
         if let Some(hint) = crate::records::hinted_path(&hints, &session) {
             if cursor.path.as_ref() != Some(&hint) {
                 *cursor = Cursor {
@@ -416,42 +540,27 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                 .and_then(|text| serde_json::from_str(text).ok());
             cursor.stored_boundary = stored_boundary;
             cursor.boundary_start = None;
-            cursor.observed = Observed::default();
             // A stale pass may have consumed the replacement process's first records before its
             // write was rejected by the new boundary. Replay them through the new boundary.
             cursor.file = LineFile::default();
-            cursor.context.forget();
-            cursor.titles.clear();
-            cursor.summary = JsonFile::default();
-            cursor.window = JsonFile::default();
+            cursor.rows_read = None;
+            cursor.rows_held = None;
+            cursor.forget_folded();
             if let Ok(current) = state.session_record(&session.id) {
                 session.observed_model = current.observed_model;
                 session.observed_effort = current.observed_effort;
             }
         }
-        let stored = |defaults: &mut DefaultEfforts, republish: &mut Vec<Session>| {
-            settle_default_effort(
-                state,
-                defaults,
-                &locator,
-                &session,
-                (
-                    session.observed_model.as_deref(),
-                    session.observed_effort.as_deref(),
-                ),
-                republish,
-            )
+        let rows_pending = if crate::records::rows::shaped(session.agent).is_some() {
+            cursors
+                .row_reads
+                .scan(&state.record_hints, &locator, &session, launch, cursor)
+        } else {
+            if cursor.path.is_none() {
+                cursor.path = locator.current_session_record(&session);
+            }
+            false
         };
-        if cursor.path.is_none() {
-            let Some(root) = locator.root(session.agent, session.config_dir.as_deref()) else {
-                stored(&mut cursors.default_efforts, &mut republish);
-                continue;
-            };
-            cursor.path = session
-                .agent_session_id
-                .as_ref()
-                .and_then(|id| locator.current_record(session.agent, &root, id));
-        }
         let store = provider(session.agent).records();
         let recorded = recorded_conversation(state, cursor, &locator, &session);
         if recorded == Recorded::Marked {
@@ -463,28 +572,8 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
             if scan(session.agent, &path, cursor).is_ok() {
                 refresh_base(cursor, &mut locator, &session);
             }
-            if let Some(file) = store.window_file() {
-                if let Some(window) = cursor.window.read(&path.with_file_name(file)) {
-                    cursor.context.set_window(store.window_in(&window));
-                }
-            }
-            if let Some(summary) = layout(session.agent).title_summary {
-                let summary_path = path.with_file_name(summary);
-                if let Some(summary) = cursor.summary.read(&summary_path) {
-                    cursor
-                        .titles
-                        .fold_summary(provider(session.agent), &summary);
-                    // Rewritten in place rather than appended to: as it was at the boundary, it
-                    // still names the old process's model.
-                    let old = cursor
-                        .observed_boundary
-                        .as_ref()
-                        .is_some_and(|boundary| boundary.unchanged(&summary_path));
-                    if !old {
-                        store.observe_summary(&summary, &mut cursor.observed);
-                    }
-                }
-            }
+            fold_window(session.agent, &path, cursor);
+            fold_summary(session.agent, &path, cursor);
         }
         // A provider's status line reports the window (Claude Code's transcript never does). The
         // last report wins, and until there is one the stored window stands, so a daemon restart,
@@ -496,9 +585,14 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                 cursor.context.set_window(Some(window));
             }
         }
+        let report = state.live_session(&session.id).and_then(|process| {
+            state
+                .launch_context
+                .for_launch(&session.id, &process.launch_id)
+        });
         let context = cursor
             .context
-            .context(store)
+            .with_report(store, report)
             .filter(|context| context != &session.context);
         let observed_model = cursor
             .observed
@@ -539,7 +633,7 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
         }
         let titles = (titles != session.record_titles).then_some(titles);
         // A session whose mark was not written is read again, process or not, until it is.
-        cursor.without_process = !live && recorded != Recorded::Pending;
+        cursor.without_process = !live && !rows_pending && recorded != Recorded::Pending;
         if context.is_some()
             || titles.is_some()
             || observed_model.is_some()
@@ -555,6 +649,7 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
             });
         }
     }
+    cursors.row_reads.start_pending(&locator);
     let mut published = HashSet::new();
     if !updates.is_empty() {
         if let Ok(changed) = state.store.set_record_data(&updates) {
@@ -628,8 +723,21 @@ fn recorded_conversation(
         return Recorded::No;
     };
     let Some(file) = locator
-        .root(session.agent, session.config_dir.as_deref())
-        .and_then(|root| user_prompt::conversation_file_of(session.agent, &root, agent_id, record))
+        .alternate_root(session)
+        .ok()
+        .flatten()
+        .filter(|(dir, depth)| {
+            record
+                .strip_prefix(dir)
+                .is_ok_and(|relative| relative.components().count() == *depth)
+        })
+        .and_then(|(dir, _)| {
+            user_prompt::conversation_file_under(session.agent, &dir, agent_id, record)
+        })
+        .or_else(|| {
+            let root = locator.root(session.agent, session.config_dir.as_deref())?;
+            user_prompt::conversation_file_of(session.agent, &root, agent_id, record)
+        })
     else {
         return Recorded::No;
     };
@@ -702,17 +810,51 @@ fn refresh_base(cursor: &mut Cursor, locator: &mut Locator, session: &Session) {
     cursor.context.set_base(head, figure);
 }
 
+#[cfg(test)]
+fn scan_rows(
+    hints: &crate::records::Hints,
+    locator: &Locator,
+    session: &Session,
+    live: bool,
+    cursor: &mut Cursor,
+) {
+    RowReads::default().scan(hints, locator, session, live.then_some("launch"), cursor);
+}
+
+/// A boundary that could not count the rows holds what the first successful read finds.
+fn fold_rows(session: &Session, cursor: &mut Cursor, rows: Vec<Value>) {
+    let adapter = provider(session.agent);
+    let store = adapter.records();
+    let held = match cursor
+        .observed_boundary
+        .as_ref()
+        .map(|boundary| boundary.rows)
+    {
+        None => 0,
+        Some(Some(held)) => held,
+        Some(None) => *cursor.rows_held.get_or_insert(rows.len()),
+    };
+    cursor.forget_folded();
+    crate::records::branch::for_each_row_on_branch(store.branching(), &rows, |index, row| {
+        let past_boundary = index >= held;
+        let line = row.to_string();
+        store.fold_line(
+            &line,
+            past_boundary,
+            &mut cursor.context,
+            &mut cursor.observed,
+        );
+        cursor.titles.fold_line(adapter, &line);
+    });
+}
+
 fn scan(agent: AgentId, path: &Path, cursor: &mut Cursor) -> std::io::Result<()> {
     let adapter = provider(agent);
     let store = adapter.records();
     let record = store.followed_file(path);
     let change = cursor.file.check(&record)?;
     if change == Change::Restarted {
-        cursor.context.forget();
-        cursor.titles.clear();
-        cursor.observed = Observed::default();
-        cursor.summary = JsonFile::default();
-        cursor.window = JsonFile::default();
+        cursor.forget_folded();
     }
     if change != Change::Unchanged {
         let start = match &cursor.boundary_start {
@@ -726,7 +868,39 @@ fn scan(agent: AgentId, path: &Path, cursor: &mut Cursor) -> std::io::Result<()>
                 start
             }
         };
-        cursor.file.read_with_position(&record, |at, line| {
+        let Some(branching) = store.branching() else {
+            return cursor.file.read_with_position(&record, |at, line| {
+                let past_boundary = start.is_some_and(|start| at >= start);
+                store.fold_line(
+                    line,
+                    past_boundary,
+                    &mut cursor.context,
+                    &mut cursor.observed,
+                );
+                cursor.titles.fold_line(adapter, line);
+            });
+        };
+        // A record that is a tree: the new lines are read once for their links alone, which says
+        // whether they all carry on from where the record stood. When they do, they are folded as
+        // they are; when one forks off, what was folded holds lines the agent abandoned, so the
+        // record is folded again from its start, along the branch it now ends on.
+        let from = cursor.file.offset();
+        if from == 0 {
+            cursor.leaf = Leaf::default();
+        }
+        let mut carries_on = true;
+        let leaf = &mut cursor.leaf;
+        cursor.file.read_with_position(&record, |_, line| {
+            let link = serde_json::from_str::<Value>(line)
+                .ok()
+                .and_then(|line| branching.link(&line));
+            carries_on &= leaf.follow(link);
+        })?;
+        let to = cursor.file.offset();
+        if !carries_on {
+            cursor.forget_folded();
+        }
+        let mut fold = |at: u64, line: &str| {
             let past_boundary = start.is_some_and(|start| at >= start);
             store.fold_line(
                 line,
@@ -735,7 +909,19 @@ fn scan(agent: AgentId, path: &Path, cursor: &mut Cursor) -> std::io::Result<()>
                 &mut cursor.observed,
             );
             cursor.titles.fold_line(adapter, line);
-        })?;
+        };
+        let folded = if carries_on {
+            crate::records::line_file::read_range(&record, from, to, fold)
+        } else {
+            crate::records::branch::read_branch_to(branching, &record, to, &mut fold)
+        };
+        if folded.is_err() {
+            // The links were read and the lines were not all folded: the record is read again
+            // from its start, onto nothing.
+            cursor.file = LineFile::default();
+            cursor.forget_folded();
+        }
+        folded?;
     }
     Ok(())
 }
@@ -744,6 +930,103 @@ fn scan(agent: AgentId, path: &Path, cursor: &mut Cursor) -> std::io::Result<()>
 mod tests {
     use super::*;
     use serde_json::json;
+
+    fn post_context_hook(state: &Arc<AppState>, launch: &str, payload: serde_json::Value) {
+        use crate::hooks::queue::{Push, QueuedHook};
+
+        assert_eq!(
+            state.hook_queues.push(
+                "s",
+                QueuedHook {
+                    body: payload.to_string().into(),
+                    launch: Some(launch.to_owned()),
+                    event: None,
+                },
+            ),
+            Push::StartWorker
+        );
+        crate::hooks::apply::drain_hook_queue(state, "s");
+    }
+
+    #[tokio::test]
+    async fn a_live_projection_reports_a_rewind_without_a_record_write() {
+        use crate::protocol::SessionStatus;
+        use crate::test_support::{app_state, console, console_session, fake_live_session};
+
+        let (state, directory) = app_state("record-collector-live-projection");
+        state.store.insert_console(&console(&directory)).unwrap();
+        let mut session = console_session("s", SessionStatus::Idle);
+        session.agent = AgentId::PI;
+        state.store.insert_session(&session).unwrap();
+        let first = fake_live_session("s", session.agent, 80, 24, "sleep 30");
+        state.register_live(first.clone());
+        let mut cursors = Cursors::default();
+        let mut pass = || {
+            collect_with(&state, &mut cursors, Locator::with_shell(HashMap::new()));
+            state.session_record("s").unwrap().context
+        };
+        let usage =
+            |tokens| json!({"hook_event_name":"context_usage","tokens":tokens,"window":60_000});
+        post_context_hook(&state, &first.launch_id, usage(Some(3485)));
+        let context = pass().expect("the live projection");
+        assert_eq!((context.tokens, context.window), (3485, Some(60_000)));
+
+        post_context_hook(&state, &first.launch_id, usage(Some(140)));
+        assert_eq!(pass().unwrap().tokens, 140);
+
+        assert!(state.remove_live(&first));
+        let second = fake_live_session("s", session.agent, 80, 24, "sleep 30");
+        state.register_live(second.clone());
+        post_context_hook(&state, &second.launch_id, usage(None));
+        assert_eq!(pass(), None, "compaction left the live size unknown");
+
+        post_context_hook(&state, &first.launch_id, usage(Some(3485)));
+        assert_eq!(
+            pass(),
+            None,
+            "the ended launch cannot replace the current one"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_stop_hook_supplies_the_window_for_the_recorded_branch() {
+        use crate::protocol::SessionStatus;
+        use crate::test_support::{app_state, console, console_session, fake_live_session};
+
+        let (state, directory) = app_state("record-collector-hook-window");
+        state.store.insert_console(&console(&directory)).unwrap();
+        let mut session = console_session("s", SessionStatus::Idle);
+        session.agent = AgentId::QWEN;
+        let mut stop = include_str!("../../testdata/qwen_hooks.jsonl")
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .find(|payload| payload["hook_event_name"] == "Stop")
+            .expect("the captured stop hook");
+        let id = stop["session_id"].as_str().unwrap();
+        session.agent_session_id = Some(id.to_owned());
+        let root = directory.join("account");
+        let chats = root.join("projects/project/chats");
+        std::fs::create_dir_all(&chats).unwrap();
+        let chat = chats.join(format!("{id}.jsonl"));
+        std::fs::write(
+            &chat,
+            include_str!("../../testdata/qwen_record_rewind.jsonl"),
+        )
+        .unwrap();
+        stop["transcript_path"] = json!(chat);
+        session.config_dir = Some(root.to_str().unwrap().to_owned());
+        state.store.insert_session(&session).unwrap();
+        let live = fake_live_session("s", session.agent, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        post_context_hook(&state, &live.launch_id, stop);
+        collect_with(
+            &state,
+            &mut Cursors::default(),
+            Locator::with_shell(HashMap::new()),
+        );
+        let context = state.session_record("s").unwrap().context.unwrap();
+        assert_eq!((context.tokens, context.window), (23, Some(200_000)));
+    }
 
     #[cfg(unix)]
     #[test]
@@ -1082,6 +1365,7 @@ mod tests {
             directory.join("output"),
             directory.join("consoles"),
             directory.join("handoff"),
+            directory.join("agent-query-homes"),
             crate::processes::ledger::ProcessLedger::new(&directory),
         ));
         state.process_ledger.without_scanner();
@@ -1903,6 +2187,475 @@ mod tests {
             .unwrap();
         collect(&state, &mut cursors);
         assert_eq!(observed().as_deref(), Some("grok-4.8"));
+    }
+
+    /// A fork forgets what the files beside the record gave along with what its lines gave, and
+    /// they are read again though they did not change: the name and the model the summary gives
+    /// and the window the window file gives are still known after the record is folded along its
+    /// new branch.
+    #[test]
+    fn a_fork_reads_the_summary_and_the_window_file_again() {
+        use crate::protocol::RecordTitles;
+        use crate::records::fixtures::{test_record, CLAUDE_ID, TREE_BRANCH, TREE_TRUNK};
+        let _declared = crate::providers::test_provider::with_tree_records();
+        let dir = crate::test_support::ScratchDir::new("agent-records-collector-fork-files");
+        let record = test_record(&dir.join("account"), CLAUDE_ID, TREE_TRUNK);
+        std::fs::write(
+            record.with_extension("title"),
+            "name: Named by the agent\nmodel: test-model\n",
+        )
+        .unwrap();
+        std::fs::write(record.with_file_name("window.json"), r#"{"window":4000}"#).unwrap();
+        // One pass of the collector over the session's files.
+        let pass = |cursor: &mut Cursor| {
+            scan(AgentId::TEST, &record, cursor).unwrap();
+            fold_window(AgentId::TEST, &record, cursor);
+            fold_summary(AgentId::TEST, &record, cursor);
+        };
+        let shown = |cursor: &Cursor| {
+            let context = cursor
+                .context
+                .context(provider(AgentId::TEST).records())
+                .flatten();
+            (
+                cursor.titles.merged(None, &RecordTitles::default()).named,
+                cursor.observed.model.clone(),
+                context.as_ref().map(|context| context.tokens),
+                context.and_then(|context| context.window),
+            )
+        };
+        let known = |tokens| {
+            (
+                Some("Named by the agent".to_owned()),
+                Some("test-model".to_owned()),
+                Some(tokens),
+                Some(4000),
+            )
+        };
+
+        let mut cursor = Cursor::default();
+        pass(&mut cursor);
+        assert_eq!(shown(&cursor), known(900));
+        // The record forks; neither file beside it changes.
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&record)
+            .unwrap();
+        std::io::Write::write_all(&mut file, TREE_BRANCH.as_bytes()).unwrap();
+        pass(&mut cursor);
+        assert_eq!(shown(&cursor), known(200));
+    }
+
+    /// A summary file named for its record and written in a form of the provider's own (the
+    /// test-only provider's tree-shaped variant: `<id>.title`, a line `name: <title>`) is found
+    /// and read through the provider's store; content its reader cannot read is no summary, and is
+    /// read again once it changes. A provider with neither answer and no name in its layout has no
+    /// summary file.
+    #[test]
+    fn a_summary_file_is_found_and_read_as_the_providers_store_says() {
+        use crate::protocol::RecordTitles;
+        use crate::records::fixtures::{test_record, CLAUDE_ID, TREE_TRUNK};
+        let dir = crate::test_support::ScratchDir::new("agent-records-collector-summary");
+        let record = test_record(&dir.join("account"), CLAUDE_ID, TREE_TRUNK);
+        let summary = record.with_extension("title");
+        std::fs::write(&summary, "name: Named by the agent\n").unwrap();
+        let named = |cursor: &Cursor| cursor.titles.merged(None, &RecordTitles::default()).named;
+
+        // The plain provider: no name in its layout, no answer of its store.
+        assert_eq!(summary_path(AgentId::TEST, &record), None);
+        let mut plain = Cursor::default();
+        fold_summary(AgentId::TEST, &record, &mut plain);
+        assert_eq!(named(&plain), None);
+
+        let _declared = crate::providers::test_provider::with_tree_records();
+        assert_eq!(summary_path(AgentId::TEST, &record), Some(summary.clone()));
+        let mut cursor = Cursor::default();
+        fold_summary(AgentId::TEST, &record, &mut cursor);
+        assert_eq!(named(&cursor).as_deref(), Some("Named by the agent"));
+
+        // Not in the provider's form: nothing is taken, and the name read before stands.
+        std::fs::write(&summary, "{\"name\":\"JSON is not this provider's form\"}").unwrap();
+        fold_summary(AgentId::TEST, &record, &mut cursor);
+        assert_eq!(named(&cursor).as_deref(), Some("Named by the agent"));
+        std::fs::write(&summary, "name: Renamed by the user, later\n").unwrap();
+        fold_summary(AgentId::TEST, &record, &mut cursor);
+        assert_eq!(
+            named(&cursor).as_deref(),
+            Some("Renamed by the user, later")
+        );
+
+        // A layout's one name still stands where the store names no file: Grok Build's.
+        let grok = dir.join("sessions/work").join(CLAUDE_ID).join("usage.json");
+        assert_eq!(
+            summary_path(AgentId::GROK, &grok),
+            Some(grok.with_file_name("summary.json"))
+        );
+        assert_eq!(summary_path(AgentId::CLAUDE, &record), None);
+    }
+
+    /// A record whose lines name what they follow is folded along its current branch: a line that
+    /// forks off an earlier one makes the collector fold the record again without what the agent
+    /// abandoned.
+    #[test]
+    fn the_context_of_a_tree_shaped_record_is_its_current_branchs() {
+        use crate::records::fixtures::{test_record, CLAUDE_ID, TREE_BRANCH, TREE_TRUNK};
+        let _declared = crate::providers::test_provider::with_tree_records();
+        let dir = crate::test_support::ScratchDir::new("agent-records-collector-tree");
+        let account = dir.join("account");
+        let tokens = |cursor: &Cursor| {
+            cursor
+                .context
+                .context(provider(AgentId::TEST).records())
+                .flatten()
+                .map(|context| context.tokens)
+        };
+        let append = |record: &Path, lines: &str| {
+            use std::io::Write;
+            let mut file = std::fs::OpenOptions::new()
+                .append(true)
+                .open(record)
+                .unwrap();
+            file.write_all(lines.as_bytes()).unwrap();
+        };
+
+        // Read as it grows: the figure is the last request's while each line carries on.
+        let record = test_record(&account, CLAUDE_ID, TREE_TRUNK);
+        let mut cursor = Cursor::default();
+        scan(AgentId::TEST, &record, &mut cursor).unwrap();
+        assert_eq!(tokens(&cursor), Some(900));
+        // The agent goes back to the first reply: the prompt it carries on with is all the file
+        // gains at first, and the figure is already the one the conversation had there, not the
+        // abandoned turn's.
+        let (prompt, reply) = TREE_BRANCH.split_once('\n').unwrap();
+        append(&record, &format!("{prompt}\n"));
+        scan(AgentId::TEST, &record, &mut cursor).unwrap();
+        assert_eq!(tokens(&cursor), Some(100));
+        append(&record, reply);
+        scan(AgentId::TEST, &record, &mut cursor).unwrap();
+        assert_eq!(tokens(&cursor), Some(200));
+        // A line that carries on from there is folded on its own, onto what was read.
+        append(
+            &record,
+            "{\"id\":\"g\",\"parent\":\"f\",\"assistant\":\"more\",\"tokens\":300}\n",
+        );
+        scan(AgentId::TEST, &record, &mut cursor).unwrap();
+        assert_eq!(tokens(&cursor), Some(300));
+
+        // Read whole for the first time, a record that already holds an abandoned turn gives its
+        // current branch's figure, whatever order the lines came in.
+        let other = "22222222-2222-4222-8222-222222222222";
+        let reordered = format!(
+            "{}{}",
+            TREE_BRANCH, "{\"id\":\"h\",\"parent\":\"e\",\"assistant\":\"again\",\"tokens\":50}\n"
+        );
+        let record = test_record(&account, other, &format!("{TREE_TRUNK}{reordered}"));
+        let mut fresh = Cursor::default();
+        scan(AgentId::TEST, &record, &mut fresh).unwrap();
+        assert_eq!(tokens(&fresh), Some(50));
+    }
+
+    /// The context of a conversation kept as rows is read through the provider while the session
+    /// has a process: at first, again only when an event of the session came in, and once more
+    /// after the process ends; it is its current branch's. A session with no process is not read
+    /// at a daemon's start.
+    #[test]
+    fn the_context_of_a_conversation_kept_as_rows_is_read_when_the_session_stirs() {
+        use crate::adapter::test_provider::row_reads;
+        use crate::records::fixtures::{row_database, session, ROW_FORK, ROW_ID, ROW_TURNS};
+        let _declared = crate::providers::test_provider::with_row_records();
+        let dir = crate::test_support::ScratchDir::new("agent-records-collector-rows");
+        let account = dir.join("account");
+        let own = session(AgentId::TEST, ROW_ID, Some(&account));
+        let hints = crate::records::Hints::default();
+        let locator = Locator::with_shell(HashMap::new());
+        let tokens = |cursor: &Cursor| {
+            cursor
+                .context
+                .context(provider(AgentId::TEST).records())
+                .flatten()
+                .map(|context| context.tokens)
+        };
+
+        // No process, never read: left alone.
+        row_database(&account, &[(ROW_ID, ROW_TURNS)]);
+        let mut cursor = Cursor::default();
+        let before = row_reads();
+        scan_rows(&hints, &locator, &own, false, &mut cursor);
+        assert_eq!((row_reads(), tokens(&cursor)), (before, None));
+
+        // With a process: read once, and not again while no event comes in.
+        scan_rows(&hints, &locator, &own, true, &mut cursor);
+        assert_eq!((row_reads(), tokens(&cursor)), (before + 1, Some(900)));
+        let forked = format!("{ROW_TURNS},{ROW_FORK}");
+        row_database(&account, &[(ROW_ID, forked.as_str())]);
+        scan_rows(&hints, &locator, &own, true, &mut cursor);
+        assert_eq!((row_reads(), tokens(&cursor)), (before + 1, Some(900)));
+
+        // An event of the session: read again, along the branch the conversation now ends on.
+        hints.stir(&own.id);
+        scan_rows(&hints, &locator, &own, true, &mut cursor);
+        assert_eq!((row_reads(), tokens(&cursor)), (before + 2, Some(200)));
+
+        // The process has ended: one last reading.
+        scan_rows(&hints, &locator, &own, false, &mut cursor);
+        assert_eq!(row_reads(), before + 3);
+    }
+
+    /// After a change of model, the rows the conversation held when the old process ended give
+    /// no model; those written after them do.
+    #[test]
+    fn rows_held_at_an_observation_boundary_give_no_model() {
+        use crate::records::fixtures::{row_database, session, ROW_ID};
+        let _declared = crate::providers::test_provider::with_row_records();
+        let dir = crate::test_support::ScratchDir::new("agent-records-collector-rows-boundary");
+        let account = dir.join("account");
+        let own = session(AgentId::TEST, ROW_ID, Some(&account));
+        let (state, _directory) = crate::test_support::app_state("record-collector-rows-boundary");
+        let hints = crate::records::Hints::default();
+        let locator = Locator::with_shell(HashMap::new());
+        let old = r#"{"user":"first"},{"assistant":"reply","model":"old-model"}"#;
+        row_database(&account, &[(ROW_ID, old)]);
+
+        let boundary = observed_boundary(&state, &own, Some(HashMap::new()));
+        assert_eq!(boundary.rows, Some(2));
+        let stored = serde_json::to_string(&boundary).unwrap();
+        let mut cursor = Cursor {
+            observed_boundary: serde_json::from_str(&stored).ok(),
+            ..Default::default()
+        };
+        scan_rows(&hints, &locator, &own, true, &mut cursor);
+        assert_eq!(cursor.observed.model, None);
+
+        let grown = format!(r#"{old},{{"assistant":"again","model":"new-model"}}"#);
+        row_database(&account, &[(ROW_ID, grown.as_str())]);
+        hints.stir(&own.id);
+        scan_rows(&hints, &locator, &own, true, &mut cursor);
+        assert_eq!(cursor.observed.model.as_deref(), Some("new-model"));
+    }
+
+    /// A conversation kept as rows that could not be read when the model changed has a boundary
+    /// with no count: the rows its first reading afterwards finds stand for the old process's,
+    /// so they give no model, and the ones written after them do.
+    #[test]
+    fn a_boundary_that_could_not_count_the_rows_is_counted_at_the_next_reading() {
+        use crate::records::fixtures::{row_database, session, ROW_ID};
+        let _declared = crate::providers::test_provider::with_row_records();
+        let dir = crate::test_support::ScratchDir::new("agent-records-collector-rows-unread");
+        let account = dir.join("account");
+        let own = session(AgentId::TEST, ROW_ID, Some(&account));
+        let (state, _directory) = crate::test_support::app_state("record-collector-rows-unread");
+        let hints = crate::records::Hints::default();
+        let locator = Locator::with_shell(HashMap::new());
+
+        // No database to read at the change.
+        let boundary = observed_boundary(&state, &own, Some(HashMap::new()));
+        assert_eq!(boundary.rows, None);
+        let stored = serde_json::to_string(&boundary).unwrap();
+        let mut cursor = Cursor {
+            observed_boundary: serde_json::from_str(&stored).ok(),
+            ..Default::default()
+        };
+        // Nor at the first reading: nothing is counted yet.
+        scan_rows(&hints, &locator, &own, true, &mut cursor);
+        assert_eq!((cursor.rows_held, &cursor.observed.model), (None, &None));
+
+        let old = r#"{"user":"first"},{"assistant":"reply","model":"old-model"}"#;
+        row_database(&account, &[(ROW_ID, old)]);
+        hints.stir(&own.id);
+        scan_rows(&hints, &locator, &own, true, &mut cursor);
+        assert_eq!((cursor.rows_held, &cursor.observed.model), (Some(2), &None));
+
+        let grown = format!(r#"{old},{{"assistant":"again","model":"new-model"}}"#);
+        row_database(&account, &[(ROW_ID, grown.as_str())]);
+        hints.stir(&own.id);
+        scan_rows(&hints, &locator, &own, true, &mut cursor);
+        assert_eq!(cursor.observed.model.as_deref(), Some("new-model"));
+    }
+
+    /// Two model changes in a row whose rows could not be read store boundaries the collector tells
+    /// apart: the second is taken up as a new boundary, so the rows the conversation holds when it
+    /// is first read again stand for the processes before, and the model the process before last
+    /// wrote among them is not shown for the new one.
+    #[test]
+    fn a_second_boundary_that_could_not_count_the_rows_is_taken_up_too() {
+        use crate::records::fixtures::{row_database, ROW_ID};
+        let _declared = crate::providers::test_provider::with_row_records();
+        let (state, directory) =
+            crate::test_support::app_state("record-collector-rows-unread-twice");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&directory))
+            .unwrap();
+        let account = directory.join("account");
+        let mut session = crate::records::fixtures::session(AgentId::TEST, ROW_ID, Some(&account));
+        session.console_id = "console-1".to_owned();
+        session.kind = crate::protocol::SessionKind::Console;
+        session.status = crate::protocol::SessionStatus::Idle;
+        state.store.insert_session(&session).unwrap();
+        let live = crate::test_support::idle_stand_in_of("s", AgentId::TEST);
+        state.register_live(live.clone());
+        let mut cursors = Cursors::default();
+        let mut pass = || {
+            state.record_hints.stir("s");
+            collect_with(&state, &mut cursors, Locator::with_shell(HashMap::new()));
+        };
+        let observed = || state.session_record("s").unwrap().observed_model;
+        let change_model = |boundary: &ObservedBoundary| {
+            let text = serde_json::to_string(boundary).unwrap();
+            assert!(state
+                .store
+                .set_session_launch_overrides_unless_archived("s", &None, &None, Some(&text))
+                .unwrap());
+        };
+        let database = account.join(crate::adapter::test_provider::ROW_DATABASE);
+
+        // A to B, with no database to read.
+        let first = observed_boundary(&state, &session, Some(HashMap::new()));
+        assert_eq!(first.rows, None);
+        change_model(&first);
+        let old = r#"{"user":"first"},{"assistant":"reply","model":"model-a"}"#;
+        row_database(&account, &[(ROW_ID, old)]);
+        pass();
+        assert_eq!(
+            observed(),
+            None,
+            "the rows held at the boundary give no model"
+        );
+        let by_b = format!(r#"{old},{{"assistant":"again","model":"model-b"}}"#);
+        row_database(&account, &[(ROW_ID, by_b.as_str())]);
+        pass();
+        assert_eq!(observed().as_deref(), Some("model-b"));
+
+        // B to C, the rows unreadable again; then readable, nothing written by C yet.
+        std::fs::remove_file(&database).unwrap();
+        let second = observed_boundary(&state, &session, Some(HashMap::new()));
+        assert_eq!(second.rows, None);
+        assert_ne!(
+            serde_json::to_string(&first).unwrap(),
+            serde_json::to_string(&second).unwrap(),
+            "each uncounted boundary is its own text"
+        );
+        change_model(&second);
+        row_database(&account, &[(ROW_ID, by_b.as_str())]);
+        pass();
+        assert_eq!(observed(), None, "B's model is not shown for C");
+    }
+
+    /// A pass over the sessions reads a conversation kept as rows through its provider, never
+    /// by looking for a file: once when its session has a process, again only when an event of
+    /// the session came in, once more when the process has ended, and not again after that
+    /// whatever comes in. What it read reaches the session's record.
+    #[test]
+    fn a_pass_reads_a_row_sessions_conversation_only_when_it_is_due() {
+        use crate::adapter::test_provider::row_reads;
+        use crate::records::fixtures::{row_database, ROW_FORK, ROW_ID, ROW_TURNS};
+        let _declared = crate::providers::test_provider::with_row_records();
+        let (state, directory) = crate::test_support::app_state("record-collector-rows-pass");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&directory))
+            .unwrap();
+        let account = directory.join("account");
+        row_database(&account, &[(ROW_ID, ROW_TURNS)]);
+        let mut session = crate::records::fixtures::session(AgentId::TEST, ROW_ID, Some(&account));
+        session.console_id = "console-1".to_owned();
+        session.kind = crate::protocol::SessionKind::Console;
+        session.status = crate::protocol::SessionStatus::Idle;
+        state.store.insert_session(&session).unwrap();
+        let mut cursors = Cursors::default();
+        let mut pass = || collect_with(&state, &mut cursors, Locator::with_shell(HashMap::new()));
+        let tokens = || {
+            let context = state.session_record("s").unwrap().context;
+            context.map(|context| context.tokens)
+        };
+        let before = row_reads();
+
+        // With a process: read once, and not again while no event comes in.
+        let live = crate::test_support::idle_stand_in_of("s", AgentId::TEST);
+        state.register_live(live.clone());
+        pass();
+        assert_eq!((row_reads(), tokens()), (before + 1, Some(900)));
+        let forked = format!("{ROW_TURNS},{ROW_FORK}");
+        row_database(&account, &[(ROW_ID, forked.as_str())]);
+        pass();
+        assert_eq!((row_reads(), tokens()), (before + 1, Some(900)));
+
+        // An event of the session: read again.
+        state.record_hints.stir("s");
+        pass();
+        assert_eq!((row_reads(), tokens()), (before + 2, Some(200)));
+
+        // The process has ended: one last reading, and none after it, stirred or not.
+        assert!(state.remove_live(&live.clone()));
+        pass();
+        assert_eq!(row_reads(), before + 3);
+        pass();
+        state.record_hints.stir("s");
+        pass();
+        assert_eq!(row_reads(), before + 3);
+    }
+
+    #[tokio::test]
+    async fn a_slow_row_read_does_not_hold_back_a_later_session() {
+        use crate::protocol::{SessionKind, SessionStatus};
+        use crate::records::fixtures::{row_database, session, ROW_ID, ROW_TURNS};
+        use crate::test_support::{app_state, console, idle_stand_in_of, PATIENCE};
+
+        let _declared = crate::providers::test_provider::with_row_records();
+        let (state, dir) = app_state("record-collector-row-concurrency");
+        state.store.insert_console(&console(&dir)).unwrap();
+        let mut stand_ins = Vec::new();
+        for (id, started_at) in [("a-slow", 1), ("b-fast", 2)] {
+            let account = dir.join(id);
+            row_database(&account, &[(ROW_ID, ROW_TURNS)]);
+            let mut each = session(AgentId::TEST, ROW_ID, Some(&account));
+            each.id = id.to_owned();
+            each.console_id = "console-1".to_owned();
+            each.kind = SessionKind::Console;
+            each.status = SessionStatus::Idle;
+            each.started_at = started_at;
+            state.store.insert_session(&each).unwrap();
+            let live = idle_stand_in_of(id, AgentId::TEST);
+            state.register_live(live.clone());
+            stand_ins.push(live);
+        }
+        let (started, slow_started) = std::sync::mpsc::channel();
+        let (release, slow_release) = std::sync::mpsc::channel();
+        let slow_release = std::sync::Mutex::new(slow_release);
+        let mut cursors = Cursors {
+            row_reads: RowReads::with_background(),
+            ..Cursors::default()
+        };
+        cursors.row_reads.before_read = Some(Arc::new(move |id| {
+            if id == "a-slow" {
+                started.send(()).unwrap();
+                let _ = slow_release.lock().unwrap().recv_timeout(PATIENCE);
+            }
+        }));
+        let mut pass = || collect_with(&state, &mut cursors, Locator::with_shell(HashMap::new()));
+        let tokens = |id| {
+            state
+                .session_record(id)
+                .unwrap()
+                .context
+                .map(|context| context.tokens)
+        };
+
+        pass();
+        slow_started
+            .recv_timeout(PATIENCE)
+            .expect("slow query started");
+        assert!(crate::session::wait::wait_for(PATIENCE, || {
+            pass();
+            tokens("b-fast") == Some(900)
+        }));
+        assert_eq!(tokens("a-slow"), None);
+
+        release.send(()).expect("release the slow query");
+        assert!(crate::session::wait::wait_for(PATIENCE, || {
+            pass();
+            tokens("a-slow") == Some(900)
+        }));
     }
 
     /// A file that is still shorter than what the boundary held of it, or cannot be read through

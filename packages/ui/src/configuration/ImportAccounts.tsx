@@ -17,7 +17,7 @@ import { knownValues } from "../values/knownValue";
 import { useHostPaths } from "../components/hooks/useHostPaths";
 import { AgentCardSections, AgentSettingsCard, type CurrentAgentSettings, useAgentSettingLines } from "./AgentSettingsCard";
 import { useFailureNode } from "../components/alerts/failureNode";
-import { accountChoicesFor, agentImported, cardAgents, directoryProblem, hasForeignDirectoryProblem, hasNameProblem, withAccountRow, withAgentImported, type DirectoryProblem, type AccountReviewState, type AccountRowState } from "./importPlan";
+import { accountChoicesFor, agentImported, cardAgents, directoryProblem, hasForeignDirectoryProblem, hasUnfixableProblem, withAccountRow, withAgentImported, type DirectoryProblem, type AccountReviewState, type AccountRowState } from "./importPlan";
 import { FlatCard } from "../components/card/FlatCard";
 import { choiceHeader, DirectoryChoiceField, DirectoryLine, ItemName, ReviewRow, type Shown, type StatusEntry, ToneLine } from "./importParts";
 
@@ -111,8 +111,8 @@ function AccountRow({
 
 /** The warning mark after the name of an account that cannot be created as it is in the file: a directory in use
  * or a name or directory the Add account form would refuse. Its popover says which, why where the daemon says, that
- * the account is left out — unless it is given another directory, where the cause is not its name — and any raw text
- * behind it. */
+ * the account is left out — unless it is given another directory, which only helps where the cause is not one another
+ * directory cannot fix (its name, or its agent having the default account only) — and any raw text behind it. */
 function UnusableMark({ account }: { account: InspectedAccount }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
@@ -137,7 +137,7 @@ function UnusableMark({ account }: { account: InspectedAccount }): React.ReactEl
         )}
       </p>
       {remedy && <p dir="auto">{remedy}</p>}
-      <p dir="auto">{t(hasNameProblem(account) ? "configuration.import.accounts.status.leftOut" : "configuration.import.accounts.status.remedy")}</p>
+      <p dir="auto">{t(hasUnfixableProblem(account) ? "configuration.import.accounts.status.leftOut" : "configuration.import.accounts.status.remedy")}</p>
       {failure && failureNode(failure, "details")}
     </StatusMark>
   );

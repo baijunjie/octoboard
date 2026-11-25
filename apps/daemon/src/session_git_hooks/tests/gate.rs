@@ -383,14 +383,14 @@ fn the_hook_side_takes_only_an_answer_as_a_reason_to_run_the_gate() {
 }
 
 /// A stand-in for a holder that answers the one request it gets with `status`, and says nothing
-/// else. Returns its port.
+/// else; a port probe is not that request. Returns its port.
 pub(super) fn answering_with(status: u16) -> u16 {
     use std::io::{Read, Write};
 
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     std::thread::spawn(move || {
-        let (mut helper, _) = listener.accept().unwrap();
+        let mut helper = crate::test_support::accept_past_probes(&listener);
         let mut request = [0u8; 1024];
         let _ = helper.read(&mut request);
         write!(
@@ -402,6 +402,11 @@ pub(super) fn answering_with(status: u16) -> u16 {
         let mut rest = Vec::new();
         let _ = helper.read_to_end(&mut rest);
     });
+    // Probed before the test uses it, as a running daemon may probe it at any point.
+    assert_eq!(
+        crate::test_support::probe_port(port),
+        "HTTP/1.1 404 Not Found"
+    );
     port
 }
 

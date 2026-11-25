@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { withModality } from "../components/dialog/dialogTestSupport";
 import { accountOf, sessionOf } from "../fixtures/builders";
-import type { Session } from "../protocol";
+import type { AccountQuota, Session } from "../protocol";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { fakeTimers } from "../test/clock";
+import { acknowledgeAllAlerts } from "../test/alertQueue";
 import { buttons, click } from "../test/dom";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
@@ -150,4 +152,41 @@ it("disables confirmation when deleting the selected session leaves no targets",
   expect(confirm().disabled).toBe(true);
   await click(confirm());
   expect(onSwitchAccounts).not.toHaveBeenCalled();
+});
+
+const signedOut = (agent: string, account: string): AccountQuota => ({
+  agent, account, fetched_at: 1, plan: null, windows: [], email: null,
+  unavailable: { code: "quota_not_signed_in", params: {}, message: "x" },
+});
+
+/** Presses Switch on a session of `agent` for `account`, which reads as signed out, and returns the alert it raised. */
+async function refusedAsSignedOut(agent: string, account: string) {
+  withModality("pointer");
+  fakeTimers({ now: new Date("2026-11-16T00:00:00Z") });
+  onTestFinished(acknowledgeAllAlerts);
+  const own = sessionOf("own", "console", undefined, "Own", "idle", { agent });
+  const target = accountOf(account, agent, "Work", "/accounts/work");
+  const daemon = testDaemon({ state: { sessions: sessionsOf([own]), accountQuotas: [signedOut(agent, account)] } });
+  daemon.store.setState({ settings: { ...daemon.store.getState().settings, accounts: [target] } });
+  const onSwitchAccounts = vi.fn();
+  mountHost(<SwitchAccountDialog session={own} account={account} accountName={target.name} onClose={vi.fn()} onSwitchAccounts={onSwitchAccounts} />, { daemon });
+  await click(confirm());
+  expect(onSwitchAccounts).not.toHaveBeenCalled();
+  return errorAlerts.getSnapshot()[0]!;
+}
+
+it("refuses a switch onto a signed-out account of a provider with no login flow with the provider's own way to log in, and no way to Settings", async () => {
+  const alert = await refusedAsSignedOut("test_agent", "test-work");
+  expect(alert.recovery).toBe("none");
+  const shown = mountHost(alert.content);
+  expect(shown.textContent).toContain("Work");
+  expect(shown.textContent).toContain("To log in, run test-agent login in a terminal, with /accounts/work as its configuration directory.");
+});
+
+it("offers no field for a credential, in the dialog or in the refusal, for a provider with no login flow", async () => {
+  const alert = await refusedAsSignedOut("test_agent", "test-work");
+  const shown = mountHost(alert.content);
+  const fields = (root: ParentNode) => root.querySelectorAll('input:not([type="radio"]), textarea');
+  expect(fields(shown)).toHaveLength(0);
+  expect(fields(document.body)).toHaveLength(0);
 });

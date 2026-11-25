@@ -13,7 +13,7 @@ import Screenshot from "../../../../components/Screenshot.astro";
 
 ## 功能说明
 
-- <strong>窗口的名称沿用智能体自己的叫法。</strong>Claude Code 把 5 小时窗口叫<strong>会话</strong>，整个账户的每周窗口叫<strong>每周</strong>（当某个模型另有自己的每周限额时，叫<strong>每周 · 所有模型</strong>），有自己限额的每个模型各有一个以模型命名的每周窗口。Codex 显示<strong>5 小时</strong>和<strong>每周</strong>。Grok Build 显示一个额度池，按周期叫<strong>每周</strong>、<strong>每月</strong>或<strong>额度</strong>。每个窗口都显示剩余的百分比、一根进度条和“多久后重置”的倒计时。
+- <strong>窗口的名称沿用智能体自己的叫法。</strong>Claude Code 把 5 小时窗口叫<strong>会话</strong>，整个账户的每周窗口叫<strong>每周</strong>（当某个模型另有自己的每周限额时，叫<strong>每周 · 所有模型</strong>），有自己限额的每个模型各有一个以模型命名的每周窗口。Codex 显示<strong>5 小时</strong>和<strong>每周</strong>。Grok Build 显示一个额度池，按周期叫<strong>每周</strong>、<strong>每月</strong>或<strong>额度</strong>。Antigravity CLI 按模型显示每周限额，GitHub Copilot CLI 显示套餐的请求额度。{productName} 不读取 OpenCode、Qwen Code 和 Pi 的套餐额度，因此不会显示它们的用量标签页。每个窗口都显示剩余的百分比、一根进度条和“多久后重置”的倒计时。
 - <strong>读取结果会自动刷新。</strong>每个账户大约每 5 分钟读取一次；窗口重置后不久会再读一次；添加账户或账户登录后不久也会读；打开<strong>设置 › 智能体账户</strong>、用量面板或菜单栏菜单时，也会读取最近没有读过的账户。读取失败后，重试的间隔会越来越长，最长 40 分钟。
 - <strong>拿不准时会告诉你。</strong>每个账户都会显示读取的时间距今多久。如果最近一次读取失败，会保留上一次成功的结果，并标为已过期，原因在弹出的说明里。未登录的账户会如实显示为未登录。
 - <strong>局限：</strong>它只显示套餐和各个窗口，不显示花费、余额或预测。读取结果只保存在内存里，也不会导出，所以重启之后每个账户都要等第一次读取才有数据。已停用的账户不会被读取；使用 API 密钥或其他没有套餐额度的提供方的账户，没有用量可显示。

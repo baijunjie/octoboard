@@ -21,6 +21,47 @@ use crate::records::RecordStore;
 /// A context size in tokens and the window limit beside it, where the record gives one.
 pub type Figure = (u64, Option<u64>);
 
+/// What the running conversation reports. A window-only report leaves the size to the
+/// record, whose active branch can change between reports.
+#[derive(Clone, Copy)]
+pub enum ContextReport {
+    Window(u64),
+    Usage {
+        tokens: Option<u64>,
+        window: Option<u64>,
+    },
+}
+
+#[derive(Default)]
+pub struct LaunchReports {
+    reports: Mutex<HashMap<String, (String, ContextReport)>>,
+}
+
+impl LaunchReports {
+    pub fn report(&self, session: &str, launch: &str, report: ContextReport) {
+        self.reports
+            .lock()
+            .expect("launch context reports lock poisoned")
+            .insert(session.to_owned(), (launch.to_owned(), report));
+    }
+
+    pub fn for_launch(&self, session: &str, launch: &str) -> Option<ContextReport> {
+        self.reports
+            .lock()
+            .expect("launch context reports lock poisoned")
+            .get(session)
+            .filter(|(reported, _)| reported == launch)
+            .map(|(_, report)| *report)
+    }
+
+    pub fn retain(&self, ids: &HashSet<&str>) {
+        self.reports
+            .lock()
+            .expect("launch context reports lock poisoned")
+            .retain(|id, _| ids.contains(id.as_str()));
+    }
+}
+
 /// What the records have shown so far.
 #[derive(Default)]
 pub struct Context {
@@ -100,13 +141,37 @@ impl Context {
         }
     }
 
-    /// The context the records show, in the form the store takes it: `None` when they have shown
-    /// nothing, `Some(None)` when they say it is not known now. The share used is `store`'s own.
+    #[cfg(test)]
     pub fn context(&self, store: &dyn RecordStore) -> Option<Option<SessionContext>> {
-        let (tokens, window) = match self.tokens {
-            Some(Some(tokens)) => (tokens, self.window),
-            Some(None) => return Some(None),
-            None => self.base.as_ref()?.1?,
+        self.with_report(store, None)
+    }
+
+    /// The collected context, with a live report taking precedence for each figure it gives.
+    /// `None` leaves the stored context alone. `Some(None)` clears a size known to be unknown.
+    pub fn with_report(
+        &self,
+        store: &dyn RecordStore,
+        report: Option<ContextReport>,
+    ) -> Option<Option<SessionContext>> {
+        let (tokens, window) = match report {
+            Some(ContextReport::Usage { tokens, window }) => {
+                let Some(tokens) = tokens else {
+                    return Some(None);
+                };
+                (tokens, window)
+            }
+            _ => {
+                let (tokens, window) = match self.tokens {
+                    Some(Some(tokens)) => (tokens, self.window),
+                    Some(None) => return Some(None),
+                    None => self.base.as_ref()?.1?,
+                };
+                let window = match report {
+                    Some(ContextReport::Window(window)) => Some(window),
+                    _ => window,
+                };
+                (tokens, window)
+            }
         };
         Some(Some(SessionContext {
             tokens,

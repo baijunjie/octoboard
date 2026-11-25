@@ -20,8 +20,8 @@ use crate::adapter::account_cli::{NotRun, QueryFailure};
 use crate::adapter::provider;
 use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{
-    AccountMcpInventory, AgentId, LocalMcpServer, McpInventoryFailure, McpInventoryUnavailable,
-    PlatformConnector,
+    AccountMcpInventory, AgentId, CodedError, LocalMcpServer, McpInventoryFailure,
+    McpInventoryUnavailable, PlatformConnector, ProviderOperation,
 };
 use crate::state::AppState;
 use crate::time::now_millis;
@@ -72,7 +72,9 @@ pub(crate) trait McpInventoryReader: Send + Sync {
 pub(crate) fn not_run_unavailable(refused: &NotRun) -> McpInventoryUnavailable {
     let reason = match refused {
         NotRun::BinaryNotFound(_) | NotRun::BinaryRefused(_) => McpInventoryFailure::CliMissing,
-        NotRun::DirMissing(_) | NotRun::HomeNotPrepared(_) => McpInventoryFailure::Failed,
+        NotRun::DirMissing(_) | NotRun::DirNotExportable(..) | NotRun::HomeNotPrepared(_) => {
+            McpInventoryFailure::Failed
+        }
     };
     McpInventoryUnavailable::new(reason, Some(refused.detail()))
 }
@@ -152,7 +154,8 @@ impl McpInventoryReadings {
 /// Reads the MCP servers and connectors of the `agent` account `account` (an account id, `None`
 /// for the default account) in the shell environment `shell` gives. A reading of the same
 /// account and directory already running is joined, whatever `refresh` each asked for. Refused
-/// with `unknown_account` for an account that is no longer stored.
+/// with `provider_unsupported` for a provider that does not declare `mcp_inventory`, and with
+/// `unknown_account` for an account that is no longer stored.
 pub(crate) async fn read_inventory(
     state: &Arc<AppState>,
     agent: AgentId,
@@ -160,9 +163,23 @@ pub(crate) async fn read_inventory(
     refresh: bool,
     shell: ShellSource,
 ) -> anyhow::Result<AccountMcpInventory> {
+    let reader = CodedError::require_offered(
+        agent,
+        ProviderOperation::McpInventory,
+        agent
+            .descriptor()
+            .capabilities
+            .mcp_inventory
+            .then(|| {
+                provider(agent)
+                    .accounts()
+                    .and_then(|ops| ops.mcp_inventory())
+            })
+            .flatten(),
+    )?;
     let config_dir = state.store.account_dir(&account)?;
     if let (Some(id), None) = (&account, &config_dir) {
-        return Err(crate::protocol::CodedError::unknown_account(id));
+        return Err(CodedError::unknown_account(id));
     }
     let key = (agent, account.clone(), config_dir.clone());
     let stopping = state.account_quotas.stopping_flag();
@@ -171,7 +188,7 @@ pub(crate) async fn read_inventory(
         .mcp_inventories
         .joined(key, async move {
             let started = Instant::now();
-            let outcome = attempt(&held, agent, config_dir, refresh, shell, stopping).await;
+            let outcome = attempt(&held, agent, reader, config_dir, refresh, shell, stopping).await;
             log_reading(agent, account.as_deref(), started.elapsed(), &outcome);
             let (connectors, servers, unavailable) = match outcome {
                 Ok((connectors, servers)) => (connectors, servers, None),
@@ -194,9 +211,7 @@ pub(crate) async fn read_inventory(
 fn is_expected(reason: McpInventoryFailure) -> bool {
     matches!(
         reason,
-        McpInventoryFailure::NotSignedIn
-            | McpInventoryFailure::CliMissing
-            | McpInventoryFailure::UnsupportedAgent
+        McpInventoryFailure::NotSignedIn | McpInventoryFailure::CliMissing
     )
 }
 
@@ -236,20 +251,17 @@ fn log_reading(
 async fn attempt(
     state: &Arc<AppState>,
     agent: AgentId,
+    reader: &'static dyn McpInventoryReader,
     config_dir: Option<String>,
     refresh: bool,
     shell: ShellSource,
     stopping: Arc<AtomicBool>,
 ) -> Result<Listing, McpInventoryUnavailable> {
-    let unavailable = |reason| McpInventoryUnavailable::new(reason, None);
-    let Some(reader) = provider(agent)
-        .accounts()
-        .and_then(|ops| ops.mcp_inventory())
-    else {
-        return Err(unavailable(McpInventoryFailure::UnsupportedAgent));
-    };
     if !agent_is_available(state, agent) {
-        return Err(unavailable(McpInventoryFailure::CliMissing));
+        return Err(McpInventoryUnavailable::new(
+            McpInventoryFailure::CliMissing,
+            None,
+        ));
     }
     read_within(
         reader,
@@ -353,7 +365,7 @@ mod tests {
     }
 
     /// A provider declares `capabilities.mcp_inventory`, which clients show the inventory by,
-    /// exactly when it has a reader; any other is answered as unsupported.
+    /// exactly when it has a reader; any other is refused.
     #[test]
     fn the_capability_matches_whether_a_reader_exists() {
         for agent in AgentId::ALL {

@@ -97,4 +97,42 @@ mod tests {
         );
         assert_eq!(detected_with("none", &[]), None);
     }
+
+    /// A provider with no name of its own at a project's top level (`DetectionMarkers::own` empty)
+    /// and only generic ones is detected only by a name nothing else claims: a name it shares with
+    /// an earlier registered provider points at that provider (`AGENTS.md` at Codex), so it neither
+    /// takes that name nor makes the project ambiguous, and its marked-by-own readers still win.
+    /// Without any of its names it is not detected at all.
+    #[test]
+    fn a_provider_with_only_generic_markers_is_detected_only_by_a_name_no_earlier_provider_reads() {
+        let _declared = crate::providers::test_provider::without_own_marker();
+        let descriptor = AgentId::TEST.descriptor();
+        assert!(descriptor.detection.own.is_empty());
+        assert!(descriptor.detection.generic.contains(&"AGENTS.md"));
+        // Its former own name points at nothing now, and neither does an empty project.
+        assert_eq!(detected_with("generic-none", &[]), None);
+        assert_eq!(detected_with("generic-former-own", &[".test-agent"]), None);
+        // The name only it reads points at it; the shared one at the first provider that reads it.
+        assert_eq!(
+            detected_with("generic-its-own-file", &["TEST_RULES.md"]),
+            Some(AgentId::TEST)
+        );
+        assert_eq!(
+            detected_with("generic-shared", &["AGENTS.md"]),
+            Some(AgentId::CODEX)
+        );
+        assert_eq!(
+            detected_with("generic-shared-marked", &[".grok", "AGENTS.md"]),
+            Some(AgentId::GROK)
+        );
+        // The others' own markers are unaffected, and two providers marked still make a guess.
+        assert_eq!(
+            detected_with("generic-claude", &["CLAUDE.md"]),
+            Some(AgentId::CLAUDE)
+        );
+        assert_eq!(
+            detected_with("generic-both", &["CLAUDE.md", "TEST_RULES.md"]),
+            None
+        );
+    }
 }

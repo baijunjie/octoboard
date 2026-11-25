@@ -6,7 +6,7 @@ import { useWindowAttended } from "../../components/announce/useWindowAttended";
 import { isolate } from "../../i18n/isolate";
 import { useT } from "../../i18n/react";
 import { useOptionalPlatform } from "../../platform/react";
-import type { AccountLogin, Agent } from "../../protocol";
+import type { AccountLogin, Agent, LoginAnswer } from "../../protocol";
 import { accountKey, accountLoginOf } from "../../accounts/accountRecords";
 import { dismissAccountLogin, trackAccountLogin, useDaemon, useDaemonStore } from "../../store";
 
@@ -22,12 +22,13 @@ export function useSucceededAccountLogin(agent: Agent, account: string | null): 
   return login?.status === "succeeded" ? login : undefined;
 }
 
-/** Starts and cancels an account's login (`null` for an agent's default account); each rejects with the daemon's
- * refusal, which the caller presents. Starting notes that this window asked for the login, which is what has it
- * open the authorization page (see `useOpenLoginPages`). */
+/** Starts and cancels an account's login (`null` for an agent's default account), and sends the user's answer to the
+ * question it waits on; each rejects with the daemon's refusal, which the caller presents. Starting notes that this
+ * window asked for the login, which is what has it open the authorization page (see `useOpenLoginPages`). */
 export function useAccountLoginActions(): {
   start: (agent: Agent, account: string | null) => Promise<void>;
   cancel: (agent: Agent, account: string | null) => Promise<void>;
+  answer: (agent: Agent, account: string | null, question: string, answer: LoginAnswer) => Promise<void>;
 } {
   const { request, store } = useDaemon();
   return {
@@ -42,6 +43,9 @@ export function useAccountLoginActions(): {
     },
     cancel: async (agent, account) => {
       await request({ type: "cancel_account_login", agent, account });
+    },
+    answer: async (agent, account, question, answer) => {
+      await request({ type: "answer_account_login_question", agent, account, question, answer });
     },
   };
 }

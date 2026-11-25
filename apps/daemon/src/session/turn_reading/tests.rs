@@ -45,6 +45,7 @@ fn bound(name: &str, agent: AgentId, status: SessionStatus) -> Fixture {
     insert_record(&state, &dir, "s", status);
     let live = fake_live_session("s", agent, 140, 45, "sleep 30");
     state.register_live(live.clone());
+    live.on_output(b"Ready");
     Fixture {
         live,
         state,
@@ -414,6 +415,7 @@ fn a_title_back_at_the_prompt_is_settled_after_the_wait_with_no_dialog_up() {
 #[test]
 fn a_turn_running_again_is_not_settled_at_the_prompt() {
     let live = fake_live_session("s", AgentId::CLAUDE, 140, 45, "sleep 30");
+    live.on_output(b"Ready");
     assert!(!live.turn_reading().settled_at_prompt(0, Duration::ZERO));
     live.on_output(RUNNING_TITLE);
     assert!(!live.turn_reading().settled_at_prompt(0, Duration::ZERO));

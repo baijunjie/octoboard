@@ -15,7 +15,7 @@ import { useLatest } from "../components/hooks/useLatest";
 import { closeToast, partSelector, showToast as queueToast, Toast, ToastCloseButton, ToastContent, ToastDescription, type ToastEntry, ToastIndicator, ToastRegion, ToastTitle, Tooltip } from "../primitives";
 
 /** How long a notice stays before it dismisses itself. */
-const NOTICE_DURATION_MS = 5000;
+export const NOTICE_DURATION_MS = 5000;
 
 /** Matches a window at least as wide as HeroUI's toast breakpoint (its `tablet:`); the narrow window is
  * the one it does not match. */
@@ -27,8 +27,8 @@ const WIDE_QUERY = `(width > ${TOAST_BREAKPOINT}px)`;
 const shownToasts = new Map<string, string>();
 
 /**
- * Routes errors into the acknowledgement queue and displays notices in HeroUI's timed toast
- * stack. An error alert is titled for what failed, with no name in the title, and names its session in the body; a session
+ * Routes errors, and the notices a code's record marks as ones to acknowledge, into the acknowledgement queue, each
+ * an alert of its own, and displays the other notices in HeroUI's timed toast stack. An error alert is titled for what failed, with no name in the title, and names its session in the body; a session
  * notice keeps its location and structured daemon message. Notices keep keyboard focus where it
  * was, remain selectable, and move clear of dialog footers. A withdrawal of a daemon notice shows nothing: it takes the
  * notice's error alert back (`errorAlerts.withdraw`), shown or still queued, and leaves a notice
@@ -41,10 +41,10 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
     () =>
       onNotification((request) => {
         if (request.kind === "withdrawn") {
-          errorAlerts.withdraw(request.session, request.code);
+          errorAlerts.withdraw(request.session, request.code, request.detail);
           return;
         }
-        if (request.kind === "error") {
+        if (request.kind === "error" || request.kind === "acknowledged") {
           errorAlerts.report(errorAlertOf(request));
           return;
         }

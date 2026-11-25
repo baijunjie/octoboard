@@ -1,0 +1,6 @@
+┌  Credentials [90m/tmp/probe/data/opencode/auth.json
+│
+●  Anthropic [90mapi
+│
+└  1 credentials
+

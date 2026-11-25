@@ -71,13 +71,30 @@ thread_local! {
 /// The watch captures this on its caller's thread before it spawns.
 #[cfg(test)]
 pub(crate) fn without_settle() -> impl Drop {
+    settle_override(Duration::ZERO)
+}
+
+/// Has the watches armed on this thread while the guard lives never count the title as settled at
+/// the prompt: the settle is held open. For a test that replays output in which the title is back
+/// at the prompt only for a moment (the gap between two steps of one turn) and asserts the turn
+/// stays open: the title's stamps are the wall clock's, so under [`SETTLE`], or any figure, the
+/// machine stalling between two reads would run the settle out and close the turn.
+#[cfg(test)]
+pub(crate) fn with_settle_held() -> impl Drop {
+    settle_override(Duration::MAX)
+}
+
+/// The watches armed on this thread while the guard lives hold for `settle` in place of
+/// [`SETTLE`].
+#[cfg(test)]
+fn settle_override(settle: Duration) -> impl Drop {
     struct Reset(Option<Duration>);
     impl Drop for Reset {
         fn drop(&mut self) {
             SETTLE_OVERRIDE.with(|value| value.set(self.0));
         }
     }
-    Reset(SETTLE_OVERRIDE.with(|value| value.replace(Some(Duration::ZERO))))
+    Reset(SETTLE_OVERRIDE.with(|value| value.replace(Some(settle))))
 }
 
 fn settle() -> Duration {
@@ -95,6 +112,17 @@ const POLL: Duration = Duration::from_millis(250);
 #[cfg(test)]
 pub(crate) async fn polls_settled() {
     crate::test_support::runtime_advanced(POLL * 2).await;
+}
+
+/// Arms [`watch`] when `asked` is a turn that may be interrupted with no hook saying so, under a
+/// record watch generation of its own: the whole of what a provider's record store does for a
+/// watch (`crate::records::RecordStore::arm_watch`) when the terminal's activity is all it has to
+/// read a cancel from.
+pub fn arm(state: &Arc<AppState>, session_id: &str, asked: &crate::hooks::RecordWatch<'_>) {
+    if let crate::hooks::RecordWatch::Interrupt { .. } = asked {
+        let generation = state.begin_record_watch(session_id);
+        watch(state, session_id, generation);
+    }
 }
 
 /// Starts watching the terminal title of `session_id`, a session a hook has just moved into

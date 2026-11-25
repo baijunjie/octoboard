@@ -556,28 +556,46 @@ mod tests {
 
     #[test]
     fn each_kind_of_stop_goes_to_its_own_endpoint_and_a_refusal_is_not_an_acceptance() {
+        use crate::test_support::{is_port_probe, probe_port};
         use std::io::{Read, Write};
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let server = std::thread::spawn(move || {
             let mut requests = Vec::new();
-            for status in ["202 Accepted", "401 Unauthorized", "202 Accepted"] {
+            let mut statuses = ["202 Accepted", "401 Unauthorized", "202 Accepted"].into_iter();
+            let mut status = statuses.next();
+            while let Some(answer) = status {
                 let (mut stream, _) = listener.accept().unwrap();
                 // The request may arrive in more than one read; its head ends at the blank line.
                 let mut request = Vec::new();
                 let mut buffer = [0u8; 1024];
                 while !request.ends_with(b"\r\n\r\n") {
-                    let read = stream.read(&mut buffer).unwrap();
+                    let read = stream.read(&mut buffer).unwrap_or(0);
                     if read == 0 {
                         break;
                     }
                     request.extend_from_slice(&buffer[..read]);
                 }
-                requests.push(String::from_utf8_lossy(&request).into_owned());
-                write!(stream, "HTTP/1.1 {status}\r\nContent-Length: 0\r\n\r\n").unwrap();
+                let request = String::from_utf8_lossy(&request).into_owned();
+                // A connection reset before its request came is nobody's request.
+                if request.is_empty() {
+                    continue;
+                }
+                // The daemon's probe of the port is answered and is none of the requests.
+                if is_port_probe(&request) {
+                    let _ = write!(
+                        stream,
+                        "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
+                    );
+                    continue;
+                }
+                requests.push(request);
+                write!(stream, "HTTP/1.1 {answer}\r\nContent-Length: 0\r\n\r\n").unwrap();
+                status = statuses.next();
             }
             requests
         });
+        assert_eq!(probe_port(port), "HTTP/1.1 404 Not Found");
         let address = DaemonAddress {
             port,
             key: "ab12".to_string(),
@@ -630,12 +648,12 @@ mod tests {
             port: listener.local_addr().unwrap().port(),
             key: "ab12".to_string(),
         };
+        let timeout = Duration::from_millis(200);
         let started = Instant::now();
-        assert!(!request_stop(
-            &address,
-            StopKind::Ordinary,
-            Duration::from_millis(200)
-        ));
-        assert!(started.elapsed() < Duration::from_secs(1));
+        assert!(!request_stop(&address, StopKind::Ordinary, timeout));
+        // Not before the timeout, which would be a request that gave up on its own, and not
+        // unbounded, with room for a machine that stalls.
+        assert!(started.elapsed() >= timeout);
+        assert!(started.elapsed() < crate::test_support::PATIENCE);
     }
 }

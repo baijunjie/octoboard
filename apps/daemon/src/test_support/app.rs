@@ -53,6 +53,7 @@ fn state_in(dir: &mut ScratchDir, key: &str) -> Arc<AppState> {
         dir.join("output"),
         dir.join("consoles"),
         dir.join("handoff"),
+        dir.join("agent-query-homes"),
         crate::processes::ledger::ProcessLedger::new(dir),
     ));
     state.install_auto_switch(crate::coordinator::auto_switch::hooks());

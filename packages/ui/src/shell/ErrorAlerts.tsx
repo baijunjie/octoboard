@@ -1,6 +1,6 @@
 import React, { useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 
-import { RecoveryLink, recoveryAction, type RecoveryAction } from "../components/alerts/ErrorGuidance";
+import { RecoveryLink, recoveryAction, useSignInHintOf, type RecoveryAction } from "../components/alerts/ErrorGuidance";
 import { alertFailures, errorAlerts } from "../components/alerts/errorAlerts";
 import { useT } from "../i18n/react";
 import { openSettingsFromAnywhere } from "../settings/settingsLauncher";
@@ -61,6 +61,7 @@ function ErrorAlertHost(): React.ReactElement | null {
     const status = error?.session ? s.sessions.get(error.session)?.status : undefined;
     return status !== undefined && !isKnownSessionStatus(status);
   });
+  const signInHint = useSignInHintOf(error?.error);
   const issue = useIssueReport(error?.classification.kind === "unexpected" ? alertFailures(error, "report") : undefined);
   // What describes an alert that holds a block of its own apart (`attached`): its explanation, not the block.
   const descriptionId = useId();
@@ -74,7 +75,8 @@ function ErrorAlertHost(): React.ReactElement | null {
   // A button for the remedy when it is the one remedy of every failure the alert is about.
   // Change model needs the session the alert is about, and one whose status is known; without that there is nothing to
   // open it for.
-  const found = error.sharedRecovery ? recoveryAction(t, error.sharedRecovery) : undefined;
+  // Not Manage accounts where the alert says how to log in itself: there is no login for it to lead to.
+  const found = error.sharedRecovery && !(error.sharedRecovery === "accountNotSignedIn" && signInHint) ? recoveryAction(t, error.sharedRecovery) : undefined;
   const session = error.session;
   const action = found?.kind === "sessionModel" && (!session || unknownStatus) ? undefined : found;
   const own = error.action;
@@ -84,12 +86,14 @@ function ErrorAlertHost(): React.ReactElement | null {
   // not a destructive step. A remedy a recovery category names never meets Report issue: it comes only with a failure
   // that is not unexpected.
   const acknowledgement = !(own && unexpected && issue.link);
+  // A notice to acknowledge is no failure: the warning tone, and an acknowledgement in the accent colour.
+  const acknowledgedNotice = error.acknowledgedNotice === true;
   return (
     <Dialog
       key={error.id}
       alert
       keyboardDismissHeld
-      headerLeading={<ModalStatusIcon status="danger" />}
+      headerLeading={<ModalStatusIcon status={acknowledgedNotice ? "warning" : "danger"} />}
       title={alertTitle(t, error)}
       onClose={() => errorAlerts.acknowledge()}
       focusesItselfOnOpen
@@ -99,7 +103,7 @@ function ErrorAlertHost(): React.ReactElement | null {
         {unexpected && issue.link}
         {action && <RecoveryControl action={action} session={session} />}
         {own && <Button variant={acknowledgement ? "secondary" : "primary"} onPress={() => { errorAlerts.acknowledge(); own.onPress(); }}>{own.label}</Button>}
-        {acknowledgement && <Button variant="danger" onPress={() => errorAlerts.acknowledge()}>{t("error.acknowledge")}</Button>}
+        {acknowledgement && <Button variant={acknowledgedNotice ? "primary" : "danger"} onPress={() => errorAlerts.acknowledge()}>{t("error.acknowledge")}</Button>}
       </>}
     >
       <span ref={inside} hidden />

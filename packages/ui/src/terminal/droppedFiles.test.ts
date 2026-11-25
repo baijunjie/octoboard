@@ -98,7 +98,7 @@ describe("uploading dropped files", () => {
   type Body = Parameters<RequestHandler>[0];
 
   /** The handlers over a stand-in daemon: `fail` rejects the requests it names, and every request is recorded. */
-  function setup({ limits = LIMITS as AttachmentLimits | null, fail = {} as Record<string, unknown>, gate }: { limits?: AttachmentLimits | null; fail?: Record<string, unknown>; gate?: (body: Body) => Promise<void> } = {}) {
+  function setup({ limits = LIMITS as AttachmentLimits | null, fail = {} as Record<string, unknown>, gate, takesImages = true }: { limits?: AttachmentLimits | null; fail?: Record<string, unknown>; gate?: (body: Body) => Promise<void>; takesImages?: boolean } = {}) {
     const requests: Body[] = [];
     let uploads = 0;
     let inFlight = 0;
@@ -129,7 +129,7 @@ describe("uploading dropped files", () => {
       }
     };
     const request = looseRequestSender(handler);
-    let current = { t, request, attachmentLimits: limits };
+    let current = { t, request, attachmentLimits: limits, takesImages: () => takesImages };
     const latest = vi.fn(() => current);
     return {
       requests,
@@ -183,6 +183,7 @@ describe("uploading dropped files", () => {
       const spaced = dropFilesHandler(() => ({
         t,
         attachmentLimits: LIMITS,
+        takesImages: () => true,
         request: looseRequestSender(async () => ({ type: "pasted_image_saved", id: null, path: "/Users/some one/run/pasted/p.png" })),
       }));
       await expect(spaced.upload([file("shot.png", "abc", "image/png")], "s-1")).resolves.toBe("'/Users/some one/run/pasted/p.png' ");
@@ -193,6 +194,22 @@ describe("uploading dropped files", () => {
       await expect(upload([file("shot.png", "abc", "image/png")])).resolves.toBeUndefined();
       expect(alerts()).toHaveLength(1);
       expect(alerts()[0]).toMatchObject({ title: "Could not attach the file", session: "s-1" });
+    });
+  });
+
+  describe("an image dropped on a session whose agent takes no images", () => {
+    it("is attached as any other file, never saved as a pasted image", async () => {
+      const { requests, upload } = setup({ takesImages: false });
+      await expect(upload([file("shot.png", "abc", "image/png")])).resolves.toBe("/run/s-1/attachments/up-1.bin ");
+      expect(requests.map((body) => body.type)).toEqual(["create_attachment_upload", "write_attachment_part", "save_attachment"]);
+      expect(alerts()).toEqual([]);
+    });
+
+    it("is refused as a file the daemon cannot take where the daemon takes no attachments at all", async () => {
+      const { requests, upload } = setup({ takesImages: false, limits: null });
+      await expect(upload([file("shot.png", "abc", "image/png")])).resolves.toBeUndefined();
+      expect(requests).toEqual([]);
+      expect(alerts()).toHaveLength(1);
     });
   });
 
@@ -235,6 +252,7 @@ describe("uploading dropped files", () => {
       const quoted = dropFilesHandler(() => ({
         t,
         attachmentLimits: LIMITS,
+        takesImages: () => true,
         request: looseRequestSender(async (body) => {
           if (body.type === "create_attachment_upload") return { type: "attachment_upload_created", id: null, upload: "u" };
           if (body.type === "save_attachment") return { type: "attachment_saved", id: null, path: "/Users/some one/run/a b.bin" };
@@ -475,7 +493,7 @@ describe("uploading dropped files", () => {
         if (body.type === "save_attachment") return { type: "attachment_saved", id: null, path: "/run/first.bin" };
         return { type: "ack", id: null };
       });
-      const handler = dropFilesHandler(() => ({ t, request, attachmentLimits: LIMITS }));
+      const handler = dropFilesHandler(() => ({ t, request, attachmentLimits: LIMITS, takesImages: () => true }));
       await expect(handler.upload([file("first.bin", "abc"), file("second.bin", "abc")], "s-1")).resolves.toBe("/run/first.bin ");
       expect(alerts()).toHaveLength(1);
     });

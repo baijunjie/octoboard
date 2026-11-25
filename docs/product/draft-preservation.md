@@ -13,6 +13,8 @@ Enter all within one draft-preserving step, so a stashed draft comes back only a
 
 ## Draft preservation has a bounded wait
 
+A plain-text message sent through Pi’s extension or OpenCode’s private server can leave the terminal composer untouched. On the terminal path, including slash commands and image messages, the usual draft rules apply.
+
 On supported launches, Octoboard first tries to deliver the automatic message separately while preserving the user's
 draft, without waiting for the user to finish typing:
 
@@ -29,6 +31,8 @@ draft, without waiting for the user to finish typing:
   message for a later attempt rather than have the key land on a box that may be empty.
   Claude Code additionally requires a verifiable Ctrl-S stash binding in the configuration this launch uses; an
   overridden binding or an unreadable or unrecognised keybindings file disables this path.
+- **GitHub Copilot CLI 1.0.114 or later:** Ctrl-S saves a draft. The footer marks it as `stashed`. A second Ctrl-S
+  restores it once the automatic message has left the composer.
 - **Codex 0.166.0 or later, on a launch with its private app server** (see "Codex's private app server" in
   `docs/product/per-agent-launch-specifics.md`): automatic messages go into Codex's own queue and leave the composer
   untouched, so none of the composer checks, the native stash or the three-second grace period below applies to them
@@ -38,7 +42,11 @@ draft, without waiting for the user to finish typing:
 
 Octoboard reads the composer off the session's screen with faint text left out, so Claude Code's hints in an empty
 box — a fresh session's placeholder, and "Press up to edit queued messages" while a message waits for the turn to
-end — read as an empty composer; text typed there replaces the hint and reads as a draft. A message Octoboard has
+end — read as an empty composer; text typed there replaces the hint and reads as a draft. An agent whose composer can
+only be found by something it draws faint, such as the rules framing it, has its composer read off the screen as
+drawn instead, and the placeholder it shows in an empty box is then read as an empty composer on every host. Every
+reading of what the composer holds — the checks for a draft, the stash, the clearing below, the interrupt's (see "The
+input box afterwards" in `docs/product/interrupting-turns.md`) — reads it off the same screen. A message Octoboard has
 just written into an empty composer can still be drawn there for a moment before the agent takes it, so before the
 next message is checked for a draft, Octoboard waits up to 500 ms after that write for the composer to read empty; only
 text still there after that counts as a draft. Octoboard therefore does not stash a message of its own.
@@ -79,14 +87,16 @@ at the timeout, only the hold above applies: no stash key until a prompt is sent
 ## The draft and typing notices
 
 Each is sent to every client about the session, naming its agent (`agent`); `typing_lost` also carries `bytes`, the
-amount of retained typing lost, and `draft_discarded` the text the draft held, as `detail`, and `cleared: "part"` when
-the composer did not empty. `message_sent_with_draft` carries the text the composer held as `detail` (see "When the
-composer cannot be cleared" below), absent where it showed none or could not be read; `held: "message"`, with no
-`detail`, where that text was only the message Octoboard wrote last, and `held: "message_and_draft"`, with `detail`,
-where it was that message with text typed after it. Of `draft_save_unconfirmed`, `draft_restore_unconfirmed` and
-`typing_held`, one stash and its recovery send only the first that applies; `draft_discarded`,
-`message_sent_with_draft`, `typing_blocked` and `typing_lost` are sent whenever they apply, and
-`message_waits_on_input` once a message. The window shows each as an error alert (see `docs/product/error-alerts.md`)
+amount of retained typing lost, `draft_discarded` the text the draft held, as `detail`, and `cleared: "part"` when
+the composer did not empty, and `message_cleared_after_cancel` likewise the text of the message cleared, as `detail`,
+and `cleared: "part"` when the composer did not empty (see "Clearing a draft past the grace period" below);
+`message_cleared_after_cancel` is sent in place of `draft_discarded`, never beside it. `message_sent_with_draft`
+carries the text the composer held as `detail` (see "When the composer cannot be cleared" below), absent where it
+showed none or could not be read; `held: "message"`, with no `detail`, where that text was only the message Octoboard
+wrote last, and `held: "message_and_draft"`, with `detail`, where it was that message with text typed after it. Of
+`draft_save_unconfirmed`, `draft_restore_unconfirmed` and `typing_held`, one stash and its recovery send only the first
+that applies; `draft_discarded`, `message_cleared_after_cancel`, `message_sent_with_draft`, `typing_blocked` and
+`typing_lost` are sent whenever they apply, and `message_waits_on_input` once a message. The window shows each as an error alert (see `docs/product/error-alerts.md`)
 naming the session and where it is: a known failure with no remedy beyond its own text, not an unexpected one.
 
 | Notice | Alert title | What the alert says |
@@ -94,6 +104,9 @@ naming the session and where it is: a known failure with no remedy beyond its ow
 | `draft_save_unconfirmed` | "Draft save not confirmed" | The agent did not confirm setting the draft aside, so Octoboard did not write its message there; the message waits until the input box is empty, and the user is to send or clear the draft, or Octoboard clears it shortly and shows what it held. |
 | `draft_discarded` | "Draft cleared" | Octoboard cleared the draft from the input box so that its message would not be sent together with it; to keep the draft, the user copies it from the block below the text and pastes it back into the input box. |
 | `draft_discarded` with `cleared: "part"` | "Draft partly cleared" | Octoboard cleared only part of the draft so that its message would not be sent together with it; the message waits until the input box is empty, and Octoboard tries again once the box changes. To keep the draft, the user copies it from the block below; part of it may still be in the input box. |
+| `message_cleared_after_cancel` | "Message not carried out" | When the turn was interrupted, the agent put a message Octoboard had written for the session, which it was holding, back in the input box unsent, and Octoboard cleared it from the input box and could not write it again, so it was not carried out; to have it carried out, the user copies it from the block below the text and sends it again. Sent only where the message could not be written again (see "A message given back at a cancel" under "Clearing a draft past the grace period" below); the alert does not say why. |
+| `message_cleared_after_cancel` with `cleared: "part"` | "Message not carried out" | As above, under the same title, which says what did not get done, but Octoboard cleared only part of the message; part of it may still be in the input box. The alert does not say what became of the next message, which waits for the box to empty or, its wait over, went in with what was left. |
+| `message_dropped_at_cancel` | "Message not carried out" | When the turn was cancelled, the agent dropped a message Octoboard had written for the session, which it was holding, and Octoboard could not write it again, so it was not carried out; to have it carried out, the user copies it from the block below the text and sends it again. Nothing was put back in the input box and nothing was cleared from it. Sent only for an agent whose provider declares that a cancel drops the messages it holds, and only where the message could not be written again (see "Messages held until a session can take them" in `docs/product/message-delivery.md`); the alert does not say why. |
 | `message_sent_with_draft` | "Message sent with the draft" | Octoboard could not clear the draft from the input box, so its message was sent together with the draft; the user is to check the session, and can copy the draft from the block below the text. |
 | `message_sent_with_draft` with neither `detail` nor `held` | "Message sent with the input box's content" | Octoboard could not clear the input box, so its message was sent together with whatever the box held; the user is to check the session. |
 | `message_sent_with_draft` with `held: "message"` | "Message sent with the previous one" | The input box still held Octoboard's previous message, unsent, so the new message was sent together with it; the user is to check the session. |
@@ -104,13 +117,18 @@ naming the session and where it is: a known failure with no remedy beyond its ow
 | `typing_blocked` | "Message partly written" | Only part of a message Octoboard wrote reached the input box, and it will not be sent again; the user is to check the input box and remove what is left of the message before sending a prompt. Its details add that what was typed while the message was written is discarded on the next key, that typing goes straight to the agent from then on, and that Octoboard's other messages wait for a prompt to be sent, each for about a minute at most, after which each is written into the input box together with what the box holds. |
 | `typing_lost` | "Typing lost" | The session ended before the agent confirmed putting its draft back, so what was typed meanwhile is lost and is not typed in when the session is resumed. |
 
-The text a `draft_discarded` or `message_sent_with_draft` alert hands back is shown in a block of its own after the
-alert's text, with a Copy button, under a label naming it as the draft's content (as the input box's content for
-`held: "message_and_draft"`): the text as the input box showed it before the first clearing key, or, for a
+The text a `draft_discarded`, `message_cleared_after_cancel`, `message_dropped_at_cancel` or `message_sent_with_draft`
+alert hands back is shown in
+a block of its own after the alert's text, with a Copy button, under a label naming it as the draft's content (as the
+message's content for `message_cleared_after_cancel` and `message_dropped_at_cancel`, and as the input box's content for
+`held: "message_and_draft"`): for `message_dropped_at_cancel`, the message's own text, as Octoboard wrote it;
+otherwise the text as the input box showed it before the first clearing key, or, for a
 `message_sent_with_draft` with no clearing in the same attempt, before the message's write; its rows joined by line
 breaks, in its own direction, its long lines wrapped. A long paste the agent shows collapsed (Claude Code's
 `[Pasted text #1 +24 lines]`, Codex's `[Pasted Content 2400 chars]`) is only that placeholder, so its text cannot be
-got back from the alert. How the block is shown is in "Names and diagnostic details" in
+got back from the alert. The exception is a `message_cleared_after_cancel` sent because an interrupt cleared such a
+placeholder (see "Messages held until a session can take them" in `docs/product/message-delivery.md`): its block holds
+the message's own text, as Octoboard wrote it. How the block is shown is in "Names and diagnostic details" in
 `docs/product/error-alerts.md`.
 
 ## The draft grace period
@@ -189,7 +207,7 @@ for a partial write outside a stash).
 Past a message's grace period, where the agent's native stash cannot take the draft — no stash on the agent or on this
 launch, a stash already shown, a stash left unsettled, a stash turned off after an indicator Octoboard could not read
 (see "Draft preservation has a bounded wait" above) — Octoboard
-clears the composer before it writes the message. It does so on Claude Code, Grok Build and Codex, whose Ctrl-U is
+clears the composer before it writes the message. On Claude Code, Grok Build and Codex, Ctrl-U is
 measured to delete one line of the composer a press and to do nothing else, mid-turn included. On an agent with no
 measured clearing key, a composer that shows text holds the message as "When the composer cannot be cleared" below says.
 
@@ -206,7 +224,8 @@ measured clearing key, a composer that shows text holds the message as "When the
   something, or showed late but left the composer empty; with `cleared: "part"` where the composer did not empty. A
   press that did not show at all sends none. Where the message then goes in as the composer stands, the text is handed
   back by `message_sent_with_draft` instead (see "When the composer cannot be cleared" below); either way, text the
-  presses removed is handed back once.
+  presses removed is handed back once. A message the agent gave back at a cancel is not told as a draft: it is written
+  again, or, where it cannot be, told by `message_cleared_after_cancel` in place of `draft_discarded` (below).
 - **The message.** It is written once a whole frame shows the composer empty and nothing else has written into the
   session since the last press; the keys typed before then count as confirmed, so later messages no longer wait on
   them. If the composer is not seen empty, or something wrote into the session after the last press, nothing of the
@@ -220,7 +239,39 @@ measured clearing key, a composer that shows text holds the message as "When the
   its text (compared without whitespace, so wrapping does not count) or a single placeholder of a long paste (Claude
   Code's `[Pasted text #1 +24 lines]`, Codex's `[Pasted Content 2400 chars]`). The queued message waits as on any
   composer that cannot be cleared (below). A draft the agent put back from its native stash counts as typed for this, so
-  it is never taken for that message.
+  it is never taken for that message. A message written at the prompt and left unsent, and one written while a turn ran
+  into the composer of an agent that does not give messages back at a cancel, are never cleared; the exception is the
+  next bullet.
+- **A message given back at a cancel.** Some agents hold a message written into their composer while a turn runs for
+  the end of the turn, take it out of the composer, and put it back there, unsent, when the turn is cancelled; Claude
+  Code, Codex and Grok Build do not. On such an agent, a composer that shows nothing but the message Octoboard wrote
+  last, written while a turn ran, with nothing typed since, holds no message left unsent: left there, it would hold the
+  next message back for 30 seconds and then be sent joined to it. So once the next message is past its grace, the
+  composer is cleared as a draft is, with the same presses and bounds, and the next message written once it shows empty.
+  The message is not lost: it went in, and its sender was answered that it was delivered, so it is written again. It is
+  put back at the front of the session's queue, as it was written (its header with it), and written again right after
+  the message it was cleared for, still behind that message if that one has to wait. This holds whoever sent it and
+  whatever has become of the sender since — a report from a session archived since, an instruction, shared information,
+  a notice of Octoboard's own — and nobody is told: no alert to the user, no message to the sender. The bounds and the
+  cases where it is not written again, when the user is sent `message_cleared_after_cancel` with its text instead, are in
+  "Messages held until a session can take them" in `docs/product/message-delivery.md`; that notice is sent in place of
+  `draft_discarded`, with `cleared: "part"` where the composer did not empty. Several messages given back at once are
+  told apart the same way: a composer that begins with the latest messages Octoboard wrote while the turn ran, one
+  after another in their order (compared without whitespace, so neither wrapping nor an empty row between two counts),
+  holds those messages, and each is written again, in that order. Text that follows them, set off by whitespace, is the
+  user's: it is cleared with them and handed back by `draft_discarded`, alone. A composer where the user's text comes
+  first, or that only begins as a message does, is a draft, cleared and told whole (`draft_discarded`), and what it
+  held is not written again; so is one that shows messages of a turn before the last. A cancel the user types in the terminal is a key typed after the message, but the composer it leaves,
+  showing that message's own text and nothing else, is still the message given back and is handled as one. A clear that
+  leaves part of the message in the composer still has it written again, once: what is left of it there is neither that
+  message nor a draft, and a later clear of it tells nobody. Where such a clear leaves text and the next message's
+  30-second wait (below) is over, the next message goes in as the composer stands, with `message_sent_with_draft`
+  carrying what was left, and the message given back is written again after it. An interrupt made with
+  `interrupt_session` clears what the agent gives back right after its key instead, where it can (see "The input box
+  afterwards" in `docs/product/interrupting-turns.md`); the message is then written again only after the next message
+  written into the session, as "Messages held until a session can take them" in `docs/product/message-delivery.md`
+  says. The messages are told apart there as here, and text the user typed after them is cleared with them and handed
+  back by `draft_discarded`, alone.
 
 ## When the composer cannot be cleared
 
@@ -239,7 +290,8 @@ within the same attempt where a clear leaves text behind. The draft cannot be go
 - text the composer shows only off frames still being drawn, a composer read empty off such frames while Octoboard's
   record of the typing knows of text typed into it, and an unreadable composer while no key it waits on can put unknown
   text into it;
-- only the message Octoboard wrote last, left unsent ("A message left in the composer is no draft" above).
+- only the message Octoboard wrote last, left unsent ("A message left in the composer is no draft" above), not one the
+  agent gave back at a cancel ("A message given back at a cancel" above).
 
 A message left unsent that waits for the user to send it — its submit key not retried because something was typed
 after it or the composer held more than it, or a Codex message left in its input box on a Windows host (see "A message

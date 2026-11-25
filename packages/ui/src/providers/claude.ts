@@ -631,7 +631,7 @@ const zhTWMessages = {
 
 /** Claude Code. The mark is taken from LobeHub's icon set (`@lobehub/icons-static-svg`, MIT), in the provider colour. The
  * colour is its orange darkened to keep 3:1 against every quota track it is drawn on, lightened on the dark ones
- * (see `.quota-meter--provider` in `style.css`). */
+ * (see `.quota-meter--provider` in `quota/QuotaMeter.css`). */
 export const claude = {
   id: "claude",
   mark: {

@@ -2763,3 +2763,91 @@ fn only_a_refusal_of_the_time_is_silent() {
         "the agent cannot be started"
     )));
 }
+
+/// The target of the automatic switch for a session of a provider with no quota window is the first
+/// usable account in the saved order (`pick_target`): not the one the session is on, not one it was
+/// moved off for a limit lately, not a signed-out one, and not held back for a reading that failed
+/// (a provider with a quota window is, with `readable_only`).
+#[test]
+fn the_target_of_a_session_of_a_provider_with_no_quota_is_the_next_usable_account_in_saved_order() {
+    use crate::protocol::{quota_unavailable_code as code, QuotaUnavailable};
+    use crate::test_support::project_session;
+
+    let (state, _dir) = app_state("auto-switch-no-quota-target");
+    state.set_agent_availability(vec![crate::protocol::AgentAvailability {
+        agent: AgentId::TEST,
+        availability: crate::protocol::Availability::Available,
+        default_account_dir: None,
+    }]);
+    crate::coordinator::accounts::set_account_disabled(&state, AgentId::TEST, None, true).unwrap();
+    // `b`'s reading failed, which says nothing of its sign-in; `out` reads as signed out.
+    let readings = [
+        ("a", None),
+        (
+            "out",
+            Some(QuotaUnavailable::new(
+                code::NOT_SIGNED_IN,
+                "not signed in",
+                &[],
+            )),
+        ),
+        (
+            "b",
+            Some(QuotaUnavailable::new(code::COMMAND_FAILED, "failed", &[])),
+        ),
+        ("c", None),
+    ];
+    for (id, unavailable) in readings {
+        state
+            .store
+            .insert_account(&Account {
+                id: id.to_string(),
+                agent: AgentId::TEST,
+                name: id.to_string(),
+                config_dir: format!("/tmp/{id}"),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: false,
+                versions: Default::default(),
+            })
+            .unwrap();
+        state.account_quotas.hold_in_dir_for_test(
+            &AccountQuota {
+                reset_credits: None,
+                agent: AgentId::TEST,
+                account: Some(id.to_string()),
+                fetched_at: 1,
+                plan: None,
+                email: None,
+                windows: Vec::new(),
+                unavailable,
+            },
+            &format!("/tmp/{id}"),
+        );
+    }
+    state
+        .store
+        .reorder_accounts(
+            AgentId::TEST,
+            &["a", "out", "b", "c"]
+                .map(|id| Some(id.to_string()))
+                .into_iter()
+                .chain([None])
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    let mut session = project_session("w", AgentId::TEST, SessionStatus::Idle);
+    session.account_id = Some("a".to_string());
+
+    assert_eq!(
+        pick_target(&state, &session).unwrap(),
+        Some(Some("b".to_string()))
+    );
+    state.note_left_for_limit("w", Some("b"));
+    assert_eq!(
+        pick_target(&state, &session).unwrap(),
+        Some(Some("c".to_string()))
+    );
+    state.note_left_for_limit("w", Some("c"));
+    assert_eq!(pick_target(&state, &session).unwrap(), None);
+}

@@ -2145,3 +2145,42 @@ async fn a_forced_write_after_presses_that_emptied_the_box_reports_the_draft_cle
     assert!(!discarded[0].contains_key("cleared"), "{:?}", discarded[0]);
     assert!(of(notice_code::MESSAGE_SENT_WITH_DRAFT).is_empty());
 }
+
+mod faint_ruled;
+
+/// The run of held messages a box begins with is found whatever stands between two of them (an
+/// empty row, a row break, the wrapping of a row), longest first, with what follows it set off
+/// by whitespace; text that only begins as a message does is no run.
+#[test]
+fn the_held_messages_a_box_begins_with_are_told_from_what_follows_them() {
+    let held: Vec<super::HeldMessage> = ["first one", "second", "third"]
+        .into_iter()
+        .map(|text| super::HeldMessage {
+            text: text.to_string(),
+            id: None,
+            records_prompt: true,
+        })
+        .collect();
+    let run = |shown: &str| super::given_back_run(shown, &held);
+    assert_eq!(
+        run("first one\n\nsecond\n\nthird"),
+        Some((3, String::new()))
+    );
+    assert_eq!(run("first\none\nsecond\nthird"), Some((3, String::new())));
+    assert_eq!(run("second\nthird"), Some((2, String::new())));
+    assert_eq!(run("third"), Some((1, String::new())));
+    assert_eq!(
+        run("second\n\nthird\n\n  my own text "),
+        Some((2, "my own text".to_string()))
+    );
+    assert_eq!(run("third and more"), Some((1, "and more".to_string())));
+    assert_eq!(run("thirdly"), None, "not set off from the message");
+    assert_eq!(run("first one\nthird"), None, "not the latest in a row");
+    assert_eq!(
+        run("my own, then third"),
+        None,
+        "the user's text comes first"
+    );
+    assert_eq!(run(""), None);
+    assert_eq!(super::given_back_run("third", &[]), None);
+}

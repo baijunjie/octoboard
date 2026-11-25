@@ -187,9 +187,6 @@ impl RecordStore for GrokRecords {
 
     /// A turn cancelled before it fired anything is watched for in the terminal title alone.
     fn arm_watch(&self, state: &Arc<AppState>, session_id: &str, watch: RecordWatch<'_>) {
-        if let RecordWatch::Interrupt { .. } = watch {
-            let generation = state.begin_record_watch(session_id);
-            crate::session::title_interrupt::watch(state, session_id, generation);
-        }
+        crate::session::title_interrupt::arm(state, session_id, &watch);
     }
 }

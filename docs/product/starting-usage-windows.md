@@ -1,14 +1,16 @@
 # Starting a usage window that has not begun counting
 
-A window that has reset does not begin counting again until the account's next request, and until then the agent reports
+GitHub Copilot CLI's free-plan budget has a fixed monthly reset, so Octoboard offers no action to start it. Antigravity CLI's two free-plan windows report their own reset times, and Octoboard offers no start action for them. Pi and OpenCode have no provider plan quota, and Qwen Code's API-key accounts expose local statistics only, so they have no windows to start.
+
+A first-use window begins counting on the account’s next request after a reset, and until then the agent reports
 it with no reset time: it shows no countdown (see "How an account's quota is shown" in
 `docs/product/account-quotas.md`), and the longer it waits, the later its next reset comes. With **Start usage windows
 automatically** on (see "Start usage windows automatically" below), Octoboard makes that first request itself — a
 **kick** — and then reads the account again, so the window starts counting and its countdown shows. A kick uses a little
-of the account's quota. The setting is off by default and applies to every agent alike.
+of the account's quota. The setting is off by default. It runs kicks for Claude Code, Codex and Grok Build.
 
-Not every agent reports such a window with no reset time: Codex reports a reset that stays a whole window length ahead
-of the moment it answers, moving with every reading. So, for every agent, Octoboard follows each window's reported reset
+A first-use window can have a placeholder reset time. Codex reports a reset that stays a whole window length ahead
+of the moment it answers, moving with every reading. Octoboard follows each window's reported reset
 time across readings of the account: when two readings at least **2 minutes** apart show that its time to reset has not
 come nearer (by more than one minute) and that none of it is used, the window is not counting and is held as having no
 reset time, like a window its agent reports with none: it shows no countdown, can be kicked, and ranks as a window that
@@ -106,7 +108,7 @@ the account is kicked again.
 
 ## What a kick leaves behind
 
-None of the three agents keeps a kick in its own history. A kick leaves out as much of the user's setup as the CLI
+Claude Code, Codex and Grok Build keep no kick in their own conversation history. A kick leaves out as much of the user's setup as the CLI
 allows without changing which sign-in is used:
 
 - **Claude Code** keeps no conversation. The user's MCP servers are not started, no hook runs (the user's or a

@@ -124,12 +124,12 @@ once it is gone; where its ordinary stop is refused, `uninstall` has it make tha
 (`background::hand_back`); `cleanup.rs` also holds the texts that name
 each item and each result. `uninstall.rs` reaches the daemon, `systemctl` and `loginctl` through the `Host` trait and
 the paths through `Installation`, so its tests inject them. No client connection and no MCP tool reaches it.
-The CLI
-modes other processes start are `hook`, `git-ref`, `gate-hook`, `guard-hook`, `status-line`, `mcp` and `holder`: their
-dispatch, with the user's modes, is `src/cli/mod.rs`, and their code is `src/cli/hook.rs` (`hook`), a provider's
-`StatusLine` (`status-line`; `src/cli/mod.rs` only finds the provider's and hands over, Claude Code's is
-`src/adapter/claude/status_line.rs`), `src/session_git_hooks/` (`git-ref`, `gate-hook`),
-`src/cross_project_guard/hook.rs` (`guard-hook`) and `src/mcp/stdio.rs` (`mcp`); `holder` is `src/cli/holder.rs`, which
+The CLI modes other processes start are `hook`, `channel`, `git-ref`, `gate-hook`, `guard-hook`, `status-line`,
+`agent-helper`, `mcp` and `holder`: their dispatch, with the user's modes, is `src/cli/mod.rs`, and their code is
+`src/cli/hook.rs` (`hook`), `src/adapter/helper.rs` and a provider's `AgentProvider::run_helper` (`agent-helper`),
+`src/cli/channel.rs` (`channel`), a provider's `StatusLine` (`status-line`; `src/cli/mod.rs` only finds the provider's
+and hands over, Claude Code's is `src/adapter/claude/status_line.rs`), `src/session_git_hooks/` (`git-ref`, `gate-hook`),
+`src/cross_project_guard/hook.rs` (`guard-hook`, its `--fired-by` check `src/cli/hook.rs`'s) and `src/mcp/stdio.rs` (`mcp`); `holder` is `src/cli/holder.rs`, which
 runs `holder::server::run`. The routes are in `src/server/`. Each mode takes the running daemon's port (`--port`) and
 the launch key, which is in no process's arguments, since every user of the machine can list those: `hook`,
 `status-line` and `mcp` are given the owner-only file that holds it (`--key-file`, written by `src/key_file.rs` into the
@@ -137,22 +137,37 @@ session's scratch directory), and `git-ref` and `gate-hook` read it from the fil
 `OCTOBOARD_DAEMON_CREDENTIAL_PATH` variable of the project session's agent environment names. Those two alone take
 `--port` as optional and, where the launch's route is gone (no port, no usable key file, a refused key, nothing
 listening), call the daemon its owner record names with its recorded key (`src/session_git_hooks/route.rs`, over
-`owner_record::Owner::recorded_in`, with the data directory passed in from `src/cli/mod.rs`). `guard-hook` is the one
-mode that calls no daemon: it takes neither of them, only the list file that the launch wrote (`--list`):
+`owner_record::Owner::recorded_in`, with the data directory passed in from `src/cli/mod.rs`). `guard-hook` and
+`agent-helper` call no daemon and take neither of them: `guard-hook` reads only the list file that the launch wrote
+(`--list`), and `agent-helper` only its own arguments and stdin:
 
-- `hook` — posts an agent's hook payload from stdin to `POST /hook/:session/:launch` (`POST /hook/:session` for a
-  hook script an earlier build wrote, which names no launch).
+- `hook` — posts an agent's hook payload from stdin to `POST /hook/:session/:launch` (earlier scripts use `POST /hook/:session`); its optional `--event <name>` goes along as
+  the route's optional `event` query parameter, the name of the event for a payload that names none (a name in the
+  payload wins). The route queues it beside the body (`hooks/queue.rs`), and a holder relays it in the `Relay` frame's
+  `event`; a holder of an earlier build drops it. Its optional `--fired-by <mark>` (`adapter::hook_command_fired_by`)
+  makes it read the payload and then post it only when the process that fired the hook, the nearest ancestor that is
+  not a shell wrapping the hook command, has the mark on its command line: the command lines come from
+  `platform::proc_table` (`parent_of`, `argv`), so the check starts no process, and whatever cannot be told posts.
 - `git-ref` — posts created branches and moved refs a session's `reference-transaction` hook saw.
 - `gate-hook` — run by a session's `reference-transaction` and `pre-push` dispatchers: asks the daemon whether the
   revert gate applies and whether the repository belongs to another registered project, runs the gate in-process, and
   exits with its status (3 rejects).
 - `guard-hook` — the synchronous `PreToolUse` command of a project session launched with the setting that keeps sessions
   to their own project on: decides a file-edit tool call from the launch's list alone and prints a `deny` decision for a
-  path inside another registered project.
+  path inside another registered project. Its optional `--fired-by <mark>` (`adapter::hooks::guard_command_fired_by`)
+  decides only where the process that fired the hook has the mark, as `hook`'s does, the wrapping shells told by the
+  list's path; otherwise it prints nothing.
+- `agent-helper` — a provider's helper (`--provider <id> --helper <name> -- <args>`), a command its launch names for the
+  agent to run where the agent takes a command (`adapter::helper_command`, a POSIX shell line the agent runs through its
+  own shell, as it runs the status hooks' command; Antigravity CLI's title command): it reads what the agent writes on
+  stdin and prints what the agent reads, through `AgentProvider::run_helper`; an unknown provider or helper prints
+  nothing, and whatever of stdin the helper did not read is drained after either. It calls no daemon and starts no
+  runtime.
 - `status-line` — the status line a provider that declares `Capabilities::status_line` injects (`--provider <id>`):
   posts the context window to `POST /context-window/:session` and runs the user's own status line with the same input.
 - `mcp` — the MCP server each adapter registers for a session: speaks MCP on stdin/stdout and forwards tool calls to
-  `POST /mcp/:token`.
+  `POST /mcp/:token`; on answering its first `tools/list` it posts `{"listed": true}` there too, which the route
+  (`server::callbacks::mcp`) takes as no call and notes with `AppState::note_mcp_tools_listed`.
 - `holder` — a process the daemon starts (`--holder-id`, `--registry-dir`), which runs the daemon's terminals; see
   [`src/holder/`](../../apps/daemon/src/holder/README.md). Unlike the others it is called by the daemon, not the other way round, and it
   is started detached (`platform::proc::start_detached`), or under a systemd user manager as a user unit of its own
@@ -196,9 +211,9 @@ owner-only key record, `daemon.key`, which four things read: `address`; `stop` a
 a successor by its key where its record does not name its predecessor; `stop` on Windows and `restart` on every host,
 which ask over loopback; and the git hook modes' fallback; the `_in` reads take the data directory from their caller),
 `request_body.rs` (the layers that read a request's body before anything answers, the daemon's listener and the holders' alike: a refused request's is read and thrown away, only an admitted one's is held, up to a limit of 2 MiB), `request_guard.rs` (the Origin/Host rules, the key compare and the key generator that the daemon's guard and the
-holders' helper routes and secret share), `paths.rs` (where Octoboard keeps its files under the data directory; `registered_writes.json` beside it names the files that may write, which the registered writes check in `scripts/verify/registered-writes.mjs` reads),
-`text.rs` (`trimmed_or_none`, free text as stored, and `without_paste_wrapper`, a prompt with the wrapper an agent puts
-around a paste taken off), `time.rs` (the clock, `now_millis`, `now_micros` and `now_secs`, and the RFC 3339, compact
+holders' helper routes and secret share), `paths.rs` (where Octoboard keeps its files under the data directory; `registered_writes.json` beside it names the files that may write),
+`text.rs` (`trimmed_or_none`, free text as stored, `without_paste_wrapper`, a prompt with the wrapper an agent puts
+around a paste taken off, and `percent_encode`, the one percent-encoding of a value that goes into a URI), `time.rs` (the clock, `now_millis`, `now_micros` and `now_secs`, and the RFC 3339, compact
 and readable timestamps) and `wire_path.rs` (`RelPath`, the canonical wire form of a path or branch name, made and
 validated through `platform::names`, with no OS token of its own; whether this host can name it is asked only where it
 meets the disk, by `RelPath::host_path`, which gives `None` for a path it cannot). `build.rs` passes `repositoryUrl` and
@@ -279,7 +294,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `PageContent::parse` and `PageContent::check_submission` in `mod.rs` are the entry points. `memory.rs` is the wire
   types of Octoboard's memory (`MemoryScope`, `MemoryEntry`, `MemoryDraft`, `MemoryIndexEntry`, `OrphanedMemory`) and its
   size limits.
-- `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode, `background.rs` the user's `start`,
+- `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode, `channel.rs` the `channel` mode
+  (the helper a provider's extension starts from the session's channel script: it long-polls `POST /channel/<session>`,
+  prints one JSON line per message and posts the outcome lines it reads), `background.rs` the user's `start`,
   `stop`, `restart` and `status`, the start of a planned restart's successor and the loopback request the commands send
   (`request_over_loopback`), `address.rs` the user's `address` and `address --rotate` and the notes `address` says on
   stderr (`address_notes`, `port_address_notes`, `no_browser_note`; the forward command they give is `browser::forward`'s),
@@ -302,7 +319,10 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 ### Coordinator role
 
 - `src/coordinator/` — what each control-socket request does to the stored records and which host-role work it triggers:
-  `mod.rs` the dispatcher, then one file per request family (`consoles`, `projects`, `open`, `resume`, `launch`,
+  `mod.rs` the dispatcher, then one file per request family (`consoles`, `projects`, `open`, `resume`, `launch`
+  (`route_instruction` says whether the instruction of a launch that is not a new session's goes in as the agent's
+  launch prompt, for a provider that declares `resume_instruction_as_launch_prompt`, or is queued as a message; `open`
+  goes through it too),
   `restart` (what the restarts of a session's process share: `run` drives the stop and relaunch of an account switch and
   a model change, the other helpers also serve a sharing change; the wait for a stopped process to be recorded down is
   `launch::wait_until_stopped`, which restarts, account sharing and the open in the agent's application all use), `bindings` (binding a session to an owner, for the MCP
@@ -317,7 +337,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   through the `*_and_announce` functions, which tell every client), `processes`
   (listing, stopping and keeping the process trees a client sees), `messages` (the user's own `send_message`, with its images, and `send_command`), `interactions` (`answer_interaction`: the user's answer to a session's published prompt, pressed by `session/interaction/press.rs`), `auto_switch` (moving a session off an
   account whose usage limit stopped a turn; lower layers reach it through `AppState`'s hooks), `validate` for the checks
-  of request text fields; the requests that edit settings, a console, a project or an account carry `base_versions` and
+  of request text fields (`required_prompt` refuses a prompt that is blank once its control and invisible characters
+  are stripped, as a launch reads it as none, `session::term::is_blank_once_stripped`; the UI's
+  `scheduledTasks/blankPrompt.ts` is the same rule, and `testdata/blank_prompt_cases.json` holds the two together); the requests that edit settings, a console, a project or an account carry `base_versions` and
   run through `settings::update_settings_checked`, `consoles::update_console_checked`,
   `projects::update_project_checked` and `accounts::update_account_requested`, which check under
   `AppState::checked_write`), plus `conversation_feed.rs` (following a session's conversation from a control connection: a `Connection`, the worker
@@ -364,12 +386,15 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `scheduled_task.rs` the scheduled task variant (`ask_to_change_task`, with nothing for the user to edit),
   `carry_out.rs` what an approval does, `outcome.rs` the wording of the outcome.
 - `src/messaging/` — every message Octoboard writes into sessions: `delivery.rs` (gates, queueing, what became of each
-  message), `outbox.rs` (the per-session ordered queue, which also keeps how a message of images or a slash command is to be written (`session::term::Shape`) and drops such a message at a handover instead of carrying it as text, sealed at a planned stop's handover, which also keeps the tickets a refusal failed, and whose holds include the one a restart puts on the queue so it is carried into the relaunched process; a daemon's tickets start from the clock, `Outbox::seeded_from_clock`, because an agent's own queue keeps a message's id across runs), `write_queue.rs`
-  (`AppState`'s queuing, flushing and holds over it, and the notice of a refused message), `restart_outbox.rs` (the messages still queued at the handover,
+  message), `outbox/` (`mod.rs` the per-session ordered queue, which also keeps how a message of images or a slash command is to be written (`session::term::Shape`) and drops such a message at a handover instead of carrying it as text, sealed at a planned stop's handover, which also keeps the tickets a refusal failed, and whose holds include the one a restart puts on the queue so it is carried into the relaunched process; a daemon's tickets start from the clock, `Outbox::seeded_from_clock`, because an agent's own queue keeps a message's id across runs; it keeps the session that sent each message a session sent, by ticket, past the write and through a write again (`note_sender`, `sender_of`, bounded); `redelivery.rs` the latest sixteen messages written into each session's terminal and writing one again once the agent gave it back at a cancel and it was cleared from the input box unsent, at once (`redeliver`) or held until another message is taken for the session (`redeliver_held`), or once the agent dropped it at a cancel (`redeliver_dropped`, which the agent reporting its text sent takes off the queue again while it is held, `withdraw_dropped`), and the messages a session's own server or channel took, one of which is queued again, held, when that server or channel says the agent gave it back (`note_taken_by_transport`, `redeliver_returned`), `MAX_REDELIVERIES` times at most, a give-back that comes while the drain is still writing the message being kept until the write is over (`begin_write`, `Returned::Writing`, `PromptSignal::given_back_while_written`); `tests.rs`, with the test-only `Outbox::queue_held` and `Outbox::drains_started` that other modules' tests use), `cleared_messages.rs` (`AppState::write_dropped_messages_again`, called where a hook, the status reports or the cancel a provider declares its reports carry beside its hooks say a turn was cancelled, for a provider whose cancel drops the messages it held, `ScreenReader::cancel_drops_held_messages`; `AppState::redeliver_cleared_message`, which `session/draft_clear.rs` calls to queue such a message again, and `AppState::message_returned`, which a session's own server or channel calls through `session::term::MessageTransport::on_returned` for a message it took and the agent gave back, and which sends the `message_given_back_unsent` notice where the message cannot be written again; `AppState::tell_sender`, which tells the session that sent a message that may not have been carried out, through `delivery::write_or_keep` on a thread of its own), `untaken_messages.rs` (`AppState::watch_untaken_messages`, called where a turn closes by its end, and `AppState::tell_untaken_messages`: for an agent that confirms writes by reported prompt, the messages written during the turn and not reported taken by its end and a grace after it, told by `message_not_taken` and to their senders), `write_queue.rs`
+  (`AppState`'s queuing, flushing and holds over it, `queue_first_task`, which queues a launch's first task ahead of the rest through the outbox's `push_kept_first` and keeps it in the store until it is written, and the notice of a refused message), `restart_outbox.rs` (the messages still queued at the handover,
   saved for the next daemon and requeued by it), `reporting.rs`, `usage_limit.rs` (arming the hold on Octoboard's own writes once a turn stopped on the account's usage limit, and releasing it; the hold's state is `session/usage_limit.rs`'s), `capacity_retry.rs` (the retries of a Codex turn that stopped at its model's capacity; its
   waits live in `AppState::capacity_retries`), `sharing.rs`, `naming.rs` (how a message names a session, a place, a
   quoted body),
-  `owner_notices.rs` (every notice to an owner), `texts.rs` (fixed texts in Octoboard's own name).
+  `owner_notices.rs` (every notice to an owner), `texts.rs` (fixed texts in Octoboard's own name),
+  `sender_notes.rs` (the one way a session is told what became of messages it sent that were not carried out, or that
+  ran after all), `untaken_messages.rs` (messages no turn took, told after a grace or at once when the process goes),
+  `cleared_messages.rs` (messages cleared, dropped or given back at a cancel, written again or told).
 - `src/handoff/` — the handoff package built for a session another takes over: build, render and file. The
   `handoff_session` operation is `coordinator/handoff.rs`, which also judges when a session may be handed off
   (`refuse_unless_it_can_be_handed_off`).
@@ -413,7 +438,10 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   daemon restart (`background_store.rs`, `paths::background_tasks_path`), sharing status, git
   status, requests, availability, hooks to the automatic account switch, whether the host is held awake
   (`keep_awake.rs`), forgetting a record (which also drops the session's followed conversation), the adoption gate a holder's relayed requests wait on, the sessions claimed
-  for a holder that cannot be linked to (`unlinked.rs`), the stop asked for, its escalation and the refusals of a
+  for a holder that cannot be linked to (`unlinked.rs`), the per-session MCP tokens and whether the server holding a
+  session's token has answered a listing of its tools (`mcp_tokens.rs`: `note_mcp_tools_listed`, and
+  `awaits_tool_listing`, what holds the writes of a launch whose provider declares `AgentProvider::awaits_tool_listing`
+  until the listing or its bound, `LiveSession::await_tool_listing`), the stop asked for, its escalation and the refusals of a
   planned restart (`stop.rs`), the barrier a planned stop raises against changes to terminals (`handover_barrier.rs`:
   `AppState::admit_change` and the admission it returns), what the application says over stdin before it quits, which
   tells a quit from a crash (`application_note.rs`), the screens a planned stop saved, written and loaded with the
@@ -433,25 +461,38 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 - `src/agents/` — what the daemon knows about each agent CLI apart from launching it: availability (`availability.rs`;
   `redetermine` judges one agent again after an update changed what its binary resolves to), `cli/` (the installed CLI's
   version, how it was installed, the latest version published, and its update, described in "Agent CLI versions" of
-  `PROTOCOL.md`: `install.rs` tells the install method from the binary's path and builds the update command from the
-  provider's `CliPackaging`, `latest.rs` reads the latest version, with the npm registry lookup behind the `Registry`
-  seam, through the proxy of the user's shell environment, `mod.rs` holds the statuses (`AgentClis`, in
+  `PROTOCOL.md`: `install.rs` tells the install method from the binary's path or an installer marker beside it.
+  It records the matching package for an npm install and uses that package and prefix in the update command.
+  `latest.rs` reads the latest version for the detected install, with the npm registry and the makers' manifests behind the
+  `VersionSources` seam (`Network`, over HTTPS alone), through the proxy of the user's shell environment
+  (`env_shell::proxy_for_url`, which `self_update/fetch.rs` shares), `mod.rs` holds the statuses (`AgentClis`, in
   `AppState::agent_clis`; runtime state, never stored, with statuses and running claims held in `PerAgent`) and the
   check orchestration, `update.rs` runs an update with its output in a file under `paths::agent_cli_updates_dir`, so
   that an update still running when the daemon ends is not broken by it, and words the failure), `models.rs` (the
   `ModelCatalogue` interface a provider lists its models through, with the cache, the command runner and the checks
   around the lists), launch settings (`launch_settings.rs`: the model, effort and compatibility values a launch level
-  holds, and their checks and normalization), `json_rpc.rs` (reading JSON-RPC replies, shared by Codex's app server and
-  Grok's ACP stdio), `detect.rs` (which agent a project is set up for, from the marker files at its top level).
+  holds, and their checks and normalization), `json_rpc.rs` (reading JSON-RPC replies, shared by Codex's app server,
+  Grok's ACP stdio and GitHub Copilot CLI's SDK server), `detect.rs` (which agent a project is set up for, from the marker files at its top level).
+
+The shared ACP client was removed because GitHub Copilot CLI's ACP mode yields no catalogue, Qwen Code reads
+`settings.json`, and OpenCode asks its own server. GitHub Copilot CLI's SDK catalogue keeps its failure mapping
+and deadline in `adapter/copilot/models.rs`.
 
 ### Agent accounts
 
 - `src/accounts/` — accounts: `ops.rs` (`AccountOps`, what `AgentProvider::accounts` gives: a provider's quota probe,
-  kick, sign-in email, reset credits, sign-in flow, MCP inventory reader, MCP server sign-in, shareable configuration
+  kick, sign-in email, sign-in reading (`sign_in_state`, for a provider with no plan quota), reset credits, sign-in flow, MCP inventory reader, MCP server sign-in, shareable configuration
   items and plugin registries, thread registry), `background_cli.rs` (an agent CLI run for an account in the background,
-  shared by the login and the MCP server sign-in: the `Process` it runs in, killed with its whole session when ended
+  shared by the login and the MCP server sign-in: the `Process` it runs in on pipes, killed with its whole session when ended
   early, the `Line`s it says, and `SigningIn`, the count under the account's directory that refuses a change of its
-  sharing), `mcp_inventory.rs` (an account's MCP servers and platform connectors read through the agent's CLI: the
+  sharing; `background_cli/terminal.rs` is the same run on a pseudo-terminal of its own, `TerminalProcess`, for a CLI
+  that asks its question only where its stdin and stdout are a terminal: the terminal is `platform::term`'s, its
+  output is cut into `Line`s while the CLI runs (at line ends and at the cursor moves of a host that repaints the
+  screen, a cursor-forward sequence read as a space), a prompt the CLI waits at handed over as an unfinished line once the
+  output has been silent for a moment, one line is written back with `answer`, and a stop or a drop kills the session,
+  reaps the CLI and hangs the terminal up; nobody answers the CLI's terminal queries), `credential_presence.rs` (whether the host's credential store holds an item, by presence
+  alone and never its content: `item_present` runs `platform::credential_store`'s query through `run_bounded`, and
+  every way of not getting an answer reads "cannot tell"), `mcp_inventory.rs` (an account's MCP servers and platform connectors read through the agent's CLI: the
   `McpInventoryReader` interface, and one reading per account at a time with later requests joining it, keyed by the
   account's directory too, and the helpers the readers share to map a failed query to an unavailability; Codex's reader
   is `adapter/codex/mcp_inventory.rs`, Claude Code's `adapter/claude/mcp_inventory.rs`, Grok's
@@ -459,15 +500,26 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   agent's own commands: the `McpServerAuth` interface, the runs held in `McpServerAuths`, one per account and server,
   and `request`, which starts or joins one; Codex's is `adapter/codex/mcp_auth.rs`), `quotas/` (plan quota read from the
   agent's CLI, poller, judgement, kicks, reset credits; `probe.rs` the `QuotaProbe` interface with the conversation it
-  runs, `reset_credit.rs` the `ResetCredits` interface, `observation.rs` telling a window that is counting from one that
-  has not begun by how its reported reset time moves across readings, for every agent), `login/` (background sign-in;
+  runs (its arguments and variables in `QuotaProbe::launch`, with an isolated `RunHome` from `AccountOps::run_home`
+  under `paths::agent_query_homes_dir` where the CLI needs one; its `framing` and the
+  `steps` its input is written in; reading the reply, and which other lines of the CLI are errors, `is_error_like`, with `marks_error` for the
+  providers whose CLIs mark them in the common way; under test every probe also gives its stand-in data, `test_fixture`,
+  which `probe/test_support.rs` builds the generic probe tests from, and each provider's reply tests are in
+  `adapter/<id>/quota/tests.rs`), `reset_credit.rs` the `ResetCredits` interface, `observation.rs` telling a window that is counting from one that
+  has not begun by how its reported reset time moves across readings, for every agent, `sign_in.rs` the `SignInReading` that
+  `AccountOps::sign_in_state` gives for a provider with no probe, which the poll publishes in the same account quota
+  entry in the probe's place, the email falling back to `AccountOps::email`), `login/` (background sign-in;
   `flows.rs` the `LoginFlow` interface with the `Flow` it drives and, for a provider whose sign-in only one login can
-  use, the code a second is refused with), `dirs.rs`, `relocate.rs` (copying a session's record into another account's
+  use, the code a second is refused with, how long the daemon waits for the sign-in where the provider declares its own
+  (`timeout`; else `LOGIN_TIMEOUT` in `mod.rs`, which an MCP server's sign-in always takes), and `looks_like_device_code`, whether a piece of what a login prints is a device code; `Progress::ask`, how a flow puts a
+  provider-defined `LoginQuestion` to the user and waits for a yes/no or secret-text answer through
+  `answer_account_login_question`. The login's `answer` in `mod.rs` checks the kind and passes the response to the
+  flow. The login timeout pauses while the question is open (`login_clock` in `mod.rs`)), `dirs.rs`, `relocate.rs` (copying a session's record into another account's
   directory for a switch), `thread_registry.rs` (the `ThreadRegistry` interface of a provider's thread database, shared
   by the switch's copy and the shared configuration, with `RowError`, the failure of one row carrying a shared cause,
   and `relocation_code` for a provider's own relocation refusal; Codex's is `adapter/codex/threads.rs`), `trash.rs`,
   `choice/` (which agent and account a session opens with: `mod.rs` resolving a session's own, `started.rs` one a
-  session starts for another, `automatic.rs` automatic selection and the order of an agent's accounts, `standing.rs`
+  session starts for another, `automatic.rs` automatic selection, the order of an agent's accounts and the account an automatic switch moves a session to (`switch_target_except`), `standing.rs`
   whether and why an account cannot open one, `refusals.rs` the refusals of one that cannot).
 - [`src/accounts/shared_config/`](../../apps/daemon/src/accounts/shared_config/README.md) — an account sharing its
   agent's default configuration directory.
@@ -502,8 +554,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   spelling component by component, following each symbolic link by reading its target and never looking at a prefix
   the caller's judgement refuses, so a path whose links lead into a network or device place is found before that place
   is touched (`path_links/resolve.rs` is its caller).
-- `src/host_open/`, `src/path_links/` — opening the file manager, default application or terminal (every launcher runs
-  through one bounded runner, and what each host's launcher is comes from `platform::open`; `host_open/native_app.rs`
+- `src/host_open/`, `src/path_links/` — opening the file manager, default application or terminal (every launcher is
+  started by `host_open`'s `start`, which gives it the daemon's environment as `env_shell::outside_session` reads it and
+  runs it through one bounded runner, and what each host's launcher is comes from `platform::open`; `host_open/native_app.rs`
   opens an agent's desktop application at a URL its scheme names); probing, reading (`read`, the one way a click on a file shows it) and opening the paths a terminal shows, where
   `path_links/mod.rs` holds the routes (`probe`, `read`, `locate`, `open`, `reveal`), `path_links/resolve.rs` is the one place that decides what a path names, what a link may reach
   and what is only shown rather than launched (it refuses a network or device place as written, and a link into one
@@ -514,7 +567,14 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `platform::shell`, filtered by `snapshot.rs` using Octoboard's own markers and every descriptor's
   `inherited_session_vars`, kept under the freshness rules of `cache.rs`), and resolving a binary on it into what starts
   it (`resolve_binary`, over `platform::shell::resolve_binary`), and the proxy it names for a host (`proxy_for` in
-  `proxy.rs`, which the npm registry lookup and the update's downloads go through).
+  `proxy.rs`, which the npm registry lookup and the update's downloads go through). A daemon started inside an agent
+  session inherits that session's variables, so `session_exports.rs` lays a launch's variables over the snapshot and
+  records each one it changed (and each of the descriptor's `command_environment`, which the agent's CLI sets for its
+  commands) in a marker variable; `session_environment_with` is the entry every launch's environment goes through
+  (`session_environment` is its test-only short form). `snapshot.rs`'s `outside_session` is the one reading of an
+  inherited environment that stands for the user's, putting the recorded variables back as the snapshot had them and
+  removing the markers (the snapshot itself, the launchers of `host_open`, the shell terminals' fallback), and
+  `forget_inherited_session` applies it to the daemon's own process environment at start, in the daemon only.
 - `src/self_update/` — the server form's self-update (see "Daemon updates" in `PROTOCOL.md`): `mod.rs` holds the status on
   `AppState::daemon_update`, `task.rs` the scheduled check and the work each request starts (`check_daemon_update`,
   `update_daemon`, `restart_daemon`), `check.rs` and `manifest.rs` the release manifest, `fetch.rs` the HTTP behind the
@@ -561,7 +621,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   whole sequences of the queries the daemon may answer (and, where the terminal keeps them, the OSC 7501 support query
   and status reports), `program_status.rs` the status a program reports about itself (Program Status Protocol: a
   report's body parsed under its limits, `ProgramStatus` the records kept by id, whose root record is the program's own
-  status, and the text that answers the support query; `keep_program_status` and `take_program_status` on `pty.rs` and
+  status, with `RootMove`, a move of that record to a state with the kind and message it carries, and the text that answers the support query; `keep_program_status` and `take_program_status` on `pty.rs` and
   `fan.rs` turn it on and take what was reported), `display.rs` `DisplayFacts`, the colours and cell size a client
   reports (until it does, `DisplaySeed` weighs the launch's appearance against this run's daemon-wide last report kept
   in `DisplayFallback` on `AppState`, whichever is more recent, then the colours stored by an earlier run that seed
@@ -581,7 +641,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   not ended), `saved_screen.rs` what a planned restart hands the next daemon of a terminal (`SavedScreen`, the saved
   screen, and `ReplayRule`, under which the tail kept since the handover is replayed: `save_screen`, `restore_screen`
   and `begin_replay` on `pty.rs`), titles (`title.rs` reads them off the output's own OSC 0/2 sequences, or off the
-  snapshot's title changes where `TermFacts::host_renders`) and the spinner glyphs they start with, `reply_route.rs`
+  snapshot's title changes where `TermFacts::host_renders`, with `title/from_the_parsed_screen.rs` holding the tests that
+  hold the two readings to the same titles over the captures, as `testdata/titles_before_drawing/<owner>.tsv` declares them) and the spinner glyphs they start with, `reply_route.rs`
   which client's answer to a query passed through to clients reaches the program, `query_log.rs` the log of how long the
   queries an agent's host waits on took to be answered, `input_class.rs` input that is only the terminal's own protocol
   traffic, `plain_text.rs` output without its escape sequences, `shell/` project shell terminals).
@@ -595,6 +656,14 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   queue and says what came of it (`start_queue` gives a `QueueStart`: nothing waited, how many started, how many wait
   behind messages someone else queued, or that it could not be told); `PrivateServer`, how a launch starts that server
   through a `ServerHost`, `LaunchPlan::private_server`, with `StartedServer` and `TransportEvents`, which
+  (`channel.rs`, beside `term/`, is the other `MessageTransport`: a session's extension channel, made by the launch
+  where the provider declares one (`AgentProvider::extension_channel`) and no server took its place, and made again
+  by the daemon that adopts the launch (`"channel"` in the terminal's meta); it hands a message to the poll of the
+  helper its extension started, and again only to that helper (a poll names its helper's instance), waits a bounded
+  time for the outcome, declines for the terminal where no helper
+  polls, and tells the queue of a message the agent gave back, `on_returned`; the route is
+  `server::callbacks::channel`, relayed by a holder as `RelayRoute::Channel`, and the script is
+  `adapter::write_channel_script`)
   `register_live` attaches so a transport can retry its queue, hand over the notice that messages are held and the code
   of that notice once they went in (the state layer only broadcasts them), and end the terminal when the server dies;
   `MessageTransport::command_host`, the server's process where the agent's commands run from it, which the ledger
@@ -602,19 +671,27 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `RefusedByAgent`, the error of a message the agent's own queue refused outright, which fails that message to its
   sender, coded `message_refused`, while the queue behind it goes on, and `HeldByServer`, that of a message the server
   holds back for now; `AfterExit`, the work a launch leaves for once its process has exited: `LaunchPlan::after_exit`;
+  the launch's notices, `LaunchPlan::notice` and whatever more `AgentProvider::further_launch_notices` tells of it,
+  each told in its order;
   `before_scratch_removal`, what a launch and an adopted session both do once the process is reaped: stop the transport
-  and run `AfterExit`), `draft.rs` (a mirror of the keys typed into the input, matching the prompts the agent reports
+  and run `AfterExit`; `launch_environment` builds the launch's environment through
+  `env_shell::session_environment_with`, handing it the descriptor's `command_environment`), `draft.rs` (a mirror of the keys typed into the input, matching the prompts the agent reports
   submitted, with `KeyTiming`, when and what kind of keys went in, kept apart from it), `draft_hold.rs` (the release of
   the hold typed keys keep on Octoboard's messages, and the checks a message written past the draft's grace waits on,
   none of them without end: `settle_input`, `release_draft_hold`, `schedule_draft_release` on `LiveSession`),
   `draft_clear.rs` (clearing a user's draft with Ctrl-U past the grace period, so that an automatic message is written
-  alone and the text handed back in a `draft_discarded` notice: `LiveSession::write_after_clearing`; where the box
+  alone and the text handed back in a `draft_discarded` notice: `LiveSession::write_after_clearing`; a message of
+  Octoboard's own that a cancel gave back (`ScreenReader::cancel_restores_held_messages`) is cleared the same way but
+  queued again through `messaging::cleared_messages`, and the `message_cleared_after_cancel` notice replaces
+  `draft_discarded` only where it cannot be written again; where the box
   cannot be cleared the message's wait is bounded by `UNCLEARABLE_DRAFT_WAIT`, kept per message under its queue id,
   after which the message goes into the box as it stands, the clients told in a `message_sent_with_draft` notice, and a
   box that stays unreadable gets a `message_waits_on_input` notice; `LiveSession::write_message_into_box` in `mod.rs` is
-  that write, told what the box holds by `BoxIs`: read, cleared or unclearable), `composer.rs` (the user's composer requests that are more than a paste and an Enter, written through the terminal inside the draft-preserving write: a message's images, each pasted alone and waited on until the input box shows one more placeholder, and a slash command, checked against the agent's completion before its Enter), `interaction/` (what the agent asks while the session waits on the user: `mod.rs` the `InteractionReader` trait a provider reads its prompts with, the tool calls kept from the hooks, the per-session `InteractionState` and the checks of an answer; `watch.rs` the screen watch that publishes `Session.interaction` and lowers the hand once a published prompt has left; `press.rs` pressing an answer key by key, each key chosen from the screen and gated like the trust confirmation's), `input_box_clear.rs` (the run of Ctrl-U
+  that write, told what the box holds by `BoxIs`: read, cleared or unclearable), `composer.rs` (the user's composer requests that are more than a paste and an Enter, written through the terminal inside the draft-preserving write: a message's images, each pasted alone and waited on until the input box shows one more placeholder, and a slash command, checked against the agent's completion before its Enter (refused as `term::CommandNotRecognised` where another command is offered, and as `term::CommandNotFound` where the agent's list says it has none of that name, the box cleared in both) with a space typed after a lone one, as a key of its own, where the provider declares it, the space only over its list read up and its Enter only once the provider reads that list closed, `ScreenReader::list_shown`), `interaction/` (what the agent asks while the session waits on the user: `mod.rs` the `InteractionReader` trait a provider reads its prompts with, the tool calls kept from the hooks, the per-session `InteractionState` and the checks of an answer; `watch.rs` the screen watch that publishes `Session.interaction` and lowers the hand once a published prompt has left, started by a hook's wait or a program's `blocked` report, and holding back a prompt typed into for a reader whose prompts cannot be read after input (`InteractionReader::prompt_unreadable_after_input`); `press.rs` pressing an answer key by key, each key chosen from the screen and gated like the trust confirmation's, or several keys as one write where the screen between them tells nothing, `NextKey::PressAll`), `input_box_clear.rs` (the run of Ctrl-U
   presses on a provider's input box, each seen on the screen before the next, which that clear and an interrupt's
-  clearing of the prompt share), `output_pace.rs` (whether the parsed screen shows a whole frame, from the agent's
+  clearing of the prompt share, or the one press of a key the provider declares empties its whole box at its idle
+  prompt, `ScreenReader::input_box_clearing_key`, only while the session reads at that prompt,
+  `TurnReading::at_idle_prompt`), `output_pace.rs` (whether the parsed screen shows a whole frame, from the agent's
   recent output), `paste_apart.rs` (submitting a message whose Enter has to wait until the agent has taken its paste;
   `NotSubmitted`), `scratch.rs` (the shared entry to a running session's scratch directory, `scratch_of`, and to a folder
   made under it without making the scratch directory again, `subdirectory`; `not_running` is the refusal of a session
@@ -622,9 +699,12 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   the generic per-connection store `Uploads<B: Body>` of one `Kind`, with its parts, offsets, idle expiry and limits,
   under a daemon-wide `UploadBudget`; where the parts are kept is the family's `Body`), `pasted_image/` (an image the
   user pasted into the terminal, written as a file under the process's scratch directory (`PtyCore::scratch_dir`) for
-  the agent to read by path: `mod.rs` the `save_pasted_image` request, answered by `pasted_image_saved`, and
-  `ImageUploads = Uploads<Vec<u8>>`, the images uploaded in parts first, held in memory until the save takes them,
-  under `AppState::pasted_image_uploads`; the wire is "Uploading a pasted image in parts" in
+  the agent to read by path: `mod.rs` `save` (the base64 image of the `save_pasted_image` request, answered by
+  `pasted_image_saved`) and `save_bytes` (an image uploaded in parts), the formats taken (`FORMATS`, `ImageFormat`) and
+  the limits (`MAX_BYTES`, `MAX_UPLOAD_BYTES`), where a saved image goes and how its name reads (`DIRECTORY`,
+  `NAME_PREFIX`, `saved_name_len`), `require_saved_for`, which checks that the paths a message names are images saved
+  for its session, and `ImageUploads = Uploads<Vec<u8>>`, the images uploaded in parts first, held in memory until the
+  save takes them, under `AppState::pasted_image_uploads`; the wire is "Uploading a pasted image in parts" in
   `apps/daemon/PROTOCOL.md`), `attachment/` (any file a client that shares no file system with the daemon attached,
   saved under the session's scratch directory for the agent to read by path: `mod.rs` `AttachmentUploads =
   Uploads<Spool>`, whose parts go to a spool file on disk as they arrive, `save` which renames it to its name, and
@@ -633,31 +713,54 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   (test-only: the running session with a scratch directory that the tests of `pasted_image`, `upload` and `attachment`
   share), `swap.rs` (the stash of the draft around a message, the hold on the input while it is
   recovered, which a bound ends so that a message is not held without end, and `write_message_input_as`, the queue's
-  write of a message under its id), `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations (`carry.rs` the
-  `TrustCarrier` interface of a provider that records the trust in a per-session home; `screen.rs` reads a provider's
-  screen off the recent output, or off the parsed screen where `TermFacts::host_renders` says the output is the host's
+  write of a message under its id), `input_box.rs`, `dialogs.rs` (the kinds of dialog, among them `DialogKind::OwnView`
+  for a view the person opened, and `DialogPattern::with_row_run` for a title row shared with the conversation), `trust/` folder-trust confirmations (`carry.rs` the
+  `TrustCarrier` interface of a provider that records the trust in a per-session home; `screen.rs` is a provider's
+  trust `Screen` (its first drawings, the option pressed and the others, the cursor glyph) and its `StartSignal`, how the
+  agent shows its startup is behind it (a hook, its title, or its input box drawn on the parsed screen), and reads it
+  off the recent output, or off the parsed screen where `TermFacts::host_renders` says the output is the host's
   repaint, `TrustState::reads_screen`; there Codex's watch ends at its composer rather than its title, and Claude Code's
   readiness, otherwise its bracketed paste after the first hook, also comes with its input box drawn after
   `SessionStart`, `on_session_start`), `interrupt/`, `title_activity.rs` (what a terminal title says about a turn),
   `turn_reading.rs` (one reading of whether the agent is in a turn, from its title or reported status, the dialog
   sighting and the hooks' status, which the interrupt key, the title's cancel watch and the draft's lone-Esc timing each
   combine their own way: `LiveSession::turn_reading`, `TurnReading`), `title_interrupt.rs` (a cancel that left no other
-  trace, read off the title), `usage_limit.rs` (where the process stands with the hold on Octoboard's writes after a
+  trace, read off the title; `arm` is the whole of a provider's record watch where the title is all it has to read a
+  cancel from), `usage_limit.rs` (where the process stands with the hold on Octoboard's writes after a
   usage-limit stop: judging, held or free; per process, so a new process starts free), `wait.rs` (polling a condition,
   `wait_for`, and waiting for a session's output to go quiet, `wait_quiet`), `program_status.rs` (the session's status,
   turns and pause taken from the root status record the program reports through OSC 7501, only for an agent whose
-  provider has no status integration). `screen.rs` is the `ScreenReader` trait, how one provider's terminal screens,
+  provider has no status integration; a `blocked` of kind `auth` counts only once it has stood for a short settle, and
+  after a restore the root record the rebuilt terminal holds is taken again, reopening a turn it says is running;
+  `program_status/signals.rs` is what a provider whose hooks give its status declares its reports say beside them
+  (`AgentProvider::reported_signals`, `ReportedSignals`: a `blocked` record is a wait on the user, `working` straight to
+  `idle` a cancelled turn, which also has the messages a provider's cancel drops queued again,
+  `AppState::write_dropped_messages_again`), and `program_status/turn_message.rs` the message a provider reads for a turn from a source
+  of its own (`HookInterpreter::supplies_turn_message` and `turn_message`, a `TurnMessage`), which a turn end the report
+  closes waits for, up to a bound, which a test, a provider's own included, shortens with the crate-wide
+  `session::shorten_turn_message_bound`; `HookInterpreter::report_msg_is_turn_message` says whether the report's own `msg`
+  stands where none was supplied). Whether the reports give one launch its status is asked of the provider per launch
+  (`AgentProvider::launch_has_status_integration`, kept in the launch's meta for a daemon that adopts it), and an
+  `idle` reported before the turn of a launch's own prompt has started is held for a settle as the `auth` wait is; a
+  `done` straight after `working` inside a turn is held for the bound `AgentProvider::reported_done_gap` declares, and
+  passed over where `working` follows within it; under test that window ends on the word of a test, a provider's own
+  included, through the crate-wide `LiveSession::end_reported_done_gaps`). `screen.rs` is the `ScreenReader` trait, how one provider's terminal screens,
   input box and title read, which `AgentProvider::screen` gives (`NoScreen` is the default that recognises nothing;
   `prompt_after_title_stop_ends_turn` declares whether a new prompt after a stopped title proves an interrupt landed;
   `user_action_title` is the title text a provider shows when only the user can act; `input_placeholder` the hint an
   empty input box shows; `clears_input_box_with_ctrl_u` and `collapsed_paste` what a provider's Ctrl-U does to its box
-  and the placeholder it shows for a long paste; `image_placeholders` and `without_image_placeholders` how many images the box holds as attachments and the box without them, `command_completion` the slash command the agent's completion offers, `leading_slash_guard` what keeps a message's leading slash from running as a command, `Interrupt` how a provider's turn is interrupted, including the wording
-  of messages left waiting in its own queue past a cancel); the modules above keep only what is done with a reading (the
+  and the placeholder it shows for a long paste; `image_placeholders` and `without_image_placeholders` how many images the box holds as attachments and the box without them, `command_completion` the slash command the agent's completion offers, `writes_lone_command_with_trailing_space` whether a lone command gets a space typed after it (once its completion is looked at) because a first Enter on `/name` only takes the completion, `leading_slash_guard` what keeps a message's leading slash from running as a command, `Interrupt` how a provider's turn is interrupted (`InterruptKey`: one Esc, Esc twice, one Ctrl-C, or Ctrl-C after clearing the box), including the wording
+  of messages left waiting in its own queue past a cancel; `input_box_screen` which `ScreenText` the box is read from, the
+  screen with faint cells blanked or as drawn; `same_as_submitted` whether a prompt the provider reports sending is one
+  recorded as submitted; `cancel_restores_held_messages` whether a cancel puts the messages the agent held back in its
+  box; `cancel_drops_held_messages` whether a cancel can drop them, which the provider can answer otherwise for one
+  launch, `AgentProvider::launch_cancel_drops_held_messages`, kept in the launch's meta for a daemon that adopts it); `ScreenText` becomes screen text only in `LiveSession::screen_as` (`src/session/mod.rs`), for `input_box_screen`
+  and `InteractionReader::prompt_screen` alike; the modules above keep only what is done with a reading (the
   dialogs are kept as `DialogPattern` and `DialogKind`), and read it through the session's provider.
 - `src/titles/` — the title a session shows, from the agent's records, the terminal title and the first prompt.
 - [`src/processes/ledger/`](../../apps/daemon/src/processes/ledger/README.md) — attributing, listing, stopping, keeping
   and carrying over the processes an agent launch started.
-- `src/processes/` — the rest: `subprocess.rs` (running a spawned process within bounds; what a stop reaches, the signals
+- `src/processes/` — the rest: `subprocess.rs` (running a spawned process within bounds, including `run_conversation_traced`, the one multi-step exchange with the process's stdin (`Conversation`, `Framing`, `Heard`), of which `run_exchange_traced` is the one-step wrapper; what a stop reaches, the signals
   and the pipe readers are `platform::proc`'s), `web_ports.rs` (which of a listed tree's listening ports serve web
   pages, by a bounded `HEAD /` probe on loopback with the answers cached per tree and port; `coordinator::processes`
   fills `ProcessTree.http_ports` from it).
@@ -671,7 +774,13 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   up that the child may run (`close_from`, shared by `proc/server/parent.rs` and the PTY start in `term/unix/start.rs`)
   and the marking of them close-on-exec instead (`mark_close_on_exec_from`, which `spawn_in_background` on Unix uses);
   `cf.rs` the CoreFoundation calls the macOS parts share (a retained `Object`, strings and URLs made from text; used by
-  `sleep/macos.rs` and `open/native_app.rs`); `sleep/` holding the host awake (`Hold`, `available`; macOS IOKit assertions, a Windows power request, Linux's logind
+  `sleep/macos.rs` and `open/native_app.rs`); `credential_store.rs` the query that asks the host's credential store
+  whether it holds an item (`presence_query`, `PresenceQuery`, `Presence`). macOS runs
+  `/usr/bin/security find-generic-password -s <service> -a <account>` through the bounded command runner in
+  `accounts/credential_presence.rs`. `credential_store/windows.rs` asks Credential Manager for an exact generic target.
+  `credential_store/linux.rs` searches Secret Service by service and username and counts locked and unlocked
+  matching paths. Both native readers return presence alone within the same deadline and distinguish an absent
+  item from a store that cannot answer; `sleep/` holding the host awake (`Hold`, `available`; macOS IOKit assertions, a Windows power request, Linux's logind
   inhibitor lock and the session bus's screen saver inhibition over `zbus`), whose answer is `HostFacts::keep_awake`;
   `proc_table/` the native reads of the system's process table (list, every pid, start time, parent and children, process group, a
   descriptor's path, sockets, working directory), one reader per OS, shared by the ledger's `table.rs`, `platform::proc`
@@ -804,8 +913,12 @@ another process, `/proc/<pid>/exe`, on Linux alone; `image_source`, for the
   clients as `Agent`: a `Copy` handle on a registered provider's id that only the registry makes, so an unregistered id
   is refused when deserialized; `AgentId::ALL` lists them in registry order and each provider's file declares its own
   constant), `ProviderDescriptor` (id, names, install page, binary, layout, the markers that detect a project set up for
-  it, inherited session marker variables, instruction file, tool-name prefix, ask-question tool, `Capabilities` (status
-  line, reset credits, per-session trust, configuration sharing, the URL scheme of its desktop application
+  it (a provider that has none of its own is allowed), inherited session marker variables, `command_environment` (what its CLI sets for the commands it runs, recorded by a launch's environment, `env_shell/`), instruction file, tool-name
+  prefix and separator, ask-question tool, `Capabilities` (status
+  line, reset credits, per-session trust, configuration sharing, `owned_accounts` (whether an account beyond the default
+  can have a directory of its own), `login_flow` (whether the daemon can sign an account in itself; a registry test
+  in `src/accounts/ops.rs` holds it to the provider handing out a `LoginFlow`, and an empty `quota_windows.kinds`,
+  which means no plan quota, to it handing out no quota probe), the URL scheme of its desktop application
   `native_app_scheme`, whether it ends its running commands' process groups as it exits
   `ends_command_groups_on_exit`, the delivery quirks, which prompts it publishes and answers `interactions`, `message_images`, `slash_commands`), `quota_windows` (`QuotaWindowNaming`, which windows the provider has and
   what its own interface calls them), `model_display` (`ModelDisplay`, how its model ids are shown), whether other
@@ -818,15 +931,36 @@ another process, `/proc/<pid>/exe`, on Linux alone; `image_source`, for the
   `overridable_settings`, is the one rule for which settings a console, a project or a session may hold its own value
   for); `ProviderSettings` and `SettingValue` are the values in effect, and the provider reads its own from
   `LaunchSpec.settings`. A `ProviderCode` is a code only that provider raises, named `provider.<id>.<code>` and declared
-  as a `pub const` of its file; `claude.rs`, `codex.rs` and `grok.rs` are one descriptor each, and `test_provider.rs` is
-  the provider only the tests register (its behavior, with a `TestRecords` store that declares a feed reader and
-  companion, is `src/adapter/test_provider.rs`); `layout.rs` is the
-  `AgentLayout` struct (where an agent keeps its files) and its lookup; each provider's own `LAYOUT` and the file-name
+  as a `pub const` of its file; `claude.rs`, `codex.rs`, `grok.rs` and `antigravity.rs`, `copilot.rs`, `opencode.rs`, `qwen.rs` and `pi.rs` are the eight release descriptors, in registry order.
+  An unreleased provider can be registered only in test and development builds with `#[cfg(any(test, debug_assertions))]`, and `test_provider.rs` is
+  the provider only the tests register (its behavior is `src/adapter/test_provider.rs`, whose `TestAccounts` reads the
+  account's `sign-in` and `email` files for the sign-in reading and the email, whose `server.rs` is a server its
+  launch starts through the launch's host and its messages go to, and whose `extension.rs` stands in for an
+  extension that opens the session's channel, each with the delivery tests of its way, and whose `TestRecords` store declares a
+  feed reader and companion; it also has variants a test takes by a guard that holds on the taking thread alone:
+  `config_dir_naming_parent`, `without_owned_accounts`, `without_records`, `without_own_marker`, `with_per_session_trust`, `with_tree_records`, whose `TreeRecords` store keeps each record as a tree with
+  part of the conversation outside the records directory and its summary file named for the record, in a form that is not JSON, `with_row_records`, whose
+  `RowStore` keeps its conversations as rows of one database file in the account directory, under ids that are not UUIDs, and lists, reads and removes
+  them itself); `layout.rs` is the
+  `AgentLayout` struct (where an agent keeps its files) and its lookup, with `ConfigDirVarNames` (whether the
+  configuration-directory variable names the directory or its parent) and the conversions generic code goes through:
+  `config_dir_export` (the variable and value for a directory, none for one the parent form cannot name),
+  `config_dir_of_export`, `required_dir_name` and `records` (none for an agent that keeps no record files); each
+  provider's own `LAYOUT` and the file-name
   constants only its logic uses are in its file. It is a layer of its own below `protocol`, so every layer can read a
   descriptor; `protocol/providers.rs` serves them to clients as `ProviderInfo` in `snapshot`.
-- `src/hooks/` — the `HookInterpreter` trait each provider reads its hook events with (including which event starts a
-  conversation and which prompts are the agent's own completion notices or self-sent, and the cross-project guard's
-  `edit_targets` and `deny_edit`, whose defaults read no paths and produce no refusal), what is common to every
+- `src/hooks/` — the `HookInterpreter` trait each provider reads its hook events with. The answers ending in `_in`
+  (`turn_message_in`, `turn_end_in`, `background_tasks_changes_in`, `status_in`) are what `apply.rs` asks, each given
+  the `HookSession`: the session's id, its launch's scratch directory and configuration directory, and the
+  interpreter's own per-session carry, `HookCarry`, which lives in the session's `LiveSession` and goes with its
+  process. Each defaults to the answer that reads the payload alone (`background_tasks_changes_in`, every change one
+  event makes applied in order, to the one change of `background_tasks_change`). The trait's other answers
+  (including which event starts a conversation and which prompts are the agent's own completion notices or self-sent,
+  whether an event announces that the
+  session has started (`announces_session_start`), the agent's own session id (`agent_session_id`), and the cross-project
+  guard's `edit_targets` and `deny_edit`; every default claims nothing: no subagent, no submitted prompt, no id, no
+  session start, no paths read and no refusal; `past_startup`, whether an event shows the agent past its startup screens, is
+  the one every interpreter answers), what is common to every
   provider's payloads, the per-session ordered queue of events, and applying an event through the session's provider's
   interpreter (`apply.rs`, which also has the provider's record store arm the record watch the interpreter asks for, and
   starts the session's own server queue when a turn is cancelled). Which launch of which session a hook event is from
@@ -839,22 +973,54 @@ another process, `/proc/<pid>/exe`, on Linux alone; `image_source`, for the
 - `src/records/` — an agent's own on-disk session records, read the same way for every provider; `mod.rs` is the
   index. `store.rs` is the `RecordStore` trait each provider answers through (`AgentProvider::records`) everything that
   depends on how it names, files and writes its records, and on how it watches them (whether it recognises its record
-  names, whether a missing record settles anything, the record a hook payload hints at, unarchiving, whether a record's
-  head moves during a turn, and how the text a user typed reads out of a line). `locate.rs` finds them (the
-  hook's hint, the account directories walked, `record_paths` for every record of a session), `removal.rs` says which
-  paths a deletion removes, `resumability.rs` judges whether a conversation can be resumed, `user_prompt.rs` whether a
-  record holds a prompt the user sent (`RecordStore::is_user_prompt`; what marks a conversation no hook reported, and
-  what a deletion asks before it moves the records of a session that counts as unused), `carried.rs` the record a
+  names, whether a missing record settles anything, the record a hook payload hints at, an inherited variable and
+  search depth for an alternate records directory (`record_root_override`), unarchiving, whether a record's
+  head moves during a turn, how the text a user typed reads out of a line, whether its record is a tree
+  (`branching`), where its conversation's summary file is where that file is named for the record (`summary_file`; else
+  the layout's one name beside the record, `AgentLayout::title_summary`) and how its content reads (`summary_in`, JSON by
+  default), whether a deletion also removes what it keeps beside the records (`removes_beside_records`, naming
+  `beside_records`), and whether its records are rows of a database of the agent's own rather than files (`rows`)). `rows.rs` is
+  that shape: the `RowRecords` trait such a provider's store hands out, which says what an id of the agent's looks like
+  (`names_conversation`) and lists an account's conversations, reads one's rows as lines and removes one by the agent's
+  own means, each in the session's own account (`RowAccount`); Octoboard never writes the agent's database itself: a
+  provider reads through the agent's own commands where they give what is needed, else opens the database read-only
+  without disturbing the running agent, and removes a conversation only through the agent's own command; `rows::read` and `rows::remove` are what generic code
+  calls, `Locator::holds_conversation` the listing of an account kept for as long as its `Locator` lives (a collector pass, a
+  whole deletion call, one look of a feed), and `Hints::stir` / `stirred` the count of a
+  session's hook events, which is what says a conversation may have changed: the collector (`RowReads::scan`), the feed
+  (`Follower::build_rows`, `read_rows`, and `rows_step` in `coordinator/conversation_feed/follow.rs`), the history, the
+  handoff package, `resumability.rs` and the deletion (`coordinator/lifecycle/record_trash.rs`) go through it for such a store and
+  never look for a file, and the rows are read by the same per-line answers as a file's lines (`entries`, `fold_line`,
+  `branching` through `for_each_row_on_branch`, the feed reader). `branch.rs` is the current branch of a record that is a tree, one file whose lines each name the line
+  they follow: a provider's `Branching` says how its lines link (`Link`), `Leaf` is where a record read line by line
+  stands and whether a new line forks off, and `on_branch`, `for_each_line_on_branch` and `read_branch_to` are the readers
+  that keep that branch alone; conversation and history reading, the collector and the feed's `Follower` read a tree only
+  through it. For records that reuse ordinal step indexes on rewind, `Steps` tracks where the active suffix begins.
+  `history.rs` uses `RecordStore::history_step_index` to select positions before assembling the turns and
+  `RecordStore::history_at` to date their messages. `locate.rs` finds the records (the hook's hint, the account directories walked, the configured alternate directory where the store declares one,
+  and `record_paths` for every record of a session). Alternate directories resolve through the launch's shell snapshot
+  and session working directory. An absence is conclusive only when the alternate search can also be completed.
+  For a layout with no
+  records directory, `records_dir()` is none and the account-relative file search has nothing to walk. `removal.rs` says which
+  paths a deletion removes (the record's own, and `beside_records` for a provider that answers `removes_beside_records`), `resumability.rs` judges whether a conversation can be resumed, `user_prompt.rs` recognises prompts the user sent (`RecordStore::is_user_prompt`) to mark a conversation no hook reported and protect unused sessions whose records may contain a conversation; `carried.rs` the record a
   switch of accounts carries and what travels with it, `switch_continue.rs` whether a relaunched session is sent a
   prompt to carry on (its text is `messaging/texts.rs`), whether its last turn stopped on the usage limit, and
-  `wait_for_usage_limit`, the wait for the record to say so, used by the automatic account switch and by `messaging/usage_limit.rs`; then the one collector that persists what the records show,
-  conversation and history reading, `feed/` (the live conversation feed read from the records: `mod.rs` the `FeedReader`
+  `wait_for_usage_limit`, the wait for the record to say so, used by the automatic account switch and by `messaging/usage_limit.rs`;
+  `collector.rs` persists the context and other values the records show. `HookInterpreter::context_report` can add a window
+  to the record's size or supply a live projection. The hook queue accepts reports from the main conversation of a
+  current or reserved launch, and the collector uses them only for the matching live process.
+  `collector/row_reads.rs` schedules row queries up to `blocking_pass::BLOCKING_WIDTH`, one per session.
+  The collector applies available results on its regular passes while slow queries continue in the background.
+  Each result belongs to the conversation, launch and observation boundary it was read for.
+  The records module also holds conversation and history reading, `feed/` (the live conversation feed read from the records: `mod.rs` the `FeedReader`
   trait each provider implements to read its lines as `protocol::ConversationEntry`s (`RecordStore::feed_reader`, `reader_for`),
   `FeedOut`, the entries as they stand with what every provider shares (user or Octoboard's message, turn count, todo
   list, tool results matched to their calls, cutting what is too long), and paging; `follow.rs` the `Follower` that reads a
   conversation's earlier stretches whole once and its head and companion file (`RecordStore::feed_companion`) again as
-  they grow; holds no knowledge of an agent's formats), and `watch/` (the poll mechanism every record watch runs on, and `back_at_prompt`,
-  putting a session back at its prompt after a watch finding); every pass over a
+  they grow; holds no knowledge of an agent's formats), and `watch/` (the poll mechanism every record watch runs on, `back_at_prompt`,
+  putting a session back at its prompt after a watch finding, and for a failure a watch found in the record
+  `end_failed_turn`, closing the turn as failed while the watch is still the session's current one, with
+  `settle_failed_turn`, the pause and the return to awaiting instructions that it shares with a provider's own ending; the test-only `last_ended` and `polls_ran` are how a test on tokio's paused clock waits for a watch that stops, or lets one that goes on make a few polls); every pass over a
   record goes through `line_file.rs`.
 - `src/adapter/` — the behavior of each provider behind one trait, `AgentProvider` (its descriptor, the launch plan,
   the work its own CLI does before the terminal starts (`before_launch()`, default nothing; `session::term::launch`
@@ -863,9 +1029,12 @@ another process, `/proc/<pid>/exe`, on Linux alone; `image_source`, for the
   resumed; its fixtures are `testdata/claude_agents_*.json`, described in `testdata/claude-agents-captures.md`),
   refusing an account that cannot be launched, the installed version, reading the titles it shows, its hook interpreter,
   its record store, its screen reader, its accounts (`accounts()`, `AccountOps`), its model catalogue (`catalogue()`,
-  `ModelCatalogue`), how its CLI is installed and updated (`cli_packaging()`, `CliPackaging`, defined in `mod.rs`, read
-  by `agents/cli/`), the prompts it shows the user while a session waits on them (`interactions()`, an `InteractionReader`, `session/interaction/`), whether its hooks and signals give its sessions their status (`has_status_integration()`; where
-  not, `session/program_status.rs` takes it from the program's own reports), its status line (`status_line()`,
+  `ModelCatalogue`), how its CLI is installed and updated (`cli_packaging()`, `CliPackaging`, defined in `mod.rs`, with
+  its installer layouts and markers, the npm packages that ship it, and the sources of its latest version, read by
+  `agents/cli/`), the version an account runs where accounts can run different versions of one install
+  (`account_version()`, read through `adapter::version_for_account` at launch and by the CLI check), the prompts it shows the user while a session waits on them (`interactions()`, an `InteractionReader`, `session/interaction/`), whether its hooks and signals give its sessions their status (`has_status_integration()`; where
+  not, `session/program_status.rs` takes it from the program's own reports, and where so, `reported_signals()` says what
+  those reports add), its status line (`status_line()`,
   `StatusLine`, defined in `mod.rs`), how its desktop application is asked to show a conversation (`native_app()`,
   `NativeApp`, defined in `mod.rs`, with `native_app_unavailable`, the refusal it raises; implemented by
   `claude/native_app.rs` and `codex/native_app.rs`) and what it offers a provider made compatible with it
@@ -873,7 +1042,8 @@ another process, `/proc/<pid>/exe`, on Linux alone; `image_source`, for the
   files it has and the instructions to read the rest of its configuration; `LaunchSpec::compatibility_sources` holds one
   source per compatibility switch that is on, looked up with `LaunchSpec::compatibility_source(agent)` and resolved by
   `compatibility_sources_of`)), registered by `adapter::provider(agent)` and implemented by `ClaudeProvider`,
-  `CodexProvider` and `GrokProvider` in `claude/`, `codex/` and `grok/` (each provider's `hooks.rs` there is its
+  `CodexProvider` and `GrokProvider` in `claude/`, `codex/` and `grok/`, followed in registry order by `AntigravityProvider`, `CopilotProvider`, `OpenCodeProvider`, `QwenProvider` and `PiProvider` in
+  `antigravity/`, `copilot/`, `opencode/`, `qwen/` and `pi/` (each provider's `hooks.rs` there is its
   `HookInterpreter`, and `records.rs` its `RecordStore`, with `conversation.rs` and `switch_continue.rs` its readings of
   a conversation and of how its last turn ended, `feed.rs` its `FeedReader` for the live conversation feed (Grok's
   companion file is its `updates.jsonl`; its fixtures are `testdata/feed_*.jsonl`), and `screen.rs` its `ScreenReader`, and `interaction.rs` its `InteractionReader` (reading its permission prompts and ask-the-user questions off the screen, matched to the calls its hooks reported, and choosing the keys that answer them; `grok/interaction_tests.rs` are Grok's tests); `claude/stash.rs` is Claude Code's
@@ -906,23 +1076,41 @@ another process, `/proc/<pid>/exe`, on Linux alone; `image_source`, for the
   that applies the permission preset), `mcp_auth.rs` (its `McpServerAuth`: `codex mcp login` and `codex mcp logout`);
   Codex, Claude Code and Grok also have `mcp_inventory.rs` (their `McpInventoryReader`: Codex's over the app server,
   Claude Code's over `claude auth status` and `claude mcp list`, Grok's over `grok mcp list` and `grok mcp doctor`,
-  servers only), and Grok `trust.rs` (its `TrustCarrier`), `plugin_paths.rs` (pointing the user's plugin registry back at the source home after a session's process exits and before a launch, since Grok records a plugin under the session's own `GROK_HOME`, which is removed when the session ends) and `query_home.rs` (the directories of Octoboard's own that Grok's background runs, its quota reading, model listing and kick, are made against in place of an account's directory, since Grok writes into the home it runs in)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the
+  servers only), and Grok `trust.rs` (its `TrustCarrier`), `plugin_paths.rs` (pointing the user's plugin registry back at the source home after a session's process exits and before a launch, since Grok records a plugin under the session's own `GROK_HOME`, which is removed when the session ends) and `query_home.rs` (the directories of Octoboard's own that Grok's background runs, its quota reading, model listing and kick, are made against in place of an account's directory, since Grok writes into the home it runs in)); Antigravity's `home.rs` is the directory a
+  launch gives its CLI in place of `~/.gemini`, Copilot's `record_watch.rs` its record watch and `login.rs` its
+  device-code sign-in, Qwen's `settings.rs` and `settings_file.rs` the system settings file a launch gives it and the
+  reading of a settings file, and OpenCode's `plugin.js` and Pi's `extension.js` the scripts written into a session's
+  scratch directory that forward their program's events to Octoboard). Pi's extension also supplies its context
+  figure and message channel. Antigravity CLI, GitHub Copilot CLI, OpenCode, Qwen Code and Pi’s `records.rs` files define their native records, and their
+  `accounts.rs` files wire up account operations. Qwen Code's `login.rs` launches the Web Shell, Pi's and
+  Antigravity's `login.rs` use the background PTY, and Copilot's and Antigravity's `quota.rs` supply their account
+  quota probes. The [OpenCode adapter README](../../apps/daemon/src/adapter/opencode/README.md) maps the
+  versioned launch, record reader and private server. The shared `mod.rs` holds the launch/resume flow,
+  where `LaunchPlan::first_message` is a first task the launch writes as the session's first message instead of passing it
+  on the command line. The shared `hooks.rs` holds the
   hook URL, command and script (the command and script name the session's key file, not the key) and the cross-project
   guard's command, script and JSON group (`guard_command`, `write_guard_script`, `add_guard_group`, whose event name is
   passed by the provider; Claude Code registers the command in its JSON hooks, Grok Build the script in its JSON hooks,
   Codex the script in its launch overrides), and `account_cli.rs` the account directories, commands and short queries
-  (running an agent CLI as an account, also one that leaves what it started running), and `files.rs` the bounded reads
-  of the files an adapter reads, with `project_dirs` (the directories whose project configuration is layered)
+  (running an agent CLI as an account, also one that leaves what it started running; a directory the agent's variable cannot
+  name is the refusal `Unstartable::DirNotExportable`; `RunHome` holds an isolated run's directory, environment,
+  cleanup and any lock; `RunHome::make_private_run_dir` creates one removed at drop. Short account queries and quota probes use the same
+  account command builder with the provider’s selected home), `files.rs` the bounded reads
+  of the files an adapter reads, with `project_dirs` (the directories whose project configuration is layered),
+  `user_json.rs` the reading of JSON a user wrote for an agent as that agent's CLI reads it (`parse`, `strict_text`, and
+  `Takes`, the four things an agent may take beyond JSON; tests in `user_json/tests.rs`), `patch.rs` the files a
+  `*** Begin Patch` patch names (`patch_targets`, for the cross-project guard of the providers whose edits come as one)
   (`codex/claude_mcp.rs` only translates a compatibility source's MCP servers into Codex's launch overrides). The
   instruction file, tool-name prefix, ask-question tool and detection markers are read from the descriptors by
   `session_tools/`, `coordinator/console_workdir.rs` and `agents/detect.rs`.
 - `src/session_tools/` — the static description of the Octoboard MCP tools and what sessions are told of them:
-  `catalogue/` the tool catalogue (`mod.rs` which tools a role sees, and `tools_offered`, which also withholds the memory
-  tools while memory is off, then one file per tool family, `memory.rs` among them with its console and project wording,
-  and `schemas.rs` the shared schema builders), `role.rs` the role description (with a project session's memory section),
-  `console_instructions.rs` the console session's instruction text (written to the console's directory by
-  `coordinator/console_workdir.rs`; with its memory section), `memory_index.rs` the index of a memory as a session is
-  given it at launch, which both of those embed, `page_guide.rs` the
+  `catalogue/` the tool catalogue (`mod.rs` which tools a role sees, `tools_offered`, which also withholds the memory
+  tools while memory is off, and `qualified_tool_name`, the one place that assembles a tool's name as a provider
+  presents it, from the prefix, server, separator and tool; then one file per tool family, `memory.rs` among them with
+  its console and project wording, and `schemas.rs` the shared schema builders), `role.rs` the role description (with a
+  project session's memory section), `console_instructions.rs` the console session's instruction text (written to the
+  console's directory by `coordinator/console_workdir.rs`; with its memory section), `memory_index.rs` the index of a
+  memory as a session is given it at launch, which both of those embed, `page_guide.rs` the
   topics of the `page_guide` tool (the usage of report pages and the schemas of the component kinds, taken from
   `protocol/page_content/`), and `Owner` and `CALL_TIMEOUT` in `mod.rs`.
 - `src/mcp/` — the Octoboard MCP server a session drives Octoboard with, over the catalogue in `src/session_tools/`:
@@ -1118,10 +1306,27 @@ them is `docs/README.md`, "Coding conventions".
   declared capabilities, and its behavior (`src/adapter/<id>/`), including its accounts (quota, sign-in, reset credits,
   shared configuration, thread registry), model catalogue, status line and trust carrying. What generic code may and may
   not do about it is in `docs/conventions/provider-neutral-core.md`.
+- A new agent: its per-agent code lives only in its descriptor (`src/providers/<id>.rs`), its adapter directory
+  (`src/adapter/<id>/`) and, in the UI, its presentation module (see the UI structure doc); its test data is the captures
+  and notes under `testdata/` named for it (`<id>_*.bin`, `<id>-captures.md`) and its rows in
+  `testdata/titles_before_drawing/<owner>.tsv`. Registering it is one line in `REGISTRY` (`src/providers/mod.rs`), one in
+  the adapter registry (`src/adapter/mod.rs`) and one entry in `VOCABULARY` of `scripts/verify/provider-neutral.mjs`;
+  a provider not yet released carries `#[cfg(any(test, debug_assertions))]` on its module declarations and registry
+  lines. What differs per agent that generic code has to act on is a method of a provider trait or a declared descriptor
+  field (a trust screen and its `StartSignal`, an `InterruptKey`, `HookInterpreter::past_startup`,
+  `LaunchPlan::first_message`, `AccountOps::sign_in_state` for an account with no plan quota), never a branch on the id.
+  A test of that behavior takes the test provider through the switches in `src/test_support/test_provider.rs`
+  (`declaring_trust_screen`, `declaring_interrupt`, `declaring_hooks`, `declaring_screen`,
+  `declaring_reported_signals`) or the capability variants in
+  `src/providers/test_provider.rs` (such as `with_per_session_trust`).
 - Tests sit beside the code they test (`tests.rs`, `*_tests.rs`); shared fixtures come from `src/test_support/`
   (`mod.rs` re-exports `scratch.rs`, `app.rs`, `stand_in.rs`, `processes.rs`, `git.rs` for repositories, `sessions.rs`,
-  `owner_team.rs`, `screens.rs` for the terminal screens of a usage limit, and `composer_agent.rs` (Unix only) for a stand-in agent that draws the test provider's input box and logs what it is given, and holds `code_of` and `param_of`, the
-  code and a param of a coded error), and `src/test_support/clock.rs` holds the helpers for a clock (`tasks_idle` and
+  `owner_team.rs`, `screens.rs` for the terminal screens of a usage limit, `composer_agent.rs` (Unix only) for a stand-in
+  agent that draws the test provider's input box and logs what it is given, and `port_probe.rs`, the
+  daemon's own probe of a session's listening ports as it reaches a test's loopback stand-in (`accept_past_probes`,
+  `accept_from`, `assert_only_probes_connected`), and `test_provider.rs`, the switches that
+  have the test-only provider declare a trust screen, an interrupt key, a hook interpreter, a screen reader or reported
+  signals of a test's own on the test's thread, which also holds `code_of` and `param_of`, the code and a param of a coded error), and `src/test_support/clock.rs` holds the helpers for a clock (`tasks_idle` and
   `runtime_settled`/`runtime_advanced` on a paused tokio clock, `next_millisecond` for the named wait on the wall
   clock). How tests are written is in `docs/conventions/tests.md`, "Where tests sit", "Time in tests" and "Daemon
   tests".
@@ -1140,9 +1345,13 @@ helpers' doc comments.
 | Replace a file whole | `hostfs::replace::replace_file` (`src/hostfs/replace.rs`) |
 | Read from the disk within a bound | `hostfs::read_bounded` (with cancel), `read_regular` / `open_regular` for files the project does not own (`src/hostfs/mod.rs`); a project's files go through `browse::live` |
 | Read an agent's record | `src/records/line_file.rs`, the bounded line reader (also what record watches use) |
+| Read a conversation an agent keeps as rows of its own database, tell whether its account holds it, or remove it | `RecordStore::rows` and `RowRecords` (`src/records/rows.rs`) for the provider's side; `rows::read`, `rows::remove`, `Locator::holds_conversation` and `Hints::stirred` for generic code, which never opens the database and reads again only when the session's events say so |
+| Read a record that is a tree (lines that each name the line they follow) as its current branch | `RecordStore::branching` and `Branching` for how a provider's lines link; `for_each_line_on_branch`, `read_branch_to`, `on_branch` and `Leaf` (`src/records/branch.rs`), which generic code goes through instead of reading such a record top to bottom |
 | Tell directories apart; move to Trash | `src/hostfs/identity.rs` (device and inode); `hostfs::trash::move_to_trash` under `src/removal_safety/`'s rules; account directories by `hostfs::dir_key` |
 | List every process id | `platform::proc_table::pids::all` (only `platform::proc::crash` keeps its own listing, which must not allocate) |
-| Run a spawned process within bounds | `src/processes/subprocess.rs` (`run_bounded`, `run_exchange`, `Bounds`; `run_to_file` for a command that is to outlive the daemon, its output going to a file rather than a pipe) |
+| Run a spawned process within bounds | `src/processes/subprocess.rs` (`run_bounded`, `run_exchange`, `Bounds`; `run_conversation_traced`, which `run_exchange_traced` wraps, for a conversation whose input is written in steps (`Conversation`), each later step once the caller's listener hears the answer it waits for (`Heard::Next`), over lines or `Content-Length` framing (`Framing`); `run_to_file` for a command that is to outlive the daemon, its output going to a file rather than a pipe) |
+| Run an agent's CLI for an account in the background, on pipes or on a pseudo-terminal of its own | `accounts::background_cli` (`Process`; `TerminalProcess` for a CLI that asks only a terminal) |
+| Ask whether the host's credential store holds an item, never reading it | `accounts::credential_presence::item_present` (the host's query is `platform::credential_store`) |
 | Lead a session, signal a process or a group, sweep a session; wait for the host's request to end the daemon, watch the application's process; tell a launch's processes apart (`Containment`) and stop or kill a child (`ChildHandle`) | `platform::proc` |
 | Listen on a private channel for a child process, and connect to it | `platform::ipc` (`PrivateListen`, `Address`, `Connection`); the caller owns what travels over it (Codex's is `src/adapter/codex/transport/`); a provider's private server for a launch goes through `terminal::server_host`, which makes the `PrivateListen` where the daemon runs the server |
 | Run a provider's private server for a launch (in the daemon, or in the holder that outlives it) | `ServerHost` (`src/terminal/server_host.rs`), given by `terminal::backend::Helpers::server_host` to `PrivateServer::start`; the holder side is its companions ([README](../../apps/daemon/src/holder/README.md)); a provider links to the server a holder kept through `AgentProvider::rebuild_launch` |
@@ -1152,10 +1361,14 @@ helpers' doc comments.
 | Give a helper process the launch key | a file for the `octoboardd` helpers that take `--key-file` (`src/key_file.rs`: `write` makes it owner-only, `read` reads it), the same file for the git hook helpers, whose path the `OCTOBOARD_DAEMON_CREDENTIAL_PATH` variable carries (`src/session_git_hooks/`); Claude Code's own HTTP hook URL carries the key inside the owner-only settings file (`src/adapter/claude/`); where the key may not be is in `docs/conventions/daemon-processes-and-io.md`, "Processes" |
 | Read a request's body before any answer goes out, the body limit and its `413` | `src/request_body.rs` (`drain_unread`, outermost; `buffer`, inside the guard); the daemon's router and a holder's listener layer them |
 | Check a request's Origin and Host, compare a key, make a key | `src/request_guard.rs` (`headers_allowed`, `key_matches`, `same_secret`, `generate_key`); the daemon's guard is `src/server/access.rs`, and a holder's helper routes use it too |
-| Run an agent's CLI as an account for a short query | `src/adapter/account_cli.rs`: `query` (admits the run, held to `Bounds::agent_query`), `AdmittedCommand::run`, `run_leaving_descendants` for a CLI that hands its work to an application that must outlive it, and `run_query` only where the account's directory is already held (a sign-in); `failure_detail` words a failure |
+| Run an agent's CLI as an account for a short query | `src/adapter/account_cli.rs`: `query` (admits the run, held to `Bounds::agent_query`), `admitted_command_in` asks the provider for a background run home inside the admission. `admitted_command_in_home` uses the same command builder for a home the caller already holds, and always admits the account's own directory; `AdmittedCommand::run`, `run_leaving_descendants` for a CLI that hands its work to an application that must outlive it, and `run_query` only where the account's directory is already held (a sign-in); `failure_detail` words a failure |
 | An account's directory | `adapter::account_dir` (the pinned directory, else the agent's default; `src/adapter/account_cli.rs`) |
-| A provider's fact (names, install page, binary, instruction file, tool-name prefix, detection markers, declared capabilities) | its descriptor: `AgentId::descriptor` and `providers::descriptors` (`src/providers/mod.rs`) |
-| Where an agent keeps its files | the descriptor's `layout` (`AgentLayout`, `src/providers/layout.rs`; each provider's value is its `LAYOUT` in `src/providers/<id>.rs`) |
+| The variable a launch exports to run an agent's CLI on the session's pinned account | `adapter::pinned_config_dir_export` (`src/adapter/mod.rs`, beside `pinned_config_dir`): the name and value for `LaunchPlan::env`, nothing for the default account; refuses a pinned directory that has gone and one the agent's variable cannot name (`Unstartable::DirNotExportable`); not yet called by a provider |
+| Read JSON a user wrote for an agent (a settings file, an inline configuration value) | `adapter::user_json` (`src/adapter/user_json.rs`): the provider states what its agent's CLI takes in `Takes` and calls `parse` (or `strict_text`, for the text with what is taken off blanked) rather than writing its own comment stripper; Qwen Code's `settings_file.rs`, OpenCode's `opencode/mod.rs`, Antigravity CLI's `antigravity/home.rs` and GitHub Copilot CLI's `copilot/accounts.rs` read through it |
+| A provider's fact (names, install page, binary, instruction file, tool-name prefix and separator, detection markers, declared capabilities) | its descriptor: `AgentId::descriptor` and `providers::descriptors` (`src/providers/mod.rs`) |
+| Where an agent keeps its files; the variable and value that point its CLI at a configuration directory, and the directory a variable's value stands for; its records directory | the descriptor's `layout` (`AgentLayout`, `src/providers/layout.rs`; each provider's value is its `LAYOUT` in `src/providers/<id>.rs`), read through `config_dir_export`, `config_dir_of_export` and `records` rather than `config_dir_var` and `records_dir` alone |
+| Name an MCP tool as a provider presents it | `qualified_tool_name` (`src/session_tools/catalogue/mod.rs`), from the descriptor's tool-name prefix and separator |
+| Refuse to add, import or repoint an account for an agent that has the default account only | `coordinator::accounts::require_owned_accounts` (`src/coordinator/accounts.rs`), reading `Capabilities::owned_accounts` |
 | A provider's settings, and the codes only it raises | the descriptor's `settings` and `codes` (`src/providers/mod.rs`); stored by `src/store/provider_settings.rs` |
 | Which settings a console, a project or a session may hold its own value for | `SettingDescriptor::overridable` is the rule; `ProviderDescriptor::is_overridable`, `overridable_settings` and `known_compatibility` (`src/providers/mod.rs`) query it or filter held values; requests are checked by `check_compatibility` (`src/agents/launch_settings.rs`) |
 | The provider settings a launch reads (the application-wide values with the switches some launch level holds on top) | `coordinator::launch::launch_provider_settings` for a session, `provider_settings_with_compatibility` for a chain not yet a session (`src/coordinator/launch.rs`) |
@@ -1166,7 +1379,7 @@ helpers' doc comments.
 | A provider's behavior (launch plan, work before the terminal starts, installed version, titles, terminal screens and dialogs, accounts, model catalogue, status line) | `adapter::provider(agent)` giving the `AgentProvider` (`src/adapter/mod.rs`); its accounts through `AccountOps` (`src/accounts/ops.rs`), its models through `ModelCatalogue` (`src/agents/models.rs`) |
 | Open a session's conversation in its agent's desktop application | `coordinator::native_app::open_session_in_app` (`src/coordinator/native_app.rs`) checks the session and the host, archives a session that is not archived first (`lifecycle::archive_keeping_branches`, which removes no branch or worktree, after `lifecycle::ensure_group_unlocked`) and keeps the trees the user chose (`processes::keep_chosen`, shared with `lifecycle::archive_requested`); what each agent's application is asked is `AgentProvider::native_app` giving a `NativeApp` (`src/adapter/mod.rs`), which an agent declares through `Capabilities::native_app_scheme` (`src/providers/mod.rs`), and a refusal is `adapter::native_app_unavailable`; whether the application is installed comes from `platform::open::native_app`, the URL is opened by `host_open::native_app::open_url` |
 | Save, read, delete or announce an entry of a console's or a place's memory; check a draft against the entry rules | `coordinator::memory` (`src/coordinator/memory.rs`: `save_memory`, `read_memory`, `delete_memory`, the `*_and_announce` writes, `checked_draft`, `place_of`, `refuse_while_place_in_use`); a refusal is a `MemoryRefusal` that each caller words for itself |
-| Whether a launch turns an agent's own memory across sessions off | `adapter::turns_native_memory_off` (`src/adapter/mod.rs`) sets `LaunchSpec::native_memory_off` for every session while memory is on, for a provider whose descriptor declares `native_memory_switch` (`src/providers/mod.rs`); the provider applies its own switch |
+| Whether a launch turns an agent's own memory across sessions off | `adapter::turns_native_memory_off` (`src/adapter/mod.rs`) sets `LaunchSpec::native_memory_off` for every session while memory is on, for a provider whose descriptor declares its `native_memory` `NativeMemory::Switchable` (`src/providers/mod.rs`), which `ProviderInfo` also serves; the provider applies its own switch |
 | Call CoreFoundation on macOS | `src/platform/cf.rs` (`Object`, `string`, `url`), not a second set of declarations |
 | Whether a session with a process is at rest, or what it is busy with (a handoff and an open in the agent's application judge by it) | `AppState::what_it_is_doing` (`src/state/status.rs`) |
 | Wait for a session whose process was ended to be recorded down | `coordinator::launch::wait_until_stopped` (`src/coordinator/launch.rs`), with its `stop_timeout` |
@@ -1206,8 +1419,9 @@ helpers' doc comments.
 | Send the settings, a console or a project to clients | `AppState::publish_settings` (or `broadcast_settings`), `publish_console`, `publish_project` (`src/state/field_versions.rs`), which stamp the field versions |
 | Refuse a write based on a field another client changed since | `AppState::checked_write` with a `RecordKey` (`src/state/field_versions.rs`), taken by `update_settings_checked`, `update_console_checked`, `update_project_checked` and `update_account_requested` and held until the change is published; it raises `write_conflict` |
 | Poll a condition, or wait for a session's output to go quiet | `src/session/wait.rs` (`wait_for`, `wait_quiet`) |
+| Compare two readings of a text whatever their wrapping (a terminal row, the input box) | `src/session/text.rs`: `bare`, a text without its whitespace; the one entry point for any whitespace-insensitive comparison in `src/session/` |
 | Resolve the user's shell environment and binaries | `src/env_shell/` (`resolve_binary`; `capture_failed` words the refusal of a request that needed the environment and could not take it) |
-| How a provider's CLI is installed and updated; the installed and latest version of a CLI, and its update | `AgentProvider::cli_packaging` (`CliPackaging`, `src/adapter/mod.rs`), read only by `src/agents/cli/` |
+| How a provider's CLI is installed and updated; the installed and latest version of a CLI, and its update | `AgentProvider::cli_packaging` (`CliPackaging`, `src/adapter/mod.rs`: layouts, marker files, the CLI's own check, its maker's manifest, npm and Homebrew names), read only by `src/agents/cli/`; an account's own version `AgentProvider::account_version` |
 | Read a page a session pushed, or a form's submission, against the page's kinds | `PageContent::parse` and `PageContent::check_submission` (`src/protocol/page_content/mod.rs`); a refusal is a `PageContentError` naming the path and the kind's schema |
 | Read a session's conversation as feed entries, or follow it live | `RecordStore::feed_reader` and `FeedReader` (`src/records/feed/mod.rs`) for what one provider's lines mean; `ConversationFeeds::join` (`src/state/conversation_feeds.rs`) for the entries a following connection reads; a connection reaches both only through `coordinator::conversation_feed::Connection` |
 | A running session's scratch directory, or a folder under it, for files Octoboard keeps for its agent (pasted images, attached files) | `session::scratch` (`src/session/scratch.rs`): `scratch_of` (refused with `unknown_session` or `session_not_running`) and `subdirectory`, which makes only the folder and never the scratch directory above it, so a process that ended meanwhile is `session_not_running` and nothing is left orphaned; `not_running` is that refusal |

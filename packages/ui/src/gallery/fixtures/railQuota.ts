@@ -7,6 +7,7 @@ import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
 import { accountOf, SAMPLE, minutesAgo, snapshotState } from "../../fixtures/builders";
 import { accountAdded, accountRemoved, agentAvailability, updateAccountQuota } from "./liveChanges";
+import { withNoQuotaProvider } from "./noQuotaProvider";
 import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow, PERSONAL_RESET_CREDITS, resetCreditOf, resetCreditsOf } from "../../fixtures/quotas";
 
 const GROUP = "Window layout";
@@ -66,15 +67,19 @@ const readState = railQuotaState([...claudeAccounts, ...codexAccounts], [
 ], { defaultNames: { claude: "Studio laptop" } });
 
 /** Claude Code with three plainly named accounts, all read: the default account, Work spent and Personal nearly spent,
- * short enough for the panel to hold without scrolling. */
+ * short enough for the panel to hold without scrolling. The other tabs show each agent that reports plan quota. */
 const plainState = railQuotaState(
   [accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work"), accountOf("a-personal", "claude", "Personal", "/Users/dev/.claude-personal")],
   [
     quotaOf("claude", null, "max", [quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60), quotaWindow("session", 18, 117)]),
     quotaOf("claude", "a-work", "pro", [quotaWindow("session", 100, 42), quotaWindow("weekly", 63, 2 * 24 * 60 + 5 * 60)], { fetched_at: minutesAgo(7) }),
     quotaOf("claude", "a-personal", "pro", [quotaWindow("session", 96, 83), quotaWindow("weekly", 88, 2 * 24 * 60 + 9 * 60)], { fetched_at: minutesAgo(3) }),
+    quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60)]),
+    quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 23, 4 * 24 * 60)]),
+    quotaOf("antigravity", null, null, [quotaWindow("weekly_model", 27, 3 * 24 * 60, "Gemini 3.1 Pro")]),
+    quotaOf("copilot", null, "free", [quotaWindow("credit_period", 42, 20 * 24 * 60)]),
   ],
-  { installed: ["claude"], added: ["claude"] },
+  { installed: FIXTURE_AGENTS },
 );
 
 /** Every agent installed and read, but only Codex then Claude Code added, in that order: Grok Build has a reading and
@@ -339,7 +344,7 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail usage panel, a short list of plainly named accounts",
-    description: "The usage panel floated in beside the rail, on Claude Code's tab, listing three accounts that all fit with nothing scrolled or clipped: Default, whose session and weekly usage show as one two-layer bar, Work, spent, receded behind its \"Limit reached\" badge, and Personal, nearly spent. Manage accounts is at the bottom. Unlike Rail usage panel, floated in by hovering, it has one agent tab, no clipped account name and no Fable window, so the list fits without scrolling.",
+    description: "The usage panel floated in beside the rail, on Claude Code's tab, listing three accounts that all fit with nothing scrolled or clipped: Default, whose session and weekly usage show as one two-layer bar, Work, spent, receded behind its \"Limit reached\" badge, and Personal, nearly spent. Manage accounts is at the bottom. The tab strip scrolls through the five agents that report plan quota. None of the accounts on the selected tab needs a clipped name or a model window.",
     state: plainState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
@@ -470,8 +475,8 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail usage panel, agents in the order they were added",
-    description: "Codex was added before Claude Code, so its tab comes first and is the one open. Grok Build is installed and has a reading but is not added, so it has no tab.",
-    state: reorderedState,
+    description: "Codex was added before Claude Code, so its tab comes first and is the one open. Grok Build is installed and has a reading but is not added, so it has no tab. Terminal Agent, a provider that reports no plan quota, is added and installed too, last, with its accounts' sign-in readings, but has no tab either: the strip is Codex and Claude Code only.",
+    state: withNoQuotaProvider(reorderedState),
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
   {
@@ -481,6 +486,15 @@ export const railQuotaScenarios: Scenario[] = [
     title: "Rail usage panel with agents installed but none added",
     description: "Every agent is installed but none is added, so the panel shows the empty state (a bot glyph, \"No agent added\", \"Add an agent to see its usage here.\" and an Add agent button) rather than the PATH hint. The panel has no footer: its Manage accounts link would only repeat the button.",
     state: railQuotaState([], [], { installed: FIXTURE_AGENTS, added: [] }),
+    steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
+  },
+  {
+    id: "rail-quota-only-without-plan-quota",
+    group: GROUP,
+    category: "normal",
+    title: "Rail usage panel with only a provider that reports no plan quota added",
+    description: "Terminal Agent, a provider that reports no plan quota, is the only agent added; the three others are installed but not added. The panel shows the empty state for agents that report no usage (a gauge glyph, \"No agent reports usage\" and the line \"Octoboard does not read the usage of the agents that are added.\"), with no tab for Terminal Agent although it has accounts, and the footer's Manage accounts link under it.",
+    state: withNoQuotaProvider(railQuotaState([], [], { installed: FIXTURE_AGENTS, added: [] })),
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
   {

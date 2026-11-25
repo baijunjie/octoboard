@@ -859,6 +859,24 @@ async fn a_login_is_refused_for_a_foreign_account_and_a_cancel_for_a_login_that_
             error_code::LOGIN_NOT_RUNNING
         );
     }
+    let refused = handle(
+        &state,
+        None,
+        RequestBody::AnswerAccountLoginQuestion {
+            agent: AgentId::CODEX,
+            account: None,
+            question: "a_question".to_string(),
+            answer: crate::protocol::LoginAnswer::Yes,
+        },
+    )
+    .await
+    .expect_err("no login is running to answer");
+    let refused = refused.downcast_ref::<CodedError>().unwrap();
+    assert_eq!(refused.code, error_code::LOGIN_NOT_RUNNING);
+    assert_eq!(
+        refused.message,
+        "Codex is not being signed in for this account."
+    );
 }
 
 /// A sign-in for a provider with no flow is refused with `provider_unsupported`, for the default
@@ -896,6 +914,73 @@ async fn a_sign_in_is_refused_for_a_provider_with_no_login_flow() {
         assert_eq!(coded.params["operation"], "sign_in");
         assert!(state.account_logins.running().is_empty());
     }
+}
+
+/// A provider whose accounts cannot each have a directory of their own refuses to add an account
+/// or point one at another directory with `provider_unsupported`, and records nothing; its default
+/// account is not affected.
+#[tokio::test]
+async fn an_account_is_refused_for_a_provider_without_accounts_of_its_own() {
+    let (state, _dir) = crate::test_support::app_state("coordinator-owned-accounts-unsupported");
+    handle(
+        &state,
+        None,
+        create_account_request(
+            AgentId::TEST,
+            "Work",
+            &host_path("/home/u/.test-agent-work"),
+        ),
+    )
+    .await
+    .expect("created while the provider has accounts of its own");
+    let existing = only_account(&state);
+
+    let _declared = crate::providers::test_provider::without_owned_accounts();
+    let refused_with = |err: anyhow::Error| {
+        let coded = err.downcast_ref::<CodedError>().expect("coded").clone();
+        assert_eq!(coded.code, error_code::PROVIDER_UNSUPPORTED);
+        assert_eq!(coded.params["agent"], "test_agent");
+        assert_eq!(coded.params["operation"], "owned_accounts");
+    };
+    refused_with(
+        handle(
+            &state,
+            None,
+            create_account_request(
+                AgentId::TEST,
+                "Other",
+                &host_path("/home/u/.test-agent-other"),
+            ),
+        )
+        .await
+        .expect_err("add refused"),
+    );
+    refused_with(
+        handle(
+            &state,
+            None,
+            RequestBody::UpdateAccount {
+                account: existing.id.clone(),
+                name: None,
+                config_dir: Some(host_path("/home/u/.test-agent-elsewhere")),
+                base_versions: None,
+            },
+        )
+        .await
+        .expect_err("repoint refused"),
+    );
+    assert_eq!(only_account(&state), existing, "nothing was recorded");
+
+    handle(
+        &state,
+        None,
+        RequestBody::SetDefaultAccountName {
+            agent: AgentId::TEST,
+            name: "Main".to_string(),
+        },
+    )
+    .await
+    .expect("the default account is unaffected");
 }
 
 #[tokio::test]

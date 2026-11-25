@@ -6,6 +6,7 @@ import { FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { press } from "../components/alerts/detailsTestSupport";
 import { projectOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
+import { TEST_PROVIDERS } from "../test/testProviders";
 import type { Agent, AgentModel, ModelsUnavailable, ProjectAccount } from "../protocol";
 import { type Pending, work, personal, render, input, type, settle, PAST_LOCAL_DETECTION_MS, click, answer, chooseSource, buttons, buttonText, accountPicker, pickerNamed, sentOf, fillDirectory, stored } from "./projectDialogTestSupport";
 
@@ -15,6 +16,9 @@ const choose = (option: string) =>
   click(Array.from(document.body.querySelectorAll('[role="option"]')).find((o) => o.textContent === option) as HTMLElement);
 
 const clearButton = (name: string) => pickerNamed(name).parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]');
+
+/** The labels the dialog's pickers show for the agents it is served, in served order, without the agents `leaving` names. */
+const servedLabels = (...leaving: Agent[]) => TEST_PROVIDERS.filter(({ id }) => !leaving.includes(id)).map(({ label }) => label);
 
 const optionTexts = () => Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent);
 const modelRequests = (pending: Pending[]) => pending.filter((p) => p.body.type === "list_agent_models");
@@ -255,9 +259,7 @@ it("leaves the agents known to be missing out of the default agent picker", asyn
   await click(buttons().find((b) => b.textContent?.includes("Same as console")));
   expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).toEqual([
     "Same as console, Claude Code",
-    "Claude Code",
-    "Grok Build",
-    "Test Agent",
+    ...servedLabels("codex"),
   ]);
 });
 
@@ -267,9 +269,7 @@ it("keeps the project's own missing agent in the picker as not installed until a
   await click(buttons().find((b) => b.textContent?.includes("Codex, Not installed")));
   expect(Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent)).toEqual([
     "Same as console, Claude Code",
-    "Claude Code",
-    "Grok Build",
-    "Test Agent",
+    ...servedLabels("codex"),
     "Codex, Not installed",
   ]);
   await choose("Claude Code");
@@ -360,7 +360,7 @@ it("keeps what the detection leaves to the user described, and the mechanism in 
   const popover = document.querySelector('[role="dialog"][aria-label="About detecting the agent"]');
   expect(popover?.textContent).toContain("looks for");
   expect(Array.from(popover!.querySelectorAll("code")).map((el) => el.textContent)).toEqual([
-    "CLAUDE.md", ".claude", ".codex", "AGENTS.md", ".agents", ".grok", ".test-agent",
+    ...new Set(TEST_PROVIDERS.flatMap(({ detection_markers }) => detection_markers)),
   ]);
   await act(async () => void popover!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   await click(buttons().find((b) => b.textContent?.includes("A parent directory")));

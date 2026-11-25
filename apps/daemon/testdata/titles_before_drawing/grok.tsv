@@ -1,0 +1,14 @@
+# capture<TAB>title<TAB>glyph (U+XXXX, or nothing); a title of * is every title of the capture.
+# Grok Build sets `grok` as it starts, and again once it has drawn; its title captures keep only the
+# title sequences.
+grok_composer_draft.bin	grok
+grok_composer_restored.bin	grok
+grok_native_stashed.bin	grok
+grok_trust_screen.bin	grok
+grok_slash_space_guarded.bin	grok
+grok_slash_zwsp_guarded.bin	grok
+grok_interaction_mcp_card.bin	grok
+grok_interaction_shell_card.bin	grok
+grok_title_cancel_before_output.bin	*
+grok_title_tool.bin	*
+grok_title_turn_end.bin	*

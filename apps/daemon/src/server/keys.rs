@@ -227,12 +227,9 @@ mod tests {
         state
             .remote_access
             .serve_clients(crate::server::browser_router(state.clone()));
-        let free = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
-            .unwrap()
-            .local_addr()
-            .unwrap()
-            .port();
-        state.remote_access.set_port(&state, free).unwrap();
+        // Kept until the test ends, so that no other test of this process is given the port.
+        let free = crate::test_support::ClosedPort::new();
+        state.remote_access.set_port(&state, free.port()).unwrap();
         state.remote_access.set_browser(&state, true).unwrap();
         let old = state.owner_key.current().expect("serving");
         let port = serve_state(state.clone()).await;

@@ -19,9 +19,7 @@ mod refusals;
 mod standing;
 mod started;
 
-pub(crate) use automatic::{
-    automatic_open_choice, candidate_accounts, preferred_weekly_account_except,
-};
+pub(crate) use automatic::{automatic_open_choice, candidate_accounts, switch_target_except};
 #[cfg(test)]
 pub(crate) use automatic::{preferred_weekly_account, soonest_available_account};
 pub(crate) use refusals::{

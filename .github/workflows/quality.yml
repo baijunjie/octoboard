@@ -48,7 +48,7 @@ jobs:
         with:
           profile: checks
       - run: pnpm install --frozen-lockfile
-      - name: Check the desktop scripts and Rust workspace
+      - name: Check the desktop scripts, the daemon's node tests and the Rust workspace
         run: /usr/bin/time -l pnpm verify --release --release-group native --fresh
 
   linux-check:

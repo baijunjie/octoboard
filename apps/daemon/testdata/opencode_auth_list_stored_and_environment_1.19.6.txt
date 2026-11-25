@@ -1,0 +1,14 @@
+┌  Credentials [90m/tmp/probe/data/opencode/auth.json
+│
+●  Anthropic [90mapi
+│
+└  1 credentials
+
+┌  Environment
+│
+●  Anthropic [90mANTHROPIC_API_KEY
+│
+●  OpenAI [90mOPENAI_API_KEY
+│
+└  2 environment variables
+

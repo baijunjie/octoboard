@@ -275,6 +275,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   // The Alert's Try again, or a successful read, takes the Alert away while focus may be on its button. The hand-over is
   // a focus move the user did not make, so the ring follows the last input.
   const importButton = useRef<HTMLButtonElement>(null);
+  const chooseAgainButton = useRef<HTMLButtonElement>(null);
   useRefocusIfLost(() => {
     ringForAutomaticFocus();
     return importButton.current;
@@ -408,11 +409,12 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
             title={t("configuration.import.refreshFailedTitle")}
             message={refreshFailure.message}
             onRetry={() => void refresh(stage)}
+            focusFallback={() => chooseAgainButton.current ?? importButton.current}
             // A failure no retry can change is met by reading the file from the start.
             otherwise={{
               remedy: <Message id="configuration.import.refreshFailedChooseAgain" />,
               action: (
-                <AlertButton kind="action" size="sm" focusOnPress={false} pending={waiting} onPress={() => void choose()}>
+                <AlertButton ref={chooseAgainButton} kind="action" size="sm" focusOnPress={false} pending={waiting} onPress={() => void choose()}>
                   {t("configuration.import.choose.submit")}
                 </AlertButton>
               ),

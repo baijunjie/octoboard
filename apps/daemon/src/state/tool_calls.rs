@@ -101,6 +101,7 @@ impl ToolCalls {
                 let id = self.open_call(&call);
                 self.wait(id);
             }
+            ToolCallChange::WaitsOnUserById(id) => self.wait(Some(id.to_string())),
             ToolCallChange::Ended { id: Some(id) } => {
                 self.open.retain(|call| call.id != id);
                 self.release(Some(id));
@@ -191,6 +192,16 @@ impl AppState {
             .unwrap_or_default()
     }
 
+    /// Whether a tool call of session `id` waits on the user, as its hooks or its records have
+    /// reported: what [`Self::apply_tool_call_change`] answers, read without changing anything.
+    pub fn holds_a_waiting_call(&self, id: &str) -> bool {
+        self.tool_calls
+            .lock()
+            .expect("tool call lock poisoned")
+            .get(id)
+            .is_some_and(|session| !session.waiting.is_empty())
+    }
+
     /// The published prompt of session `id` for call `call` has left the screen, whoever answered
     /// it: the call no longer waits on the user, and once no call does, the session's hand comes
     /// down (`AppState::lower_hand_left_by_prompt`). Lowered under the tool-call lock, so that a
@@ -260,6 +271,29 @@ mod tests {
         assert!(calls.waiting.is_empty());
     }
 
+    /// Whether a session holds a waiting call reads what applying a change answers, and changes
+    /// nothing: a session never reported keeps no entry, and a waiting call that ends is read as
+    /// gone.
+    #[test]
+    fn whether_a_call_waits_is_read_without_changing_anything() {
+        let (state, _dir) = app_state("tool-calls-holds-waiting");
+        assert!(!state.holds_a_waiting_call("s"));
+        assert!(
+            !state.tool_calls.lock().unwrap().contains_key("s"),
+            "asking made an entry"
+        );
+        let input = json!({"questions": []});
+        assert!(state.apply_tool_call_change("s", question("a", &input)));
+        assert!(state.holds_a_waiting_call("s"));
+        assert!(
+            state.holds_a_waiting_call("s"),
+            "asking again changes nothing"
+        );
+        assert!(state.tool_call_activity("s").open);
+        assert!(!state.apply_tool_call_change("s", ToolCallChange::Ended { id: Some("a") }));
+        assert!(!state.holds_a_waiting_call("s"));
+    }
+
     fn question<'a>(id: &'a str, input: &'a serde_json::Value) -> ToolCallChange<'a> {
         ToolCallChange::Started {
             id: Some(id),
@@ -293,6 +327,45 @@ mod tests {
         assert!(state.apply_tool_call_change("s", ended("a")));
         assert!(state.apply_tool_call_change("s", ended("never-started")));
         assert!(!state.apply_tool_call_change("s", ended("q")));
+    }
+
+    /// A call named as waiting by its id waits until its own end, without being opened a second
+    /// time: it stays one open call, the end of another call leaves the hand up, and its own end
+    /// leaves no call open.
+    #[test]
+    fn a_call_named_as_waiting_by_its_id_waits_until_its_own_end() {
+        let (state, _dir) = app_state("tool-calls-waits-by-id");
+        let input = bash();
+        assert!(!state.apply_tool_call_change("s", started("a", "Bash", &input)));
+        assert!(!state.apply_tool_call_change("s", started("b", "Bash", &input)));
+        assert!(state.apply_tool_call_change("s", ToolCallChange::WaitsOnUserById("a")));
+        // Named again, it waits once.
+        assert!(state.apply_tool_call_change("s", ToolCallChange::WaitsOnUserById("a")));
+        let opened = |state: &AppState| {
+            let calls = state.tool_calls.lock().expect("tool call lock poisoned");
+            calls.get("s").map_or(0, |session| {
+                session.open.iter().filter(|call| call.id == "a").count()
+            })
+        };
+        assert_eq!(
+            opened(&state),
+            1,
+            "named as waiting, it is not opened again"
+        );
+        assert!(state.apply_tool_call_change("s", ended("b")));
+        assert!(state.tool_call_activity("s").open);
+        assert!(!state.apply_tool_call_change("s", ended("a")));
+        assert!(!state.tool_call_activity("s").open);
+    }
+
+    /// A call the hooks never reported as started can still be named as waiting: it holds the hand
+    /// until an end names it.
+    #[test]
+    fn a_call_never_started_waits_under_the_id_it_is_named_by() {
+        let (state, _dir) = app_state("tool-calls-waits-unstarted");
+        assert!(state.apply_tool_call_change("s", ToolCallChange::WaitsOnUserById("a")));
+        assert!(state.apply_tool_call_change("s", ended("b")));
+        assert!(!state.apply_tool_call_change("s", ended("a")));
     }
 
     /// A call that waits on nobody raises no hand, however it starts and ends.

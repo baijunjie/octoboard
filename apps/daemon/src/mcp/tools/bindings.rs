@@ -239,6 +239,11 @@ mod tests {
         code_of, fake_live_session, heard_after_marker, output_containing, running,
     };
 
+    /// How the sessions of these tests, which run Claude Code, name one of the tools to their model.
+    fn claude(tool: &str) -> String {
+        qualified_tool_name(AgentId::CLAUDE, tool)
+    }
+
     /// A transfer moves the session to its new owner, tells it whose it now is, and sends the new
     /// owner the note, quoted; the session is the new owner's to drive from then on, not the old
     /// one's.
@@ -461,17 +466,22 @@ mod tests {
         assert_eq!(bound["role"], "coordinator");
         assert_eq!(
             bound["note"],
-            "Your role is coordinator. You now report to the console session `a` (\"Hub\"), your \
-             parent session: take work only from it, or from the user typing in this terminal, \
-             and report to it with `mcp__octoboard__report` once per round of work. This \
-             replaces anything your role description says about being independent and not \
-             calling `mcp__octoboard__report`. `done` with no open items archives you, and is \
-             refused while a session you started is not archived; `needs_decision` or open items \
-             leave you running. Items that are your parent session's to carry out rather than \
-             yours go in `owner_items`, not `open_items`. You keep your child sessions and go on \
-             driving them with `mcp__octoboard__open_session` and the tools that go with it. Your \
-             summary, as your first report, was delivered to your new parent session. You have a \
-             parent session now, so do not call `mcp__octoboard__bind_to_session` again."
+            format!(
+                "Your role is coordinator. You now report to the console session `a` (\"Hub\"), your \
+                 parent session: take work only from it, or from the user typing in this terminal, \
+                 and report to it with `{report}` once per round of work. This \
+                 replaces anything your role description says about being independent and not \
+                 calling `{report}`. `done` with no open items archives you, and is \
+                 refused while a session you started is not archived; `needs_decision` or open items \
+                 leave you running. Items that are your parent session's to carry out rather than \
+                 yours go in `owner_items`, not `open_items`. You keep your child sessions and go on \
+                 driving them with `{open_session}` and the tools that go with it. Your \
+                 summary, as your first report, was delivered to your new parent session. You have a \
+                 parent session now, so do not call `{bind}` again.",
+                report = claude("report"),
+                open_session = claude("open_session"),
+                bind = claude("bind_to_session"),
+            )
         );
         for (caller, parent, expected, role_words) in [
             (
@@ -557,27 +567,31 @@ mod tests {
         assert_eq!(result["role"], "coordinator");
         let note = result["note"].as_str().unwrap();
         assert!(note.contains("no longer yours"));
-        assert!(
-            note.contains(&qualified_tool_name(AgentId::CLAUDE, "inform_session")),
-            "{note}"
-        );
+        assert!(note.contains(&claude("inform_session")), "{note}");
         let released = state.store.get_session("of-a").unwrap().unwrap();
         assert_eq!(state.wire_session(released.clone()).role, Role::Coordinator);
         assert_eq!(released.bound_to, None);
         let told = output_containing(&of_a, "you have no parent session now");
-        assert!(told.contains("`mcp__octoboard__open_session`"), "{told}");
         assert!(
-            told.contains("do not call `mcp__octoboard__report`"),
+            told.contains(&format!("`{}`", claude("open_session"))),
             "{told}"
         );
         assert!(
-            told.contains(
-                "tell your former parent session something with `mcp__octoboard__inform_session`"
-            ),
+            told.contains(&format!("do not call `{}`", claude("report"))),
             "{told}"
         );
         assert!(
-            told.contains("call `mcp__octoboard__get_session` once with no arguments first,"),
+            told.contains(&format!(
+                "tell your former parent session something with `{}`",
+                claude("inform_session")
+            )),
+            "{told}"
+        );
+        assert!(
+            told.contains(&format!(
+                "call `{}` once with no arguments first,",
+                claude("get_session")
+            )),
             "{told}"
         );
         // A blank note adds nothing, and the owner that released it is not told what it did.
@@ -693,6 +707,36 @@ mod tests {
         );
     }
 
+    /// What a session is told about Octoboard's tools names them as its own agent does, whatever
+    /// that agent puts between the server and the tool.
+    #[tokio::test]
+    async fn the_note_of_a_binding_names_tools_by_the_sessions_own_agents_spelling() {
+        let (state, _dir) = peer_state("bind-names-by-agent");
+        let _loose = running(&state, "loose");
+        let _starter = running(&state, "starter");
+        let session = state.store.get_session("loose").unwrap().unwrap();
+        state
+            .store
+            .update_session(&Session {
+                agent: AgentId::TEST,
+                ..session
+            })
+            .unwrap();
+        let result = call(
+            &state,
+            "loose",
+            "bind_to_session",
+            &arguments(json!({ "owner": "starter", "summary": "Auditing." })),
+        )
+        .await
+        .unwrap();
+        let note = result["note"].as_str().unwrap();
+        let report = qualified_tool_name(AgentId::TEST, "report");
+        assert_eq!(report, "mcp__octoboard.report");
+        assert!(note.contains(&format!("`{report}`")), "{note}");
+        assert!(!note.contains("octoboard__"), "{note}");
+    }
+
     /// A session that binds itself to a project session becomes an ordinary bound one: the owner
     /// gets its summary as its first report, its result says which tools it has left, and the
     /// ones it had for owning sessions are refused from then on.
@@ -726,19 +770,20 @@ mod tests {
             "{note}"
         );
         assert!(
-            note.starts_with(
+            note.starts_with(&format!(
                 "Your role is worker. You now report to the project session `starter` (\"Work \
                  starter\"), your parent session: take work only from it, or from the user typing \
-                 in this terminal, and report to it with `mcp__octoboard__report` once per round \
+                 in this terminal, and report to it with `{report}` once per round \
                  of work. This replaces anything your role description says about being \
-                 independent and not calling `mcp__octoboard__report`. `done` with no open items \
+                 independent and not calling `{report}`. `done` with no open items \
                  archives you; `needs_decision` or open items leave you running. Items that are \
                  your parent session's to carry out rather than yours go in `owner_items`, not \
-                 `open_items`. You can no longer start or drive sessions"
-            ),
+                 `open_items`. You can no longer start or drive sessions",
+                report = claude("report")
+            )),
             "{note}"
         );
-        assert!(note.contains("`mcp__octoboard__report`"), "{note}");
+        assert!(note.contains(&format!("`{}`", claude("report"))), "{note}");
         assert!(note.contains("pages you pushed"), "{note}");
         // Its pages are withdrawn with the tools for them, and the panels are told.
         assert!(state.store.list_pages("loose").unwrap().is_empty());
@@ -865,7 +910,7 @@ mod tests {
         );
 
         let first = |delivery: Delivery| {
-            first_report_note(&Ok((String::new(), delivery)), "mcp__octoboard__report")
+            first_report_note(&Ok((String::new(), delivery)), &claude("report"))
         };
         assert_eq!(
             first(Delivery::Written),
@@ -894,10 +939,13 @@ mod tests {
         assert_eq!(
             first_report_note(
                 &Err(anyhow::anyhow!("the pipe broke")),
-                "mcp__octoboard__report"
+                &claude("report")
             ),
-            "Your summary could not be delivered to your new parent session (the pipe broke), so \
-             send it yourself with `mcp__octoboard__report`."
+            format!(
+                "Your summary could not be delivered to your new parent session (the pipe broke), so \
+                 send it yourself with `{}`.",
+                claude("report")
+            )
         );
         // One that may already be there is not to be sent again.
         let uncertain = crate::protocol::CodedError::raised(
@@ -905,7 +953,7 @@ mod tests {
             "not confirmed",
             &[("agent", "Codex")],
         );
-        let note = first_report_note(&Err(uncertain), "mcp__octoboard__report");
+        let note = first_report_note(&Err(uncertain), &claude("report"));
         assert!(
             note.contains("may already have been delivered")
                 && note.contains("do not report it again")

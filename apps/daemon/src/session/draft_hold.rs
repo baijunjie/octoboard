@@ -170,7 +170,7 @@ impl LiveSession {
         let output = self.output_total();
         let now = Instant::now();
         let whole = self.shows_whole_frame(now);
-        let composer = self.input_box(&self.screen_text_undimmed());
+        let composer = self.input_box(&self.box_screen());
         let whole = (whole && self.output_total() == output).then_some(output);
         (composer, whole, now)
     }

@@ -2,7 +2,7 @@
 //! and what deleting its config directory would do. See "Account login" in
 //! `apps/daemon/PROTOCOL.md`.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::agents::AgentId;
 use super::codes::Code;
@@ -70,8 +70,8 @@ pub enum AccountTrashSharing {
 pub enum LoginStatus {
     /// The CLI has started and has not yet said where to authorize.
     Starting,
-    /// Waiting for the user to authorize in a browser: `authorization_url` and `device_code` say
-    /// where and with what.
+    /// Waiting for the user: to authorize in a browser, where `authorization_url` and
+    /// `device_code` say where and with what, or, while `question` is there, to answer it.
     Waiting,
     /// Signed in, confirmed by the agent itself.
     Succeeded,
@@ -99,6 +99,11 @@ pub struct AccountLogin {
     /// The agent's CLI opens the page in the browser by itself and cannot be stopped from it (Grok
     /// Build), so a client must not open it again, only offer to reopen it.
     pub opened_by_agent: bool,
+    /// A question the login waits on. The login goes on once
+    /// `answer_account_login_question` brings the user's answer.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub question: Option<LoginQuestion>,
     /// Why a `failed` login failed, as a coded message of the same shape as an `error`; codes in
     /// `login_failure_code`.
     pub failure: Option<LoginFailure>,
@@ -270,6 +275,96 @@ pub struct SharingItemFailure {
     pub sessions: Vec<String>,
 }
 
+/// A question an agent's sign-in puts to the user. A client words it from its own copy for the
+/// provider's `id` and shows it only if it supports that question and answer kind.
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LoginQuestion {
+    /// Which of the provider's questions this is, in the provider's own vocabulary.
+    pub id: String,
+    /// The values the question's wording names (a path, say), by name.
+    pub params: Params,
+    /// The question in English, for the log; not for display.
+    pub message: String,
+    /// When present, the question takes masked text. The default is a yes/no question.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub answer_kind: Option<LoginAnswerKind>,
+}
+
+impl LoginQuestion {
+    pub fn new(id: &str, message: impl Into<String>, pairs: &[(&str, &str)]) -> Self {
+        Self {
+            id: id.to_string(),
+            params: params(pairs),
+            message: message.into(),
+            answer_kind: None,
+        }
+    }
+
+    pub fn accepts(&self, answer: &LoginAnswer) -> bool {
+        matches!(
+            (&self.answer_kind, answer),
+            (None, LoginAnswer::Yes | LoginAnswer::No)
+                | (
+                    Some(LoginAnswerKind::SecretText),
+                    LoginAnswer::SecretText { .. }
+                )
+        )
+    }
+}
+
+/// The input a login question asks the user for.
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LoginAnswerKind {
+    SecretText,
+}
+
+/// The user's answer to a `LoginQuestion`.
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LoginAnswer {
+    Yes,
+    No,
+    #[serde(untagged)]
+    SecretText {
+        secret_text: SecretLoginText,
+    },
+}
+
+/// One transient line of login input. Its debug representation is always redacted.
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
+#[cfg_attr(test, ts(type = "string"), schemars(transparent))]
+#[derive(Clone, PartialEq, Eq)]
+pub struct SecretLoginText(String);
+
+impl std::fmt::Debug for SecretLoginText {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("[redacted]")
+    }
+}
+
+impl SecretLoginText {
+    pub(crate) fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for SecretLoginText {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let text = String::deserialize(deserializer)?;
+        if text.trim().is_empty() || text.len() > 1024 || text.chars().any(char::is_control) {
+            return Err(serde::de::Error::custom(
+                "expected one short line of login input",
+            ));
+        }
+        Ok(Self(text))
+    }
+}
+
 /// Why a login failed.
 #[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -293,8 +388,9 @@ impl LoginFailure {
 mod tests {
     use crate::protocol::{
         AccountInUse, AccountLogin, AccountSharing, AccountTrashOutcome, AccountTrashSharing,
-        AgentId, Event, LoginStatus, McpServerAuthOutcome, Request, RequestBody,
-        ResetCreditOutcome, SharingCause, SharingFailure, SharingPhase, SharingProgress,
+        AgentId, Event, LoginAnswer, LoginQuestion, LoginStatus, McpServerAuthOutcome, Request,
+        RequestBody, ResetCreditOutcome, SharingCause, SharingFailure, SharingPhase,
+        SharingProgress,
     };
 
     #[test]
@@ -404,6 +500,19 @@ mod tests {
                 account: Some(_)
             }
         ));
+        let request: Request = serde_json::from_str(
+            r#"{"type":"answer_account_login_question","id":"r","agent":"codex","question":"q","answer":"no"}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            request.body,
+            RequestBody::AnswerAccountLoginQuestion {
+                agent: AgentId::CODEX,
+                account: None,
+                answer: LoginAnswer::No,
+                ..
+            }
+        ));
         assert!(
             serde_json::from_str::<Request>(r#"{"type":"use_reset_credit","id":"r"}"#).is_err()
         );
@@ -446,6 +555,7 @@ mod tests {
                 authorization_url: Some("https://accounts.x.ai/oauth2/device".to_string()),
                 device_code: Some("ABCD-1234".to_string()),
                 opened_by_agent: true,
+                question: None,
                 failure: None,
             },
         })
@@ -460,6 +570,26 @@ mod tests {
                     "device_code": "ABCD-1234", "opened_by_agent": true, "failure": null,
                 },
             })
+        );
+        let asking = serde_json::to_value(AccountLogin {
+            agent: AgentId::GROK,
+            account: Some("a".to_string()),
+            status: LoginStatus::Waiting,
+            authorization_url: None,
+            device_code: None,
+            opened_by_agent: false,
+            question: Some(LoginQuestion::new(
+                "keep_token",
+                "Keep the token at /tmp/t?",
+                &[("path", "/tmp/t")],
+            )),
+            failure: None,
+        })
+        .unwrap();
+        assert_eq!(
+            asking["question"],
+            serde_json::json!({"id": "keep_token", "params": {"path": "/tmp/t"},
+                "message": "Keep the token at /tmp/t?"})
         );
     }
 

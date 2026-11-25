@@ -18,7 +18,7 @@ pub(super) enum Stub {
     Unreadable,
 }
 
-impl Registry for Stub {
+impl VersionSources for Stub {
     fn latest_version(
         &self,
         _package: &str,
@@ -30,15 +30,63 @@ impl Registry for Stub {
             Stub::Unreadable => Err(Failure::Unreadable),
         }
     }
+
+    fn manifest_version(
+        &self,
+        _url: &str,
+        _field: &str,
+        _shell_env: &HashMap<String, String>,
+    ) -> std::result::Result<String, Failure> {
+        Err(Failure::Failed("a manifest was asked".to_owned()))
+    }
 }
 
-/// What `registry()` is under test: nothing is asked of the network.
-pub(super) struct NoRegistry;
+/// A network with only manifests on it, which answers `1.5.15` for the manifest and field it
+/// records being asked for.
+#[derive(Default)]
+struct ManifestOnly {
+    asked: std::sync::Mutex<Vec<(String, String)>>,
+}
 
-impl Registry for NoRegistry {
+impl VersionSources for ManifestOnly {
     fn latest_version(
         &self,
         _package: &str,
+        _shell_env: &HashMap<String, String>,
+    ) -> std::result::Result<String, Failure> {
+        Err(Failure::Failed("the registry was asked".to_owned()))
+    }
+
+    fn manifest_version(
+        &self,
+        url: &str,
+        field: &str,
+        _shell_env: &HashMap<String, String>,
+    ) -> std::result::Result<String, Failure> {
+        self.asked
+            .lock()
+            .unwrap()
+            .push((url.to_owned(), field.to_owned()));
+        Ok("1.5.15".to_owned())
+    }
+}
+
+/// What `version_sources()` is under test: nothing is asked of the network.
+pub(super) struct NoNetwork;
+
+impl VersionSources for NoNetwork {
+    fn latest_version(
+        &self,
+        _package: &str,
+        _shell_env: &HashMap<String, String>,
+    ) -> std::result::Result<String, Failure> {
+        Err(Failure::Failed("no network under test".to_owned()))
+    }
+
+    fn manifest_version(
+        &self,
+        _url: &str,
+        _field: &str,
         _shell_env: &HashMap<String, String>,
     ) -> std::result::Result<String, Failure> {
         Err(Failure::Failed("no network under test".to_owned()))
@@ -116,6 +164,21 @@ fn a_package_directory_of_the_agent_is_npm_wherever_the_prefix_is() {
         ),
         CliInstallMethod::Npm
     );
+}
+
+#[cfg(windows)]
+#[test]
+fn an_npm_batch_launcher_is_updated_in_the_prefix_that_holds_its_package() {
+    let root = crate::test_support::ScratchDir::new("npm-batch-install");
+    let package = root.join("node_modules/@openai/codex");
+    std::fs::create_dir_all(&package).unwrap();
+    std::fs::write(package.join("package.json"), "{}").unwrap();
+    let program = root.join("codex.cmd");
+    std::fs::write(&program, "").unwrap();
+
+    let install = Install::of_binary(codex(), &ResolvedBinary::new(program));
+    assert_eq!(install.method, CliInstallMethod::Npm);
+    assert_eq!(install.npm_package(), Some("@openai/codex"));
 }
 
 #[test]
@@ -329,6 +392,58 @@ fn an_npm_install_is_updated_in_its_own_prefix_with_the_npm_on_the_path() {
 }
 
 #[test]
+fn an_npm_install_is_checked_and_updated_using_its_own_package() {
+    struct Registry;
+
+    impl VersionSources for Registry {
+        fn latest_version(
+            &self,
+            package: &str,
+            _shell_env: &HashMap<String, String>,
+        ) -> Result<String, Failure> {
+            match package {
+                "example-cli" => Ok("1.2.0".to_owned()),
+                "@example/cli" => Ok("2.3.0".to_owned()),
+                _ => panic!("unexpected npm package {package}"),
+            }
+        }
+
+        fn manifest_version(
+            &self,
+            _url: &str,
+            _field: &str,
+            _shell_env: &HashMap<String, String>,
+        ) -> Result<String, Failure> {
+            panic!("unexpected manifest lookup")
+        }
+    }
+
+    let packaging = CliPackaging {
+        npm_packages: &["example-cli", "@example/cli"],
+        ..CliPackaging::NONE
+    };
+    let dir = crate::test_support::ScratchDir::new("cli-multiple-packages");
+    let bin = dir.join("bin");
+    executable(&bin.join(NPM));
+    let env = env_with_path(&[&bin]);
+
+    for (package, version) in [("example-cli", "1.2.0"), ("@example/cli", "2.3.0")] {
+        let binary =
+            ResolvedBinary::new(dir.join("lib/node_modules").join(package).join("bin/cli"));
+        let install = Install::of_binary(&packaging, &binary);
+
+        assert_eq!(install.method, CliInstallMethod::Npm);
+        assert_eq!(install.npm_package(), Some(package));
+        assert_eq!(
+            latest::latest_version(AgentId::TEST, &packaging, &install, &env, &Registry),
+            Some(Ok(version.to_owned()))
+        );
+        let command = install.update_command(&packaging, &binary, &env).unwrap();
+        assert_eq!(args_of(&command).last(), Some(&format!("{package}@latest")));
+    }
+}
+
+#[test]
 fn a_volta_install_is_updated_without_a_prefix_and_one_with_no_npm_not_at_all() {
     let install = Install::of_path(
         codex(),
@@ -437,6 +552,39 @@ fn the_install_of_a_binary_is_told_after_following_every_link() {
         Install::of_binary(codex(), &ResolvedBinary::new(&lone)).method,
         CliInstallMethod::Unknown
     );
+}
+
+/// An installer whose directory can have any name is told by a marker file its packaging names
+/// beside the binary, a path from the binary's directory with `..` for a parent, wherever that
+/// directory lies and whatever it is called; the same layout without the marker, a directory where
+/// the marker should be, and packaging that names no marker tell nothing.
+#[test]
+fn a_marker_file_beside_the_binary_tells_a_native_install_wherever_it_lies() {
+    static MARKED: CliPackaging = CliPackaging {
+        native_markers: &[&["..", "state", "installed.json"]],
+        ..CliPackaging::NONE
+    };
+    let dir = crate::test_support::ScratchDir::new("cli-marker");
+    let launcher = dir.join("any name/bin/agent");
+    executable(&launcher);
+    let install = |packaging: &CliPackaging, binary: &Path| {
+        Install::of_binary(packaging, &ResolvedBinary::new(binary)).method
+    };
+    assert_eq!(install(&MARKED, &launcher), CliInstallMethod::Unknown);
+
+    let marker = dir.join("any name/state/installed.json");
+    std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+    std::fs::write(&marker, "{}").unwrap();
+    assert_eq!(install(&MARKED, &launcher), CliInstallMethod::Native);
+    assert_eq!(
+        install(&CliPackaging::NONE, &launcher),
+        CliInstallMethod::Unknown
+    );
+
+    // A directory where the marker should be is no marker.
+    std::fs::remove_file(&marker).unwrap();
+    std::fs::create_dir_all(&marker).unwrap();
+    assert_eq!(install(&MARKED, &launcher), CliInstallMethod::Unknown);
 }
 
 // -- checks and updates against stand-in CLIs ---------------------------------------------------
@@ -1062,6 +1210,7 @@ fn an_update_through_npm_runs_npm_in_the_installs_prefix() {
 
     let prepared = prepare(AgentId::CODEX, env.clone()).expect("an npm install is updated");
     assert_eq!(prepared.found.install_method, CliInstallMethod::Npm);
+    assert_eq!(prepared.found.npm_package, Some("@openai/codex"));
     let status = run_update_tool(
         &prepared.command,
         &env,
@@ -1320,6 +1469,7 @@ async fn a_check_begun_before_an_update_is_dropped_when_it_lands_after() {
         agent: AgentId::CODEX,
         installed_version: Some(installed.to_owned()),
         install_method: CliInstallMethod::Native,
+        npm_package: None,
         latest_version: None,
         latest_error: None,
         latest_detail: None,
@@ -1354,6 +1504,7 @@ async fn an_update_that_ends_without_a_word_is_recorded_as_failed() {
         agent: AgentId::CODEX,
         installed_version: Some("0.166.0".to_owned()),
         install_method: CliInstallMethod::Native,
+        npm_package: None,
         latest_version: None,
         latest_error: None,
         latest_detail: None,
@@ -1390,6 +1541,141 @@ async fn an_update_that_ends_without_a_word_is_recorded_as_failed() {
     assert_eq!(state.agent_clis.statuses(), vec![announced]);
 }
 
+/// A CLI its own installer puts at `~/.local/bin/standin`, whose maker publishes a manifest for the
+/// platform the tests run on and for one other, and which has no check of its own.
+static MANIFESTED: CliPackaging = CliPackaging {
+    native_layouts: &[&[".local", "bin", "standin"]],
+    native_manifest: Some(crate::adapter::ManifestLatest {
+        urls: &[
+            crate::adapter::ManifestUrl {
+                os: std::env::consts::OS,
+                arch: std::env::consts::ARCH,
+                url: "https://updates.example.com/here.json",
+            },
+            crate::adapter::ManifestUrl {
+                os: "plan9",
+                arch: "mips",
+                url: "https://updates.example.com/there.json",
+            },
+        ],
+        version_field: "latest",
+    }),
+    ..CliPackaging::NONE
+};
+
+#[test]
+fn a_native_install_with_a_manifest_and_no_check_of_its_own_reads_the_manifest_of_its_platform() {
+    let install = Install::of_path(&MANIFESTED, Path::new("/Users/someone/.local/bin/standin"));
+    let network = ManifestOnly::default();
+
+    let version = latest::latest_version(
+        AgentId::TEST,
+        &MANIFESTED,
+        &install,
+        &HashMap::new(),
+        &network,
+    );
+
+    assert_eq!(version, Some(Ok("1.5.15".to_owned())));
+    assert_eq!(
+        *network.asked.lock().unwrap(),
+        vec![(
+            "https://updates.example.com/here.json".to_owned(),
+            "latest".to_owned()
+        )]
+    );
+}
+
+#[test]
+fn a_native_install_with_no_manifest_for_its_platform_has_nothing_to_ask() {
+    static ELSEWHERE: CliPackaging = CliPackaging {
+        native_layouts: &[&[".local", "bin", "standin"]],
+        native_manifest: Some(crate::adapter::ManifestLatest {
+            urls: &[crate::adapter::ManifestUrl {
+                os: "plan9",
+                arch: "mips",
+                url: "https://updates.example.com/there.json",
+            }],
+            version_field: "latest",
+        }),
+        ..CliPackaging::NONE
+    };
+    let install = Install::of_path(&ELSEWHERE, Path::new("/Users/someone/.local/bin/standin"));
+    let network = ManifestOnly::default();
+
+    let version = latest::latest_version(
+        AgentId::TEST,
+        &ELSEWHERE,
+        &install,
+        &HashMap::new(),
+        &network,
+    );
+
+    assert_eq!(version, None);
+    assert!(network.asked.lock().unwrap().is_empty());
+}
+
+#[test]
+fn a_manifest_is_chosen_by_the_platform_rust_names() {
+    let manifest = MANIFESTED.native_manifest.as_ref().unwrap();
+    assert_eq!(
+        manifest.url_for("plan9", "mips"),
+        Some("https://updates.example.com/there.json")
+    );
+    assert_eq!(manifest.url_for("plan9", "x86_64"), None);
+    assert_eq!(
+        manifest.url_here(),
+        Some("https://updates.example.com/here.json")
+    );
+}
+
+#[test]
+fn a_manifest_s_version_is_its_field_of_the_json_it_serves() {
+    use std::io::{Read, Write};
+
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = std::thread::spawn(move || {
+        let mut stream = crate::test_support::port_probe::accept_past_probes(&listener);
+        let mut request = [0u8; 4096];
+        let read = stream.read(&mut request).unwrap();
+        let body =
+            r#"{"version": "1.5.15", "url": "https://example.com/cli.tar.gz", "sha512": "00"}"#;
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        )
+        .unwrap();
+        String::from_utf8_lossy(&request[..read]).into_owned()
+    });
+    let url = format!("http://127.0.0.1:{port}/manifests/darwin_arm64.json");
+
+    let version = latest::Network::LOCAL.manifest_version(&url, "version", &HashMap::new());
+
+    assert_eq!(version, Ok("1.5.15".to_owned()));
+    let request = server.join().unwrap();
+    assert!(
+        request.starts_with("GET /manifests/darwin_arm64.json "),
+        "{request}"
+    );
+}
+
+/// The network as it is read outside the tests asks nothing over plain HTTP: a manifest at an
+/// `http://` address is a failed lookup, and its server is never asked.
+#[test]
+fn a_manifest_over_plain_http_is_refused() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let url = format!("http://127.0.0.1:{port}/manifest.json");
+
+    let version = latest::Network::PUBLIC.manifest_version(&url, "version", &HashMap::new());
+
+    assert!(matches!(version, Err(Failure::Failed(_))), "{version:?}");
+    crate::test_support::assert_only_probes_connected(&listener);
+}
+
 #[test]
 fn a_socks_proxy_that_refuses_is_a_failed_lookup_and_not_a_panic() {
     let closed = crate::test_support::ClosedPort::new();
@@ -1397,7 +1683,7 @@ fn a_socks_proxy_that_refuses_is_a_failed_lookup_and_not_a_panic() {
     let env = HashMap::from([("ALL_PROXY".to_owned(), format!("socks5://127.0.0.1:{port}"))]);
     let started = Instant::now();
 
-    let result = latest::NpmRegistry.latest_version("@openai/codex", &env);
+    let result = latest::Network::PUBLIC.latest_version("@openai/codex", &env);
 
     assert!(matches!(result, Err(Failure::Failed(_))), "{result:?}");
     assert!(started.elapsed() < crate::test_support::PATIENCE);
@@ -1501,6 +1787,7 @@ async fn a_check_that_lands_keeps_the_update_the_status_carries() {
         agent: AgentId::CODEX,
         installed_version: Some(installed.to_owned()),
         install_method: CliInstallMethod::Native,
+        npm_package: None,
         latest_version: None,
         latest_error: None,
         latest_detail: None,
@@ -1713,6 +2000,7 @@ async fn cli_statuses_cover_registered_providers_in_registry_order_after_each_is
                 agent,
                 installed_version: Some(format!("version-{}", agent.wire_name())),
                 install_method: CliInstallMethod::Unknown,
+                npm_package: None,
                 latest_version: None,
                 latest_error: None,
                 latest_detail: None,

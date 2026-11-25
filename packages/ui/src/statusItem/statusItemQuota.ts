@@ -1,6 +1,6 @@
 import { consoleAccount } from "../accounts/accountInheritance";
 import { defaultAccountName, listedAgents, servedAgents } from "../agents/agents";
-import { providerShortName } from "../agents/providers";
+import { hasPlanQuota, providerShortName } from "../agents/providers";
 import type { Translate } from "../i18n/catalog";
 import { ellipsize } from "../i18n/displayColumns";
 import { isolate } from "../i18n/isolate";
@@ -133,9 +133,10 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
  * account that is turned off, except the one `inUse` names (the account the selected running session is on), which
  * is listed and marked "Disabled". Nothing for an agent that is not added, not available or not yet determined, or
  * whose accounts are all turned off: unlike the rail's panel, which lists an undetermined agent, a submenu
- * without readings to fill it would be empty. */
+ * without readings to fill it would be empty. Nor for an agent whose provider declares no plan quota
+ * (`hasPlanQuota`). */
 export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, currentConsole?: Console, inUse?: { agent: Agent; account: string | null }): StatusItemSubmenuDraft[] {
-  const available = listedAgents(source.addedAgents, servedAgents(source.providers)).filter((agent) => source.agentAvailability.get(agent)?.availability === "available");
+  const available = listedAgents(source.addedAgents, servedAgents(source.providers)).filter((agent) => source.agentAvailability.get(agent)?.availability === "available" && hasPlanQuota(source.providers, agent));
   return listedQuotaAccounts(available, source, inUse).flatMap(({ agent, rows }): StatusItemSubmenuDraft[] => {
     const items = rows.flatMap((row, index): StatusItemSubmenuDraftItem[] => [
       ...(index > 0 ? [{ kind: "separator" as const }] : []),

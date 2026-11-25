@@ -98,7 +98,7 @@ const COPY: { [F in BooleanField]: Copy<F> } = {
     section: "memory",
     order: 1,
     label: "settings.memory.enabled.label",
-    description: { on: "settings.memory.enabled.description.on", off: "settings.memory.enabled.description.off" },
+    description: { on: "settings.memory.enabled.sharedDescription.on", off: "settings.memory.enabled.sharedDescription.off" },
     // It does not travel in a configuration document, so no import card words it.
     consequence: null,
   },

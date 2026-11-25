@@ -19,6 +19,8 @@ pub enum Select {
     /// The strings at this place: each step is an object's key, or `*` for every value of an
     /// object or an array.
     At(&'static [&'static str]),
+    /// Several selected paths that may hold strings.
+    AnyOf(&'static [&'static [&'static str]]),
 }
 
 /// `rest` below `dir`, for a `moved` answer: `dir` itself, as it is spelled, when `rest` is
@@ -68,6 +70,18 @@ pub fn rewrite_paths(
     moved: &dyn Fn(&Path) -> Option<PathBuf>,
     matters_unread: &dyn Fn(&str) -> bool,
 ) -> io::Result<bool> {
+    try_rewrite_paths(file, limit, select, &|path| Ok(moved(path)), matters_unread)
+}
+
+/// Like [`rewrite_paths`], with a path resolver that may refuse a selected path. On refusal the
+/// entire registry keeps its original bytes.
+pub fn try_rewrite_paths(
+    file: &Path,
+    limit: usize,
+    select: Select,
+    moved: &dyn Fn(&Path) -> io::Result<Option<PathBuf>>,
+    matters_unread: &dyn Fn(&str) -> bool,
+) -> io::Result<bool> {
     // What a rewrite of this file cut short by its process's end left staged beside it is cleared
     // away first, whether or not anything is rewritten now.
     remove_stale_staged(&super::canonical(file).unwrap_or_else(|_| file.to_path_buf()));
@@ -77,7 +91,7 @@ pub fn rewrite_paths(
             Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(false),
             Err(err) => return Err(err),
         };
-        let Some(rewritten) = rewritten(&text, select, moved, matters_unread)
+        let Some(rewritten) = try_rewritten(&text, select, moved, matters_unread)
             .map_err(|err| io::Error::other(format!("`{}` {err}", file.display())))?
         else {
             return Ok(false);
@@ -104,10 +118,20 @@ pub fn rewrite_paths(
 
 /// The document `text` with the moved paths replaced; `None` when there is nothing to move, or
 /// the text is not JSON and does not matter. The error says what is wrong with the file.
+#[cfg(test)]
 fn rewritten(
     text: &str,
     select: Select,
     moved: &dyn Fn(&Path) -> Option<PathBuf>,
+    matters_unread: &dyn Fn(&str) -> bool,
+) -> Result<Option<String>, String> {
+    try_rewritten(text, select, &|path| Ok(moved(path)), matters_unread)
+}
+
+fn try_rewritten(
+    text: &str,
+    select: Select,
+    moved: &dyn Fn(&Path) -> io::Result<Option<PathBuf>>,
     matters_unread: &dyn Fn(&str) -> bool,
 ) -> Result<Option<String>, String> {
     let mut after: Value = match serde_json::from_str(text) {
@@ -116,9 +140,15 @@ fn rewritten(
         Err(err) => return Err(format!("is not JSON: {err}")),
     };
     let mut changes: Vec<(String, String)> = Vec::new();
+    let mut refusal = None;
     let mut change = |string: &mut String| {
-        let Some(new) = moved(Path::new(string.as_str())) else {
-            return;
+        let new = match moved(Path::new(string.as_str())) {
+            Ok(Some(new)) => new,
+            Ok(None) => return,
+            Err(err) => {
+                refusal.get_or_insert(err);
+                return;
+            }
         };
         let Some(new) = new.to_str() else {
             return;
@@ -131,6 +161,14 @@ fn rewritten(
     match select {
         Select::Any => each_string(&mut after, &mut change),
         Select::At(steps) => each_string_at(&mut after, steps, &mut change),
+        Select::AnyOf(paths) => {
+            for steps in paths {
+                each_string_at(&mut after, steps, &mut change);
+            }
+        }
+    }
+    if let Some(err) = refusal {
+        return Err(err.to_string());
     }
     if changes.is_empty() {
         return Ok(None);

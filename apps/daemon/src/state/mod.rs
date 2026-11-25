@@ -163,6 +163,9 @@ pub struct AppState {
     /// MCP token to session id. A token is issued per launch and dropped when the process goes
     /// away, so the MCP surface is reachable only by the children the daemon itself started.
     mcp_tokens: RwLock<HashMap<String, String>>,
+    /// The sessions whose MCP server has answered a listing of its tools under the token the
+    /// session holds now ([`mcp_tokens`]): forgotten with the token.
+    mcp_tools_listed: RwLock<HashSet<String>>,
     /// Per-session turn bookkeeping, which is what makes a synthesised report possible without
     /// correlating turn ids. Entries are added on a turn start and removed when the session's
     /// process goes away.
@@ -239,6 +242,7 @@ pub struct AppState {
     pub conversation_feeds: ConversationFeeds,
     /// The context window each Claude Code session's status line last reported.
     pub context_windows: crate::records::context::ReportedWindows,
+    pub launch_context: crate::records::context::LaunchReports,
     /// The repositories' refs under watch, so a commit made outside the daemon is re-read
     /// (`crate::project_git::watch`).
     pub git_watch: crate::project_git::watch::Watch,
@@ -427,6 +431,8 @@ pub struct AppState {
     /// The processes each agent launch started outside its terminal session, stopped when the
     /// launch ends (`crate::processes::ledger`).
     pub process_ledger: Arc<crate::processes::ledger::ProcessLedger>,
+    /// The daemon-owned directory for persistent background query homes.
+    pub agent_query_homes: std::path::PathBuf,
     /// The colours last reported by any client, which a terminal answers its program's colour
     /// queries with when no client of its own has reported and its launch appearance is not newer
     /// (`crate::terminal::display`). Seeded from the store at start and stored on each change
@@ -445,6 +451,7 @@ impl AppState {
         saved_output_dir: std::path::PathBuf,
         consoles_dir: std::path::PathBuf,
         handoff_dir: std::path::PathBuf,
+        agent_query_homes: std::path::PathBuf,
         process_ledger: Arc<crate::processes::ledger::ProcessLedger>,
     ) -> Self {
         let (events, _) = broadcast::channel(1024);
@@ -458,6 +465,7 @@ impl AppState {
             install_exe,
             live: RwLock::new(LiveSessions::default()),
             mcp_tokens: RwLock::new(HashMap::new()),
+            mcp_tools_listed: RwLock::new(HashSet::new()),
             turns: Mutex::new(HashMap::new()),
             left_for_limit: Mutex::new(HashMap::new()),
             quota_recovery: Default::default(),
@@ -491,6 +499,7 @@ impl AppState {
             record_hints: Default::default(),
             conversation_feeds: Default::default(),
             context_windows: Default::default(),
+            launch_context: Default::default(),
             git_watch: Default::default(),
             ref_moves: Default::default(),
             agent_availability: RwLock::new(
@@ -511,6 +520,7 @@ impl AppState {
             saved_output: SavedOutput::new(saved_output_dir),
             consoles_dir,
             handoff_dir,
+            agent_query_homes,
             browse_gate: Arc::new(crate::browse::lane::Gate::with_budget()),
             pasted_image_uploads: crate::session::upload::UploadBudget::images(),
             attachment_uploads: crate::session::upload::UploadBudget::attachments(),

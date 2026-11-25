@@ -1,0 +1,6 @@
+{"format":1,"hook_event_name":"turn.started","turn_id":"msg_20c2573e90016121x02tpm3uQQ","prompt":"M35 measured prompt","session_id":"ses_df3da984bffek6V2mhSk2Fomf5"}
+{"format":1,"hook_event_name":"question.asked","session_id":"ses_df3da984bffek6V2mhSk2Fomf5","request_id":"frm_20c257415001OB8TlPlqQsCaQg","tool":"question","call_id":"probe-call","input":{"questions":[{"question":"Pick a probe value","header":"Probe","multiple":false,"options":[{"label":"A","description":"First choice"},{"label":"B","description":"Second choice"}]}]}}
+{"format":1,"hook_event_name":"question.replied","session_id":"ses_df3da984bffek6V2mhSk2Fomf5","request_id":"frm_20c257415001OB8TlPlqQsCaQg"}
+{"format":1,"hook_event_name":"record.changed","session_id":"ses_df3da984bffek6V2mhSk2Fomf5"}
+{"format":1,"hook_event_name":"record.changed","session_id":"ses_df3da984bffek6V2mhSk2Fomf5"}
+{"format":1,"hook_event_name":"session.idle","turn_id":"msg_20c2573e90016121x02tpm3uQQ","last_assistant_message":"M35 stand-in answer","session_id":"ses_df3da984bffek6V2mhSk2Fomf5"}

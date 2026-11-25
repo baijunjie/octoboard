@@ -35,10 +35,23 @@ daemon to its OS-token and source rules, are in `docs/structure/daemon.md`.
   outside any lock (`start_kill_leftovers` then `PendingSweep::wait`).
 - **The daemon spawns an agent directly, not inside a shell.** A shell in between changes quoting, signals and the
   process tree the sweep depends on.
-- **The environment an agent launches with is stripped of every provider's agent-session markers, which are
-  enumerated, never matched by prefix.** A daemon started inside an agent session would hand that session's identity to
-  every agent it launches, whichever agent is launched; `GROK_HOME`, `CODEX_HOME` and similar are user settings a
-  prefix would drop.
+- **Free text the daemon puts on an agent's command line (a first task) is placed where the CLI cannot read it as an
+  option or a subcommand**: after a bare `--`, or joined to its flag (`--prompt=<text>`), as that CLI was measured to
+  take it; a CLI that still dispatches a subcommand after `--` (Claude Code) gets the argument shaped by its provider. A
+  task can start with `-` (a list) or be one word that names a subcommand (`update`), and the CLI's parser then takes it
+  for flags or runs the subcommand, and the task is lost while the daemon counts it as sent.
+- **The environment an agent launches with is stripped of every provider's agent-session markers, which are enumerated,
+  never matched by prefix.** A daemon started inside an agent session would hand that session's identity to every agent
+  it launches, whichever agent is launched; `GROK_HOME`, `CODEX_HOME` and similar are user settings a prefix would drop.
+  Everything a launch sets on the agent's process over the snapshot goes through `env_shell::session_environment_with`,
+  which records it, and every reading of an
+  inherited environment that is to stand for the user's goes through `env_shell::outside_session`, which puts each
+  recorded variable back by value; only Octoboard's own markers, the snapshot shell's terminal variables and the
+  variables a provider declares as its session's are filtered by name. A value an agent's CLI sets for its commands
+  under a name users also set is declared by the provider with its exact value and recorded the same way, never filtered
+  by name; the daemon makes its own environment what `env_shell::outside_session` gives of it, once at start and only
+  when that environment was inherited from a session (`env_shell::forget_inherited_session`), which a helper mode of the
+  executable never does.
 - **A helper process gets the launch key never in its arguments or environment.** Use an owner-only file
   (`key_file.rs`) or the path variable `OCTOBOARD_DAEMON_CREDENTIAL_PATH`; no variable a git hook needs has `KEY`,
   `SECRET` or `TOKEN` in its name, which agents' filters strip. Arguments show in every process listing and agents write
@@ -186,7 +199,9 @@ code does it is in the module docs of `session/draft_clear.rs`, `session/compose
   constants, with no model or message text. Its wait for the agent's answer is bounded by the agent's pace on the slowest
   host (Windows ARM64 under emulation) and ends as soon as what it waits for is seen.
 - **One key per write, never joined to a message or to another key, and never repeated blind.** Read what the first did
-  (screen, or `AppState::turn_ends` compared with a reading taken before the key) before another press.
+  (screen, or `AppState::turn_ends` compared with a reading taken before the key) before another press. The one joined
+  write is keys an interaction reader chooses together (`NextKey::PressAll`) because the screen between them shows
+  nothing to read; they are gated and waited on as one key.
 - **Every refusal, start of a wait, discard or write with the user's text logs a `tracing::warn!` naming the session,
   never the text.** The daemon log is the only trace afterwards.
 - **The daemon's own terminal writes are semantic `Input` values (`platform::term`, `Pty::write_input`) that each

@@ -10,10 +10,15 @@
 //!
 //! [`AgentId`] names a registered provider; [`AgentId::ALL`] is the registry's order.
 
+pub(crate) mod antigravity;
 pub(crate) mod claude;
 pub(crate) mod codex;
+pub(crate) mod copilot;
 pub(crate) mod grok;
 pub(crate) mod layout;
+pub(crate) mod opencode;
+pub(crate) mod pi;
+pub(crate) mod qwen;
 #[cfg(test)]
 pub(crate) mod test_provider;
 
@@ -25,18 +30,26 @@ use layout::AgentLayout;
 
 use crate::platform::term::QuitKeys;
 
-/// Every registered provider's descriptor, in the registry's order, which every per-provider
-/// listing keeps. Registering a provider is one line here and one in `crate::adapter`'s registry.
+/// Every registered provider's descriptor, in the registry's order. The behavior registry
+/// in `crate::adapter` registers the same providers.
 const REGISTRY: &[&ProviderDescriptor] = &[
     &claude::DESCRIPTOR,
     &codex::DESCRIPTOR,
     &grok::DESCRIPTOR,
+    &antigravity::DESCRIPTOR,
+    &copilot::DESCRIPTOR,
+    &opencode::DESCRIPTOR,
+    &qwen::DESCRIPTOR,
+    &pi::DESCRIPTOR,
     #[cfg(test)]
     &test_provider::DESCRIPTOR,
 ];
 
 /// How many providers are registered.
 pub const PROVIDER_COUNT: usize = REGISTRY.len();
+
+/// An agent's version as major, minor, patch.
+pub type AgentVersion = (u32, u32, u32);
 
 /// A provider's id: the id of one of the registered providers, so it is only ever made from the
 /// registry ([`AgentId::from_wire_name`], deserializing, or a provider's own constant). Ids that
@@ -78,7 +91,11 @@ impl AgentId {
     }
 
     /// The provider's descriptor.
-    pub const fn descriptor(self) -> &'static ProviderDescriptor {
+    pub fn descriptor(self) -> &'static ProviderDescriptor {
+        #[cfg(test)]
+        if let Some(variant) = test_provider::variant_of(self) {
+            return variant;
+        }
         REGISTRY[self.index()]
     }
 
@@ -168,15 +185,29 @@ pub struct ProviderDescriptor {
     /// Session marker variables removed from an inherited login-shell environment.
     /// Enumerate measured markers; user configuration and authentication must survive.
     pub inherited_session_vars: &'static [&'static str],
+    /// What the CLI was measured to set, for the commands it runs, under names a user also sets:
+    /// each name with the exact value. A daemon started from such a command would take the value
+    /// for the user's, and a name like these cannot be filtered: the user's own setting would go
+    /// with it. So a launch records each as it records what it sets itself
+    /// (`crate::env_shell::session_environment_with`), and an inherited variable holding exactly
+    /// this value is put back as the launch environment had it, while any other value is kept.
+    /// Only values that are the same in every session belong here; a variable of the CLI's own
+    /// that marks its session, or whose value varies, goes in
+    /// [`Self::inherited_session_vars`]. The measurements are in `docs/agent-cli-reference.md`,
+    /// "Whether a command the agent runs sees the launch's variables unchanged".
+    pub command_environment: &'static [(&'static str, &'static str)],
     /// The instruction file read from the working directory, matched by exact spelling.
     pub instruction_file: &'static str,
     /// What a line of [`Self::instruction_file`] starts with, followed by the path of a file beside
     /// it, for the provider to read that file's text in the line's place; `None` where the provider
     /// is not known to read such a line.
     pub instruction_import_prefix: Option<&'static str>,
-    /// What the provider puts before `<server>__<tool>` when it presents an MCP server's tool to
+    /// What the provider puts before the server's name when it presents an MCP server's tool to
     /// its model.
     pub tool_name_prefix: &'static str,
+    /// What the provider puts between the server's name and the tool's: the model sees
+    /// `<prefix><server><separator><tool>`.
+    pub tool_name_separator: &'static str,
     /// The provider's own tool for asking the user a question with options to pick from, when it
     /// has one whose name is known.
     pub ask_question_tool: Option<&'static str>,
@@ -192,12 +223,13 @@ pub struct ProviderDescriptor {
     /// Whether other providers can be made compatible with this one, reading its configuration
     /// (MCP servers, instructions) the way it does.
     pub compatibility_source: bool,
-    /// Whether the agent's own memory across sessions (the notes it keeps and reads back by itself,
-    /// apart from the instruction files) can be turned off for one launch, without a change to the
-    /// agent's or the user's configuration. Where it can, the provider's launch turns it off when
+    /// Whether the agent keeps a memory of its own across sessions (the notes it keeps and reads
+    /// back by itself, apart from the instruction files), and if so whether one launch can turn it
+    /// off. Where it can, the provider's launch turns it off when
     /// [`crate::adapter::LaunchSpec::native_memory_off`] says so, which generic code sets for every
-    /// session (`crate::adapter::turns_native_memory_off`).
-    pub native_memory_switch: bool,
+    /// session (`crate::adapter::turns_native_memory_off`). Served to clients, which name the
+    /// agents whose memory is turned off and those whose memory is left as the user set it.
+    pub native_memory: NativeMemory,
     /// The settings the user can make for the provider, in the order a client lists them. The
     /// provider reads its own at launch (`crate::adapter::LaunchSpec::settings`).
     pub settings: &'static [SettingDescriptor],
@@ -434,8 +466,9 @@ impl ProviderSettings {
     }
 }
 
-/// The names at a project's top level that point at a provider: its own, which point at it alone,
-/// and generic ones it reads that other providers may read as well. A generic name points at the
+/// The names at a project's top level that point at a provider: its own, which point at it alone
+/// (none for a provider no name points at alone), and generic ones it reads that other providers
+/// may read as well. A generic name points at the
 /// first registered provider that reads it, and at none while any provider reading it is marked by
 /// its own names (`crate::agents::detect`).
 #[derive(Debug)]
@@ -490,6 +523,14 @@ pub struct Capabilities {
     pub console_trust: ConsoleTrust,
     /// Its accounts can share the default account's configuration.
     pub config_sharing: bool,
+    /// Its accounts beyond the default can each be given a directory of their own, the agent's
+    /// configuration directory for that account. False for an agent that cannot be pointed at a
+    /// second one without changing something every program it starts would inherit: it has the
+    /// default account only, and the daemon refuses to add, import or point another.
+    pub owned_accounts: bool,
+    /// Can sign an account in without a terminal (`AccountOps::login`); otherwise the user signs
+    /// in with the agent's own CLI, and a login request is refused.
+    pub login_flow: bool,
     /// Can list an account's MCP servers and platform connectors (`read_account_mcp_inventory`).
     pub mcp_inventory: bool,
     /// Ends the process groups of the commands it still has running as it exits, so a process in
@@ -503,7 +544,10 @@ pub struct Capabilities {
     /// and answers (`Session.interaction`, `answer_interaction`;
     /// `AgentProvider::interactions`).
     pub interactions: InteractionKinds,
-    /// Takes images attached to a message (`send_message`'s `images`).
+    /// Takes an image file as an attached image: images attached to a message (`send_message`'s
+    /// `images`), and the path of an image saved for its session (`save_pasted_image`,
+    /// `create_pasted_image_upload`), which a client pastes or drops into the session's terminal.
+    /// Where it does not, each of those requests is refused.
     pub message_images: bool,
     /// Runs a slash command sent as one (`send_command`).
     pub slash_commands: bool,
@@ -544,6 +588,21 @@ pub struct DeliveryQuirks {
     /// An instruction for a resumed conversation goes as the launch prompt, which keeps the agent
     /// from showing a resume dialog that would swallow it.
     pub resume_instruction_as_launch_prompt: bool,
+}
+
+/// Whether an agent keeps a memory of its own across sessions, and whether one launch can turn
+/// it off without a change to the agent's or the user's configuration.
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeMemory {
+    /// The agent keeps no memory of its own.
+    Absent,
+    /// The agent keeps a memory of its own, which one launch can turn off.
+    Switchable,
+    /// The agent keeps a memory of its own, which no launch can turn off: it stays as the agent
+    /// and the user set it.
+    Unswitchable,
 }
 
 /// The kind of a quota window. Not every provider has every kind: Claude Code has `session`,
@@ -595,16 +654,38 @@ impl SessionWindowName {
     }
 }
 
+/// A native name for a provider's credit pool.
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CreditPeriodName {
+    /// "Plan".
+    Plan,
+}
+
+impl CreditPeriodName {
+    pub fn text(self) -> &'static str {
+        match self {
+            Self::Plan => "Plan",
+        }
+    }
+}
+
 /// How the provider's own interface names its quota windows, which Octoboard's wording follows.
 #[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct QuotaWindowNaming {
-    /// The kinds of window the provider reports at all.
+    /// The kinds of window the provider reports at all. Empty: Octoboard reads no plan quota for
+    /// the provider (`AccountOps::quota_probe` is `None`), and its accounts show none.
     pub kinds: &'static [QuotaWindowKind],
     /// What it calls the five-hour window.
     pub session_window: SessionWindowName,
     /// Whether an account-wide weekly window beside a model's own is named "Weekly · all models".
     pub weekly_all_models: bool,
+    /// A native name for the credit pool. When absent, its period determines the name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub credit_period: Option<CreditPeriodName>,
 }
 
 /// How a model id of the provider is shown.
@@ -686,6 +767,34 @@ mod tests {
         }
     }
 
+    /// Claude Code, Codex and Grok Build give each account beyond the default a directory of its
+    /// own, and so does the test provider unless a test takes the variant that does not; sharing the
+    /// default account's configuration is something only such an account does.
+    #[test]
+    fn the_owned_accounts_capability_is_declared_where_accounts_have_directories() {
+        for agent in [
+            AgentId::CLAUDE,
+            AgentId::CODEX,
+            AgentId::GROK,
+            AgentId::TEST,
+        ] {
+            assert!(
+                agent.descriptor().capabilities.owned_accounts,
+                "{}",
+                agent.descriptor().id
+            );
+        }
+        for descriptor in descriptors() {
+            assert!(
+                descriptor.capabilities.owned_accounts || !descriptor.capabilities.config_sharing,
+                "{}: shares a configuration with no account of its own to share it",
+                descriptor.id
+            );
+        }
+        let _single = test_provider::without_owned_accounts();
+        assert!(!AgentId::TEST.descriptor().capabilities.owned_accounts);
+    }
+
     /// Every registered descriptor carries every fact a provider must have, and the registry's
     /// order, ids and lookups agree with each other.
     #[test]
@@ -713,7 +822,6 @@ mod tests {
                 ("instruction_file", descriptor.instruction_file),
                 ("config_dir_var", descriptor.layout.config_dir_var),
                 ("default_dir", descriptor.layout.default_dir),
-                ("records_dir", descriptor.layout.records_dir),
             ] {
                 assert!(
                     !value.trim().is_empty(),
@@ -731,11 +839,6 @@ mod tests {
                 "{}: the short name is not a form of the label",
                 descriptor.id
             );
-            assert!(
-                !descriptor.detection.own.is_empty(),
-                "{}: no detection marker of its own",
-                descriptor.id
-            );
             if let Some(tool) = descriptor.ask_question_tool {
                 assert!(!tool.trim().is_empty(), "{}: blank ask tool", descriptor.id);
             }
@@ -747,11 +850,6 @@ mod tests {
     fn a_providers_quota_naming_agrees_with_its_kinds() {
         for descriptor in descriptors() {
             let naming = descriptor.quota_windows;
-            assert!(
-                !naming.kinds.is_empty(),
-                "{}: reports no quota window",
-                descriptor.id
-            );
             if naming.weekly_all_models {
                 assert!(
                     naming.kinds.contains(&QuotaWindowKind::WeeklyModel),
@@ -891,25 +989,26 @@ mod tests {
         }
     }
 
+    /// A provider's launch overrides are exactly the settings it declares as compatibility switches;
+    /// each provider's own tests pin which those are.
     #[test]
     fn launch_overrides_accept_only_the_declared_compatibility_switches() {
         for agent in AgentId::ALL {
-            let expected: &[&str] = match agent {
-                AgentId::CLAUDE => &["codex_compatibility"],
-                AgentId::CODEX => &["claude_compatibility"],
-                AgentId::GROK => &["claude_compatibility", "codex_compatibility"],
-                AgentId::TEST => &[],
-                other => panic!("no fixture for {other}"),
-            };
             let descriptor = agent.descriptor();
+            let expected: Vec<_> = descriptor
+                .settings
+                .iter()
+                .filter(|setting| setting.compatibility_with.is_some())
+                .map(|setting| setting.id)
+                .collect();
             let actual: Vec<_> = descriptor.overridable_settings().map(|s| s.id).collect();
             assert_eq!(actual, expected, "{}", agent.wire_name());
             for setting in descriptor.settings {
                 assert_eq!(
                     descriptor.is_overridable(setting.id),
-                    expected.contains(&setting.id)
+                    setting.compatibility_with.is_some()
                 );
-                assert_eq!(setting.overridable(), expected.contains(&setting.id));
+                assert_eq!(setting.overridable(), setting.compatibility_with.is_some());
                 if matches!(setting.kind, SettingKind::Choice { .. }) {
                     assert!(!descriptor.is_overridable(setting.id));
                 }

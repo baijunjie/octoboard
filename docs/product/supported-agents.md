@@ -7,7 +7,7 @@ ones the window offers, is in "Added agents" in `docs/product/agent-accounts.md`
 
 ## The agents and their order
 
-Octoboard supports three agents, each known by an id that names it wherever an agent is named in data — the daemon's
+Octoboard supports eight agents, each known by an id that names it wherever an agent is named in data — the daemon's
 protocol, a configuration document, a session's tools:
 
 | Agent | Id |
@@ -15,20 +15,24 @@ protocol, a configuration document, a session's tools:
 | Claude Code | `claude` |
 | Codex | `codex` |
 | Grok Build | `grok` |
+| Antigravity CLI | `antigravity` |
+| GitHub Copilot CLI | `copilot` |
+| OpenCode | `opencode` |
+| Qwen Code | `qwen` |
+| Pi | `pi` |
 
 The daemon decides which agents are supported and serves them to every window in a fixed order, the order above. The
-window lists them in the order the daemon serves them wherever it lists the supported agents in their usual order —
-the order Claude Code, Codex, Grok Build that other docs name — and a value given per agent, such as a console's
+window lists them in the order the daemon serves them wherever it lists the supported agents, and a value given per agent, such as a console's
 account for each agent, holds one entry for each of them. The first agent served, Claude Code, is the one a control
 opens on when nothing else chooses one. A request from a window or a program naming any other agent id is refused as
 an unreadable request (`unreadable_request`).
 
 ## How an agent is named and marked
 
-Each agent is shown by its name and its mark: Claude Code, Codex and Grok Build each by their own. An agent the daemon
-serves that the window has no presentation of its own for is still listed and usable: it is named by the name the
-daemon gives it, its shorter name where the window uses one, such as the menu bar icon's menu, and shown with a
-generic, neutral mark in the text colour in place of a mark of its own.
+Each of the eight agents has its own name and mark. A provider's presentation is registered with its name, mark
+and brand colour where it has one. The window can also list and use an agent with no registered presentation.
+It uses the name the daemon gives it, the short name in places such as the menu bar menu, and a generic, neutral
+mark in the text colour.
 
 ## Data of an agent this build does not support
 

@@ -208,8 +208,9 @@ pub(super) const GET_SETTINGS: ToolDef = ToolDef {
                   `beta`, the release line it follows), `memory_enabled` (whether Octoboard's \
                   memory is on: sessions launched while it is on are offered the memory tools \
                   and are given the memory's index, and their agents' own memory is turned \
-                  off), `auto_select_account`, `interface_language` (the language of the \
-                  windows connected to this daemon and the one you are told to reply in, a tag; \
+                  off where one launch can turn it off), `auto_select_account`, \
+                  `interface_language` (the language of the windows connected to this daemon \
+                  and the one you are told to reply in, a tag; \
                   `null` until a window reported one), \
                   `default_clone_dir`, the `git_workflow` settings, \
                   `provider_settings` (the settings the user made for each agent's \
@@ -259,9 +260,9 @@ pub(super) const UPDATE_SETTINGS: ToolDef = ToolDef {
                     "description": "Whether Octoboard's memory is on. Sessions launched \
                                     afterwards follow it: while it is on they are offered the \
                                     memory tools and given the memory's index, and their \
-                                    agents' own memory is turned off; while it is off, \
-                                    neither, and a memory tool is refused. Turning it off \
-                                    deletes no entry.",
+                                    agents' own memory is turned off where one launch can \
+                                    turn it off; while it is off, neither, and a memory tool \
+                                    is refused. Turning it off deletes no entry.",
                 },
                 "resume_sessions_on_start": {
                     "type": "boolean",

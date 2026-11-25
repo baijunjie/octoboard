@@ -9,6 +9,7 @@ import { type ConsoleExtra, consoleOf, type ProjectExtra, projectOf, sessionOf }
 import { DaemonProvider, type Daemon, type State } from "../store";
 import { buttons, optionElements, pickerNamed } from "../test/dom";
 import { testDaemon } from "../test/testDaemon";
+import { BASELINE_PROVIDERS } from "../test/testProviders";
 import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { SessionDialog } from "./SessionDialog";
 export { LOCATE_DELAY_MS } from "./useResumeTarget";
@@ -20,7 +21,7 @@ export const project = projectOf("p-1", parentConsole.id, "Search API");
 
 function fakeDaemon(initial: Partial<State> = {}): Daemon {
   return testDaemon({
-    state: initial,
+    state: { providers: BASELINE_PROVIDERS, ...initial },
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
     showNotice: vi.fn(),
   });

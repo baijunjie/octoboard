@@ -9,7 +9,7 @@ use alacritty_terminal::vte::ansi::NamedColor;
 
 use super::{Request, TerminalSnapshot};
 use crate::terminal::display::DisplayFacts;
-use crate::terminal::program_status::{self, ProgramStatus, ReportedState};
+use crate::terminal::program_status::{self, ProgramStatus, RootMove};
 use crate::terminal::queries::{Piece, Query, QueryScanner};
 
 /// The private mode a program sets to be told when the colour scheme changes (`CSI ? 997 ; 1 n`
@@ -66,7 +66,7 @@ pub struct TakenIn {
     /// The state the program's root status record moved to, each time the chunk moved it (a status
     /// report, a prompt start, a reset), in order; `None` where the record went. Empty unless
     /// [`TerminalSnapshot::keep_program_status`] has asked for the reports.
-    pub program_status: Vec<Option<ReportedState>>,
+    pub program_status: Vec<RootMove>,
 }
 
 impl TakenIn {
@@ -116,12 +116,24 @@ impl TerminalSnapshot {
         }
     }
 
-    /// The state of the program's root status record, where the records are kept and it has one.
-    pub fn program_status_root(&self) -> Option<ReportedState> {
+    /// Where the program's root status record stands, as a move to there ([`RootMove`]): its
+    /// state, with what it is blocked on and its `msg`, or none where the records are not kept or
+    /// it has none.
+    pub fn program_status_root(&self) -> RootMove {
         self.answering
             .as_ref()
             .and_then(|answering| answering.program_status.as_ref())
-            .and_then(ProgramStatus::root)
+            .map_or_else(|| None.into(), ProgramStatus::root_move)
+    }
+
+    pub(crate) fn record_program_status(
+        &mut self,
+        record: program_status::Record,
+    ) -> Option<RootMove> {
+        let status = self.program_status_mut()?;
+        status
+            .apply(program_status::Report::Set { id: None, record })
+            .then(|| status.root_move())
     }
 
     /// The records kept once [`Self::keep_program_status`] has asked for them.
@@ -208,7 +220,7 @@ impl TerminalSnapshot {
                             // And forgets the program's status records.
                             if let Some(status) = answering.program_status.as_mut() {
                                 if status.reset() {
-                                    taken.program_status.push(None);
+                                    taken.program_status.push(None.into());
                                 }
                             }
                         }
@@ -233,7 +245,7 @@ impl TerminalSnapshot {
                 // The prompt is the clients' to draw; it only ends what running programs said.
                 if let Some(status) = self.program_status_mut() {
                     if status.end_volatile() {
-                        taken.program_status.push(status.root());
+                        taken.program_status.push(status.root_move());
                     }
                 }
                 self.process(&sequence);
@@ -245,7 +257,7 @@ impl TerminalSnapshot {
                     let moved =
                         program_status::parse(body).is_some_and(|report| status.apply(report));
                     if moved {
-                        taken.program_status.push(status.root());
+                        taken.program_status.push(status.root_move());
                     }
                     continue;
                 }

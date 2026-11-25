@@ -2,9 +2,16 @@
 import { act } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 
+import { providerLabel } from "../agents/providers";
+import { translatorFor } from "../i18n/catalog";
+import { joinValues } from "../i18n/joinPhrases";
 import { fakeTimers, runPendingTimers } from "../test/clock";
-import type { ClientRequestBody, Event, OrphanedMemory } from "../protocol";
-import { createMemoryListeners } from "../store";
+import type { Agent, ClientRequestBody, Event, OrphanedMemory, ProviderInfo } from "../protocol";
+import { served as claude } from "../providers/claude.fixture";
+import { served as codex } from "../providers/codex.fixture";
+import { served as pi } from "../providers/pi.fixture";
+import { served as testAgent } from "../providers/testAgent.fixture";
+import { DEFAULT_SETTINGS, createMemoryListeners } from "../store";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 import { MemorySection } from "./MemorySection";
@@ -18,12 +25,17 @@ const leftBehind = (path: string, extra: Partial<OrphanedMemory> = {}): Orphaned
 
 function mount(
   places: OrphanedMemory[],
-  { hosts = [{ id: "local", name: "This computer", kind: "local" as const, ssh_config: null }], list }: { hosts?: { id: string; name: string; kind: "local"; ssh_config: null }[]; list?: () => Promise<Event> } = {},
+  {
+    hosts = [{ id: "local", name: "This computer", kind: "local" as const, ssh_config: null }],
+    list,
+    providers,
+    added,
+  }: { hosts?: { id: string; name: string; kind: "local"; ssh_config: null }[]; list?: () => Promise<Event>; providers?: ProviderInfo[]; added?: Agent[] } = {},
 ) {
   const listeners = createMemoryListeners();
   const request = vi.fn((body: ClientRequestBody): Promise<Event> =>
     body.type === "list_orphaned_memories" && list ? list() : Promise.resolve(body.type === "list_orphaned_memories" ? { type: "orphaned_memory_list", id: null, places } : { type: "ack", id: null }));
-  const daemon = testDaemon({ state: { connectionState: "open", snapshotEpoch: 1, hosts: new Map(hosts.map((host) => [host.id, host])) }, request: request as never, onMemoryChange: listeners.subscribe });
+  const daemon = testDaemon({ state: { connectionState: "open", snapshotEpoch: 1, hosts: new Map(hosts.map((host) => [host.id, host])), ...(providers && { providers }), ...(added && { settings: { ...DEFAULT_SETTINGS, added_agents: added } }) }, request: request as never, onMemoryChange: listeners.subscribe });
   const container = mountHost(<MemorySection />, { daemon });
   return { container, request, daemon, broadcast: (next: OrphanedMemory[]) => act(() => listeners.deliver({ type: "orphaned_memory_list", id: null, places: next })) };
 }
@@ -254,4 +266,68 @@ it("names a machine the daemon lists as a reference in the delete confirmation, 
   const unknown = await confirmFor(1);
   expect(unknown.textContent).toContain("Unknown machine");
   expect([...unknown.querySelectorAll("[data-inline-reference]")].map((element) => element.textContent)).not.toContain("Unknown machine");
+});
+
+/** Text with the isolates a row puts around a value it substitutes taken out. */
+const withoutIsolates = (text: string) => text.replace(/[\u2068\u2069]/g, "");
+
+/** The switch row's description, as `withoutIsolates` leaves it. */
+const switchDescription = (container: HTMLElement) => withoutIsolates(container.querySelector('[data-settings-search-id="memory_enabled"] [data-setting-description]')?.textContent ?? "");
+
+/** The names the switch row's description sets apart as references, in order. */
+const namedAgents = (container: HTMLElement) =>
+  [...container.querySelectorAll('[data-settings-search-id="memory_enabled"] [data-setting-description] [data-inline-reference]')].map((element) => element.textContent);
+
+const en = translatorFor("en");
+
+/** The English sentence `key` names `ids` in, each by its full name among `providers`. */
+const naming = (key: "settings.memory.enabled.nativeMemory.turnedOff" | "settings.memory.enabled.nativeMemory.kept", providers: ProviderInfo[], ids: string[]) =>
+  withoutIsolates(en(key, { agents: joinValues("en", ids.map((id) => providerLabel(en, providers, id))) }));
+
+it("names, under the switch's description, the agents whose own memory those sessions turn off and those whose own memory they leave as it is set", async () => {
+  // Two whose memory one launch turns off, one whose memory no launch can, and one with no memory of its own.
+  const providers: ProviderInfo[] = [
+    { ...claude, native_memory: "switchable" },
+    { ...codex, native_memory: "switchable" },
+    { ...pi, native_memory: "unswitchable" },
+    { ...testAgent, native_memory: "absent" },
+  ];
+  const { container } = mount([], { providers });
+  await settle();
+  const description = switchDescription(container);
+  expect(description).toContain(en("settings.memory.enabled.sharedDescription.off"));
+  expect(description).toContain(naming("settings.memory.enabled.nativeMemory.turnedOff", providers, [claude.id, codex.id]));
+  expect(description).toContain(naming("settings.memory.enabled.nativeMemory.kept", providers, [pi.id]));
+  // Each agent is named as a reference, not as plain text of the sentence, and the one with no memory of its own not at all.
+  expect(namedAgents(container)).toEqual([claude.id, codex.id, pi.id].map((id) => providerLabel(en, providers, id)));
+});
+
+it("says nothing of the agents' own memory when no served agent keeps one, or keeps one of a kind this build does not know", async () => {
+  const providers: ProviderInfo[] = [{ ...claude, native_memory: "absent" }, { ...codex, native_memory: "remembered_elsewhere" }];
+  const { container } = mount([], { providers });
+  await settle();
+  expect(switchDescription(container)).toBe(en("settings.memory.enabled.sharedDescription.off"));
+  expect(namedAgents(container)).toEqual([]);
+});
+
+it("leaves out the sentence with no agent to name", async () => {
+  const providers: ProviderInfo[] = [{ ...pi, native_memory: "unswitchable" }];
+  const { container } = mount([], { providers });
+  await settle();
+  expect(switchDescription(container)).toBe(en("settings.memory.enabled.sharedDescription.off") + naming("settings.memory.enabled.nativeMemory.kept", providers, [pi.id]));
+});
+
+it("names only the agents the user has added, in the order Settings lists them", async () => {
+  const providers: ProviderInfo[] = [
+    { ...claude, native_memory: "switchable" },
+    { ...codex, native_memory: "switchable" },
+    { ...pi, native_memory: "unswitchable" },
+    { ...testAgent, native_memory: "switchable" },
+  ];
+  // The test agent keeps a memory one launch can turn off too, but is not added; the others are listed out of the registry's order.
+  const { container } = mount([], { providers, added: [codex.id, claude.id, pi.id] });
+  await settle();
+  expect(namedAgents(container)).toEqual([codex.id, claude.id, pi.id].map((id) => providerLabel(en, providers, id)));
+  expect(switchDescription(container)).toContain(naming("settings.memory.enabled.nativeMemory.turnedOff", providers, [codex.id, claude.id]));
+  expect(switchDescription(container)).not.toContain(providerLabel(en, providers, testAgent.id));
 });

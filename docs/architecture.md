@@ -13,8 +13,7 @@ request to a console session; the console session decides which project it belon
 session in that project's directory and hands it the task; the session reports back to the console session, and the
 console session reports to the user. The user can step into any session at any time to watch it or take over.
 
-It is neither a new agent nor a new terminal. Every session is a native agent CLI process (Claude Code, Codex, Grok
-Build), and Octoboard only adds organization, orchestration and observation on top. It is not tied to any provider, and
+It is neither a new agent nor a new terminal. Every session is a native agent CLI process (Claude Code, Codex, Grok Build, Antigravity CLI, GitHub Copilot CLI, OpenCode, Qwen Code and Pi), and Octoboard only adds organization, orchestration and observation on top. It is not tied to any provider, and
 the retention and cleanup of session data follows each agent's own rules.
 
 ### Two deployment forms
@@ -435,9 +434,9 @@ Claude Code alike, and the agent still took input and gave output through the ho
   differs per agent ("Injecting Octoboard into each agent" in `docs/agent-cli-reference.md`).
 - **The MCP server is a child process, not an endpoint the agent dials.** The daemon binary doubles as it
   (`octoboardd mcp`), speaking MCP on stdin/stdout and forwarding each call to the daemon over loopback HTTP. A
-  Streamable HTTP endpoint in the daemon was ruled out by two of the three agents: Codex's verified MCP injection takes
+  Streamable HTTP endpoint in the daemon was ruled out by the original Codex and Grok Build integrations: Codex's verified MCP injection takes
   a `command` and `args`, and Grok's SSRF protection rejects plain HTTP and private addresses alike (also why Grok's
-  hooks cannot be HTTP). One mechanism for all three beats a bridge for some. The session's identity travels in argv
+  hooks cannot be HTTP). The session's identity travels in argv
   because Codex exports nothing to an MCP child and Grok's `{{session_id}}` templating does not work; a token issued per
   launch and dropped with the process means a local process that guesses the port cannot reach the tools, and the
   daemon resolves the calling session from the token rather than from an argument.
@@ -484,7 +483,7 @@ Claude Code alike, and the agent still took input and gave output through the ho
   session decision" (the agent calls `report(status: needs_decision)`) and "needs a user decision" (a permission
   prompt or a question to a person, shown as the raised hand) are kept apart.
 - **Detecting the raised hand is limited by what the hooks expose**, not by Octoboard: a question asked as plain prose
-  is indistinguishable from a finished turn on all three agents, and that is a known gap rather than something to work
+  is indistinguishable from a finished turn, and that is a known gap rather than something to work
   around with terminal-text matching. State is read from hooks, never from rendered output, because that would need a
   VT emulator in the daemon and differs between an agent's own renderers. The one exception is each agent's own
   folder-trust confirmation, which no hook precedes and so can only be recognized in the output.

@@ -13,6 +13,27 @@ use tokio::sync::Notify;
 
 use bytes::Bytes;
 
+/// A hook event waiting to be applied: the body as it was posted, and the name of the event when
+/// the route was given one beside it (its `event` query parameter), for a payload that names none.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueuedHook {
+    pub body: Bytes,
+    pub launch: Option<String>,
+    pub event: Option<String>,
+}
+
+#[cfg(test)]
+impl From<Bytes> for QueuedHook {
+    /// An event posted with no name beside its body.
+    fn from(body: Bytes) -> Self {
+        Self {
+            body,
+            launch: None,
+            event: None,
+        }
+    }
+}
+
 /// How many events one session may have waiting, the one being applied included. An agent fires a
 /// handful of hooks per tool call and each is applied in well under a millisecond, so a queue this
 /// long means the session is wedged or the caller is not an agent, so past it the newest event
@@ -44,21 +65,6 @@ pub(crate) fn settle_bound() -> Duration {
 #[cfg(test)]
 thread_local! {
     static SETTLE_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
-}
-
-/// One hook event as it arrived: the launch its hook named (`crate::holder::protocol::HookMark`),
-/// if it named one, and the agent's payload.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct QueuedHook {
-    pub launch: Option<String>,
-    pub body: Bytes,
-}
-
-impl From<Bytes> for QueuedHook {
-    /// An event whose hook named no launch.
-    fn from(body: Bytes) -> Self {
-        Self { launch: None, body }
-    }
 }
 
 #[derive(Default)]
@@ -172,12 +178,16 @@ impl HookQueues {
 mod tests {
     use super::*;
 
+    fn hook(body: &'static str) -> QueuedHook {
+        Bytes::from(body).into()
+    }
+
     #[test]
     fn events_come_out_in_arrival_order_and_the_queue_goes_when_drained() {
         let queues = HookQueues::default();
-        assert_eq!(queues.push("s", Bytes::from("a")), Push::StartWorker);
-        assert_eq!(queues.push("s", Bytes::from("b")), Push::Queued);
-        assert_eq!(queues.push("t", Bytes::from("x")), Push::StartWorker);
+        assert_eq!(queues.push("s", hook("a")), Push::StartWorker);
+        assert_eq!(queues.push("s", hook("b")), Push::Queued);
+        assert_eq!(queues.push("t", hook("x")), Push::StartWorker);
 
         assert_eq!(queues.next("s").unwrap().body, "a");
         assert!(queues.is_busy());
@@ -185,17 +195,43 @@ mod tests {
         assert_eq!(queues.next("s").unwrap().body, "b");
         assert!(!queues.complete("s"));
         assert!(queues.next("s").is_none());
-        assert_eq!(queues.push("s", Bytes::from("c")), Push::StartWorker);
+        assert_eq!(queues.push("s", hook("c")), Push::StartWorker);
+    }
+
+    /// The event's name travels beside its body, through the queue in order, and is absent for a
+    /// body that came with none; the body is never rewritten to carry it.
+    #[test]
+    fn an_events_name_stays_beside_its_body_through_the_queue() {
+        let queues = HookQueues::default();
+        let named = |body: &'static str, event: &str| QueuedHook {
+            body: Bytes::from(body),
+            launch: None,
+            event: Some(event.to_string()),
+        };
+        assert_eq!(
+            queues.push("s", named("a", "PreToolUse")),
+            Push::StartWorker
+        );
+        assert_eq!(queues.push("s", hook("b")), Push::Queued);
+        assert_eq!(queues.push("s", named("c", "Stop")), Push::Queued);
+
+        assert_eq!(queues.next("s"), Some(named("a", "PreToolUse")));
+        assert!(queues.complete("s"));
+        assert_eq!(queues.next("s").unwrap().event, None);
+        assert_eq!(queues.next("s").unwrap().body, "b");
+        assert!(queues.complete("s"));
+        assert_eq!(queues.next("s"), Some(named("c", "Stop")));
+        assert_eq!(QueuedHook::from(Bytes::from("x")).event, None);
     }
 
     #[test]
     fn a_full_queue_replaces_its_tail_with_what_comes_after() {
         let queues = HookQueues::default();
-        assert_eq!(queues.push("s", Bytes::from("0")), Push::StartWorker);
+        assert_eq!(queues.push("s", hook("0")), Push::StartWorker);
         for _ in 1..MAX_QUEUED {
-            assert_eq!(queues.push("s", Bytes::from("e")), Push::Queued);
+            assert_eq!(queues.push("s", hook("e")), Push::Queued);
         }
-        assert_eq!(queues.push("s", Bytes::from("late")), Push::Coalesced);
+        assert_eq!(queues.push("s", hook("late")), Push::Coalesced);
         assert_eq!(queues.next("s").unwrap().body, "0");
         for _ in 1..MAX_QUEUED - 1 {
             assert!(queues.complete("s"));
@@ -212,7 +248,7 @@ mod tests {
         let queues = std::sync::Arc::new(HookQueues::default());
         queues.settled("s").await;
 
-        queues.push("s", Bytes::from("a"));
+        queues.push("s", hook("a"));
         let waiting = {
             let queues = queues.clone();
             tokio::spawn(async move { queues.settled("s").await })
@@ -225,7 +261,7 @@ mod tests {
             .expect("settled returns when the queue drains")
             .unwrap();
 
-        queues.push("s", Bytes::from("b"));
+        queues.push("s", hook("b"));
         let started = tokio::time::Instant::now();
         queues.settled("s").await;
         assert!(started.elapsed() >= SETTLE_BOUND);

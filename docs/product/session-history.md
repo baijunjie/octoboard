@@ -63,6 +63,15 @@ Each message the user or Octoboard sent opens a turn. Also left out: tool calls 
 reasoning, the replies of a turn before its last one, slash-command expansions, the note an agent leaves when a turn
 is interrupted, and what the agent injects into its conversation on its own.
 
+**For an agent whose record is a tree** — one file in which each line names the line it follows, so that going back to
+an earlier point of the conversation and carrying on from there leaves the abandoned lines in the file — the history
+lists the conversation's current branch only: the line written last and what it descends from. What the user went back
+on is not listed.
+
+**For an agent that keeps its conversations as rows of a database of its own**, with no file per conversation, the
+Octoboard reads history through the agent's CLI each time it is shown, using the session's current account. History
+is unavailable when that account lacks the conversation or the read fails. OpenCode keeps its conversations this way.
+
 ### Per agent
 
 - **Claude Code**: the conversation as its transcript records it.
@@ -71,8 +80,16 @@ is interrupted, and what the agent injects into its conversation on its own.
   without being brought back. A thread that had a turn reverted is read as it stands, the reverted turns left out.
 - **Grok Build**: Grok keeps only a summary of what came before it compacted its history, so a compacted session's
   history lists only the turns since the compaction.
+- **Pi**: the turns on the last branch written to the session record, including a replacement branch after rewind.
+- **Qwen Code**: the active chat branch, including its messages and recorded file edits. The saved title can be
+  manual or generated.
+- **GitHub Copilot CLI**: the main conversation as currently recorded, with the native session name. Copilot syncs this history to the signed-in GitHub account unless the user disables sync. Rewinding removes
+  the abandoned turns from the record the archive reads.
+- **Antigravity CLI**: the current transcript steps, dated by the agent. When a new turn after rewind replaces steps,
+  the archive shows the replacement.
+- **OpenCode**: the conversation read from the default account by the native CLI, on both supported generations.
 
-The record is looked for as the handoff package's conversation is (see "The handoff package" in
+A file-based record is looked for as the handoff package's conversation is (see "The handoff package" in
 `docs/product/handing-off-sessions.md`): in every account of the agent that could hold it.
 
 ## The context size beside the heading

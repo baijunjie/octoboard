@@ -30,6 +30,7 @@ use std::io;
 use std::time::{Duration, Instant};
 
 use super::input_box::text_of;
+use super::text::bare;
 use super::{wait, LiveSession};
 use crate::platform::term::{self, Input, PartialWrite};
 
@@ -162,7 +163,7 @@ impl Pasted {
             })
             .unwrap_or_default();
         Self {
-            squeezed: squeezed(text),
+            squeezed: bare(text),
             lengths: [text.chars().count(), text.trim().chars().count()],
             alone,
             agent,
@@ -180,7 +181,7 @@ impl Pasted {
     /// characters as written, as measured on Windows (0.166.0, under "Keys that clear the
     /// composer" in `docs/agent-cli-reference.md`).
     fn shown_in(&self, rows: &[String]) -> Shown {
-        let shown = squeezed(&rows.concat());
+        let shown = bare(&rows.concat());
         if shown == self.squeezed || (!self.alone && shown.contains(&self.squeezed)) {
             Shown::Whole
         } else if shown.chars().count() >= TAIL_SHOWN && self.squeezed.ends_with(&shown) {
@@ -211,13 +212,9 @@ impl Pasted {
     }
 }
 
-fn squeezed(text: &str) -> String {
-    text.chars().filter(|c| !c.is_whitespace()).collect()
-}
-
 /// The length, in characters whitespace aside, of what `rows` hold, for the logs.
 fn box_len(rows: Option<&[String]>) -> Option<usize> {
-    rows.map(|rows| squeezed(&rows.concat()).chars().count())
+    rows.map(|rows| bare(&rows.concat()).chars().count())
 }
 
 fn millis(since: Instant) -> u128 {
@@ -237,12 +234,14 @@ pub(super) fn submit(
     keys: &[Input],
     alone: bool,
 ) -> Result<(), PartialWrite> {
-    submit_checked(target, timing, now, keys, alone, true, |_| Ok(()))
+    submit_checked(target, timing, now, keys, alone, true, |_| Ok(0))
 }
 
 /// [`submit`] with `before_press` looking at the box's rows, once the paste is shown whole and
 /// settled and before the first submit key; an error it gives is the submit's, and no key is
-/// pressed (a message composed of several pastes, or a command checked before it is run). Without
+/// pressed (a message composed of several pastes, or a command checked before it is run). What it
+/// answers is how many bytes it wrote itself (a key typed after a command), counted as written
+/// before the submit key. Without
 /// `confirm_sent` the submit is done once its key is written: where the agent puts a stashed draft
 /// back in the box as it sends the message, the box does not show the message gone, and the restore
 /// the caller waits for is what says it was sent.
@@ -253,15 +252,16 @@ pub(super) fn submit_checked(
     keys: &[Input],
     alone: bool,
     confirm_sent: bool,
-    before_press: impl FnOnce(&[String]) -> Result<(), PartialWrite>,
+    before_press: impl FnOnce(&[String]) -> Result<usize, PartialWrite>,
 ) -> Result<(), PartialWrite> {
     let written = term::encode(now).len();
-    let full = written + term::encode(keys).len();
     let pasted = Pasted::new(now, alone, target.agent());
     let Some(rows) = caught_up(target, &pasted, timing) else {
         return Err(not_submitted(written));
     };
-    before_press(&rows)?;
+    // What the look before the keys wrote counts as written ahead of them.
+    let written = written + before_press(&rows)?;
+    let full = written + term::encode(keys).len();
     press(target, &pasted, keys, 1, &rows, written, full)?;
     if !confirm_sent {
         return Ok(());
@@ -562,7 +562,7 @@ impl Target for LiveSession {
     }
 
     fn box_rows(&self) -> Option<Vec<String>> {
-        LiveSession::input_box_rows(self, &self.screen_text_undimmed())
+        LiveSession::input_box_rows(self, &self.box_screen())
     }
 
     fn gone(&self) -> bool {

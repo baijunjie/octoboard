@@ -117,6 +117,11 @@ export type AccountLogin = {
    */
   opened_by_agent: boolean,
   /**
+   * A question the login waits on. The login goes on once
+   * `answer_account_login_question` brings the user's answer.
+   */
+  question?: LoginQuestion,
+  /**
    * Why a `failed` login failed, as a coded message of the same shape as an `error`; codes in
    * `login_failure_code`.
    */
@@ -166,8 +171,11 @@ export type AccountName = {
 export type AccountOutcome = "created" | "existing" | "left_out" | "failed";
 
 /**
- * The plan quota of one account as the agent's own CLI last reported it. Runtime state of the
- * daemon: never stored and never part of an exported configuration.
+ * The plan quota of one account as the agent's own CLI last reported it. For a provider that
+ * declares no quota window (`QuotaWindowNaming::kinds` empty) it is instead a reading of the
+ * account's sign-in: no plan, no windows, the email when signed in, and the not-signed-in state
+ * in `unavailable` when signed out. Runtime state of the daemon: never stored and never part of
+ * an exported configuration.
  */
 export type AccountQuota = {
   agent: Agent,
@@ -190,10 +198,16 @@ export type AccountQuota = {
    */
   email: string | null,
   /**
-   * Empty when the account has never been read. After a failed re-read, the last good windows
-   * stay (with their `fetched_at`) and `unavailable` says why the newer attempt failed.
+   * Empty when the account has never been read, and always for a provider that declares no
+   * quota window. After a failed re-read, the last good windows stay (with their `fetched_at`)
+   * and `unavailable` says why the newer attempt failed.
    */
   windows: Array<QuotaWindow>,
+  /**
+   * Why the reading is missing or stale, or that the account is not signed in or its directory
+   * is missing. For a provider that declares no quota window, `None` does not by itself mean
+   * signed in: the provider may not be able to tell, and says nothing then.
+   */
   unavailable: QuotaUnavailable | null,
   /**
    * The account's usable rate limit reset credits (Codex only); absent when it has none or the
@@ -324,6 +338,10 @@ export type AgentCliStatus = {
    */
   installed_version: string | null,
   install_method: Received<CliInstallMethod>,
+  /**
+   * The package that installed the CLI when `install_method` is `npm`.
+   */
+  npm_package?: string,
   /**
    * The latest version published for this install method, as the source names it; null when
    * there is no source for it (`install_method` `unknown`) or looking it up failed, in which
@@ -714,6 +732,18 @@ export type Capabilities = {
    */
   config_sharing: boolean,
   /**
+   * Its accounts beyond the default can each be given a directory of their own, the agent's
+   * configuration directory for that account. False for an agent that cannot be pointed at a
+   * second one without changing something every program it starts would inherit: it has the
+   * default account only, and the daemon refuses to add, import or point another.
+   */
+  owned_accounts: boolean,
+  /**
+   * Can sign an account in without a terminal (`AccountOps::login`); otherwise the user signs
+   * in with the agent's own CLI, and a login request is refused.
+   */
+  login_flow: boolean,
+  /**
    * Can list an account's MCP servers and platform connectors (`read_account_mcp_inventory`).
    */
   mcp_inventory: boolean,
@@ -733,7 +763,10 @@ export type Capabilities = {
    */
   interactions: InteractionKinds,
   /**
-   * Takes images attached to a message (`send_message`'s `images`).
+   * Takes an image file as an attached image: images attached to a message (`send_message`'s
+   * `images`), and the path of an image saved for its session (`save_pasted_image`,
+   * `create_pasted_image_upload`), which a client pastes or drops into the session's terminal.
+   * Where it does not, each of those requests is refused.
    */
   message_images: boolean,
   /**
@@ -1405,6 +1438,11 @@ export type ConversationLocation = {
 | {
   "kind": "not_found"
 };
+
+/**
+ * A native name for a provider's credit pool.
+ */
+export type CreditPeriodName = "plan";
 
 /**
  * A release newer than the daemon that the last check found.
@@ -2256,6 +2294,7 @@ export type Event = {
   "type": "session_notice_withdrawn",
   session: string,
   code: string,
+  detail?: string,
 }
 | {
   "type": "trust_prompt",
@@ -3486,6 +3525,18 @@ export type LocalMcpServer = {
 };
 
 /**
+ * The user's answer to a `LoginQuestion`.
+ */
+export type LoginAnswer = "yes" | "no" | {
+  secret_text: SecretLoginText,
+};
+
+/**
+ * The input a login question asks the user for.
+ */
+export type LoginAnswerKind = "secret_text";
+
+/**
  * Why a login failed.
  */
 export type LoginFailure = {
@@ -3494,6 +3545,31 @@ export type LoginFailure = {
     [key in string]: string
   },
   message: string,
+};
+
+/**
+ * A question an agent's sign-in puts to the user. A client words it from its own copy for the
+ * provider's `id` and shows it only if it supports that question and answer kind.
+ */
+export type LoginQuestion = {
+  /**
+   * Which of the provider's questions this is, in the provider's own vocabulary.
+   */
+  id: string,
+  /**
+   * The values the question's wording names (a path, say), by name.
+   */
+  params: {
+    [key in string]: string
+  },
+  /**
+   * The question in English, for the log; not for display.
+   */
+  message: string,
+  /**
+   * When present, the question takes masked text. The default is a yes/no question.
+   */
+  answer_kind?: Received<LoginAnswerKind>,
 };
 
 /**
@@ -3510,7 +3586,7 @@ export type MatchRange = {
   end: number,
 };
 
-export type McpInventoryFailure = "not_signed_in" | "cli_missing" | "timed_out" | "unsupported_agent" | "failed";
+export type McpInventoryFailure = "not_signed_in" | "cli_missing" | "timed_out" | "failed";
 
 /**
  * Why an account's MCP servers and connectors could not be read. The reason is a closed set the
@@ -3666,6 +3742,12 @@ export type ModelsUnavailable = {
   },
   message: string,
 };
+
+/**
+ * Whether an agent keeps a memory of its own across sessions, and whether one launch can turn
+ * it off without a change to the agent's or the user's configuration.
+ */
+export type NativeMemory = "absent" | "switchable" | "unswitchable";
 
 /**
  * The offers of a project, and the choice an import would preselect, with the clone-dependent
@@ -4157,6 +4239,13 @@ export type ProviderInfo = {
    */
   model_display: ModelDisplay,
   /**
+   * Whether the agent keeps a memory of its own across sessions, and whether one launch can
+   * turn it off: a client names, beside the memory setting, the agents whose own memory a
+   * session launched while it is on has turned off and those whose own memory such a session
+   * leaves as the user set it in the agent, unable to turn it off.
+   */
+  native_memory: Received<NativeMemory>,
+  /**
    * The settings the user can make for the provider, in the order a client lists them. Their
    * values in effect are `Settings::provider_settings`.
    */
@@ -4283,7 +4372,8 @@ export type QuotaWindowKind = "session" | "weekly" | "weekly_model" | "credit_pe
  */
 export type QuotaWindowNaming = {
   /**
-   * The kinds of window the provider reports at all.
+   * The kinds of window the provider reports at all. Empty: Octoboard reads no plan quota for
+   * the provider (`AccountOps::quota_probe` is `None`), and its accounts show none.
    */
   kinds: Array<Received<QuotaWindowKind>>,
   /**
@@ -4294,6 +4384,10 @@ export type QuotaWindowNaming = {
    * Whether an account-wide weekly window beside a model's own is named "Weekly · all models".
    */
   weekly_all_models: boolean,
+  /**
+   * A native name for the credit pool. When absent, its period determines the name.
+   */
+  credit_period?: Received<CreditPeriodName>,
 };
 
 /**
@@ -5410,6 +5504,13 @@ export type Request = {
   "type": "cancel_account_login",
   agent: Agent,
   account?: string | null,
+}
+  | {
+  "type": "answer_account_login_question",
+  agent: Agent,
+  account?: string | null,
+  question: string,
+  answer: LoginAnswer,
 }
   | {
   "type": "check_agent_clis",
@@ -6575,6 +6676,13 @@ export type RequestBody = {
   account?: string | null,
 }
 | {
+  "type": "answer_account_login_question",
+  agent: Agent,
+  account?: string | null,
+  question: string,
+  answer: LoginAnswer,
+}
+| {
   "type": "check_agent_clis",
   agent?: Agent | null,
 }
@@ -7010,6 +7118,11 @@ export type ScheduledTaskRun = {
   trigger: Received<ScheduledRunTrigger>,
   outcome: ScheduledRunOutcome,
 };
+
+/**
+ * One transient line of login input. Its debug representation is always redacted.
+ */
+export type SecretLoginText = string;
 
 export type Session = {
   id: string,

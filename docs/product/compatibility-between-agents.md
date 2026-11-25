@@ -259,3 +259,12 @@ skills path; the instructions tell the agent to read a prompt's file when the us
 **The Codex compatibility instructions** are appended to the role description Octoboard passes with `--rules`. Grok
 keeps the `--rules` a session was first started with, so turning the switch on or off changes a resumed session's MCP
 servers and skills but not its instructions.
+
+## Compatibility for Pi, Qwen Code, GitHub Copilot CLI, Antigravity CLI and OpenCode
+
+- **Pi** discovers `AGENTS.md` with a native fallback to `CLAUDE.md`. On Pi 1.5.2, `--no-context-files` removes both, so Octoboard offers no separate Claude compatibility switch.
+- **Qwen Code** can include Claude Code's instruction filename through a per-launch setting. Qwen Code also
+  discovers shared `AGENTS.md` and `.agents/skills` natively.
+- **GitHub Copilot CLI** discovers Claude configuration natively. On GitHub Copilot CLI 1.0.114, `--no-custom-instructions` drops the injected role and the instruction files together and still loads Claude skills, agents and commands. Octoboard offers no separate Claude compatibility switch.
+- **Antigravity CLI** reads `AGENTS.md` and `GEMINI.md` natively. Its explicit `plugin import` command changes the user configuration. The CLI exposes no per-launch compatibility control, so Octoboard offers no extra switch.
+- **OpenCode** has a per-launch switch for Claude Code instructions and skills.

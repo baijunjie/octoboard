@@ -8,6 +8,21 @@ use crate::adapter::files::SMALL_FILE_LIMIT;
 use crate::adapter::tests::spec_fixture;
 use crate::records::line_file::JSON_FILE_LIMIT;
 
+/// Codex's status comes from its hooks and signals, which win over OSC 7501.
+#[test]
+fn it_has_a_status_integration() {
+    assert!(CodexProvider.has_status_integration());
+}
+
+/// Codex says its session has started with its `SessionStart` event and no other.
+#[test]
+fn only_session_start_announces_the_session_start() {
+    crate::adapter::tests::only_announces_session_start(
+        crate::protocol::AgentId::CODEX,
+        "SessionStart",
+    );
+}
+
 /// The Codex private server plan a launch plan carries.
 fn private_plan(plan: &LaunchPlan) -> &PrivateServerPlan {
     plan.private_server
@@ -29,10 +44,10 @@ fn a_supported_release_runs_a_private_server_with_the_launchs_overrides() {
     let plan = CodexProvider.plan(&spec).unwrap();
     let private = private_plan(&plan);
     // The ordinary arguments stay whole, for a launch whose server does not come up.
-    assert_eq!(plan.args.last().map(String::as_str), Some("first task"));
+    assert_eq!(plan.args[plan.args.len() - 2..], ["--", "first task"]);
     assert_eq!(overrides(&private.args), overrides(&plan.args));
     assert_eq!(&private.tui_args[..2], ["--cd", spec.cwd.to_str().unwrap()]);
-    assert_eq!(private.tui_args[2..], plan.args[..plan.args.len() - 1]);
+    assert_eq!(private.tui_args[2..], plan.args[..plan.args.len() - 2]);
     assert_eq!(private.task.as_deref(), Some("first task"));
     // The key reaches no argument of the terminal or of the server beside it.
     for arg in private.args.iter().chain(&private.tui_args) {
@@ -233,7 +248,49 @@ fn a_model_and_effort_are_config_overrides_ahead_of_the_task() {
     let overrides = overrides(&plan.args);
     assert!(overrides.contains(&"model=\"gpt-5\"".to_string()));
     assert!(overrides.contains(&"model_reasoning_effort=\"high\"".to_string()));
-    assert_eq!(plan.args.last().map(String::as_str), Some("do it"));
+    assert_eq!(plan.args[plan.args.len() - 2..], ["--", "do it"]);
+}
+
+/// A new session's task is the one argument after a bare `--` that ends the arguments, in the
+/// ordinary arguments and in the private server's plan alike, so a task that starts with `-` (a
+/// list, "--help me with this") is the prompt and not an option. A resume carries no task and no
+/// `--`.
+#[test]
+fn a_new_sessions_task_is_the_one_argument_after_a_bare_double_dash() {
+    for task in ["do it", "- a list", "--help me with this", "-p x"] {
+        let mut fixture = spec_fixture();
+        fixture.agent_version = Some((0, 167, 1));
+        fixture.model = Some("gpt-5".to_string());
+        let mut spec = fixture.spec();
+        spec.task = Some(task);
+        let plan = CodexProvider.plan(&spec).expect("plan");
+        assert_eq!(plan.args[plan.args.len() - 2..], ["--", task], "{task:?}");
+        for count in ["--", task] {
+            assert_eq!(
+                plan.args.iter().filter(|arg| *arg == count).count(),
+                1,
+                "{task:?}"
+            );
+        }
+        let private = private_plan(&plan);
+        assert_eq!(private.task.as_deref(), Some(task));
+        assert!(
+            !private
+                .tui_args
+                .iter()
+                .chain(&private.args)
+                .any(|arg| arg == "--" || arg == task),
+            "{task:?}"
+        );
+
+        spec.resume_agent_session_id = Some("thread-to-resume");
+        let resumed = CodexProvider.plan(&spec).expect("plan");
+        assert!(
+            !resumed.args.iter().any(|arg| arg == "--" || arg == task),
+            "{task:?}"
+        );
+        assert_eq!(private_plan(&resumed).task, None);
+    }
 }
 
 /// Project trust is Codex's own to record when its confirmation is pressed, so it is never
@@ -363,10 +420,9 @@ fn the_cross_project_guard_is_a_synchronous_apply_patch_group_beside_the_status_
 /// on a resume too, and the private server beside the terminal is started with it as well.
 #[test]
 fn memories_are_turned_off_only_when_the_launch_says_so() {
-    assert!(
-        crate::protocol::AgentId::CODEX
-            .descriptor()
-            .native_memory_switch
+    assert_eq!(
+        crate::protocol::AgentId::CODEX.descriptor().native_memory,
+        crate::providers::NativeMemory::Switchable
     );
     let mut fixture = spec_fixture();
     fixture.agent_version = Some((0, 166, 0));
@@ -760,7 +816,7 @@ enabled = true
                         || matches!(arg.as_str(), "--sandbox" | "--approve-for-me")
                 }));
                 if resume.is_none() {
-                    assert_eq!(plan.args.last().unwrap(), "Initial prompt");
+                    assert_eq!(plan.args[plan.args.len() - 2..], ["--", "Initial prompt"]);
                 } else {
                     assert_eq!(&plan.args[..2], ["resume", "conversation-1"]);
                     assert!(!plan.args.iter().any(|arg| arg == "Initial prompt"));

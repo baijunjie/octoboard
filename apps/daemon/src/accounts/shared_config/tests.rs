@@ -393,7 +393,8 @@ impl Launches {
             Ok(crate::session::term::Launch {
                 session: process,
                 agent_session_id: None,
-                notice: None,
+                notices: Vec::new(),
+                first_message: None,
             })
         }
     }
@@ -2897,7 +2898,8 @@ async fn a_message_sent_to_a_session_being_restarted_is_held_for_its_resumed_pro
                 Ok(crate::session::term::Launch {
                     session: process,
                     agent_session_id: None,
-                    notice: None,
+                    notices: Vec::new(),
+                    first_message: None,
                 })
             },
         ));

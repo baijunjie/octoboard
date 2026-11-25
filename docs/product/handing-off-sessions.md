@@ -201,7 +201,7 @@ Refused before the user is asked, with the reason in prose (as a tool error) and
 
 - a session that is not the caller's — an independent one, one bound to another session, a console session, or the
   caller itself — with a reason naming who owns it, as for the other tools that act on a session of the caller's;
-- an `agent` other than the three, or an `account` that is not one of `agent`'s;
+- an `agent` the daemon does not serve, or an `account` that is not one of `agent`'s;
 - a session that is archived, not at rest, locked, or with a session bound to it that can still send it something,
   and a receiving agent that is the session's own (see "What can be handed off" above);
 - what opening the receiving session would refuse (see "What can be handed off" above) — an agent that is not available
@@ -301,7 +301,9 @@ receiving session to read. It holds:
   earlier conversation. For a Codex thread that had a turn reverted, the conversation is read as it stands across the
   thread's rollouts: each earlier file up to the point the next one continues from, then the head, which is also the
   record the package names (see "Agent session data" in `docs/product/launching-agents.md`). The reverted turns are left
-  out, and so are the todo list updates and file changes made in them.
+  out, and so are the todo list updates and file changes made in them. For an agent whose record is a tree (see "What
+  the history lists" in `docs/product/session-history.md`), the conversation is the current branch only: what the user
+  went back on is left out.
 
 The original's brief is not kept by Octoboard, so it is not carried separately: where the agent recorded it, it is the
 first user message of the conversation. A conversation record that is missing or cannot be read, or a reverted Codex

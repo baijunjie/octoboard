@@ -101,6 +101,19 @@ impl BackgroundWork {
                     self.tasks.push(self.subagent_task(id));
                 }
             }
+            BackgroundTasksChange::Started(started) => {
+                // As for a subagent's start: an emptying still waiting takes effect before what
+                // starts now is added, so it cannot take these with it later.
+                if self.pending_empty.take().is_some() {
+                    self.tasks.clear();
+                }
+                self.remember_descriptions(&started);
+                for task in started {
+                    if !self.tasks.iter().any(|listed| listed.id == task.id) {
+                        self.tasks.push(task);
+                    }
+                }
+            }
         }
         None
     }
@@ -172,7 +185,9 @@ impl AppState {
     ///
     /// A subagent's start or stop counts only while the session is idle: inside a turn the turn's
     /// own `Stop` lists everything anyway, and a turn cancelled without a `Stop` would leave a
-    /// foreground subagent in the list.
+    /// foreground subagent in the list. Tasks a provider reads as started in the background
+    /// ([`BackgroundTasksChange::Started`]) count whenever they come: they are listed from their
+    /// start, and shown once the session is at its prompt, as the list is.
     pub fn apply_background_tasks_change(
         self: &Arc<Self>,
         id: &str,
@@ -571,6 +586,68 @@ mod tests {
         state.apply_background_tasks_change("s", BackgroundTasksChange::Replace(vec![task("c")]));
         state.forget_session_bookkeeping("s");
         assert!(state.background_tasks_of("s").is_empty());
+    }
+
+    /// Tasks read as started are added beside what is listed, in the order they came, one already
+    /// listed under its id left as it is; a later `Finished` takes one off and leaves the rest.
+    #[test]
+    fn tasks_started_one_by_one_are_added_to_the_list_and_finished_one_by_one() {
+        let mut work = BackgroundWork::default();
+        let now = tokio::time::Instant::now();
+        work.apply(BackgroundTasksChange::Replace(vec![task("a")]), now, 1);
+        work.apply(
+            BackgroundTasksChange::Started(vec![task("b"), task("a")]),
+            now,
+            2,
+        );
+        work.apply(BackgroundTasksChange::Started(vec![task("c")]), now, 3);
+        assert_eq!(ids(&work), ["a", "b", "c"]);
+        work.apply(
+            BackgroundTasksChange::Finished(vec!["b".to_string()]),
+            now,
+            4,
+        );
+        assert_eq!(ids(&work), ["a", "c"]);
+    }
+
+    /// A task that starts while an emptying of the list waits is not emptied with it: the
+    /// emptying takes effect first, and the ticket no longer empties anything.
+    #[test]
+    fn a_task_started_while_an_emptying_waits_survives_it() {
+        let mut work = BackgroundWork::default();
+        let now = tokio::time::Instant::now();
+        work.tasks = vec![BackgroundTask {
+            id: "sub".to_string(),
+            kind: Some("subagent".to_string()),
+            description: None,
+        }];
+        assert_eq!(work.apply(stopped("sub", &["sub"]), now, 7), Some(7));
+        work.apply(BackgroundTasksChange::Started(vec![task("shell")]), now, 8);
+        assert_eq!(ids(&work), ["shell"]);
+        assert!(!work.expire(7));
+        assert_eq!(ids(&work), ["shell"]);
+    }
+
+    /// A task read as started inside a turn is listed at once, where a subagent's start is not
+    /// counted, and is what a client is shown once the session is at its prompt.
+    #[tokio::test]
+    async fn a_task_started_inside_a_turn_is_listed_and_shown_at_the_prompt() {
+        let (state, dir) = crate::test_support::app_state("background-started-in-turn");
+        crate::state::test_support::insert_record(&state, &dir, "s", SessionStatus::Working);
+        state.apply_background_tasks_change(
+            "s",
+            BackgroundTasksChange::SubagentStarted("sub".to_string()),
+        );
+        assert!(state.background_tasks_of("s").is_empty());
+        state.apply_background_tasks_change("s", BackgroundTasksChange::Started(vec![task("sh")]));
+        assert_eq!(state.background_tasks_of("s"), vec![task("sh")]);
+        assert!(state
+            .shown_background_tasks("s", SessionStatus::Working)
+            .is_empty());
+        assert_eq!(
+            state.shown_background_tasks("s", SessionStatus::Idle),
+            vec![task("sh")]
+        );
     }
 
     fn task(id: &str) -> BackgroundTask {

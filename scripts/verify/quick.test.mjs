@@ -97,7 +97,16 @@ test("Markdown a crate reads runs the reading module's tests, and nothing of the
   assert.deepEqual(rustTests(["apps/daemon/PROTOCOL.md"]), { mode: "related", args: ["--bin", "octoboardd", "--", ...["session_tools::", ...WIDE].sort()] });
   assert.deepEqual(rustTests(["apps/daemon/src/adapter/codex/compatibility.md"]), { mode: "related", args: ["--bin", "octoboardd", "--", ...["adapter::", ...WIDE].sort()] });
   assert.deepEqual(uiTests(["apps/daemon/PROTOCOL.md"]), { mode: "skip" });
-  assert.deepEqual(labels(["apps/daemon/PROTOCOL.md"]), ["identity check", "provider-neutral core", "registered writes", "verify lint", "verify tests", "rustfmt check", "rust clippy", "rust related tests"]);
+  assert.deepEqual(labels(["apps/daemon/PROTOCOL.md"]), ["identity check", "provider-neutral core", "registered writes", "verify lint", "verify tests", "daemon node tests", "rustfmt check", "rust clippy", "rust related tests"]);
+});
+
+test("the quick plan keeps the daemon's node tests, which need no build, for a change to a script the daemon compiles in", () => {
+  for (const file of ["apps/daemon/src/adapter/pi/extension.js", "apps/daemon/src/adapter/opencode/plugin.test.mjs"]) {
+    const { steps } = quick([file]);
+    assert.deepEqual(steps.map((step) => step.label), ["identity check", "provider-neutral core", "registered writes", "daemon node tests", "rustfmt check", "rust clippy", "rust related tests"], file);
+    const node = steps.find((step) => step.label === "daemon node tests");
+    assert.ok(!node.heavy && node.stamp !== false, file);
+  }
 });
 
 test("a deleted UI file is not passed to vitest, and nothing is run when only deletions remain", () => {
@@ -109,7 +118,7 @@ test("a deleted UI file is not passed to vitest, and nothing is run when only de
 test("the quick plan drops builds and the full suites, keeping every other step of the normal plan", () => {
   const files = ["packages/ui/src/a/X.tsx", "apps/web/app/app.vue", "apps/daemon/src/coordinator.rs", "apps/desktop/scripts/bundle.mjs", "packages/ui/vite.config.ts"];
   assert.deepEqual(labels(files), [
-    "identity check", "provider-neutral core", "registered writes", "ui lint", "ui type check", "web lint", "web type check", "web locales", "desktop lint", "desktop script tests", "rustfmt check", "rust clippy", "ui tests",
+    "identity check", "provider-neutral core", "registered writes", "ui lint", "ui type check", "web lint", "web type check", "web locales", "desktop lint", "desktop script tests", "daemon node tests", "rustfmt check", "rust clippy", "ui tests",
     "rust related tests",
   ]);
 });
@@ -124,7 +133,7 @@ test("the quick plan checks the docs without building them or running their test
 
 test("narrowed test steps are heavy, last and never stamped; a fallback keeps the normal stamped suite", () => {
   const narrowed = quick(["packages/ui/src/a/X.tsx", "apps/daemon/src/coordinator.rs"]).steps;
-  assert.deepEqual(narrowed.map((step) => step.label), ["identity check", "provider-neutral core", "registered writes", "ui lint", "ui type check", "rustfmt check", "rust clippy", "ui related tests", "rust related tests"]);
+  assert.deepEqual(narrowed.map((step) => step.label), ["identity check", "provider-neutral core", "registered writes", "ui lint", "ui type check", "daemon node tests", "rustfmt check", "rust clippy", "ui related tests", "rust related tests"]);
   const related = narrowed.filter((step) => /related/.test(step.label));
   assert.ok(related.every((step) => step.heavy && step.stamp === false));
   assert.deepEqual(related[0].cmd, ["pnpm", "--filter", "@octoboard/ui", "exec", "vitest", "related", "--run", "src/a/X.tsx", ...UI_DISK_TESTS]);
@@ -140,7 +149,7 @@ test("without known changed files both suites stay in full, minus the builds", (
   const { steps, notes } = quickSteps({ mode: "full", packages: [] }, null);
   assert.deepEqual(steps.map((step) => step.label), [
     "identity check", "provider-neutral core", "registered writes", "verify lint", "verify tests", "ui lint", "ui type check", "web lint", "web type check", "web locales", "docs lint",
-    "docs type check", "desktop lint", "desktop script tests", "rustfmt check", "rust clippy", "ui tests", "rust tests",
+    "docs type check", "desktop lint", "desktop script tests", "daemon node tests", "rustfmt check", "rust clippy", "ui tests", "rust tests",
   ]);
   assert.equal(notes.length, 2);
   assert.match(quickSteps({ mode: "full", reason: "base origin/x is not readable", packages: [] }, null).notes[0], /: base origin\/x is not readable$/);

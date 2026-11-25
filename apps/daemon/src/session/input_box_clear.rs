@@ -5,7 +5,11 @@
 //! delete a line of its box a press
 //! (`crate::session::screen::ScreenReader::clears_input_box_with_ctrl_u`). Each press goes through
 //! `LiveSession::write_keys_if` alone, with its gate re-checked under the input lock, and is never
-//! repeated blind: a press that does not show ends the run.
+//! repeated blind: a press that does not show ends the run. An agent that declares a key emptying
+//! its whole box at its idle prompt
+//! (`crate::session::screen::ScreenReader::input_box_clearing_key`) has that key pressed once
+//! instead while the session reads at the idle prompt, re-checked under the input lock, and never
+//! otherwise.
 
 use std::time::{Duration, Instant};
 
@@ -77,12 +81,14 @@ pub(super) fn clear_allowance() -> Duration {
     CLEAR_PER_PRESS
 }
 
-/// How a run of Ctrl-U presses on an input box ended.
+/// How a clear of an input box ended: a run of Ctrl-U presses, or the single press of the
+/// provider's clearing key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Cleared {
     /// The screen shows the box empty.
     Empty,
-    /// A press was not written: someone else wrote, or the run's `allowed` check failed.
+    /// A press was not written: someone else wrote, or the run's `allowed` check failed, or, for
+    /// the clearing key, the session no longer read at its idle prompt or the box had emptied.
     Refused,
     /// The presses ran out, a press did not show, or the box could no longer be read, with text
     /// still in it.
@@ -93,8 +99,10 @@ pub(super) enum Cleared {
 /// has written since the last and while `allowed` says so, checked under the input lock, until the
 /// screen shows the box empty, a press has not shown within `shown`, or the run's budget has run
 /// out: the larger of [`CLEAR_FLOOR`] and `allowance` ([`clear_allowance`]) for each press it
-/// plans. Returns how it ended, how many presses went in, whether any of them showed as a change
-/// in the box, and whether the last one did not (a press nobody saw); `writes` is moved past each.
+/// plans. Where the provider declares a key that empties its whole box at the idle prompt and the
+/// session reads there, that key is pressed once instead ([`clear_with_key`]). Returns how it
+/// ended, how many presses went in, whether any of them showed as a change in the box, and whether
+/// the last one did not (a press nobody saw); `writes` is moved past each.
 pub(super) fn clear_input_box(
     live: &LiveSession,
     writes: &mut u64,
@@ -115,9 +123,21 @@ pub(super) fn clear_input_box_in(
     allowed: impl Fn() -> bool,
     owned: bool,
 ) -> (Cleared, usize, bool, bool) {
-    let Some(text) = live.input_box(&live.screen_text_undimmed()) else {
+    let Some(text) = live.input_box(&live.box_screen()) else {
         return (Cleared::Left, 0, false, false);
     };
+    let reader = crate::adapter::provider(live.agent).screen();
+    if let Some(key) = reader.input_box_clearing_key() {
+        if text.is_empty() {
+            return (Cleared::Empty, 0, false, false);
+        }
+        if live.turn_reading().at_idle_prompt() {
+            return clear_with_key(live, writes, shown, key, allowed, owned);
+        }
+        if !reader.clears_input_box_with_ctrl_u() {
+            return (Cleared::Left, 0, false, false);
+        }
+    }
     // A press clears a line's text and the next its line break, so two a row and one to spare.
     let presses = (text.lines().count() * 2 + 1).min(MAX_PRESSES);
     let deadline = Instant::now() + CLEAR_FLOOR.max(allowance * presses as u32);
@@ -129,7 +149,7 @@ pub(super) fn clear_input_box_in(
         if left.is_zero() {
             break;
         }
-        let screen = live.screen_text_undimmed();
+        let screen = live.box_screen();
         match live.input_box(&screen) {
             Some(text) if text.is_empty() => return (Cleared::Empty, pressed, changed, false),
             Some(_) => {}
@@ -157,15 +177,62 @@ pub(super) fn clear_input_box_in(
         // text nor a line break before the cursor, leaves nothing for the next to change either.
         // No press is waited for past the run's budget.
         if !wait_for(shown.min(left), || {
-            live.input_box_rows(&live.screen_text_undimmed()) != before
+            live.input_box_rows(&live.box_screen()) != before
         }) {
             unseen = true;
             break;
         }
         changed = true;
     }
-    match live.input_box(&live.screen_text_undimmed()) {
+    match live.input_box(&live.box_screen()) {
         Some(text) if text.is_empty() => (Cleared::Empty, pressed, changed, false),
         _ => (Cleared::Left, pressed, changed, unseen),
+    }
+}
+
+/// Presses `key`, the provider's key that empties its whole box at the idle prompt, once, written
+/// only while nobody else has written since and while `allowed` says so, the session still reads
+/// at its idle prompt and the box still holds text, checked under the input lock; then waits up
+/// to `shown` for the box to
+/// read empty. Never pressed twice: on an emptied box the key may mean something else. Answers as
+/// [`clear_input_box_in`].
+fn clear_with_key(
+    live: &LiveSession,
+    writes: &mut u64,
+    shown: Duration,
+    key: Input,
+    allowed: impl Fn() -> bool,
+    owned: bool,
+) -> (Cleared, usize, bool, bool) {
+    let before = live.input_box_rows(&live.box_screen());
+    // The box is read again under the input lock: one emptied since it was last read leaves the
+    // key nothing to empty, and it may mean something else there.
+    let gate = || {
+        allowed()
+            && live.turn_reading().at_idle_prompt()
+            && live
+                .input_box(&live.box_screen())
+                .is_some_and(|text| !text.is_empty())
+    };
+    let keys = std::slice::from_ref(&key);
+    let pressed = if owned {
+        live.write_message_keys_if(Some(*writes), gate, keys)
+    } else {
+        live.write_keys_if(*writes, gate, keys)
+    };
+    match pressed {
+        Ok(true) => *writes += 1,
+        Ok(false) => return (Cleared::Refused, 0, false, false),
+        Err(_) => return (Cleared::Left, 0, false, false),
+    }
+    let empty = wait_for(shown, || {
+        live.input_box(&live.box_screen())
+            .is_some_and(|text| text.is_empty())
+    });
+    let changed = empty || live.input_box_rows(&live.box_screen()) != before;
+    if empty {
+        (Cleared::Empty, 1, true, false)
+    } else {
+        (Cleared::Left, 1, changed, !changed)
     }
 }

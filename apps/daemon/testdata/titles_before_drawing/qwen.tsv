@@ -1,0 +1,19 @@
+# capture<TAB>title<TAB>glyph (U+XXXX, or nothing); a title of * is every title of the capture.
+# Qwen Code sets its title as OSC 0 and as OSC 2 before it has drawn anything, and both again after
+# its first drawing. In the three whole-launch captures (`qwen_trust_*.bin`) those are bytes 14 and 99,
+# the alternate screen being entered at byte 184 and the first drawing after byte 200; the titles at
+# bytes 2318 and 2403 follow it, and so do those after the restart inside `qwen_trust_accepted.bin`
+# (bytes 13190, 13275, 15494 and 15579): a screen cleared and drawn again after the first drawing
+# still has the titles after it reported. The five `qwen_turn_*.bin` captures are cut from mid-session,
+# their first bytes a redraw of the logo, so none of their titles comes before a drawing.
+qwen_trust_screen.bin	Qwen - proj3
+qwen_trust_screen.bin	Qwen - proj3
+qwen_trust_accepted.bin	Qwen - tp1
+qwen_trust_accepted.bin	Qwen - tp1
+qwen_trust_declined.bin	Qwen - tp2
+qwen_trust_declined.bin	Qwen - tp2
+qwen_trust_cursor_moved.bin	Qwen - tp3
+qwen_trust_cursor_moved.bin	Qwen - tp3
+# `qwen_question_0.28.4.bin` is also a whole launch, and loses the same two titles before its first drawing.
+qwen_question_0.28.4.bin	Qwen - work
+qwen_question_0.28.4.bin	Qwen - work

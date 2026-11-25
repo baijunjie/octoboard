@@ -17,6 +17,7 @@ import { blurOnRemoval } from "../test/blurOnRemoval";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import { sessionOf } from "../fixtures/builders";
+import { FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "../fixtures/fixtureProviders";
 import { CATALOGS, format } from "../i18n/catalog";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { Language } from "../i18n/languages";
@@ -45,7 +46,7 @@ const { FakeController } = vi.hoisted(() => {
       onPaintedChange?: (painted: boolean) => void;
       openLink?: (url: string) => Promise<void>;
       pathLinks?: { open: (target: PathTarget) => Promise<void>; probe: (paths: string[]) => Promise<{ kind: string; view?: unknown }[]>; reveal?: unknown; openDefault?: unknown };
-      pasteImage?: { save: (image: Blob, sessionId: string) => Promise<string | undefined>; read?: () => Promise<Blob | undefined> };
+      pasteImage?: { takes: (sessionId: string) => boolean; save: (image: Blob, sessionId: string) => Promise<string | undefined>; read?: () => Promise<Blob | undefined> };
       dropFiles?: { upload: (files: { file: File; folder: boolean }[], sessionId: string) => Promise<string | undefined> };
     }) {
       FakeController.last = this;
@@ -2284,6 +2285,24 @@ describe("pasting an image into the agent's terminal", () => {
     expect(pasting).toBeDefined();
     await expect(pasting.save(new Blob([Uint8Array.from([1, 2, 3])], { type: "image/png" }), "s-1")).resolves.toBe("/data/run/s-1/pasted/paste-1-0.png");
     expect(request).toHaveBeenCalledWith({ type: "save_pasted_image", session: "s-1", data: "AQID" });
+  });
+
+  it("takes an image only for a session whose agent's served provider declares that it takes images", () => {
+    const takingNone = { ...session, id: "s-none", agent: UNPRESENTED_PROVIDER.id };
+    mount();
+    const pasting = FakeController.last.pasteImage!;
+    // Before the daemon has served the providers, and for a session the store does not hold, none is taken.
+    expect(pasting.takes(session.id)).toBe(false);
+    const taking = FIXTURE_PROVIDERS.find((provider) => provider.id === session.agent)!;
+    expect(taking.capabilities.message_images).toBe(true);
+    expect(UNPRESENTED_PROVIDER.capabilities.message_images).toBe(false);
+    setState({ sessions: new Map([[session.id, session], [takingNone.id, takingNone]]), providers: [taking, UNPRESENTED_PROVIDER] });
+    expect(pasting.takes(session.id)).toBe(true);
+    expect(pasting.takes(takingNone.id)).toBe(false);
+    expect(pasting.takes("s-gone")).toBe(false);
+    // The served capability decides, not which provider it is.
+    setState({ providers: [{ ...taking, capabilities: { ...taking.capabilities, message_images: false } }, UNPRESENTED_PROVIDER] });
+    expect(pasting.takes(session.id)).toBe(false);
   });
 
   it("reads the image through the platform's clipboard where it has one to read", async () => {

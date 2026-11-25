@@ -1,0 +1,4 @@
+# capture<TAB>title<TAB>glyph (U+XXXX, or nothing); a title of * is every title of the capture.
+# Codex sets its first title once it has drawn; its title captures keep only the title sequences.
+codex_approval_title.bin	*
+codex_working_title.bin	*

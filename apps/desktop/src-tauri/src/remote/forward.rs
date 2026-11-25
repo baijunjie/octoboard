@@ -27,7 +27,13 @@ use super::tunnel::Link;
 use crate::diagnostics::diagnostic;
 
 /// How long the remote port is tried for at each of its addresses before the browser opens.
+#[cfg(not(test))]
 const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+/// Longer under test than a test waits for anything (`PATIENCE`): where a test's host holds one
+/// address's answer back, an opening that waits for that answer is then seen not to end, rather
+/// than to end at this limit.
+#[cfg(test)]
+const PROBE_TIMEOUT: Duration = crate::test_support::PATIENCE.saturating_mul(2);
 
 /// How long a connection to a port of this computer is waited for when finding out whether anything
 /// answers there.
@@ -538,11 +544,18 @@ async fn carry(
     let Some(session) = link.session().await else {
         return;
     };
+    #[cfg(test)]
+    let from = stream.peer_addr().ok();
     let tried = *route.lock().unwrap_or_else(|e| e.into_inner());
     let windows = link.host_is_windows();
     let opening = async {
         let mut start = Start::default();
         for host in Route::order(tried.hosts, Some(tried.answered)) {
+            #[cfg(test)]
+            if let Some(from) = from {
+                let mut tries = link.forward_tries.lock().unwrap_or_else(|e| e.into_inner());
+                tries.push((from, host));
+            }
             let channel = match session.forward(host, remote, ssh::COMMAND_TIMEOUT).await {
                 Ok(channel) => channel,
                 Err(ForwardError::NothingListening) => continue,
@@ -645,10 +658,10 @@ async fn start_on_windows(
 #[cfg(test)]
 mod tests {
     use super::super::octoboardd::{Remote, Shell};
-    use super::super::ssh::test_server::{Behaviour, TestServer};
+    use super::super::ssh::test_server::{Behaviour, Refusal, TestServer};
     use super::super::ssh::{Secret, Target as SshTarget};
     use super::*;
-    use crate::test_support::{ClosedPort, PATIENCE};
+    use crate::test_support::{is_port_probe, port_probed, ClosedPort, PATIENCE};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -795,15 +808,56 @@ mod tests {
 
     /// Sends `text` to `address` on `local` and reads what comes back until the end.
     async fn through(address: SocketAddr, text: &[u8]) -> Vec<u8> {
+        through_from(address, text).await.0
+    }
+
+    /// `through`, and where the connection came from, for `tried_for`.
+    async fn through_from(address: SocketAddr, text: &[u8]) -> (Vec<u8>, SocketAddr) {
         let mut stream = TcpStream::connect(address).await.unwrap();
+        let from = stream.local_addr().unwrap();
         stream.write_all(text).await.unwrap();
         stream.shutdown().await.unwrap();
         let mut back = Vec::new();
-        tokio::time::timeout(Duration::from_secs(10), stream.read_to_end(&mut back))
+        tokio::time::timeout(PATIENCE, stream.read_to_end(&mut back))
             .await
             .expect("the bytes came back")
             .unwrap();
-        back
+        (back, from)
+    }
+
+    /// The addresses of the remote machine the connection made from `from` was tried at, in order.
+    /// A forwarded port takes a connection from anything on the machine
+    /// (`crate::test_support::port_probe`) and carries it like any other, so what the host was
+    /// asked for after a moment says nothing of one connection: a test reads its own.
+    fn tried_for(running: &Running, from: SocketAddr) -> Vec<&'static str> {
+        let tries = running.link.forward_tries.lock().unwrap();
+        tries
+            .iter()
+            .filter(|(came_from, _)| *came_from == from)
+            .map(|(_, host)| *host)
+            .collect()
+    }
+
+    /// The addresses the host was asked for at `port`, sorted, each named once however often it
+    /// was asked for: which addresses an opening asks for, whatever connections were carried to
+    /// the port besides (they go to the same addresses).
+    fn asked_for(running: &Running, port: u16) -> Vec<String> {
+        let mut hosts: Vec<String> = running
+            .server
+            .forwarded()
+            .into_iter()
+            .filter(|(_, asked)| *asked == u32::from(port))
+            .map(|(host, _)| host)
+            .collect();
+        hosts.sort();
+        hosts.dedup();
+        hosts
+    }
+
+    /// Sends the daemon's probe to the forwarded port `local`, as anything on the machine may at
+    /// any moment: it is carried to the echo server, which sends its request back.
+    async fn stranger(local: u16) {
+        assert!(is_port_probe(&port_probed(local).await));
     }
 
     fn has_ipv6() -> bool {
@@ -836,6 +890,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(opened, format!("http://localhost:{remote}/p"));
+        stranger(remote).await;
         assert_eq!(
             through((Ipv4Addr::LOCALHOST, remote).into(), b"hello").await,
             b"hello"
@@ -945,6 +1000,8 @@ mod tests {
         let session = running.link.current().unwrap();
         running.server.drop_connections();
         session.closed().await;
+        // Whichever connection comes first has the SSH connection made again: a stranger's here.
+        stranger(local).await;
         assert_eq!(
             through((Ipv4Addr::LOCALHOST, local).into(), b"back").await,
             b"back"
@@ -1015,24 +1072,11 @@ mod tests {
         ] {
             let closed = ClosedPort::new();
             let url = format!("{url}:{}/", closed.port());
-            let before = running.server.forwarded().len();
-            open(&running, &url).await.unwrap();
-            assert_eq!(sorted(asked_since(&running, before)), hosts, "{url}");
+            let opened = open(&running, &url).await.unwrap();
+            // A stranger's connection to the forwarded port goes to the same addresses.
+            stranger(port_of(&opened)).await;
+            assert_eq!(asked_for(&running, closed.port()), hosts, "{url}");
         }
-    }
-
-    /// The hosts the `direct-tcpip` channels asked for from the `from`th on.
-    fn asked_since(running: &Running, from: usize) -> Vec<String> {
-        running.server.forwarded()[from..]
-            .iter()
-            .map(|(host, _)| host.clone())
-            .collect()
-    }
-
-    /// `hosts` in order, for the ones asked for at once.
-    fn sorted(mut hosts: Vec<String>) -> Vec<String> {
-        hosts.sort();
-        hosts
     }
 
     #[tokio::test]
@@ -1052,15 +1096,13 @@ mod tests {
         let opened = open(&running, &format!("http://localhost:{remote}/"))
             .await
             .unwrap();
-        assert_eq!(sorted(asked_since(&running, 0)), ["127.0.0.1", "::1"]);
-        // Each connection goes where the server answered.
+        assert_eq!(asked_for(&running, remote), ["127.0.0.1", "::1"]);
+        // Each connection goes where the server answered: a stranger's, and the one made here.
         let local = port_of(&opened);
-        let before = running.server.forwarded().len();
-        assert_eq!(
-            through((Ipv4Addr::LOCALHOST, local).into(), b"six").await,
-            b"six"
-        );
-        assert_eq!(asked_since(&running, before), ["::1"]);
+        stranger(local).await;
+        let (back, from) = through_from((Ipv4Addr::LOCALHOST, local).into(), b"six").await;
+        assert_eq!(back, b"six");
+        assert_eq!(tried_for(&running, from), ["::1"]);
     }
 
     #[tokio::test]
@@ -1078,12 +1120,19 @@ mod tests {
             (failure.kind, failure.port),
             (FailureKind::NothingListening, 4321)
         );
-        assert_eq!(sorted(asked_since(&running, 0)), ["127.0.0.1", "::1"]);
+        // Nothing comes to be forwarded here, so no port is listened on and the host is asked by
+        // these openings alone.
+        let asked = |from: usize| running.server.forwarded()[from..].to_vec();
+        let mut both = asked(0);
+        both.sort();
+        assert_eq!(
+            both,
+            [("127.0.0.1".to_owned(), 4321), ("::1".to_owned(), 4321)]
+        );
         // An address as written is tried at that address alone.
-        let before = running.server.forwarded().len();
         let failure = open(&running, "http://127.0.0.1:4321/").await.unwrap_err();
         assert_eq!(failure.kind, FailureKind::NothingListening);
-        assert_eq!(asked_since(&running, before), ["127.0.0.1"]);
+        assert_eq!(asked(2), [("127.0.0.1".to_owned(), 4321)]);
         assert!(running.forwards.list().is_empty());
     }
 
@@ -1104,12 +1153,13 @@ mod tests {
         let local = (Ipv4Addr::LOCALHOST, port_of(&opened)).into();
         // The server moved to `::1`.
         running.server.set_not_listening_on(&["127.0.0.1"]);
-        let before = running.server.forwarded().len();
-        assert_eq!(through(local, b"moved").await, b"moved");
-        assert_eq!(asked_since(&running, before), ["127.0.0.1", "::1"]);
-        let before = running.server.forwarded().len();
-        assert_eq!(through(local, b"again").await, b"again");
-        assert_eq!(asked_since(&running, before), ["::1"]);
+        let (back, from) = through_from(local, b"moved").await;
+        assert_eq!(back, b"moved");
+        assert_eq!(tried_for(&running, from), ["127.0.0.1", "::1"]);
+        stranger(port_of(&opened)).await;
+        let (back, from) = through_from(local, b"again").await;
+        assert_eq!(back, b"again");
+        assert_eq!(tried_for(&running, from), ["::1"]);
     }
 
     #[tokio::test]
@@ -1130,39 +1180,29 @@ mod tests {
             .unwrap();
     }
 
-    /// How long the test host takes to find that nothing listens, where it is told to take time.
-    const REFUSAL_DELAY: Duration = Duration::from_secs(2);
-
-    /// How long opening `url` over `running` took, and what came of it.
-    async fn timed(running: &Running, url: &str) -> (Duration, Result<String, Failure>) {
-        let started = tokio::time::Instant::now();
-        let opened = open(running, url).await;
-        (started.elapsed(), opened)
-    }
-
     #[tokio::test]
     async fn nothing_listening_on_either_family_is_told_after_one_refusal_s_time_not_two() {
         for (shell, confirms_then_closes) in [(Shell::Posix, false), (Shell::Cmd, true)] {
             let closed = ClosedPort::new();
+            // The host takes its time over each address: it answers once both wait for it.
             let running = run_on(Behaviour {
                 forward_to: Some(closed.port()),
                 not_listening_on: vec!["127.0.0.1".into(), "::1".into()],
-                refusal_delay: REFUSAL_DELAY,
+                refusal: Refusal::Together(2),
                 confirms_then_closes,
                 shell,
                 ..Behaviour::default()
             })
             .await;
-            let (took, opened) = timed(&running, "http://localhost:4321/").await;
+            let opened = open(&running, "http://localhost:4321/").await;
             assert_eq!(
                 opened.unwrap_err().kind,
                 FailureKind::NothingListening,
                 "{shell:?}"
             );
-            assert!(
-                took >= REFUSAL_DELAY && took < REFUSAL_DELAY * 2 - Duration::from_millis(500),
-                "{shell:?} took {took:?}"
-            );
+            // Both addresses were asked for at once, so the host's time was waited out once: an
+            // opening that asks for one after the other never has two waiting.
+            assert_eq!(running.server.most_refusals_waiting(), 2, "{shell:?}");
         }
     }
 
@@ -1172,20 +1212,27 @@ mod tests {
         let running = run_on(Behaviour {
             forward_to: Some(echo),
             not_listening_on: vec!["127.0.0.1".into()],
-            refusal_delay: REFUSAL_DELAY,
+            refusal: Refusal::Held,
             confirms_then_closes: true,
             shell: Shell::Cmd,
             ..Behaviour::default()
         })
         .await;
         let closed = ClosedPort::new();
-        let (took, opened) = timed(&running, &format!("http://localhost:{}/", closed.port())).await;
-        assert!(took < REFUSAL_DELAY, "took {took:?}");
+        // The host never says that nothing listens on `127.0.0.1` here, and the opening's own limit
+        // for an address is longer than this wait (`PROBE_TIMEOUT`): the address is opened only if
+        // that answer is not waited for.
+        let url = format!("http://localhost:{}/", closed.port());
+        let opened = tokio::time::timeout(PATIENCE, open(&running, &url))
+            .await
+            .expect("opened with the other family's answer still to come");
+        running.server.refuse();
         // `::1` answered first, and is where the connections go.
-        let local = (Ipv4Addr::LOCALHOST, port_of(&opened.unwrap())).into();
-        let before = running.server.forwarded().len();
-        assert_eq!(through(local, b"first").await, b"first");
-        assert_eq!(asked_since(&running, before), ["::1"]);
+        let local = port_of(&opened.unwrap());
+        stranger(local).await;
+        let (back, from) = through_from((Ipv4Addr::LOCALHOST, local).into(), b"first").await;
+        assert_eq!(back, b"first");
+        assert_eq!(tried_for(&running, from), ["::1"]);
     }
 
     #[tokio::test]
@@ -1208,13 +1255,14 @@ mod tests {
         let local = (Ipv4Addr::LOCALHOST, port_of(&opened)).into();
         // The server moved to `::1`, or `127.0.0.1`'s channel closes later than the probe watched it for.
         running.server.set_not_listening_on(&["127.0.0.1"]);
-        let before = running.server.forwarded().len();
         // The bytes sent before the close reach the server at `::1`.
-        assert_eq!(through(local, b"moved").await, b"moved");
-        assert_eq!(asked_since(&running, before), ["127.0.0.1", "::1"]);
-        let before = running.server.forwarded().len();
-        assert_eq!(through(local, b"again").await, b"again");
-        assert_eq!(asked_since(&running, before), ["::1"]);
+        let (back, from) = through_from(local, b"moved").await;
+        assert_eq!(back, b"moved");
+        assert_eq!(tried_for(&running, from), ["127.0.0.1", "::1"]);
+        stranger(port_of(&opened)).await;
+        let (back, from) = through_from(local, b"again").await;
+        assert_eq!(back, b"again");
+        assert_eq!(tried_for(&running, from), ["::1"]);
     }
 
     #[tokio::test]
@@ -1232,7 +1280,7 @@ mod tests {
         let opened = open(&running, &format!("http://localhost:{}/", closed.port()))
             .await
             .unwrap();
-        let before = running.server.forwarded().len();
+        stranger(port_of(&opened)).await;
         let mut stream = TcpStream::connect((Ipv4Addr::LOCALHOST, port_of(&opened)))
             .await
             .unwrap();
@@ -1243,7 +1291,8 @@ mod tests {
         stream.write_all(b"pong").await.unwrap();
         stream.read_exact(&mut back).await.unwrap();
         assert_eq!(&back, b"pong");
-        assert_eq!(asked_since(&running, before), ["127.0.0.1"]);
+        let from = stream.local_addr().unwrap();
+        assert_eq!(tried_for(&running, from), ["127.0.0.1"]);
     }
 
     #[test]
@@ -1293,11 +1342,8 @@ mod tests {
             .or_default()
             .clone();
         let _held = lock.lock().await;
-        let other = tokio::time::timeout(
-            Duration::from_secs(5),
-            open(&running, &format!("http://localhost:{b}/")),
-        )
-        .await;
+        let other =
+            tokio::time::timeout(PATIENCE, open(&running, &format!("http://localhost:{b}/"))).await;
         assert!(other.expect("another port is not waited for").is_ok());
     }
 
@@ -1319,8 +1365,7 @@ mod tests {
         stream.read_exact(&mut back).await.unwrap();
         running.forwards.stop(remote);
         let mut rest = Vec::new();
-        let ended =
-            tokio::time::timeout(Duration::from_secs(10), stream.read_to_end(&mut rest)).await;
+        let ended = tokio::time::timeout(PATIENCE, stream.read_to_end(&mut rest)).await;
         assert!(ended.is_ok(), "the connection was cut");
         assert!(port_freed(local).await, "the port is let go");
     }

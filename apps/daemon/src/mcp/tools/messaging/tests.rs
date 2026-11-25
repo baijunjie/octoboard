@@ -550,3 +550,71 @@ fn the_sender_is_told_what_became_of_a_message_word_for_word() {
          affected."
     );
 }
+
+/// The sessions the outbox has noted as the senders of the messages queued so far
+/// (`crate::messaging::outbox::Outbox::sender_of`), oldest ticket first: a test state's tickets
+/// start from 0.
+fn noted_senders(state: &std::sync::Arc<crate::state::AppState>) -> Vec<String> {
+    (0..64)
+        .filter_map(|ticket| state.outbox.sender_of(&format!("launch:{ticket}")))
+        .collect()
+}
+
+/// An instruction is noted as sent by the session that gave it, so that a cancel or a turn's end
+/// that loses it tells that session.
+#[tokio::test]
+async fn an_instruction_is_noted_as_sent_by_its_caller() {
+    let (state, _dir) = peer_state("peer-instruct-sender");
+    let mine = running(&state, "mine");
+    let result = call(
+        &state,
+        "starter",
+        "instruct_session",
+        &arguments(json!({ "session": "mine", "text": "rebase onto main" })),
+    )
+    .await
+    .unwrap();
+    assert_eq!(result["delivered"], true);
+    output_containing(&mine, "rebase onto main");
+    assert_eq!(noted_senders(&state), ["starter"]);
+}
+
+/// Information is noted as sent by the session that shared it, and the copy its receiver's owner
+/// is sent as sent by nobody: that copy was never the sender's message to the owner.
+#[tokio::test]
+async fn information_is_noted_as_sent_by_its_sender_and_the_owners_copy_by_nobody() {
+    let (state, _dir) = peer_state("peer-share-sender");
+    let of_a = running(&state, "of-a");
+    let console_a = running(&state, "a");
+    let result = call(
+        &state,
+        "loose",
+        "inform_session",
+        &arguments(json!({ "session": "of-a", "text": "the port moved" })),
+    )
+    .await
+    .unwrap();
+    assert_eq!(result["delivered"], true);
+    output_containing(&of_a, "the port moved");
+    // The copy went through the owner's queue too.
+    assert!(output_containing(&console_a, "the port moved").contains("Copy of information"));
+    assert_eq!(noted_senders(&state), ["loose"]);
+}
+
+/// A report is noted as sent by the reporting session, so that an owner's turn that loses it
+/// tells the reporter.
+#[tokio::test]
+async fn a_report_is_noted_as_sent_by_the_reporting_session() {
+    let (state, _dir) = peer_state("peer-report-sender");
+    let starter = running(&state, "starter");
+    call(
+        &state,
+        "mine",
+        "report",
+        &arguments(json!({ "summary": "halfway there", "status": "needs_decision" })),
+    )
+    .await
+    .unwrap();
+    output_containing(&starter, "halfway there");
+    assert_eq!(noted_senders(&state), ["mine"]);
+}

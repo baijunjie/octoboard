@@ -45,7 +45,9 @@ and that nothing bypasses them, is in `CLAUDE.md`, "Repository checks".
   and compares, and lists every module that test reads, transitive imports included, in a relation list of
   `scripts/verify/scope.mjs` (`DOCS_READS_WEB` for `apps/docs/webParity.test.ts`). The cross-package scan in
   `scope.test.mjs` finds only direct reads, from `.rs`, `.ts`, `.tsx`, `.mjs`, `.astro` and `.mdx` files, so a module
-  the test reaches through an import is named by hand.
+  the test reaches through an import is named by hand. The website's and the documentation site's imports of the UI
+  package are the exception: they are derived by following the imports (`scripts/verify/ui-imports.mjs`), which fails
+  on an import it cannot resolve.
 - **A new check or workspace package follows `scripts/verify/README.md`, "Changing it":** a rule in `RULES`, a step in
   `steps.mjs` with `quick.mjs` kept consistent (its tests fail otherwise), a Rust test target named in `CRATES`. A test
   that creates a temporary Git repository calls `assertRepositoryEnvironmentCleared` at module startup, and a hook

@@ -25,6 +25,8 @@ const ADOPTION_WAIT: Duration = Duration::from_secs(20);
 /// queue, a session request it has waiting (its call has nobody left to return to), its
 /// bookkeeping. Called wherever a live session is dropped.
 pub(crate) fn unregister_live(state: &Arc<AppState>, live: &Arc<LiveSession>) {
+    // What the process's agent left untaken is kept on it, and no wait finds it once it is gone.
+    state.tell_untaken_now(live);
     let was_current = state.remove_live(live);
     if was_current {
         crate::session_request::withdraw_for_session(state, &live.id);

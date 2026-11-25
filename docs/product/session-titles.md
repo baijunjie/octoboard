@@ -28,13 +28,16 @@ in "Renaming a session" in `docs/product/sessions.md`.
 
 The task title is the first of these that says something:
 
-1. **The title the agent's own records name the conversation with**: the name the user gave it with the agent's
-   rename, else the one the agent generated (Claude Code, Codex, Grok Build each keep one).
+1. **The title the agent's own records name the conversation with**: a name the user gave it in the agent, or a task title the agent generated and saved.
 2. **The task in the agent's terminal title**, with the agent's decorations taken off: status glyphs and spinners,
    activity and approval markers, the agent's own name, and the project's name where the agent adds it. A terminal
    title that is only decoration, such as a startup placeholder, says nothing.
 3. **The user's first prompt**, for Claude Code and Codex: its first line that is not a markdown heading, on one line
    and cut to about 80 characters with an ellipsis.
+
+For an agent whose record is a tree (see "What the history lists" in `docs/product/session-history.md`), the titles its
+records give are read from the conversation's current branch only: a title named on what the user went back on does
+not count.
 
 The instructions that open a handoff do not count as a prompt title, including one already saved with the session.
 Until the receiving agent names the conversation or puts a task in its terminal title, the receiving session shows
@@ -70,7 +73,10 @@ The terminal title comes from OSC 0 or OSC 2 with a BEL or ST terminator. Octobo
 most 4096 bytes without control characters. Other terminal strings and malformed or oversized titles leave the
 saved title unchanged. On Windows, a title the console host sets of its own accord is not the agent's and is passed
 over too: the path of an executable (`C:\…\codex.exe`), alone or after the one-word label of an elevated console
-(`Administrator: C:\…\powershell.exe`, in the system's language). Title observation does not remove or change the
+(`Administrator: C:\…\powershell.exe`, in the system's language). In a terminal running on the system's own console
+host, a title set before the program has drawn anything on the terminal's screen is passed over as well, whoever set
+it, since the console host may set one of its own as it starts; so the title an agent sets as it starts, before its
+first drawing, is not followed there, while one it sets once something has been drawn is. Title observation does not remove or change the
 output shown in the terminal.
 
 ## Leading activity glyphs
@@ -79,9 +85,12 @@ Agents animate glyphs at the start of their terminal title to show what they are
 characters at the very start of a title, together with the whitespace after it, is not part of the title Octoboard
 follows: braille patterns (U+2800–U+28FF, the usual terminal spinners ⠋⠙⠹…), the half-filled circles ◐◓◑◒
 (U+25D0–U+25D3) and U+25F0–U+25F7, the stars and asterisks U+2722–U+2727 and U+2729–U+273D (among them ✳ ✶ ✻ ✽ ✦),
-and · • ● ○ ◉ ◎ ◆ ◇. The run is left out only when the title goes on after whitespace or ends there: a title that
-starts with such a character followed directly by text keeps it, and such characters further into the title are
-kept.
+the raised hand ✋ (U+270B), the timer ⏲ (U+23F2), and · • ● ○ ◉ ◎ ◆ ◇. The run is left out only when the title goes on
+after whitespace or ends there: a title that starts with such a character followed directly by text keeps it, and such
+characters further into the title are kept.
 
 So the saved title, and every place that shows it, never carries these glyphs; a title that only changes its glyph is
-not a change, and one that is nothing but such glyphs clears the terminal title as an empty one does.
+not a change, and one that is nothing but such glyphs clears the terminal title as an empty one does. The glyph is not
+lost for the session's status, though: the agent's provider is handed the glyph a title starts with, and reads from it
+what the agent is doing where that agent's titles say so (see "What the statuses are derived from" in
+`docs/product/session-statuses.md`).

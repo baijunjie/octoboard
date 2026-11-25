@@ -107,6 +107,10 @@ fn main() -> Result<()> {
     // its pid names now is the application.
     let parent = cli.parent_pid.map(platform::proc::Parent::read);
     processes::ledger::forget_inherited_tag();
+    // Likewise still the only thread: nothing above starts one, and the logging, the crash
+    // handler and the runtime come after. Only here, in the daemon itself: a mode of this
+    // executable that runs inside a session (`cli::run` above) keeps that session's environment.
+    env_shell::forget_inherited_session();
     let (key, handed_over_from) = if cli.key_stdin {
         let (key, from) = read_key_from_stdin()?;
         (Some(key), Some(from))
@@ -293,6 +297,7 @@ async fn run_daemon(
         paths::saved_output_dir(),
         paths::consoles_dir(),
         paths::handoff_dir(),
+        paths::agent_query_homes_dir(),
         processes::ledger::ProcessLedger::new(&paths::data_dir()),
     ));
     let _ = state_out.set(state.clone());

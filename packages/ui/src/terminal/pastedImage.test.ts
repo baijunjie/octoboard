@@ -71,7 +71,7 @@ describe("the handlers of a terminal that pastes images", () => {
       return { type: "pasted_image_saved", id: null, path: options.path ?? PATH };
     };
     const request = looseRequestSender(handler);
-    return { requests, pasting: pasteImageHandlers(() => ({ t, request }), options.readImage) };
+    return { requests, pasting: pasteImageHandlers(() => ({ t, request, takesImages: () => true }), options.readImage) };
   }
 
   const base64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
@@ -125,7 +125,7 @@ describe("the handlers of a terminal that pastes images", () => {
 
   it("save answers each call through the translator and request sender current at that time", async () => {
     let current = handlers();
-    const latest = vi.fn(() => ({ t, request: looseRequestSender(async (body) => { current.requests.push(body); return { type: "pasted_image_saved", id: null, path: "/x" }; }) }));
+    const latest = vi.fn(() => ({ t, request: looseRequestSender(async (body) => { current.requests.push(body); return { type: "pasted_image_saved", id: null, path: "/x" }; }), takesImages: () => true }));
     const pasting = pasteImageHandlers(latest, undefined);
     const first = current;
     await pasting.save(new Blob(["x"], { type: "image/png" }), "s-1");
@@ -248,7 +248,7 @@ describe("saving an image on the daemon of a session", () => {
       requests.push(body);
       return { type: "pasted_image_saved", id: null, path: "/Users/some one/pasted/p.png" };
     });
-    await expect(pasteImageHandlers(() => ({ t, request }), undefined).save(new Blob(["abc"], { type: "image/png" }), "s-9")).resolves.toBe("'/Users/some one/pasted/p.png'");
+    await expect(pasteImageHandlers(() => ({ t, request, takesImages: () => true }), undefined).save(new Blob(["abc"], { type: "image/png" }), "s-9")).resolves.toBe("'/Users/some one/pasted/p.png'");
     expect(requests).toEqual([{ type: "save_pasted_image", session: "s-9", data: Buffer.from("abc").toString("base64") }]);
   });
 

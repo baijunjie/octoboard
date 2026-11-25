@@ -1,6 +1,7 @@
 //! The HTTP routes the daemon's own helper processes and the agents' hooks call: the hook events
 //! (queued here, applied by `crate::hooks::apply`), the branches a session's git created, the
-//! revert gate's question, the context window a status line reports, the MCP tool calls, and the
+//! revert gate's question, the context window a status line reports, the MCP tool calls, the
+//! polls of a session's extension channel, and the
 //! requests to stop: to shut down, to make a planned restart, and to make a planned stop.
 //!
 //! What each helper route does is [`handle`], which takes the route by name: the HTTP routes call
@@ -9,13 +10,12 @@
 
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 
-use crate::holder::protocol::HookMark;
-use crate::holder::protocol::RelayRoute;
+use crate::holder::protocol::{HookMark, HookQuery, RelayRoute};
 use crate::hooks;
 use crate::hooks::queue::{Push, QueuedHook};
 use crate::state::{AppState, RestartRefusal};
@@ -58,19 +58,21 @@ impl IntoResponse for Reply {
 
 /// Runs the helper route `route`, whose path parameter is `param` (the session id, for
 /// [`RelayRoute::Hook`] followed by the launch where the hook names one ([`HookMark`]), or for
-/// [`RelayRoute::Mcp`] the session's token) and whose body is `body`.
+/// [`RelayRoute::Mcp`] the session's token) and whose body is `body`. The hook route can supply an event name separately.
 pub(super) async fn handle(
     state: Arc<AppState>,
     route: RelayRoute,
     param: String,
     body: Bytes,
+    event: Option<String>,
 ) -> Reply {
     match route {
         RelayRoute::Hook | RelayRoute::GitRef | RelayRoute::ContextWindow => {
-            report(state, route, param, body)
+            report(state, route, param, body, event)
         }
         RelayRoute::RevertGate => revert_gate(state, param, body).await,
         RelayRoute::Mcp => mcp(state, param, body).await,
+        RelayRoute::Channel => channel(state, param, body).await,
         RelayRoute::Unknown => Reply::status(StatusCode::NOT_FOUND),
     }
 }
@@ -78,9 +80,15 @@ pub(super) async fn handle(
 /// Runs a helper route that only reports (the hook, the git refs, the context window): it never
 /// waits, so it is handled in the order the requests arrive. Anything else is not found. Starts
 /// tasks, so it has to run inside the daemon's runtime.
-pub(super) fn report(state: Arc<AppState>, route: RelayRoute, param: String, body: Bytes) -> Reply {
+pub(super) fn report(
+    state: Arc<AppState>,
+    route: RelayRoute,
+    param: String,
+    body: Bytes,
+    event: Option<String>,
+) -> Reply {
     match route {
-        RelayRoute::Hook => hook(state, param, body),
+        RelayRoute::Hook => hook(state, param, body, event),
         RelayRoute::GitRef => git_ref(state, param, body),
         RelayRoute::ContextWindow => context_window(&state, &param, &body),
         _ => Reply::status(StatusCode::NOT_FOUND),
@@ -89,16 +97,25 @@ pub(super) fn report(state: Arc<AppState>, route: RelayRoute, param: String, bod
 
 pub(super) async fn hook_callback(
     Path(session_id): Path<String>,
+    query: Option<Query<HookQuery>>,
     State(state): State<Arc<AppState>>,
     body: Bytes,
 ) -> Reply {
-    handle(state, RelayRoute::Hook, session_id, body).await
+    handle(
+        state,
+        RelayRoute::Hook,
+        session_id,
+        body,
+        HookQuery::event(query),
+    )
+    .await
 }
 
 /// The hook callback of a launch whose hooks name it ([`HookMark`]): the session
 /// and the launch go on as one parameter, as a holder relays them.
 pub(super) async fn launch_hook_callback(
     Path((session, launch)): Path<(String, String)>,
+    query: Option<Query<HookQuery>>,
     State(state): State<Arc<AppState>>,
     body: Bytes,
 ) -> Reply {
@@ -106,7 +123,14 @@ pub(super) async fn launch_hook_callback(
         session,
         launch: Some(launch),
     };
-    handle(state, RelayRoute::Hook, mark.param(), body).await
+    handle(
+        state,
+        RelayRoute::Hook,
+        mark.param(),
+        body,
+        HookQuery::event(query),
+    )
+    .await
 }
 
 pub(super) async fn git_ref_callback(
@@ -114,7 +138,7 @@ pub(super) async fn git_ref_callback(
     State(state): State<Arc<AppState>>,
     body: Bytes,
 ) -> Reply {
-    handle(state, RelayRoute::GitRef, session_id, body).await
+    handle(state, RelayRoute::GitRef, session_id, body, None).await
 }
 
 pub(super) async fn revert_gate_callback(
@@ -122,7 +146,7 @@ pub(super) async fn revert_gate_callback(
     State(state): State<Arc<AppState>>,
     body: Bytes,
 ) -> Reply {
-    handle(state, RelayRoute::RevertGate, session_id, body).await
+    handle(state, RelayRoute::RevertGate, session_id, body, None).await
 }
 
 pub(super) async fn context_window_callback(
@@ -130,7 +154,15 @@ pub(super) async fn context_window_callback(
     State(state): State<Arc<AppState>>,
     body: Bytes,
 ) -> Reply {
-    handle(state, RelayRoute::ContextWindow, session_id, body).await
+    handle(state, RelayRoute::ContextWindow, session_id, body, None).await
+}
+
+pub(super) async fn channel_poll(
+    Path(session_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+    body: Bytes,
+) -> Reply {
+    handle(state, RelayRoute::Channel, session_id, body, None).await
 }
 
 pub(super) async fn mcp_call(
@@ -138,7 +170,7 @@ pub(super) async fn mcp_call(
     State(state): State<Arc<AppState>>,
     body: Bytes,
 ) -> Reply {
-    handle(state, RelayRoute::Mcp, token, body).await
+    handle(state, RelayRoute::Mcp, token, body, None).await
 }
 
 /// The hook callback. It answers `200` with an empty body at once whatever happens, and applies the
@@ -148,15 +180,19 @@ pub(super) async fn mcp_call(
 /// waited would also hold the turn, and one that never came (an unreachable daemon, the hook's
 /// timeout) shows a non-blocking error notice in the transcript. An empty `200` is read there as
 /// "no decision", so the event cannot steer the turn either.
-fn hook(state: Arc<AppState>, param: String, body: Bytes) -> Reply {
+fn hook(state: Arc<AppState>, param: String, body: Bytes, event: Option<String>) -> Reply {
     let HookMark {
         session: session_id,
         launch,
     } = HookMark::parse(&param);
-    match state
-        .hook_queues
-        .push(&session_id, QueuedHook { launch, body })
-    {
+    match state.hook_queues.push(
+        &session_id,
+        QueuedHook {
+            launch,
+            body,
+            event,
+        },
+    ) {
         Push::StartWorker => {
             // Applying an event is blocking work on the store, so the drain runs on the blocking
             // pool; the tasks `apply_hook` starts find the runtime from there.
@@ -246,6 +282,15 @@ async fn mcp(state: Arc<AppState>, token: String, body: Bytes) -> Reply {
         }));
     };
 
+    // Not a call: the server saying it answered a listing of its tools, which a launch whose
+    // agent offers them only from then on waits for (`AppState::awaits_tool_listing`).
+    if serde_json::from_slice::<serde_json::Value>(&body)
+        .is_ok_and(|request| request.get("listed") == Some(&serde_json::Value::Bool(true)))
+    {
+        state.note_mcp_tools_listed(&session_id);
+        return Reply::json(&serde_json::json!({ "ok": true }));
+    }
+
     let request: McpCall = match serde_json::from_slice(&body) {
         Ok(request) => request,
         Err(err) => {
@@ -274,6 +319,43 @@ async fn mcp(state: Arc<AppState>, token: String, body: Bytes) -> Reply {
         answer["worker"] = serde_json::json!(session.is_worker());
     }
     Reply::json(&answer)
+}
+
+/// One poll of a session's extension channel by its helper (`octoboardd channel`): the outcomes of
+/// the messages handed over before, answered, for a poll that waits, with the messages to send
+/// once there are some or with none once its window runs out (`crate::session::channel`). `404`
+/// where the session has no channel: it does not run, its messages go through its terminal or a
+/// server of its own, or it has ended. The helper ends on that, so a launch whose daemon or holder
+/// knows no channel stays on its terminal.
+///
+/// `503`, on which the helper asks again, where the session does not run yet and its claim is
+/// held: a launch is registered only once its process is up, and an extension that starts its
+/// helper before that would otherwise lose the channel for the whole session.
+async fn channel(state: Arc<AppState>, session_id: String, body: Bytes) -> Reply {
+    let Ok(request) = serde_json::from_slice::<crate::session::channel::PollRequest>(&body) else {
+        return Reply::status(StatusCode::BAD_REQUEST);
+    };
+    // Read before the running sessions: a launch registers its session and then releases its
+    // claim, so read the other way round, one that did both in between would look like neither.
+    let starting = state.is_launching(&session_id);
+    let Some(live) = state.live_session(&session_id) else {
+        return Reply::status(if starting {
+            StatusCode::SERVICE_UNAVAILABLE
+        } else {
+            StatusCode::NOT_FOUND
+        });
+    };
+    let transport = live.transport.clone();
+    let Some(channel) = transport
+        .as_deref()
+        .and_then(|transport| transport.channel())
+    else {
+        return Reply::status(StatusCode::NOT_FOUND);
+    };
+    match channel.poll(request).await {
+        Some(reply) => Reply::json(&reply),
+        None => Reply::status(StatusCode::NOT_FOUND),
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -399,7 +481,7 @@ fn refusal_reply(refusal: RestartRefusal) -> Reply {
 #[cfg(test)]
 mod tests {
     use crate::server::router;
-    use crate::server::test_support::{keyed, serve, status_of};
+    use crate::server::test_support::{keyed, serve, serve_state, status_of};
     use crate::test_support::{app_state, PATIENCE, TEST_KEY};
     use std::io::Write;
     use std::net::TcpStream;
@@ -435,6 +517,128 @@ mod tests {
         })
         .await
         .expect("the checks ran");
+    }
+
+    /// A hook whose payload names no event is applied under the `event` the route was given, as a
+    /// percent-encoded query value, beside the key; a payload that names its event, in either
+    /// spelling, keeps it whatever the route says; one with neither moves nothing.
+    #[tokio::test]
+    async fn a_hook_is_applied_under_the_routes_event_only_where_its_payload_names_none() {
+        let (state, dir) = app_state("server-hook-event-name");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::console_session(
+                "s",
+                crate::protocol::SessionStatus::Idle,
+            ))
+            .unwrap();
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        let port = serve_state(state.clone()).await;
+
+        let applied = |path: &'static str, body: &'static [u8]| {
+            let state = state.clone();
+            async move {
+                let answered = tokio::task::spawn_blocking(move || {
+                    crate::loopback::post(port, TEST_KEY, path, body, PATIENCE)
+                })
+                .await
+                .expect("the post ran")
+                .expect("answered");
+                assert!(answered.is_empty(), "{path}");
+                state.hook_queues.settled("s").await;
+                state.store.get_session("s").unwrap().unwrap().status
+            }
+        };
+        use crate::protocol::SessionStatus::{Idle, Working};
+
+        // Named by the route alone.
+        assert_eq!(
+            applied("/hook/s?event=UserPromptSubmit", b"{}").await,
+            Working
+        );
+        // The payload's own name wins: `SessionStart` alone would put the session back to idle.
+        assert_eq!(
+            applied(
+                "/hook/s?event=SessionStart",
+                br#"{"hook_event_name": "PostToolUse"}"#
+            )
+            .await,
+            Working
+        );
+        // Percent-encoded, and named by the route alone again: now it does move the session.
+        assert_eq!(applied("/hook/s?event=Session%53tart", b"{}").await, Idle);
+        // The other spelling of the payload's name wins as well.
+        assert_eq!(
+            applied("/hook/s?event=Stop", br#"{"hookEventName": "PostToolUse"}"#).await,
+            Working
+        );
+        // No name anywhere: nothing to apply.
+        assert_eq!(applied("/hook/s", b"{}").await, Working);
+        assert_eq!(applied("/hook/s?event=", b"{}").await, Working);
+    }
+
+    /// The hook route answers `200` whatever its query is: an empty `event`, or one that cannot be
+    /// read (a duplicated `event`, an unknown key) names no event, so a payload that names none is
+    /// applied under nothing and a payload that names its event still is applied.
+    #[tokio::test]
+    async fn a_hook_query_that_names_no_event_or_cannot_be_read_is_answered_and_names_none() {
+        let (state, dir) = app_state("server-hook-lenient-query");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::console_session(
+                "s",
+                crate::protocol::SessionStatus::Idle,
+            ))
+            .unwrap();
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        let port = serve_state(state.clone()).await;
+
+        let applied = |query: &'static str, body: &'static [u8]| {
+            let state = state.clone();
+            async move {
+                let path = format!("/hook/s{query}");
+                let answered = tokio::task::spawn_blocking(move || {
+                    crate::loopback::post(port, TEST_KEY, &path, body, PATIENCE)
+                })
+                .await
+                .expect("the post ran")
+                .expect("answered with a success status");
+                assert!(answered.is_empty(), "{query}");
+                state.hook_queues.settled("s").await;
+                state.store.get_session("s").unwrap().unwrap().status
+            }
+        };
+        use crate::protocol::SessionStatus::{Idle, Working};
+
+        // The event would put the session to work, if it were read.
+        for query in [
+            "?event=",
+            "?event",
+            "?event=UserPromptSubmit&event=UserPromptSubmit",
+            "?event=UserPromptSubmit&event=Stop",
+            "?unknown=UserPromptSubmit",
+        ] {
+            assert_eq!(applied(query, b"{}").await, Idle, "{query}");
+        }
+        // The payload's own name is applied whatever the query holds.
+        assert_eq!(
+            applied(
+                "?event=Stop&event=Stop",
+                br#"{"hook_event_name": "UserPromptSubmit"}"#
+            )
+            .await,
+            Working
+        );
     }
 
     /// What `octoboardd status-line` posts is held for the record collector; a body without a
@@ -482,5 +686,63 @@ mod tests {
                 .retain(&std::collections::HashSet::from(["s", "t"])),
             std::collections::HashMap::from([("s".to_owned(), 200_000)])
         );
+    }
+
+    /// A poll of a session's channel that comes while the session is still being started is told
+    /// to ask again (`503`), since the launch registers its channel only once its process is up;
+    /// once nothing starts the session and it does not run, the poll is answered that there is no
+    /// channel (`404`), which ends the helper.
+    #[tokio::test]
+    async fn a_channel_poll_during_the_sessions_launch_is_told_to_ask_again() {
+        let (state, _dir) = app_state("server-channel-during-launch");
+        let port = serve_state(state.clone()).await;
+        let poll = move || {
+            tokio::task::spawn_blocking(move || {
+                let answered = crate::loopback::post(
+                    port,
+                    TEST_KEY,
+                    "/channel/s",
+                    br#"{"wait":true}"#,
+                    PATIENCE,
+                );
+                crate::loopback::error_status(&answered.expect_err("no channel yet"))
+            })
+        };
+        let claim = state.begin_launch("s").expect("the launch's claim");
+        assert_eq!(poll().await.unwrap(), Some(503));
+        drop(claim);
+        assert_eq!(poll().await.unwrap(), Some(404));
+    }
+
+    /// The body `{"listed":true}` the session's MCP server posts under its token, on answering a
+    /// listing of its tools, is no tool call: it is answered `{"ok":true}` and ends the wait of a
+    /// launch that holds its first message for the listing.
+    #[tokio::test]
+    async fn a_listing_told_under_a_token_ends_the_sessions_wait_for_it() {
+        let _wait = crate::test_support::test_provider::declaring_tool_listing_wait(
+            std::time::Duration::from_secs(3600),
+        );
+        let (state, _dir) = app_state("server-mcp-listed");
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        let token = state.issue_mcp_token("s");
+        assert!(state.awaits_tool_listing(&live));
+        let port = serve_state(state.clone()).await;
+
+        let answered = tokio::task::spawn_blocking(move || {
+            crate::loopback::post(
+                port,
+                TEST_KEY,
+                &format!("/mcp/{token}"),
+                br#"{"listed":true}"#,
+                PATIENCE,
+            )
+        })
+        .await
+        .expect("the post ran")
+        .expect("answered");
+        let answer: serde_json::Value = serde_json::from_slice(&answered).unwrap();
+        assert_eq!(answer, serde_json::json!({ "ok": true }));
+        assert!(!state.awaits_tool_listing(&live));
     }
 }

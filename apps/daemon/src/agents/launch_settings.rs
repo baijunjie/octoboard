@@ -18,7 +18,7 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use crate::adapter::provider;
-use crate::agents::models::{Listing, COMMAND_TIMEOUT};
+use crate::agents::models::Listing;
 use crate::protocol::{
     error_code, AgentId, CodedError, DefaultModelSource, Launch, LaunchChange, PerAgent,
 };
@@ -355,9 +355,9 @@ async fn resolve(state: &Arc<AppState>, request: Resolve) -> Result<Resolved> {
         let dir = config_dir.as_deref().map(Path::new);
         let catalogue = provider(agent).catalogue();
         if !catalogue.names_default_model() {
-            let listing = state
-                .agent_models
-                .get_or_load(agent, dir, || crate::agents::models::load(agent, dir));
+            let listing = state.agent_models.get_or_load(agent, dir, || {
+                crate::agents::models::load(agent, dir, &state.agent_query_homes)
+            });
             return Resolved {
                 listing,
                 configured: None,
@@ -376,8 +376,8 @@ async fn resolve(state: &Arc<AppState>, request: Resolve) -> Result<Resolved> {
         let listing = catalogue.list(
             &shell_env,
             dir,
-            &crate::paths::agent_query_homes_dir(),
-            COMMAND_TIMEOUT,
+            &state.agent_query_homes,
+            catalogue.deadline(),
         );
         #[cfg(test)]
         let listing = state.agent_models.seeded(agent, dir).unwrap_or(listing);

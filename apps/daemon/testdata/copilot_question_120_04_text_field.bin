@@ -1,0 +1,36 @@
+[?25l[23;117H1[39;7H[?25h[?25l[23;30r[23;1HMM[r[3;1H[2;90m╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮[m  
+[2C                                                                                                    [17C 
+[2C[34m ╭──╮╭╮[m                     [5;42H[1;34mGetting started[m                                     [26C 
+[2C[34m ╰──╯╰╯[m  Copilot v1.0.114 uses AI.[5CUse the tabs above to explore your sessions and pull requests[17C 
+[2C[35m ██ [96m▘▝[35m▐[m  Check for mistakes.[7;39H[2;90m│[m  /model — Switch models across providers, or use Auto[26C 
+[2;90m│[m [35m   ▔▔▔ [m                             [2;90m│[m                                                                              [2;90m│[m  
+[2;90m│[116C│[m  
+[2;90m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[m  
+[K
+ [33m![m Model "standin" is not in the built-in catalog. Using defaults for: prompt tokens[K
+   (COPILOT_PROVIDER_MAX_PROMPT_TOKENS), output tokens (COPILOT_PROVIDER_MAX_OUTPUT_TOKENS). Run [37m copilot help [m[K
+   [37mproviders [m for configuration details.[K
+[119C 
+ [34m●[m MCP Servers reloaded: 0 servers connected[K
+[119C 
+ ❯ use echo[102C23:02  
+[119C 
+ [34m●[m ok[K
+[K
+ ❯ CMD:tool ask_user {"message": "Pick one?", "requestedSchema": {"properties": {"choice": {"type": "string",    23:02  
+   "enum": ["alpha", "beta"]}, "note": {"type": "string", "description": "a note"}}, "required": ["choice"]}}
+
+[119C 
+[119C [5B  choice  [1;97;44m[note]
+[m[K
+ [1mnote[m  
+ a note[K
+ [2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[C[m❯[K
+ [2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m 
+[K
+ [1menter[m accept · [1mshift+tab[m prev · [1mctrl+d[m decline · [1mesc[m cancel
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[?7l─[?7h[5;6H[34m╮╭─╮
+[5C╯╰─╯
+[4C[35m [96m▘▝[35m █
+[4C▔▔[m

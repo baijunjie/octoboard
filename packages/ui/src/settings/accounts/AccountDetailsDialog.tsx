@@ -1,6 +1,9 @@
 import React, { useId, useRef, useState } from "react";
 
 import { isAgentUnavailable } from "../../agents/agents";
+import { accountConfigDir } from "../../accounts/accountDir";
+import { hasPlanQuota, offersLoginFlow } from "../../agents/providers";
+import { SignInHint } from "../../components/text/SignInHint";
 import { HelpTip } from "../../components/hint/HelpTip";
 import { PATH_VAR_PARAMS } from "../../components/text/literalParams";
 import { MarkedPath } from "../../components/text/MarkedPath";
@@ -13,7 +16,7 @@ import { knownQuotaWindows, loginStateOf } from "../../accounts/quotaFormat";
 import { useFocusReturnAfterClose } from "../../components/focus/useFocusReturnAfterClose";
 import { ResetCreditsLine, UseResetCreditDialog } from "../../quota/ResetCredits";
 import { useAccountQuota } from "../../quota/useAccountQuota";
-import { useDaemonStore } from "../../store";
+import { useDaemonStore, useProviders } from "../../store";
 import { ProviderName } from "../../components/text/ProviderName";
 import { AccountHeading, useAccountDialogSubject } from "./accountDialogSubject";
 import { AccountLoginAnnouncer, useSucceededAccountLogin } from "./AccountLogin";
@@ -37,12 +40,13 @@ function Part({ title, aside, children }: { title: React.ReactNode; aside?: Reac
  * default account): what the row shows in full and what it leaves out, read-only but for redeeming a reset credit. The
  * title is plain ("Account details"); the body's first line names the account, with its plan and login state after the
  * name, the email under it on a line of its own, and the next says where its configuration lives, the default
- * account's explanation after the path. Then the account's quota as the rail's panel draws it (the two-layer 5-hour
+ * account's explanation after the path. Then, for a provider that declares a plan quota (`hasPlanQuota`; none has no such part), the account's quota as the rail's panel draws it (the two-layer 5-hour
  * and weekly meter, each model's window after it) with when it was read, and, for an account holding a reset credit of a provider
  * that offers them, the line that offers to redeem it (`ResetCreditsLine`), whose confirmation opens over this dialog.
  * Besides those controls it holds the header's close button, which Escape and a click outside do the same as; the
  * account's switches are in `AccountSettingsDialog`, its connectors and MCP servers in `AccountMcpDialog`, and logging
- * in is the row's and the menu's. It reads the account from the store as it is now, so a change from another window
+ * in is the row's and the menu's; for a provider with no login flow the dialog says how to log in instead (`SignInHint`)
+ * while the account reads as not logged in. It reads the account from the store as it is now, so a change from another window
  * shows, and closes if the account is removed.
  *
  * Closing the confirmation hands focus back when it fell to the page (the confirmation was opened by a press that took
@@ -60,6 +64,8 @@ export function AccountDetailsDialog({ agent, account, onClose }: {
   const defaultDir = useDaemonStore((s) => s.agentAvailability.get(agent)?.default_account_dir);
   const unusable = useDaemonStore((s) => isAgentUnavailable(s.agentAvailability, agent));
   const quota = useAccountQuota(agent, account);
+  const providers = useProviders();
+  const hintDir = useDaemonStore((s) => accountConfigDir(s.settings.accounts, s.agentAvailability, providers, agent, account));
   const [resetting, setResetting] = useState(false);
   const redeem = useRef<HTMLDivElement>(null);
   const handBack = useFocusReturnAfterClose(() => void focusOpenDialog(redeem.current?.querySelector("button"), { opening: true }));
@@ -70,6 +76,11 @@ export function AccountDetailsDialog({ agent, account, onClose }: {
   if (gone) return null;
   const path = stored ? stored.config_dir : defaultDir;
   const known = loginStateOf(quota) !== undefined;
+  // A provider that declares no plan quota has no usage part; one with no login flow says how to log in instead of
+  // offering it, while the account reads as not logged in.
+  const showsUsagePart = hasPlanQuota(providers, agent);
+  // Said only for a directory that is known, which the hint names.
+  const signInHint = loginStateOf(quota) === "out" && !offersLoginFlow(providers, agent) && hintDir !== "";
   const showsUsage = quota === "loading" || (typeof quota === "object" && (knownQuotaWindows(quota.windows).length > 0 || loginStateOf(quota) === "out"));
   return (
     <>
@@ -99,13 +110,16 @@ export function AccountDetailsDialog({ agent, account, onClose }: {
               <Message id="settings.accounts.notUsable" params={{ agent: <ProviderName agent={agent} />, ...PATH_VAR_PARAMS }} />
             </div>
           )}
+          {signInHint && <div className="text-sm text-app-muted"><SignInHint providers={providers} agent={agent} dir={hintDir} /></div>}
           <AccountLoginAnnouncer login={succeeded} name={name} />
-          <Part title={t("settings.accounts.table.usage")} aside={<QuotaUpdated quota={quota} />}>
-            {showsUsage ? <AccountQuotaSummary quota={quota} single /> : <NoUsageReading />}
-            <div ref={redeem} className="contents">
-              <ResetCreditsLine quota={quota} accountName={name} onUse={() => setResetting(true)} />
-            </div>
-          </Part>
+          {showsUsagePart && (
+            <Part title={t("settings.accounts.table.usage")} aside={<QuotaUpdated quota={quota} />}>
+              {showsUsage ? <AccountQuotaSummary quota={quota} single /> : <NoUsageReading />}
+              <div ref={redeem} className="contents">
+                <ResetCreditsLine quota={quota} accountName={name} onUse={() => setResetting(true)} />
+              </div>
+            </Part>
+          )}
         </div>
       </Dialog>
       {resetting && <UseResetCreditDialog agent={agent} account={account} accountName={name} onClose={closeReset} />}

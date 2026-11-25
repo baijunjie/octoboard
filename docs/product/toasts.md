@@ -1,7 +1,8 @@
 # Toasts
 
 Notices that need no answer are shown as **toasts**. Failures never are; where each is shown instead is in
-"Error alerts" in `docs/product/error-alerts.md`.
+"Error alerts" in `docs/product/error-alerts.md`. Nor is a notice its agent's provider marks as one to acknowledge,
+which is shown in the error alert until dismissed (see "Notices to acknowledge" there).
 
 - **At the window's bottom right** (bottom left under a right-to-left language), or, at a window width of 768 px or
   less, **at the top, centred, just below the top bar**: there the footers of dialogs and the connection banner span the

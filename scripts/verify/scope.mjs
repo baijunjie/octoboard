@@ -6,24 +6,24 @@
 //
 // Packages: `verify` is this command's own code, hook scripts and the tests of the scripts directory;
 // `daemon` and `native` are the two Rust crates, which the Rust steps always check together (one
-// `cargo test --workspace`, one feature set), so selecting either selects both Rust steps.
+// `cargo test --workspace`, one feature set), so selecting either selects both Rust steps. `daemon` also
+// runs the `node:test` files beside the JavaScript the daemon compiles in (`apps/daemon/src/**/*.test.mjs`),
+// which its own rule selects with the rest of the crate's directory.
 
-// What `apps/web` imports from `@octoboard/ui` outside the preview inputs below: the modules its `exports` map
-// names (`i18n/matchLanguage.ts`, `i18n/languages.ts`, `providers/agentMarks.ts`) and what they import
-// (the provider presentation modules the marks come from, and their types).
-export const WEB_IMPORTS_FROM_UI = [
-  "packages/ui/src/i18n/matchLanguage.ts",
-  "packages/ui/src/i18n/languages.ts",
-  "packages/ui/src/providers/agentMarks.ts",
-  "packages/ui/src/providers/claude.ts",
-  "packages/ui/src/providers/codex.ts",
-  "packages/ui/src/providers/grok.ts",
-  "packages/ui/src/providers/types.ts",
-];
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { importsFromUi } from "./ui-imports.mjs";
 
-// What `apps/docs` imports from `@octoboard/ui`: the language list its locale table is built from (`locales.ts`),
-// resolved through the package's `exports` map.
-export const DOCS_IMPORTS_FROM_UI = ["packages/ui/src/i18n/languages.ts", "packages/ui/package.json"];
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+// What `apps/web` imports from `@octoboard/ui`: the modules its `exports` map names and what they import in turn (the
+// provider presentation modules the agent marks come from, and their types). Read from the website's own sources, so a
+// module it starts to reach is in scope with no edit here.
+export const WEB_IMPORTS_FROM_UI = importsFromUi(root, "apps/web");
+
+// What `apps/docs` imports from `@octoboard/ui`, read from its sources the same way (the language list its locale
+// table is built from), and the manifest whose `exports` map resolves it.
+export const DOCS_IMPORTS_FROM_UI = [...importsFromUi(root, "apps/docs"), "packages/ui/package.json"];
 
 // The inputs of the preview build `apps/web` takes from `packages/ui`.
 export const WEB_PREVIEW_INPUTS = [
@@ -136,7 +136,7 @@ export const WEB_IMPORTS_DESKTOP = ["apps/desktop/scripts/release-manifest.mjs"]
 export const UI_READS_ELSEWHERE = ["LICENSE"];
 // UI tests (`daemonCodes.test.ts`, `fixtureProviders.test.ts`) read the provider modules' sources, where each provider
 // declares its codes and facts; `useAppExit.test.ts` runs the restart and quit cases the daemon's checks run too.
-export const UI_READS_DAEMON = ["apps/daemon/src/providers/", "apps/daemon/testdata/restart_impact_cases.json", "apps/daemon/testdata/quit_holders_cases.json"];
+export const UI_READS_DAEMON = ["apps/daemon/src/providers/", "apps/daemon/testdata/restart_impact_cases.json", "apps/daemon/testdata/quit_holders_cases.json", "apps/daemon/testdata/blank_prompt_cases.json"];
 // A UI module (`settings/AboutSection.tsx`) inlines the app icon into the UI bundle, and so into the preview of the app
 // the website ships.
 export const UI_IMPORTS_NATIVE = ["apps/desktop/src-tauri/icons/128x128.png"];

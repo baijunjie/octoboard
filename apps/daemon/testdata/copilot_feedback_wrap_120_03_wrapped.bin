@@ -1,0 +1,5 @@
+[?25l[22;36r[36;1H
+
+[r[35;1H[90m│[m [97;44m❯[39m [97m3. please do not touch that file at all and instead write the result into a scratch folder that you create under [39m [m [90m│
+│[m [44m     [97mthe temporary directory, then list what you made there and stop[39m                                                [m [90m│
+[2C[0;44m     [97m(Esc to stop)[39m                                            [m[A[6C[?25h

@@ -231,6 +231,11 @@ pub(crate) fn typed_text(value: &serde_json::Value) -> Option<String> {
 }
 
 impl AgentProvider for CodexProvider {
+    #[cfg(test)]
+    fn launch_fixture_version(&self) -> Option<super::AgentVersion> {
+        Some((0, 166, 0))
+    }
+
     fn descriptor(&self) -> &'static ProviderDescriptor {
         AgentId::CODEX.descriptor()
     }
@@ -286,9 +291,11 @@ impl AgentProvider for CodexProvider {
     fn cli_packaging(&self) -> &'static super::CliPackaging {
         &super::CliPackaging {
             native_layouts: &[&[".codex", "packages", "standalone"]],
+            native_markers: &[],
             native_update: &["update"],
             native_latest: None,
-            npm_package: Some("@openai/codex"),
+            native_manifest: None,
+            npm_packages: &["@openai/codex"],
             homebrew_formula: Some("codex"),
             homebrew_cask: Some("codex"),
         }
@@ -491,10 +498,10 @@ impl AgentProvider for CodexProvider {
         // stands.
         let mut env = pinned
             .map(|dir| {
-                vec![(
-                    codex::LAYOUT.config_dir_var.to_string(),
-                    dir.to_string_lossy().into_owned(),
-                )]
+                let (var, value) = codex::LAYOUT
+                    .config_dir_export(dir)
+                    .expect("Codex's variable names its configuration directory itself");
+                vec![(var.to_string(), value.to_string_lossy().into_owned())]
             })
             .unwrap_or_default();
         // The compatibility source's MCP servers (Claude Code's), for the session's working
@@ -573,8 +580,8 @@ impl AgentProvider for CodexProvider {
 
         // Codex has no effort flag; the effort is reachable only as a config override, so the
         // model goes the same way to keep the two consistent. Both come before the positional
-        // task, which Codex takes last. A model that does not advertise the effort is refused by
-        // Codex itself, at launch.
+        // task, which Codex takes last, after `--`. A model that does not advertise the effort is
+        // refused by Codex itself, at launch.
         if let Some(model) = spec.model {
             args.push("-c".to_string());
             args.push(format!("model={}", toml_string(model)));
@@ -609,7 +616,10 @@ impl AgentProvider for CodexProvider {
                 preset,
             )) as Box<dyn crate::session::term::PrivateServer>
         });
+        // After a bare `--`, which Codex takes only after every option: a task that starts with
+        // `-` is otherwise refused as an unexpected argument, or read as an option.
         if let Some(task) = task {
+            args.push("--".to_string());
             args.push(task.to_string());
         }
 

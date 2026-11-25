@@ -123,6 +123,12 @@ pub(super) fn host_stat(path: &Path, links: Links) -> io::Result<Stat> {
     host_stat_of(&open_for_attributes(path, links)?)
 }
 
+/// The change time from the file's basic information, as libuv reads it
+/// ([`super::filetime_node_ms`]).
+pub(super) fn host_change_time_ms(stat: &Stat) -> Option<f64> {
+    super::filetime_node_ms(stat.changed)
+}
+
 pub(super) fn host_stat_of(file: &File) -> io::Result<Stat> {
     let basic: FILE_BASIC_INFO = information(file, FileBasicInfo)?;
     Ok(Stat {

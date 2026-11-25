@@ -123,6 +123,7 @@ impl Relays {
         param: String,
         body: Vec<u8>,
         waits: bool,
+        event: Option<String>,
     ) -> (u64, FromHolder) {
         let req = self.next_req.fetch_add(1, Ordering::Relaxed);
         (
@@ -133,6 +134,7 @@ impl Relays {
                 param,
                 body,
                 waits,
+                event,
             },
         )
     }
@@ -161,9 +163,15 @@ impl Relays {
         }
     }
 
-    /// Queues a report for the daemon. Never waits.
-    pub(super) fn report(&self, route: RelayRoute, param: String, body: Vec<u8>) {
-        let (_, relay) = self.relay(route, param, body, false);
+    /// Queues a report for the daemon, with the hook route's `event` where it has one. Never waits.
+    pub(super) fn report(
+        &self,
+        route: RelayRoute,
+        param: String,
+        body: Vec<u8>,
+        event: Option<String>,
+    ) {
+        let (_, relay) = self.relay(route, param, body, false, event);
         {
             let mut state = self.state();
             let size = body_len(&relay);
@@ -198,7 +206,7 @@ impl Relays {
                 if let Some(link) = &state.link {
                     let (sink, generation) = (link.sink.clone(), link.generation);
                     let (reply, replied) = oneshot::channel();
-                    let (req, relay) = self.relay(route, param.clone(), body.clone(), true);
+                    let (req, relay) = self.relay(route, param.clone(), body.clone(), true, None);
                     state.waiting.insert(req, Waiting { generation, reply });
                     break (req, relay, sink, replied);
                 }
@@ -326,7 +334,7 @@ mod tests {
     async fn reports_made_while_no_daemon_is_linked_reach_the_next_one_in_order() {
         let relays = Relays::new(PATIENCE);
         for n in 0..5 {
-            relays.report(RelayRoute::Hook, "s".into(), vec![n]);
+            relays.report(RelayRoute::Hook, "s".into(), vec![n], None);
         }
         assert_eq!(relays.queued(), 5);
 
@@ -336,7 +344,7 @@ mod tests {
             assert_eq!(report_of(&next(&mut frames).await), ("s", &[n][..]));
         }
         // And a report made once linked follows the earlier ones.
-        relays.report(RelayRoute::GitRef, "s".into(), vec![9]);
+        relays.report(RelayRoute::GitRef, "s".into(), vec![9], None);
         assert_eq!(report_of(&next(&mut frames).await), ("s", &[9][..]));
         assert_eq!(relays.queued(), 0);
     }
@@ -349,6 +357,7 @@ mod tests {
                 RelayRoute::Hook,
                 "s".into(),
                 (n as u32).to_be_bytes().to_vec(),
+                None,
             );
         }
         assert_eq!(relays.queued(), QUEUE_LIMIT);
@@ -363,7 +372,7 @@ mod tests {
         let relays = Relays::new(PATIENCE);
         let big = QUEUE_BYTES / 2 + 1;
         for n in 0..3u8 {
-            relays.report(RelayRoute::Hook, "s".into(), vec![n; big]);
+            relays.report(RelayRoute::Hook, "s".into(), vec![n; big], None);
         }
         assert_eq!(relays.queued(), 1, "only the newest of three fits");
         let (sink, mut frames) = link();
@@ -496,7 +505,7 @@ mod tests {
         relays.attach(2, newer);
         relays.detach(1);
         assert_eq!(asking.await.unwrap().expect_err("lost"), Failure::Lost);
-        relays.report(RelayRoute::Hook, "s".into(), vec![1]);
+        relays.report(RelayRoute::Hook, "s".into(), vec![1], None);
         assert_eq!(report_of(&next(&mut newer_frames).await), ("s", &[1][..]));
     }
 

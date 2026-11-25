@@ -3,13 +3,15 @@
    `--provider-fill-dark`, the way `.session-colour-dot` takes its pair; a provider without a colour sets neither, and
    its bars take the foreground, as its mark does. Claude's is its provider colour, an orange darkened to keep 3:1
    against every track it is drawn on at full opacity, lightened on the dark tracks, though the bar is decorative and
-   not held to it (see docs/conventions/ui-accessibility.md, "Not by colour alone"); Codex's is a blue.
+   not held to it (see docs/conventions/ui-accessibility.md, "Not by colour alone"); Codex's is a blue and Qwen Code's
+   a violet.
    Inside `.control-fills` (Settings, the dialogs, the rail panel) `--default` is `--control-fill`, and the compact
    bar's dark track lightens that a step (see `.quota-bar-track`): the lightest dark track, and the one that sets
    Claude's dark value. From the module colours, light then dark: the compact bar on `--control-fill` (a table cell, a
    select trigger; in dark also a popover and a menu, whose `--default` is the floating fill) Claude 3.55 / 3.01, Codex
-   3.65 / 3.10; the compact bar on HeroUI's own `--default` (a light popover or menu) Claude 3.77, Codex 3.88; the
-   meters, on `--control-fill` itself (the rail panel, the details) Claude 3.55 / 4.52, Codex 3.65 / 4.65. The menu bar
+   3.65 / 3.10, Qwen 4.25 / 3.16; the compact bar on HeroUI's own `--default` (a light popover or
+   menu) Claude 3.77, Codex 3.88, Qwen 4.52; the meters, on `--control-fill` itself (the rail panel, the
+   details) Claude 3.55 / 4.52, Codex 3.65 / 4.65, Qwen 4.25 / 4.73. The menu bar
    icon's menu reads the same colours from the module for its own bars in either appearance. */
 .quota-meter--provider {
   --meter-fill: var(--provider-fill-light, var(--default-foreground));

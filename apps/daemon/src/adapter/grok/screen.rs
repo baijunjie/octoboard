@@ -180,7 +180,7 @@ pub(crate) const TRUST: Screen = Screen {
         "Yes,proceedyNo,quitn",
     ]],
     accept: Some("Yes,proceedy"),
-    decline: &["No,quitn"],
+    others: &["No,quitn"],
     cursor: None,
     press: Press::Yes,
     next_screen: None,

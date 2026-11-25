@@ -385,7 +385,8 @@ async fn the_first_native_submission_has_the_completed_handoff_context() {
             Ok(term::Launch {
                 session: process,
                 agent_session_id: None,
-                notice: None,
+                notices: Vec::new(),
+                first_message: None,
             })
         })
         .await
@@ -1891,4 +1892,22 @@ async fn a_child_whose_queue_is_written_despite_a_hold_can_still_report() {
             assert_eq!(params.get("child"), Some(&child), "{kind:?}");
         }
     }
+}
+
+/// A message held in a child's queue until the next one is written is not one on its way: no drain
+/// takes it, so the child at rest behind it cannot send anything, and its owner is handed off.
+/// A message a drain may take beside it stops the handoff as any queued message does.
+#[tokio::test]
+async fn a_child_with_only_a_held_message_queued_does_not_stop_a_handoff() {
+    let fixture = Fixture::new("child-held-message");
+    let _owner = fixture.run(session("owner", true, "idle", None, false));
+    let _child = fixture.run(session("child", true, "idle", Some("owner"), false));
+    fixture.state.outbox.queue_held("child", "given back");
+    assert_eq!(fixture.state.outbox.len("child"), 1);
+    assert_eq!(fixture.refusal_of("owner"), None);
+
+    fixture.state.queue_message("child", "a report is due");
+    let (code, params) = fixture.refusal_of("owner").expect("refused");
+    assert_eq!(code, error_code::SESSION_CHILD_ACTIVE.to_string());
+    assert_eq!(params.get("child").map(String::as_str), Some("child"));
 }

@@ -1,7 +1,7 @@
 # Account quota readings
 
 How Octoboard reads the account quotas described in `docs/product/account-quotas.md`, for the accounts its "Which
-accounts have a quota" section names: how a quota is read, the sign-in email a reading carries, when readings are taken,
+accounts have a quota" section names: how a quota is read, the sign-in email a reading carries, how the sign-in of an agent whose quota is unavailable is read, when readings are taken,
 what a reading leaves behind (Claude Code's first-run set-up included), where Grok Build's readings run, how a run of an
 agent's CLI is stopped and what the daemon's log records of readings.
 
@@ -9,8 +9,7 @@ agent's CLI is stopped and what the daemon's log records of readings.
 
 Octoboard asks the agent's own CLI, given the environment a session of that account would get: the login shell's
 environment, with the agent's configuration directory set to the account's directory (left as the shell has it for the
-default account) — except Grok Build, whose reading runs against a directory of Octoboard's own that reaches the
-account's sign-in (see "Where Grok Build's readings run" below). It runs from the home directory, with no terminal. The
+default account) — except Grok Build, GitHub Copilot CLI and Antigravity CLI, whose readings run against private directories. Grok Build reaches the account’s sign-in from that directory (see "Where Grok Build's readings run" below). It runs from the home directory, with no terminal. The
 CLI looks after its own sign-in, Keychain access and token refresh; Octoboard never uses a credential and never contacts
 a service of its own. It reads the agent's local sign-in record only to take the account's email from it (see "The
 account's sign-in email" below). Each agent is asked over the channel it offers its own front ends:
@@ -20,6 +19,15 @@ account's sign-in email" below). Each agent is asked over the channel it offers 
 | Claude Code | `claude -p` in stream-JSON input and output mode, keeping no session, with no MCP servers (`--strict-mcp-config` and an empty `--mcp-config`) | Its `get_usage` control request, after `initialize` |
 | Codex | `codex app-server`, with its plugins, remote plugins, apps and hooks turned off by `-c features.…=false` overrides | `account/rateLimits/read`, after `initialize` |
 | Grok Build | `grok agent --no-leader stdio`, in a process of its own rather than through a Grok already running | `_x.ai/billing`, after `initialize` |
+| Antigravity CLI | The CLI in an Octoboard-owned directory, using the system credential store | Its JSON `/usage` result supplies each model group's remaining fraction and reset time. This spends no model turn. |
+| GitHub Copilot CLI | The CLI's SDK server in an isolated configuration directory | It confirms the account identity before reading the monthly credit budget and reset time. |
+| OpenCode | — | Model providers bill their own keys or subscriptions. |
+| Qwen Code | — | For key accounts, the CLI reports local usage statistics. |
+| Pi | — | Model providers bill their own keys or subscriptions. |
+
+A credit pool uses its provider's declared native window name when available. GitHub Copilot CLI calls its
+monthly credit pool **Plan**. Other credit pools are shown as **Weekly**, **Monthly** or **Credits** according
+to the length of the period the agent reports.
 
 The agents mark these requests as experimental, so a reading that fails or cannot be understood only makes that
 account's quota unavailable and affects nothing else. A reading is given 60 seconds and at most 8 MiB on its standard
@@ -37,6 +45,19 @@ it holds no credential of any kind there:
   OpenAI sign-in — which includes a home whose only key is `OPENAI_API_KEY` or `CODEX_API_KEY` in the environment;
 - **Grok Build**: the quota request is refused for want of authentication and no sign-in method is set as the
   default, or it is refused because the stored credentials are invalid or have expired.
+
+GitHub Copilot CLI and Antigravity CLI check for a sign-in item in the daemon host's credential store:
+Keychain on macOS, Credential Manager on Windows and Secret Service on Linux. The lookup reports only
+whether the item exists. On Linux an item in a locked collection counts as present. A store that cannot be reached,
+such as a Windows logon without a vault or a Linux session without Secret Service, gives an unknown result.
+
+Copilot also recognizes a cleared login list and a token saved in its configuration with the user's consent.
+For a login still named in the configuration without a saved token, a missing credential-store item means
+signed out.
+
+After a failed quota probe, Antigravity CLI uses the item's presence as a separate sign-in reading. A missing item
+means signed out when the account environment has no `GEMINI_API_KEY`. With a key and a missing item, sign-in
+is unknown. A signed-in or unknown result keeps the quota failure and any previous quota windows.
 
 An account that runs on credentials with no plan quota behind them — an API key, Claude Code on Bedrock, Vertex or
 Foundry, Codex on a custom or open-source model provider, Grok Build on an xAI API key — is signed in, and reads as
@@ -83,6 +104,30 @@ readings" below) or put into an error. Settings shows it in the accounts table a
 `docs/product/agent-accounts.md`); nothing else shows it — not the account pickers, the rail's account quota panel,
 the menu bar icon or a session's information — and a session is not given it (see
 `docs/product/listing-agents-from-a-session.md`).
+
+## Reading the sign-in of an agent whose quota is not read
+
+For an agent whose plan quota Octoboard does not read (see "Agents whose quota Octoboard does not read" in
+`docs/product/account-quotas.md`), each reading of an account is of its sign-in alone, taken on the same occasions and
+for the same accounts as a quota reading (see "When quotas are read" below) and reaching every window the same way. The
+agent's provider answers it from the agent's own sign-in record on this machine or from a short query of its CLI run as
+the account, never with a credential. An account whose directory does not exist reads as not logged in without anything being asked, as
+for a quota reading, and a login shell environment that could not be read is a failed reading. Otherwise the reading
+is one of:
+
+- **Signed in**: no plan and no windows, with the email the agent's sign-in record gives, when it gives one;
+- **Signed out**: no plan, no windows and no email, in the not-logged-in state (`quota_not_signed_in`), with all that
+  follows from it (see "An account that is not logged in" in `docs/product/account-quotas.md`);
+- **Cannot tell** — no record to read, one the provider does not understand, or a query that failed: no plan, no
+  windows, no email and no reason. It says nothing about the sign-in: the account is neither refused nor passed over
+  for it, it is not a failed reading and is not tried less often, and the window shows no login state for it.
+
+Pi reads saved model-provider credentials, including keys and OAuth. Qwen Code checks configured provider keys or
+saved subscription sign-in. OpenCode reads the default account's model-provider sign-in.
+
+A client cannot tell a signed-in reading that carries no email from one that cannot tell, so the window shows the
+**Logged in** badge for such an agent's account only when the reading carries its email (see "The accounts table" in
+`docs/product/agent-accounts.md`).
 
 ## When quotas are read
 
@@ -264,6 +309,10 @@ nothing was run). Warnings also carry the end of the agent's error output — th
 part that is kept (see "How a quota is read" above), joined into one line — and the sign-out and failure warnings carry
 up to 3 lines the agent printed besides its reply that it marks as an error or a sign-in status (a `type` of `error`
 or `auth_status`, or an `error` field). A line from the agent is cut to 300 characters.
+
+A sign-in reading (see "Reading the sign-in of an agent whose quota is not read" above) is logged by the same rules,
+signed in counting as a reading that found the account signed in; one that cannot tell is not logged and changes
+nothing of what has been seen of the account.
 
 What has been seen of each account is kept in the daemon's memory only, and forgotten when the account is removed or
 pointed at another directory. After the daemon starts, an account's first reading is never a change of sign-in, though

@@ -279,7 +279,7 @@ itself as its direct child.
 
 | Field | Required | Contents |
 |---|---|---|
-| `goal` | yes | The outcome to achieve. |
+| `goal` | yes | The outcome to achieve. A goal that is nothing but whitespace once its control and invisible characters are ignored counts as missing, and the call is refused with the reason in prose. |
 | `context` | no | Background and relevant leads. The field asks the caller to include the user's language, so that the session can name the sessions it starts in it (see "Naming the sessions a session starts" below). |
 | `acceptance` | no | Criteria for being done. |
 | `constraints` | no | What must not be touched, whether committing or pushing is allowed, and so on. |

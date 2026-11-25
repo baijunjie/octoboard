@@ -1,0 +1,5 @@
+{"format":1,"hook_event_name":"session.created","session_id":"ses_dfb33ec30ffeR0UCvPBnRGoaHf"}
+{"format":1,"hook_event_name":"turn.started","turn_id":"msg_204cc1479001URvw32mdKySVha","prompt":"run TWOBASH now","session_id":"ses_dfb33ec30ffeR0UCvPBnRGoaHf"}
+{"format":1,"hook_event_name":"permission.replied","session_id":"ses_dfb33ec30ffeR0UCvPBnRGoaHf","request_id":"per_204cc1a82001UbuxES8qlBYHdT"}
+{"format":1,"hook_event_name":"permission.replied","session_id":"ses_dfb33ec30ffeR0UCvPBnRGoaHf","request_id":"per_204cc1a83002AYo2Hl3T7BLALD"}
+{"format":1,"hook_event_name":"session.idle","turn_id":"msg_204cc1479001URvw32mdKySVha","last_assistant_message":"Final answer from stub.","session_id":"ses_dfb33ec30ffeR0UCvPBnRGoaHf"}

@@ -1,0 +1,3 @@
+{"tool_name":"write","tool_input":{"path":"/private/tmp/nap25/other/x5.txt"},"cwd":"/private/tmp/nap25/proj"}
+{"tool_name":"write","tool_input":{"path":"/private/tmp/nap25/proj/local.txt"},"cwd":"/private/tmp/nap25/proj"}
+{"tool_name":"edit","tool_input":{"path":"/private/tmp/nap25/other/y.txt"},"cwd":"/private/tmp/nap25/proj"}

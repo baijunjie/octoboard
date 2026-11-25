@@ -1,7 +1,7 @@
 import { GripVertical } from "lucide-react";
 import React, { useLayoutEffect, useRef, useState } from "react";
 
-import { providerLabel } from "../../agents/providers";
+import { hasPlanQuota, providerLabel } from "../../agents/providers";
 import { useListMotion } from "../../components/motion/useListMotion";
 import { ActionMenu } from "../../components/menus/ActionMenu";
 import type { ActionMenuEntry } from "../../components/menus/menuEntries";
@@ -21,6 +21,7 @@ import { useNow } from "../../format/useNow";
 import { AccountDisableSwitch } from "./AccountDisableSwitch";
 import { AccountLoginAnnouncer, useClearSucceededLogin, useSucceededAccountLogin } from "./AccountLogin";
 import { AccountLoginButton, type ReturnLoginFocus } from "./AccountLoginButton";
+import { AccountSignInHelp } from "./AccountSignInHelp";
 import { useAccountDisabled } from "./useAccountDisabled";
 import { useProviders } from "../../store";
 
@@ -31,8 +32,8 @@ const PINNED_EDGE = "group-data-[overflowing]/accounts:shadow-[inset_var(--hairl
 const HEADER = "px-2 py-2 align-middle text-start text-xs font-medium whitespace-nowrap text-app-muted hairline-b";
 
 /** One agent's accounts as a table, a row for each account (`AccountTableRow`, as `children`) under column headers said
- * once: the account (name, plan and email), its usage, its status (login state, with the Log in icon while it is signed
- * out, or "Disabled" while it is turned off), whether it is turned off (the Disable switch), and an actions column that
+ * once: the account (name, plan and email), its usage (left out for a provider that declares no plan quota), its status
+ * (login state, with the Log in icon while it is signed out, or "Disabled" while it is turned off), whether it is turned off (the Disable switch), and an actions column that
  * holds the actions menu, whose first entries open the account's details and settings. Narrower than its columns need,
  * the table scrolls sideways (a focusable region while it does) and the actions column stays pinned at the end edge.
  * The scroller draws no fade, which would dim that column, and keeps clear of it when focus scrolls a control into
@@ -40,6 +41,8 @@ const HEADER = "px-2 py-2 align-middle text-start text-xs font-medium whitespace
 export function AccountsTable({ agent, children }: { agent: Agent; children: React.ReactNode }): React.ReactElement {
   const t = useT();
   const providers = useProviders();
+  // A provider that declares no plan quota has no usage to show, so no Usage column.
+  const usage = hasPlanQuota(providers, agent);
   const region = useFadeRegion({ label: t("settings.accounts.table.scrollLabel", { agent: isolate(providerLabel(t, providers, agent)) }) });
   const motion = useListMotion<HTMLTableSectionElement>();
   const pinned = useRef<HTMLTableCellElement>(null);
@@ -56,12 +59,12 @@ export function AccountsTable({ agent, children }: { agent: Agent; children: Rea
   return (
     <div className={`group/accounts rounded-lg ${region.ring}`} data-overflowing={region.overflows ? "" : undefined}>
       <FadedScroller orientation="horizontal" region={region} fade={false} endInset={pinnedWidth}>
-        <table aria-label={t("settings.accounts.table.label", { agent: isolate(providerLabel(t, providers, agent)) })} className="w-full min-w-[38rem] border-separate border-spacing-0 text-sm">
+        <table aria-label={t("settings.accounts.table.label", { agent: isolate(providerLabel(t, providers, agent)) })} className={`w-full ${usage ? "min-w-[38rem]" : "min-w-[30rem]"} border-separate border-spacing-0 text-sm`}>
           <thead>
             <tr>
               <th aria-hidden="true" className={`${HEADER} w-px`} />
               <th scope="col" className={HEADER}>{t("settings.accounts.table.account")}</th>
-              <th scope="col" className={HEADER}>{t("settings.accounts.table.usage")}</th>
+              {usage && <th scope="col" className={HEADER}>{t("settings.accounts.table.usage")}</th>}
               <th scope="col" className={HEADER}>{t("settings.accounts.table.status")}</th>
               <th scope="col" className={HEADER}>
                 <span className="flex w-max items-center gap-1">
@@ -91,8 +94,9 @@ const CELL = "px-2 py-3 align-middle hairline-b group-last/row:border-b-0";
 
 /** One account's row (`account` null for the agent's default account): its `name` with the plan and, under them, the
  * email it is signed in with (the row's header cell, with the name muted while its quota is used up), a compact usage
- * indicator (grey and followed by the "Limit reached" badge while used up), its login state with the Log in icon while
- * it is signed out (the Status cell), the Disable switch, and the actions `menu`, whose first entries open the details
+ * indicator (grey and followed by the "Limit reached" badge while used up; the table has no such column for a provider
+ * that declares no plan quota), its login state with the Log in icon while it is signed out, or for a provider with no login flow a help tip
+ * that says how to log in instead (the Status cell), the Disable switch, and the actions `menu`, whose first entries open the details
  * and the settings. A turned-off account's Status cell says "Disabled" in a neutral badge instead, with no Log in icon
  * (the menu still offers Log in); the rest of its row looks like any other. The hidden status region that says a login
  * succeeded is the row's, which also clears that login once it has been shown. */
@@ -130,13 +134,14 @@ export function AccountTableRow({ agent, account, name, menu, onLogin, onDragSta
           <AccountLoginAnnouncer login={succeeded} name={name} />
         </div>
       </th>
-      <td className={CELL}><AccountUsageCell quota={quota} exhausted={exhausted} /></td>
+      {hasPlanQuota(providers, agent) && <td className={CELL}><AccountUsageCell quota={quota} exhausted={exhausted} /></td>}
       <td className={`${CELL} whitespace-nowrap`}>
         <div className="flex items-center gap-1">
           {disabled
             ? <DotStatusBadge separated={false}>{t("settings.accounts.disabledState")}</DotStatusBadge>
             : <LoginStateBadge quota={quota} separated={false} />}
           <AccountLoginButton agent={agent} account={id} name={name} quota={quota} turnedOff={disabled} onLogin={onLogin} fallback={() => actions.current?.querySelector<HTMLElement>("button")} />
+          <AccountSignInHelp agent={agent} account={id} name={name} quota={quota} turnedOff={disabled} />
         </div>
       </td>
       <td className={CELL}><AccountDisableSwitch agent={agent} account={id} name={name} /></td>

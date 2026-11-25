@@ -230,7 +230,11 @@ struct Parameter<'a> {
 /// The user's own `GIT_CONFIG_PARAMETERS` entries, as text to put ours after: empty when there are
 /// none. An entry pointing `core.hooksPath` under `root` is not the user's: it is what a daemon
 /// started from inside another session inherited, and kept, its sessions would run both daemons'
-/// dispatchers and report to both. `None` for a value git cannot read, which already fails every
+/// dispatchers and report to both. A daemon's snapshot already puts the variable back as it was
+/// before an outer session's launch (`crate::env_shell::outside_session`), by comparing its value
+/// with the one that launch recorded; this check by the path stays for where that comparison
+/// misses, as when git or a shell profile has added an entry of its own to the value since, or
+/// the session was launched by a build that recorded nothing. `None` for a value git cannot read, which already fails every
 /// git the user runs.
 fn user_parameters(shell_env: &HashMap<String, String>, root: &Path) -> Option<String> {
     let value = shell_env

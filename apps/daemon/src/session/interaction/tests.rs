@@ -185,6 +185,46 @@ fn an_answer_is_pressed_and_lowers_the_hand() {
     );
 }
 
+/// Keys the provider chooses together are written as one write and the screen is read only after
+/// the last: the stand-in redraws once it has read both, so a press that waited for the first key
+/// to change the screen would time out.
+#[test]
+fn keys_chosen_together_are_written_at_once_and_read_after_the_last() {
+    // An answer pauses the session's queue, whose release drains it on the runtime.
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let _runtime = runtime.enter();
+    let (state, live, _dir) = session(
+        "interaction-press-all",
+        SessionStatus::WaitingUser,
+        "printf 'PROMPT Bash ls\\r\\n'; IFS= read -r -n 2 keys; \
+         printf '\\033[2J\\033[HINPUT> after %s\\r\\n' \"$keys\"; sleep 30",
+    );
+    let mut watch = Watch::default();
+    look_until(&mut watch, &state, &live, || {
+        live.interaction.interaction().is_some()
+    });
+    let id = live.interaction.interaction().unwrap().id;
+    let before = live.input_writes();
+    let fields = AnswerFields {
+        choice: Some("2".to_string()),
+        text: None,
+        answers: None,
+        dismiss: false,
+    };
+    press::answer(&state, &live, &id, fields).expect("pressed");
+    let after = format!(
+        "INPUT> after {}2",
+        crate::adapter::test_provider::UNSEEN_KEY
+    );
+    assert!(
+        live.screen_text().contains(&after),
+        "{}",
+        live.screen_text()
+    );
+    assert_eq!(live.input_writes(), before + 1, "one write for both keys");
+    assert!(live.interaction.interaction().is_none());
+}
+
 /// An answer naming an id that is not published, or given after someone typed into the terminal,
 /// is refused as not waiting, and nothing is pressed.
 #[test]
@@ -1202,4 +1242,232 @@ fn a_question_refuses_a_top_level_text_or_choice() {
         assert_eq!(picked.field, "choice");
         assert!(!picked.missing);
     }
+}
+
+/// A reader is given the screen it asks for ([`InteractionReader::prompt_screen`]): the screen as
+/// drawn unless it asks for the one with faint cells blanked, on which what the agent draws faint
+/// is no text.
+#[test]
+fn a_reader_is_given_the_screen_it_asks_for() {
+    struct AsDrawn;
+    impl InteractionReader for AsDrawn {
+        fn call_started(&self, _event: &str, _payload: &Value) -> Option<CallSeen> {
+            None
+        }
+        fn read(&self, _screen: &str, _calls: &[CallSeen]) -> Reading {
+            unreachable!("nothing is read")
+        }
+        fn next_key(&self, _screen: &str, _call: &CallSeen, _answer: &Answer) -> NextKey {
+            unreachable!("nothing is pressed")
+        }
+    }
+    struct Blanked;
+    impl InteractionReader for Blanked {
+        fn call_started(&self, _event: &str, _payload: &Value) -> Option<CallSeen> {
+            None
+        }
+        fn prompt_screen(&self) -> ScreenText {
+            ScreenText::FaintBlanked
+        }
+        fn read(&self, _screen: &str, _calls: &[CallSeen]) -> Reading {
+            unreachable!("nothing is read")
+        }
+        fn next_key(&self, _screen: &str, _call: &CallSeen, _answer: &Answer) -> NextKey {
+            unreachable!("nothing is pressed")
+        }
+    }
+    let stand_in = fake_live_session("prompt-screen", AgentId::TEST, 80, 24, "sleep 30");
+    let live: &LiveSession = &stand_in;
+    live.on_output(b"plain \x1b[2mfaint\x1b[22m");
+    let drawn = screen_of(live, &AsDrawn);
+    assert!(
+        drawn.contains("plain") && drawn.contains("faint"),
+        "{drawn:?}"
+    );
+    let blanked = screen_of(live, &Blanked);
+    assert!(
+        blanked.contains("plain") && !blanked.contains("faint"),
+        "{blanked:?}"
+    );
+}
+
+/// For a provider whose status comes from its program's reports, a `working` report opens a turn
+/// that forgets the calls of the one before, and a `blocked` report starts the watch, which
+/// publishes the prompt of a call reported since.
+#[tokio::test(flavor = "multi_thread")]
+async fn reported_status_opens_the_turns_calls_and_starts_the_watch() {
+    let (state, live, _dir) = session(
+        "interaction-reported",
+        SessionStatus::Idle,
+        PROMPT_THEN_INPUT,
+    );
+    wait_screen(&live, "PROMPT Bash ls");
+    live.on_output(b"\x1b]7501;state=working\x07");
+    let until = |what: &str, holds: &dyn Fn() -> bool| {
+        assert!(
+            crate::session::wait::wait_for(PATIENCE, holds),
+            "{what} not seen in time"
+        );
+    };
+    until("the turn's calls forgotten", &|| {
+        status_of(&state) == SessionStatus::Working && live.interaction.calls().is_empty()
+    });
+    live.interaction.call_started(CallSeen::new(
+        Some("call-1".to_string()),
+        "Bash",
+        &json!({"command": "ls"}),
+    ));
+    live.on_output(b"\x1b]7501;state=blocked:kind=permission\x07");
+    until("the prompt published", &|| {
+        live.interaction.interaction().is_some()
+    });
+    assert!(live.interaction.watching.load(Ordering::Acquire));
+}
+
+/// For a reader that cannot read a prompt once a key went into it, a key typed at the terminal
+/// after the watch first saw the prompt, before the session waited, keeps the prompt from ever
+/// being published.
+#[test]
+fn an_unreadable_prompt_typed_into_before_it_was_published_is_never_published() {
+    let _unreadable = crate::test_support::test_provider::declaring_prompt_unreadable_after_input();
+    let (state, live, dir) = framed(
+        "interaction-unreadable-before",
+        SessionStatus::Working,
+        "PROMPT Bash ls",
+        &["PROMPT Bash ls"],
+    );
+    wait_screen(&live, "PROMPT Bash ls");
+    let mut watch = Watch::default();
+    watch.look(&state, &live, reader());
+    live.write_input(b"x").unwrap();
+    assert_eq!(wait_keys(&dir, 1), "x");
+    state
+        .apply_hook_status("s", SessionStatus::WaitingUser)
+        .unwrap();
+    for _ in 0..4 {
+        watch.look(&state, &live, reader());
+        assert!(live.interaction.interaction().is_none());
+    }
+}
+
+/// For a reader that cannot read a prompt once a key went into it, a published prompt typed into
+/// at the terminal is withdrawn and not published again while it stays up.
+#[test]
+fn an_unreadable_prompt_typed_into_is_withdrawn_and_not_published_again() {
+    let _unreadable = crate::test_support::test_provider::declaring_prompt_unreadable_after_input();
+    let (state, live, dir) = framed(
+        "interaction-unreadable-after",
+        SessionStatus::WaitingUser,
+        "PROMPT Bash ls",
+        &["PROMPT Bash ls"],
+    );
+    let mut watch = Watch::default();
+    published(&mut watch, &state, &live);
+    live.write_input(b"x").unwrap();
+    assert_eq!(wait_keys(&dir, 1), "x");
+    for _ in 0..4 {
+        watch.look(&state, &live, reader());
+        assert!(live.interaction.interaction().is_none());
+    }
+    assert!(live.screen_text().contains("PROMPT Bash ls"));
+}
+
+/// The test provider's reader, for a prompt unreadable once a key went into it, that types a key
+/// into the session as it first reads the screen: a write landing after the watch read the screen
+/// and before it read the count of writes.
+struct TypesWhileRead {
+    live: Arc<LiveSession>,
+    typed: std::sync::atomic::AtomicBool,
+}
+
+impl InteractionReader for TypesWhileRead {
+    fn call_started(&self, event: &str, payload: &serde_json::Value) -> Option<CallSeen> {
+        reader().call_started(event, payload)
+    }
+
+    fn read(&self, screen: &str, calls: &[CallSeen]) -> Reading {
+        if !self.typed.swap(true, Ordering::AcqRel) {
+            self.live.write_input(b"x").unwrap();
+        }
+        reader().read(screen, calls)
+    }
+
+    fn next_key(&self, screen: &str, call: &CallSeen, answer: &Answer) -> NextKey {
+        reader().next_key(screen, call, answer)
+    }
+
+    fn prompt_unreadable_after_input(&self) -> bool {
+        true
+    }
+}
+
+/// For a reader that cannot read a prompt once a key went into it, a key written while the watch
+/// reads the screen counts as typed into the prompt: the prompt is withdrawn at the next look and
+/// stays withdrawn.
+#[test]
+fn a_key_written_while_the_screen_is_read_counts_as_typed_into_the_prompt() {
+    let (state, live, dir) = framed(
+        "interaction-typed-while-read",
+        SessionStatus::WaitingUser,
+        "PROMPT Bash ls",
+        &["PROMPT Bash ls"],
+    );
+    wait_screen(&live, "PROMPT Bash ls");
+    let typing = TypesWhileRead {
+        live: live.clone(),
+        typed: std::sync::atomic::AtomicBool::new(false),
+    };
+    let mut watch = Watch::default();
+    watch.look(&state, &live, &typing);
+    assert_eq!(wait_keys(&dir, 1), "x");
+    for _ in 0..4 {
+        watch.look(&state, &live, &typing);
+        assert!(live.interaction.interaction().is_none());
+    }
+}
+
+/// The test provider's reader, choosing three keys together for every answer.
+struct ThreeKeys;
+
+impl InteractionReader for ThreeKeys {
+    fn call_started(&self, event: &str, payload: &serde_json::Value) -> Option<CallSeen> {
+        reader().call_started(event, payload)
+    }
+
+    fn read(&self, screen: &str, calls: &[CallSeen]) -> Reading {
+        reader().read(screen, calls)
+    }
+
+    fn next_key(&self, _screen: &str, _call: &CallSeen, _answer: &Answer) -> NextKey {
+        use crate::platform::term::Input;
+        NextKey::PressAll(
+            ["a", "b", "c"]
+                .map(|key| Input::Text(key.to_string()))
+                .to_vec(),
+        )
+    }
+}
+
+/// Keys chosen together that would take an answer past the most keys it may take are not written:
+/// the press stops with the keys before them.
+#[test]
+fn keys_chosen_together_past_the_most_an_answer_takes_are_not_written() {
+    let (state, live, _dir) = session(
+        "interaction-most-keys",
+        SessionStatus::WaitingUser,
+        "printf 'PROMPT Bash ls\\r\\n'; n=0; while IFS= read -r -n 3 keys; do n=$((n+3)); \
+         printf '\\033[2J\\033[HPROMPT Bash ls\\r\\nKEYS %s\\r\\n' \"$n\"; done",
+    );
+    let mut watch = Watch::default();
+    published(&mut watch, &state, &live);
+    let published = live.interaction.published().unwrap();
+    let answer = Answer::Choice {
+        id: "1".to_string(),
+        text: None,
+    };
+    let stopped = press::press(&live, &ThreeKeys, &published, &answer, PATIENCE);
+    assert!(stopped.is_err());
+    // 21 writes of three keys make 63; a 22nd would make 66.
+    assert_eq!(live.input_writes(), published.writes + 21);
+    wait_screen(&live, "KEYS 63");
 }

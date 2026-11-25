@@ -463,6 +463,36 @@ pub(crate) fn entries(agent: AgentId, conversations: usize) -> usize {
     shared_items(agent).len() + conversations
 }
 
+/// Checks the whole entry before linking or repairing it. If an existing sharing link has
+/// become unsafe, restore the account's private entry before it can be used at launch.
+fn prepare_item(
+    agent: AgentId,
+    item: &SharedItem,
+    dirs: &Dirs,
+    stamp: &str,
+) -> Result<(), SharingItemFailure> {
+    let Some(ops) = crate::adapter::provider(agent).accounts() else {
+        return Ok(());
+    };
+    let account = dirs.account.join(item.name);
+    let default = dirs.default.join(item.name);
+    if let Err(err) = ops.check_shared_item(item, &account, &default) {
+        let owns_link = link_target(&account).is_some() && is_sharing_link(&account, item, dirs);
+        if owns_link {
+            take_out(item, dirs, stamp)?;
+        }
+        return Err(SharingItemFailure::io(item, SharingLeft::Unchanged, err));
+    }
+    registries::prepare_file(agent, item, dirs).map_err(|err| {
+        let left = if is_sharing_link(&account, item, dirs) {
+            SharingLeft::Linked
+        } else {
+            SharingLeft::Unchanged
+        };
+        SharingItemFailure::io(item, left, err)
+    })
+}
+
 /// Shares every item of `agent`'s catalog the default directory can take, backing up what the
 /// account had under `stamp`. A retry before turning sharing on has `completed` once also redoes
 /// the database work an earlier attempt may have left undone.
@@ -479,7 +509,9 @@ pub(super) fn turn_on(
         .enumerate()
         .filter_map(|(done, item)| {
             report(done, item.name);
-            bring_in(item, dirs, stamp, threads, !completed).err()
+            prepare_item(agent, item, dirs, stamp)
+                .and_then(|()| bring_in(item, dirs, stamp, threads, !completed))
+                .err()
         })
         .collect()
 }
@@ -628,6 +660,10 @@ pub(super) fn repair(agent: AgentId, dirs: &Dirs, stamp: &str) -> Repaired {
     let mut failures = Vec::new();
     let threads = thread_registry(agent);
     for item in &shared_items(agent) {
+        if let Err(failure) = prepare_item(agent, item, dirs, stamp) {
+            failures.push(failure);
+            continue;
+        }
         let entry = dirs.account.join(item.name);
         let present = match lstat(&entry) {
             Ok(present) => present,

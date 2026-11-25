@@ -208,6 +208,14 @@ const reopenOnIncompleteAccount = resumeState("s-api-1", requestOf({
 }), resumeSettings);
 const switchToIncompleteAccount = moveState(switchRequestTo("a-client"), { accounts: moveAccounts.map((account) => account.id === "a-client" ? { ...account, share_default_config_incomplete: true } : account) });
 
+const antigravitySession = sessionOf("s-web-antigravity", console_.id, web.id, "Review the build output", "idle", { agent: "antigravity" });
+const antigravityNoticeState = snapshotState({ consoles: [console_], projects: [web], sessions: [antigravitySession] });
+const antigravityLeftovers = (left: "both" | "rules") => sessionNoticeNotification(
+  antigravitySession.id,
+  "provider.antigravity.earlier_layout_leftovers_not_read",
+  { path: "/Users/dev/.gemini/antigravity-cli", current_path: "/Users/dev/.gemini/config", left },
+);
+
 export const noticeScenarios: Scenario[] = [
   {
     id: "trust-prompt",
@@ -908,6 +916,27 @@ export const noticeScenarios: Scenario[] = [
         reason_code: "store_locked",
       }),
     ],
+  },
+  {
+    id: "antigravity-launch-notices",
+    group: TRUST,
+    category: "exceptional",
+    title: "Antigravity CLI launch with two notices",
+    description: "The settings file alert comes first. Acknowledge it to see the alert for both folders left by the previous version, with the earlier and current paths.",
+    state: antigravityNoticeState,
+    notifications: [
+      sessionNoticeNotification(antigravitySession.id, "provider.antigravity.settings_not_read", { path: "/Users/dev/.gemini/config/settings.json" }),
+      antigravityLeftovers("both"),
+    ],
+  },
+  {
+    id: "antigravity-launch-notice-one-leftover",
+    group: TRUST,
+    category: "exceptional",
+    title: "Antigravity CLI launch with one folder left",
+    description: "The alert names the single rules folder and shows the earlier and current paths.",
+    state: antigravityNoticeState,
+    notifications: [antigravityLeftovers("rules")],
   },
   {
     id: "error-sharing-resume-failed",

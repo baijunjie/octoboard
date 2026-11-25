@@ -75,13 +75,16 @@ export function hasCodeParams(error: { code: string; params: MessageParams }): b
   return names.length > 0 || references.length > 0 || !!record?.recoveryLine || (!!record?.detailBlock && !!params.detail);
 }
 
-/** How a session notice is shown: a failure (`failureNotice` in `codes.ts`) as an error alert, anything else as a
- * toast. A trust entry not carried over is a notice, Grok Build only asking again the next time, unless it carries
+/** How a session notice is shown: a failure (`failureNotice` in `codes.ts`) as an error alert, a notice its record
+ * marks as one to acknowledge (`acknowledgedNotice`) in the same alert, where it stays until dismissed, anything else
+ * as a toast. A trust entry not carried over is a notice, Grok Build only asking again the next time, unless it carries
  * what the system said (a `store_io_failed` detail, or a reason the catalog has no words for), which only an error
  * alert keeps, behind its "Error details". */
-export function noticeKind(code: string, params: MessageParams): "error" | "notice" {
-  if (codeRecord(code)?.failureNotice) return "error";
-  return code === CODE.trust_not_carried_over && (hasTrustDiagnostic(code, params) || unwordedReason(code, params) !== undefined) ? "error" : "notice";
+export function noticeKind(code: string, params: MessageParams): "error" | "acknowledged" | "notice" {
+  const record = codeRecord(code);
+  if (record?.failureNotice) return "error";
+  if (code === CODE.trust_not_carried_over && (hasTrustDiagnostic(code, params) || unwordedReason(code, params) !== undefined)) return "error";
+  return record?.acknowledgedNotice ? "acknowledged" : "notice";
 }
 
 /** A launch failure retains the nested cause code and params even when it has no special markup.

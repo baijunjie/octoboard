@@ -7,13 +7,20 @@ use serde_json::{json, Value};
 
 use super::app_server::{self, CODEX_QUIET_FEATURES};
 use crate::accounts::quotas::kick::{strings, KickCommand, KICK_PROMPT, KICK_SYSTEM_PROMPT};
+#[cfg(test)]
+use crate::accounts::quotas::probe::ProbeFixture;
 use crate::accounts::quotas::probe::{
-    is_second_response, reading, refusal_problem, QuotaProbe, Reading, ReplyProblem, WEEK_MINUTES,
+    is_second_response, marks_error, reading, refusal_problem, QuotaProbe, Reading, ReplyProblem,
+    WEEK_MINUTES,
 };
 use crate::agents::json_rpc;
 use crate::protocol::{AgentId, QuotaWindow, QuotaWindowKind, ResetCredit, ResetCredits};
 
 pub(super) struct CodexQuota;
+
+/// The reply the tests read, which the probe's fixture hands out too.
+#[cfg(test)]
+const REPLY: &str = include_str!("../../../testdata/codex_rate_limits_reply.json");
 
 impl QuotaProbe for CodexQuota {
     fn args(&self) -> &'static [&'static str] {
@@ -30,6 +37,10 @@ impl QuotaProbe for CodexQuota {
         .iter()
         .map(Value::to_string)
         .collect()
+    }
+
+    fn is_error_like(&self, line: &Value) -> bool {
+        marks_error(line)
     }
 
     fn is_reply(&self, value: &Value) -> bool {
@@ -60,6 +71,18 @@ impl QuotaProbe for CodexQuota {
         "the rate limits request was refused for want of a sign-in and \
          account/read reports no account"
             .to_string()
+    }
+
+    #[cfg(test)]
+    fn test_fixture(&self) -> ProbeFixture {
+        ProbeFixture {
+            request_marker: Some("account/rateLimits/read"),
+            reply: REPLY,
+            unreadable_reply: r#"{"id":2,"result":{}}"#,
+            error_line: Some(
+                r#"{"id":9,"error":{"code":-32603,"message":"refresh failed for me@example.com"}}"#,
+            ),
+        }
     }
 }
 
@@ -268,3 +291,6 @@ fn codex_reset_credit(credit: &Value) -> Option<ResetCredit> {
 fn reset_credit_order(credit: &ResetCredit) -> (bool, i64) {
     (credit.expires_at.is_none(), credit.expires_at.unwrap_or(0))
 }
+
+#[cfg(test)]
+mod tests;

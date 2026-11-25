@@ -315,3 +315,34 @@ it("leaves its options operable and its Cancel pressable while it waits for a lo
   expect(button("Cancel").disabled).toBe(true);
   await act(async () => finish());
 });
+
+// The other action that returns a promise is held as Confirm is: its button pending, the dialog busy, no further press.
+it("holds an other action that is running pending, and takes no further press of either action meanwhile", async () => {
+  withModality("pointer");
+  let settle!: () => void;
+  const onPress = vi.fn(() => new Promise<void>((resolve) => { settle = resolve; }));
+  const onConfirm = vi.fn(async () => {});
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  act(() => root.render(
+    <DaemonProvider value={testDaemon()}>
+      <ConfirmDialog title="Answer" message="Keep it?" confirmLabel="Keep" hideCancel otherAction={{ label: "Do not keep", onPress }} errorTitle="Could not answer" onConfirm={onConfirm} onCancel={() => {}} />
+    </DaemonProvider>,
+  ));
+  const button = (name: string) => Array.from(document.querySelectorAll("button")).find((found) => found.textContent?.includes(name))!;
+  await act(async () => button("Do not keep").click());
+  expect(button("Do not keep").getAttribute("aria-busy")).toBe("true");
+  expect(button("Keep").getAttribute("aria-busy")).not.toBe("true");
+  await act(async () => button("Do not keep").click());
+  await act(async () => button("Keep").click());
+  expect(onPress).toHaveBeenCalledOnce();
+  expect(onConfirm).not.toHaveBeenCalled();
+  await act(async () => settle());
+  expect(button("Do not keep").getAttribute("aria-busy")).not.toBe("true");
+  await act(async () => button("Keep").click());
+  expect(onConfirm).toHaveBeenCalledOnce();
+});

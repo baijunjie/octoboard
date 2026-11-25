@@ -600,3 +600,39 @@ fn the_additions_are_not_written_back_to_the_shared_config() {
         assert!(!updated.contains(added), "{added} in {updated}");
     }
 }
+
+/// A daemon started inside a session on a host without file links, with Claude compatibility on
+/// and Grok's memory off, starts a session on another account with both the other way: Grok is
+/// pointed at that account's own login, not left with the outer session's as if the user's shell
+/// had named it, and neither the compatibility switches nor the memory one reach it.
+#[test]
+fn a_nested_daemons_launch_inherits_neither_the_outer_login_nor_its_switches() {
+    let _links = FileLinks::set(false);
+    let mut fixture = world(&["claude_compatibility"]);
+    let mut spec = fixture.spec();
+    spec.native_memory_off = true;
+    let outer = plan_isolated(&spec).expect("plan");
+    let outer_session = crate::adapter::tests::launched(&fixture.shell_env, &outer);
+    assert!(outer_session.contains_key("GROK_AUTH_PATH"));
+    assert!(outer_session.contains_key(MEMORY_OFF.0));
+    let nested = crate::adapter::tests::nested_shell_env(&fixture.shell_env, &outer);
+    assert_eq!(nested, fixture.shell_env);
+
+    let other = fixture.scratch.join("other-grok-home");
+    write(other.join("sessions/.keep"), "");
+    write(other.join("config.toml"), "");
+    write(other.join("auth.json"), "{}");
+    fixture.shell_env = nested;
+    fixture.config_dir = Some(other.clone());
+    fixture.settings = ProviderSettings::default();
+    let inner = plan_isolated(&fixture.spec()).expect("plan");
+    let session = crate::adapter::tests::launched(&fixture.shell_env, &inner);
+    assert_eq!(
+        PathBuf::from(&session["GROK_AUTH_PATH"]),
+        crate::hostfs::canonical(other.join("auth.json")).expect("canonical path")
+    );
+    assert!(!session.contains_key(MEMORY_OFF.0));
+    for var in CLAUDE_COMPATIBILITY_VARS {
+        assert!(!session.contains_key(var), "{var}");
+    }
+}

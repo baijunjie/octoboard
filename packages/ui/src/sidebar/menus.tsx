@@ -260,7 +260,8 @@ function switchAccountSubmenu(
         // `block` gives the span the label's width to clip against; inline, it never overflows.
         ...(isPath ? { content: <PathText path={name} className="block" />, ariaLabel: name } : {}),
         // The key sits in the bar's width, so that the labels line up.
-        icon: isPath ? <span aria-hidden="true" className="flex w-8 shrink-0 justify-center"><KeyRound className="size-4 text-app-muted" /></span> : icon,
+        // A provider with no plan quota has no bar; the space stays, so the labels line up.
+        icon: isPath ? <span aria-hidden="true" className="flex w-8 shrink-0 justify-center"><KeyRound className="size-4 text-app-muted" /></span> : icon ?? <span aria-hidden="true" className="w-8 shrink-0" />,
         reason,
         description: detail,
         ...(held ? { disabled: true } : {}),

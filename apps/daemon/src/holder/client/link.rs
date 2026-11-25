@@ -222,6 +222,7 @@ struct HeldRelay {
     param: String,
     body: Vec<u8>,
     waits: bool,
+    event: Option<String>,
 }
 
 pub(super) struct Link {
@@ -816,6 +817,7 @@ impl Link {
                 relayed.param,
                 relayed.body,
                 relayed.waits,
+                relayed.event,
             );
         }
     }
@@ -1628,12 +1630,14 @@ impl Link {
                 param,
                 body,
                 waits,
+                event,
             } => self.relay_or_hold(HeldRelay {
                 req: *req,
                 route: *route,
                 param: param.clone(),
                 body: body.clone(),
                 waits: *waits,
+                event: event.clone(),
             }),
             FromHolder::RelayGone { req } => {
                 // One still held back is dropped before it reaches the daemon.
@@ -1677,6 +1681,7 @@ impl Link {
             relayed.param,
             relayed.body,
             relayed.waits,
+            relayed.event,
         );
     }
 
@@ -1690,8 +1695,14 @@ impl Link {
         param: String,
         body: Vec<u8>,
         waits: bool,
+        event: Option<String>,
     ) {
-        let request = RelayRequest { route, param, body };
+        let request = RelayRequest {
+            route,
+            param,
+            body,
+            event,
+        };
         if !waits {
             self.relay.report(request);
             return;

@@ -248,18 +248,19 @@ warnings and notes marked at their point" in `docs/product/error-alerts.md`):
   another directory is chosen for it;
 - for an account the Add account form would refuse, the mark is named after the account as unable to be created, and
   its popover says why, with the form's remedy where it has one, then that the account is left out unless another
-  directory is chosen for it — or, where its name is the problem, only that it is left out — and last any raw text.
+  directory is chosen for it — or, where its name is the problem or its agent has only its default account, only that
+  it is left out — and last any raw text.
   For an account whose directory in the file was written on another operating system (see "Importing accounts" in
   `docs/product/configuration-export-and-import.md`), the popover never says the directory is not absolute: it says
   that the directory in the file was written on another operating system and so cannot be used here, then that the
-  account is left out unless another directory is chosen for it. An account whose name is the problem as well is
-  described by its name's reason, as above.
+  account is left out unless another directory is chosen for it. An account whose name is the problem as well, or
+  whose agent has only its default account, is described by that reason, as above.
 
 The choice of what to do with the account sits at the end of the name's line, and drops under it where the row is
 narrow; its accessible name is "What to do with" followed by the account's name. A new account offers **Create it**,
 preselected, and **Leave out**. An existing account has no choice, since it is used as it is. A directory in use, or a
 directory the form refuses, offers **Another directory** and **Leave out**, with Leave out preselected; a name the form
-refuses offers Leave out alone.
+refuses, or an account of an agent that has only its default account, offers Leave out alone.
 
 A line under the name gives the directory as the file writes it, led by a folder icon whose tooltip names it
 **Directory in the file**, on every row but an existing account's, and not while Another directory is chosen. Another

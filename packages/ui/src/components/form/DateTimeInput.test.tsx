@@ -58,7 +58,7 @@ it("reports a field left with a segment blank as empty before it reports the fie
 });
 
 it("opens a calendar popover from its button, and a day picked there keeps the time and closes it", () => {
-  fakeTimers();
+  fakeTimers({ now: new Date(2026, 10, 24, 12) });
   const onValue = vi.fn();
   const host = mountHost(<Held initial="2026-11-20T17:05" onValue={onValue} />);
   expect(popover()).toBeNull();

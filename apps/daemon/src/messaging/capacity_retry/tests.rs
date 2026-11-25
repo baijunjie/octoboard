@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::*;
-use crate::adapter::codex::rollout_watch::end_failed_turn;
+use crate::adapter::codex::rollout_watch::end_failed_turn_or_retry;
 use crate::hooks::TurnEnd;
 use crate::protocol::Session;
 use crate::test_support::owner_team::{hub_heard, hub_heard_of, team_state};
@@ -51,7 +51,7 @@ impl Fixture {
 
     /// The open turn fails at capacity.
     fn fail_at_capacity(&self) {
-        end_failed_turn(
+        end_failed_turn_or_retry(
             &self.state,
             &self.id,
             Some("Selected model is at capacity. Please try a different model.".to_string()),
@@ -432,7 +432,7 @@ async fn a_session_that_waits_for_the_user_when_the_wait_ends_is_not_sent_the_re
 #[tokio::test]
 async fn a_failure_of_another_kind_is_reported_at_once_and_never_retried() {
     let fixture = Fixture::new("capacity-retry-other", SHORT);
-    end_failed_turn(
+    end_failed_turn_or_retry(
         &fixture.state,
         &fixture.id,
         Some("a different error".to_string()),

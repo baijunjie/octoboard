@@ -33,9 +33,14 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    selects every package, except Markdown, which is read by no check. If nothing checked changed, the mode is `unread`
    and nothing runs. `build` inputs (`builds`) add the UI build. The `menu.*` keys of the UI message catalog count only
    when a changed line is one of them. A cross-package read (a test that reads another package's file, an import across
-   packages) is declared in `scope.mjs`; `scope.test.mjs` fails when a new one is not. The docs package (`apps/docs`) is
+   packages) is declared in `scope.mjs`; `scope.test.mjs` fails when a new one is not. The exception is what the website
+   and the docs import from the UI package: `ui-imports.mjs` reads those from their sources (through the UI package's
+   `exports` map and the relative imports inside it), so a module they start to reach, such as a provider presentation
+   module the agent marks begin to import, is in scope with no edit. The docs package (`apps/docs`) is
    selected by its own files and by the UI's language list and `exports` map, which its locale table is built from
-   (verify, ui and docs); a change to its content directory also selects the website (verify, web and docs), whose SEO
+   (verify, ui and docs). The language list also selects the website, the desktop scripts and the daemon. The desktop
+   installer test and the daemon's interface language test read it directly. A change to the docs content directory
+   also selects the website (verify, web and docs), whose SEO
    test checks that every docs page the website links to exists in every language, and a change to the website's logo
    and wordmark or to the website modules a docs test reads selects the docs in turn (verify, web and docs). `--full`
    selects every package and `--release` the shipping application only. `--release-group frontend|native|windows`
@@ -45,11 +50,14 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    against `config/app.json` without writing (`scripts/sync-identity.mjs --check`), searches the production core for
    provider knowledge (`provider-neutral.mjs`, below) and holds the Rust crates' writes to their registrations
    (`registered-writes.mjs`, below). A package selects its other steps (lint, type check, locales,
-   tests, build, script tests; both Rust crates always run together). The docs package's steps are lint, type check,
+   tests, build, script tests; both Rust crates always run together). The daemon package also runs the `node:test`
+   files beside the JavaScript it compiles in and an agent's CLI loads in its own process (an extension, a plugin),
+   `node --test apps/daemon/src/**/*.test.mjs`: a light step, since each takes about a second and builds nothing, so a
+   quick run keeps it; `steps.test.mjs` fails when the daemon tracks a node test the pattern does not match. The docs package's steps are lint, type check,
    build and tests, in that order. Light steps run first and heavy ones (UI tests, Rust builds and tests, the website
    and docs builds) last, and a failure stops the run. The website build runs before its SEO tests, and the docs build
    before the docs tests, which read the generated output. `--release` runs the application checks: application lint,
-   production UI type check, application UI tests, desktop script tests, rustfmt, clippy, Rust tests and the Windows
+   production UI type check, application UI tests, desktop script tests, the daemon's node tests, rustfmt, clippy, Rust tests and the Windows
    cross-check (`pnpm check:windows`: both crates, all targets, through `cargo xwin`, and a link of the daemon's
    executable once its check passes, for `x86_64-pc-windows-msvc` and `aarch64-pc-windows-msvc`). Local `release:version` runs the complete plan with `--fresh --head
    <release-commit>` before tagging, then scoped push verification can reuse matching passes. The release groups
@@ -103,8 +111,13 @@ group. It checks all production source in the daemon and UI, rather than only ch
 file, line and matching source with exit status 1 for a violation. Run it alone with
 `node scripts/verify/provider-neutral.mjs`.
 
-The search covers Rust, JavaScript, TypeScript, TSX and CSS. It looks for known agent ids, agent names in wording,
-agent-specific files, directories, environment variables, CLI flags, URL schemes and hook events. Descriptors and UI
+The search covers Rust, JavaScript, TypeScript, TSX and CSS. It looks for the ids of the registered providers, agent
+names in wording, agent-specific files, directories, environment variables, CLI flags, URL schemes and hook events. The
+registered providers are derived: one descriptor file `apps/daemon/src/providers/<id>.rs` per id, leaving out `mod.rs`,
+`layout.rs` and `test_provider.rs`, so a provider is guarded by its id as soon as its descriptor exists. The other
+spellings come from `VOCABULARY`, a table with one entry per provider id (product names, quoted forms, dot-directories,
+files, environment variables, flags, URL schemes and hook events); a registered provider with no entry is guarded by its
+id alone, and an entry applies whether or not its descriptor is present. Descriptors and UI
 presentation modules under their respective `src/providers/` directories are outside the core; a daemon
 `adapter/<id>/` directory is excluded only when a corresponding descriptor file exists. Shared adapter helpers remain
 in scope.
@@ -114,12 +127,14 @@ Tests and test fixtures are excluded by their file and directory conventions, as
 are excluded only where `cfg(test)` or a necessary `test` conjunct proves they are absent from production; an
 `any(test, unix)` item stays in scope. Strings remain searchable, including template strings and Rust raw strings.
 
-`EXCEPTIONS` lists exact source lines, file paths and reasons. Its only entries are the three built-in adapter
-registration lines in `apps/daemon/src/adapter/mod.rs`: the registry is the permitted place to associate an id with its
-adapter. A nearby branch or another line in the same file is not excepted. New exceptions need a reason and the same
-precise scope. The vocabulary is a mechanical guard alongside review, not an interpreter of arbitrary code.
+There is no list of exceptions to maintain: they are derived per registered id, and the only one is that provider's line
+in the adapter registry, `apps/daemon/src/adapter/mod.rs`, which pairs its id with its implementation (with or without
+a `cfg` attribute before it). The registry is the permitted place to associate an id with its adapter; a nearby branch or
+another line in the same file is not excepted. The vocabulary is a mechanical guard alongside review, not an
+interpreter of arbitrary code.
 
-`provider-neutral.test.mjs` covers the scope, test exclusions, exact exceptions and a regression that invokes the CLI
+`provider-neutral.test.mjs` covers the scope, test exclusions, the vocabulary, the derived exceptions, a provider added
+by a descriptor file alone and a regression that invokes the CLI
 on a generic agent-id branch and checks its failing exit status. Run it with
 `node --test scripts/verify/provider-neutral.test.mjs`.
 
@@ -268,7 +283,7 @@ does not call this workflow or wait for its results, except that its `linux-daem
 | Job | Runner | Command and scope |
 |---|---|---|
 | `frontend` | `ubuntu-latest` | `pnpm verify --release --release-group frontend --fresh`: identity, provider-neutral core search, registered writes, application lint, production UI type check and application UI tests. |
-| `native` | `macos-26` | `pnpm verify --release --release-group native --fresh`: identity, provider-neutral core search, registered writes, desktop script tests, rustfmt, clippy for the workspace and all targets, and both Rust crates' tests. |
+| `native` | `macos-26` | `pnpm verify --release --release-group native --fresh`: identity, provider-neutral core search, registered writes, desktop script tests, the daemon's node tests, rustfmt, clippy for the workspace and all targets, and both Rust crates' tests. |
 | `linux-check` | `ubuntu-latest` | `node scripts/cargo.mjs check --locked`: compile both crates (compilation only) with the Linux prerequisites installed. |
 | `linux-daemon` | `ubuntu-24.04`, `ubuntu-24.04-arm` | `.github/workflows/linux-daemon.yml`: clippy on the daemon, its whole test suite on glibc in a privileged container with a writable cgroup v2 hierarchy, and its tests on musl for x86_64 and aarch64, the targets the Linux release links statically. It also gates Linux releases. |
 | `windows-check`, `windows-bundle` | `windows-latest` | Native Windows checks and the unsigned installer build (see the [tooling overview](../../docs/structure/tooling.md)); the local release plan's windows group also cross-checks the same crates from the Mac. |
@@ -286,7 +301,8 @@ retention and timing measurements are documented in the [Rust cache module](../.
 
 ## Changing it
 
-- A new package or a new input: add or extend a rule in `RULES`; a rule's `consumers` decide which steps run.
+- A new package or a new input: add or extend a rule in `RULES`; a rule's `consumers` decide which steps run. A new
+  import of the UI package by the website or the docs needs none: it is derived.
 - A product doc a registered exception names (`registered-writes.mjs`): name it in `VERIFY_READS_DOCS` of `scope.mjs`,
   or the check fails; a change to it then selects the verify package, and with it the check.
 - A new check: a step in `steps.mjs`; keep `quick.mjs` consistent (its tests fail when a UI test reads files or a crate
@@ -311,6 +327,10 @@ retention and timing measurements are documented in the [Rust cache module](../.
 - `pnpm verify` with `--dry-run`, `--base <ref>`, `--head <commit>`, `--full`, `--release`,
   `--release-group frontend|native|windows`, `--quick`, `--fresh`.
 - `scope.mjs`: `RULES`, `planScope`, `matchingRules`. `steps.mjs`: `checkSteps`. `quick.mjs`: `quickSteps`.
+- `ui-imports.mjs`: `importsFromUi` gives the UI package's files that the sources under a directory import, directly or
+  through the package's own relative imports; `scope.mjs` builds the website's and the docs' lists from it. An import
+  that lands in the UI package and cannot be resolved to a file there, or an `exports` entry it does not interpret,
+  throws, naming the specifier and its importer, rather than leaving the modules behind it out of scope.
 - `changes.mjs`: `chooseBase`, `resolveBase`, `resolveLocalTargetBase`, `remoteTargetBase` (the one
   merge-base-with-the-remote-target function, also used by the pre-push hook), `resolveRemoteTargetBase`,
   `changedFiles`, `requirePushedTree`.
@@ -324,8 +344,8 @@ retention and timing measurements are documented in the [Rust cache module](../.
   `tree.mjs`: `workingTree`.
 - `environment.mjs`: `withoutRepositoryEnvironment`, `assertRepositoryEnvironmentCleared`.
 - `provider-neutral.mjs`: `checkProviderNeutral` searches a repository's production core; `violations` checks one
-  source file against the vocabulary and precise exceptions; `productionSource` and `testOnly` blank what is not
-  production code, for this check and the next.
+  source file against the vocabulary and the derived registration exceptions; `providerIds` derives the registered ids
+  from the descriptor files; `VOCABULARY` is the per-provider table of spellings. `productionSource` and `testOnly` blank code absent from production.
 - `registered-writes.mjs`: `checkRegisteredWrites` checks a repository's crates (`CRATES`) against their
   registrations; `hitsIn` lists one source file's writes by the vocabulary (`VOCABULARY`) and the functions it is
   given, with the acknowledged ones marked; `publicFunctions` and `bodiesOf` read a file's public functions and a

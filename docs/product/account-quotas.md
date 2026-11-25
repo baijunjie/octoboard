@@ -2,7 +2,8 @@
 
 How much of an account's plan quota is left: the plan an account is on, and for each of the plan's usage windows how
 much remains and when it resets. Octoboard shows it for every account of an agent — the agent's default account and
-every account the user owns (see `docs/product/agent-accounts.md`) — for Claude Code, Codex and Grok Build alike. It is
+every account the user owns (see `docs/product/agent-accounts.md`) — when the agent reports a plan quota. An
+agent whose plan quota Octoboard does not read shows none (see "Agents whose quota Octoboard does not read" below). It is
 shown in Settings' **Agent accounts** section, in the rail's account quota panel (see
 `docs/product/account-quota-panel.md`), in a compact indicator for the selected session (see "The selected session's
 quota indicator" below) and, in the macOS application, on the menu bar icon and in its quota submenus (see "The icon's
@@ -28,6 +29,34 @@ fresh readings, so that the indicator below and the automatic account switch kee
 reading and no failure: turning it off discards the reading held, the poller's next look discards that of an account
 whose last running session has stopped, and turning it back on reads it at once with no failures held against it.
 
+## Agents whose quota Octoboard does not read
+
+Each agent the daemon serves declares the kinds of quota window it reports (`quota_windows.kinds`); an agent that
+declares none is one Octoboard reads no plan quota for. Pi and OpenCode have no plan quota of their own because each model provider bills the selected key or subscription. Qwen Code’s `/usage` shows local statistics for API-key accounts. Subscription quota is unavailable in Octoboard pending verification with a Qwen subscription or Coding Plan account.
+GitHub Copilot CLI’s additional paid-plan limits and Antigravity CLI’s paid tiers and AI credits are outside the verified readings. See "Quota windows" below for the quotas Octoboard reads. The window tells such an agent by that declaration, never by a reading. Its accounts are read,
+on the same occasions and under the same rules as above, for their sign-in alone (see "Reading the sign-in of an agent
+whose quota is not read" in `docs/product/account-quota-readings.md`), and nothing about usage is shown for them:
+
+- Settings' accounts table has no **Usage** column for that agent, and the account details dialog has no **Usage**
+  part (see "The accounts table" and "The account details dialog" in `docs/product/agent-accounts.md`);
+- the rail's account quota panel has no tab for it (see "What the panel shows" in
+  `docs/product/account-quota-panel.md`);
+- the account pickers and a session row's **Switch account** submenu draw no usage bar before its accounts' names and
+  state no remainder in their descriptions; the submenu keeps the bar's space empty, so the names still line up;
+- the selected session's quota indicator, and the menu bar icon's bars, show nothing for a session of that agent (see
+  "The selected session's quota indicator" below);
+- the menu bar icon's menu has no quota submenu for it (see "The icon's menu" in `docs/product/menu-bar-icon.md`);
+- a session's `list_agents` lists its accounts with no plan and no windows (see
+  `docs/product/listing-agents-from-a-session.md`).
+
+Having no windows, its accounts are never used up (see "A used-up account" below), and nothing weighs one against
+another by quota. Automatic account selection finds no account that ranks, so it takes the usable account inherited
+from the project or console, then the first usable account in the saved display order (see "Which account a session
+uses" in `docs/product/opening-sessions.md`); the automatic switch at a usage limit takes the first usable account in
+the saved display order (see "Which account it is switched to" in `docs/product/automatic-account-switch.md`); no usage
+window is ever started on them (see `docs/product/starting-usage-windows.md`). Whether an account is logged in counts
+as for any other agent, going by its sign-in reading (see "An account that is not logged in" below).
+
 ## Quota windows
 
 What each agent reports, and what each window is called. A window is named the way the agent's own interface names
@@ -38,6 +67,8 @@ it, so the same kind of window can carry a different name for different agents:
 | Claude Code | The **five-hour window**, called **Session**; the **account-wide weekly window**, called **Weekly · all models** when the same reading also has a model's own weekly window, and **Weekly** when it has none; and one weekly window per model that has a weekly limit of its own, named after the model (for example "Fable weekly") |
 | Codex | The **five-hour window**, called **5h**, and the **account-wide weekly window**, called **Weekly** |
 | Grok Build | One credit pool, named after its current period: **Weekly** for a period of about a week (6 to 8 days), **Monthly** for one of about a month (28 to 31 days), and **Credits** when the period is anything else or not given |
+| Antigravity CLI | On the free plan, **Gemini Models weekly** and **Claude and GPT models weekly**. Each window belongs to its model group. Octoboard does not start these windows. |
+| GitHub Copilot CLI | On the free plan, the monthly AI-credit budget, called **Plan**, with its fixed reset date. Octoboard does not start this window. |
 
 Inside a sentence — a used-up account's reason, an alert — a window is named the same way, as a limit: Claude Code's
 "session limit", Codex's "5h limit", "weekly limit" ("weekly limit for all models" where the name above is **Weekly ·
@@ -120,7 +151,7 @@ separately.
 
 In the account picker of the session dialog and the handoff dialog (see the **Agent** field in "The session dialog" in
 `docs/product/opening-sessions.md`), each account carries a compact, wordless usage bar before its name, in the agent's
-colour: what remains of the five-hour window, with the account-wide weekly window's thin bar beneath it, or, for an
+colour (none for an agent whose quota Octoboard does not read; see "Agents whose quota Octoboard does not read" above): what remains of the five-hour window, with the account-wide weekly window's thin bar beneath it, or, for an
 account without a five-hour window, one bar for its account-wide weekly window or its credit pool. An account with
 nothing to draw — not read yet, not logged in, unavailable, or whose latest reading failed so that its windows are out
 of date — shows an empty track. The tracks of a picker's or menu's bars have a hairline edge (a Settings table cell's
@@ -252,9 +283,11 @@ seconds of its reset time passing, without waiting for a newer reading.
 
 An account is **not logged in** while the last reading held for it, under the directory it points at now, found the
 agent not signed in there or its directory missing (the reading's `unavailable` code is `quota_not_signed_in` or
-`quota_config_dir_missing`; see "Quota states" above). It is judged on the reading already held, as a used-up account
-is. A reading that failed for any other reason — a timeout, a CLI that could not be run — says nothing about the
-sign-in, and neither does an account not read yet: such an account can still be chosen and opened on. So until a
+`quota_config_dir_missing`; see "Quota states" above). For an agent whose quota Octoboard does not read, that reading
+is its sign-in reading, which reads as signed out in the same way (see "Agents whose quota Octoboard does not read"
+above). It is judged on the reading already held, as a used-up account is. A reading that failed for any other reason
+— a timeout, a CLI that could not be run — says nothing about the sign-in, nor does a sign-in reading that cannot tell,
+and neither does an account not read yet: such an account can still be chosen and opened on. So until a
 reading of an account is held — after the daemon starts, after the account is added, turned back on or pointed at
 another directory (see "When quotas are read" in `docs/product/account-quota-readings.md`) — the daemon accepts and
 launches a session opened on it even when the account is in fact not logged in, and refuses a new one only once that
@@ -279,6 +312,9 @@ An account that is not logged in is treated as clearly unusable:
   account is not logged in, so a session cannot use it, and to choose another account or log in to it. An account
   that is turned off is described as turned off instead. The console and project dialogs' account pickers do not mark
   it, since a console's or project's account is a lasting preference.
+- **For an agent Octoboard cannot log in**, what the window says of such an account tells how to log in with the
+  agent's own CLI instead of to log in to it (see "Agents Octoboard cannot log in" in
+  `docs/product/logging-accounts-in.md`).
 - **Opening a session with defaults passes over it**, and is unavailable when it cannot (see "Opening a session with
   defaults" in `docs/product/opening-sessions.md`).
 
@@ -313,7 +349,8 @@ each window drawn, the window and its whole remaining percent; the bars are not 
 tooltip (see "Tooltips on icon-only controls" in `docs/product/labels-and-tooltips.md`).
 
 The indicator is absent when no session is selected, its agent is unavailable or its availability is not yet determined,
-the account has no reading or no eligible window, or the latest reading failed. A failed reading hides it even when
+its agent is one whose quota Octoboard does not read (see "Agents whose quota Octoboard does not read" above), the
+account has no reading or no eligible window, or the latest reading failed. A failed reading hides it even when
 Settings and the quota panel retain the last good windows as out of date. It is absent, too, for an account the user
 turned off, unless the selected session is running on it — starting, working, waiting for the user or awaiting
 instructions (see "Turning an account off" in `docs/product/agent-accounts.md`). Without an indicator the button's

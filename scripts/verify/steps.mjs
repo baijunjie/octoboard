@@ -3,6 +3,11 @@ import path from "node:path";
 import { ALL_PACKAGES } from "./scope.mjs";
 
 const VERIFY_TESTS = { label: "verify tests", cmd: ["node", "--test", "scripts/**/*.test.mjs"] };
+// The `node:test` files beside the JavaScript the daemon compiles in and an agent's CLI loads in its own process (an
+// extension, a plugin), which no Rust test runs. They take about a second each and build nothing, so the step is light
+// and a quick run keeps it.
+export const DAEMON_NODE_TESTS_GLOB = "apps/daemon/src/**/*.test.mjs";
+const DAEMON_NODE_TESTS = { label: "daemon node tests", cmd: ["node", "--test", DAEMON_NODE_TESTS_GLOB] };
 const PROVIDER_NEUTRAL_CHECK = { label: "provider-neutral core", cmd: ["node", "scripts/verify/provider-neutral.mjs"] };
 const REGISTERED_WRITES_CHECK = { label: "registered writes", cmd: ["node", "scripts/verify/registered-writes.mjs"] };
 const IDENTITY_CHECK = { label: "identity check", cmd: ["node", "scripts/sync-identity.mjs", "--check"] };
@@ -38,6 +43,7 @@ export function checkSteps(scope) {
     ];
     const native = [
       pnpm("desktop script tests", ["--filter", "@octoboard/desktop", "test"]),
+      DAEMON_NODE_TESTS,
       ...RUST_STEPS,
     ];
     if (scope.group && !RELEASE_GROUPS.includes(scope.group)) throw new Error(`Unknown release check group: ${scope.group}`);
@@ -71,6 +77,9 @@ export function checkSteps(scope) {
     lint("desktop lint", ["apps/desktop/scripts"]),
     pnpm("desktop script tests", ["--filter", "@octoboard/desktop", "test"]),
   );
+  // Every daemon change runs them, not only one to the scripts and their tests: the step costs seconds, and a narrower
+  // rule would have to name each directory a provider keeps such a script in.
+  if (packages.includes("daemon")) steps.push(DAEMON_NODE_TESTS);
   if (packages.includes("daemon") || packages.includes("native")) steps.push(...RUST_STEPS);
   if (scope.builds?.includes("ui")) steps.push(pnpm("ui build", ["--filter", "@octoboard/ui", "build"], { heavy: true }));
   return lightFirst(steps);

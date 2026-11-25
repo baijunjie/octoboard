@@ -30,7 +30,7 @@ const CHECK_EVERY: Duration = Duration::from_secs(60 * 60);
 const SCAN_EVERY_MILLIS: i64 = 24 * 60 * 60 * 1000;
 
 /// Where a scan gets the locator that finds the agents' records.
-type LocatorSource = Arc<dyn Fn() -> Locator + Send + Sync>;
+type LocatorSource = Arc<dyn Fn() -> Locator<'static> + Send + Sync>;
 
 /// How a scan would move an agent record to the Trash.
 type TrashRecord = Arc<dyn Fn(&Path) -> Result<(), TrashFailure> + Send + Sync>;
@@ -112,7 +112,10 @@ async fn scan(state: &Arc<AppState>, locator: LocatorSource, trash: TrashRecord)
     }
     let deleting = {
         let (state, locator) = (state.clone(), locator.clone());
-        tokio::task::spawn_blocking(move || delete_unresumable_groups(&state, &locator()))
+        tokio::task::spawn_blocking(move || {
+            let locator = locator().with_store(&state.store);
+            delete_unresumable_groups(&state, &locator)
+        })
     };
     let deleted = match deleting.await {
         Ok(deleted) => deleted,

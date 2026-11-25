@@ -1,0 +1,87 @@
+[?25l[7A[K
+[K
+[K
+[K
+[K
+ /Volumes/2TB/AgentData/tmp/claude/claude-501/.../work[36;73HRun on: This computer [1mctrl+e[m change environment
+
+❯ [K
+
+ [1m←[m open sidebar · Interactive · Manual Approval · [1m/[m commands · [1m?[m help · [1mtab[m next tab[38;3H[?25h[?25l[H  [1mGLOBAL[m[K
+
+    /help                 show full help[K
+    ?[4;27Hshow quick help[K
+    /    [5;27Hcommands[K
+    @                     mention files and opted-in sessions[K
+    #                     mention issues and pull requests[K
+    !    [8;27Hexecute shell command[K
+    shift+tab[9;27Hswitch modes[K
+    ctrl+s                stash/pop current prompt[K
+[4Cctrl+q[11;27Henqueue prompt
+    ctrl+r                reverse search history[K
+    ctrl+o                toggle all timeline[K
+    ctrl+c                cancel[K
+[4Cctrl+c×2[15;27Hexit
+    esc esc               clear input, interrupt, stop agents, or rewind
+[4Cctrl+d[17;27Hexit on an empty prompt, else delete next character
+[4Cctrl+z[18;27Hsuspend (on Windows: exit on an empty prompt)
+[4Cctrl+l[19;27Hclear screen
+[4Cctrl+t[20;27Htoggle reasoning display
+[4Cctrl+y[21;27Hopen plan or research report in your editor; accept completion in a picker
+[4Cspace[22;27Hhold to record voice input while voice mode is on (/voice)
+[4Cctrl+space[23;27Hstart or stop voice dictation (also ctrl+x → v)
+[4Cctrl+x → b[24;27Hmove current task to background
+[4Cctrl+x → g[25;27Hcollapse or expand the autopilot goal panel
+[4Cctrl+x → o[26;27Hopen most recent link
+
+  [1mINPUT
+
+[4C[mctrl+a[30;27Hgo to line start
+[4Cctrl+e[31;27Hgo to line end
+[4Cctrl+h[32;27Hdelete previous character (previous word in local Windows terminals)
+[4Cctrl+w[33;27Hdelete previous word
+[4Cctrl+u[34;27Hdelete from cursor to beginning of line
+[4Cctrl+k[35;27Hdelete from cursor to end of line
+    meta+←/→              move cursor by word[K
+    shift+enter           insert newline (see /terminal-setup)[K
+    ctrl+j[38;27Hinsert newline in any terminal (so does \ then enter)
+    ctrl+g                edit prompt in $EDITOR[K
+[1m↑/↓[m scroll · [1mesc[m close[K[1;120H[36m┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C[90m┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃
+[119C┃[m

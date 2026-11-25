@@ -27,6 +27,16 @@ pub(super) fn required_text(field: &str, text: &str) -> Result<String> {
     Ok(trimmed.to_string())
 }
 
+/// A prompt an agent is to be handed as stored: trimmed, and refused as a missing `field` if
+/// nothing but whitespace is left of it once its control and invisible characters are ignored,
+/// which is what a launch reads as no prompt (`crate::session::term::is_blank_once_stripped`).
+pub(super) fn required_prompt(field: &str, text: &str) -> Result<String> {
+    if crate::session::term::is_blank_once_stripped(text) {
+        return Err(field_required(field));
+    }
+    Ok(text.trim().to_string())
+}
+
 pub(super) const PROJECT_NAME_LIMIT: usize = 100;
 pub(super) const PROJECT_DESCRIPTION_LIMIT: usize = 2_000;
 

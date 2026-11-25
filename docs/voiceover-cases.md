@@ -406,6 +406,7 @@ proxy and VoiceOver were stopped afterwards; `cleanup.json` records the exact ow
 | [OPEN-2 Startup failure page alert](#open-2-startup-failure-page-alert) | delayed `EmptyPanel` alert on a page with no focus move | Unconfirmed |
 | [OPEN-3 Unprompted question turned failed in place](#open-3-unprompted-question-turned-failed-in-place) | focus relayed off a dialog and back as its content becomes a failure | Unconfirmed |
 | [OPEN-4 Clean-up result's outcome line and the warning's read-failed alert](#open-4-clean-up-results-outcome-line-and-the-warnings-read-failed-alert) | focus moved onto a plain dialog's outcome line once the window is attended; a delayed alert hidden while it waits inside an alert dialog | Pass in the packaged app for the opening phrases, focus after closing, and the retry alert |
+| [OPEN-5 In-place Alert loses a control](#open-5-in-place-alert-loses-a-control) | retained or handed-off focus inside Connectors and MCP, then a delayed Alert | Unconfirmed |
 
 ### NAME-1 Retained picker trigger
 
@@ -2545,6 +2546,27 @@ tree equal to main `505f1c2fc`, with the holder-runtime repair `30eb3e434`) and 
   dialog opened from a button. The Safari reference does not count: the rendering-surface criterion requires the
   packaged application's WKWebView.
 
+### OPEN-5 In-place Alert loses a control
+
+- **Location and state change.** In Settings → Agent accounts → Connectors and MCP, make the inventory answer
+  `unavailable` with reason `failed` and a diagnostic. Focus Try again and press it with the keyboard. Answer with
+  the same reason and no diagnostic. Repeat with Details focused, using the pointer to press Refresh connectors and
+  MCP servers. For the recovery link, start with a missing Git failure, focus Download Git, and refresh into a
+  connection failure.
+- **Mechanism.** `packages/ui/src/settings/accounts/AccountMcpInventory.tsx` (`McpInventoryBody`,
+  `UnavailableAlert`) renders `FailureAlert` or `ErrorAlert`. `ErrorAlert` hands focus from a removed control to
+  Try again, or to the view's fallback when retry is unavailable. Focus already on Try again stays there if it
+  remains offered. On a control change the title and summary first render as ordinary text. Only their wrapper
+  gains `role="alert"` after `AFTER_FOCUS_MOVE_DELAY_MS`, inside the open dialog. The recovery controls are outside
+  that wrapper.
+- **Expected listening result.** Try again keeps focus on retry. After the pointer refresh removes a focused control,
+  Try again takes focus before the alert is spoken. In each run, listen for one automatic reading of the new title
+  and any summary after the delay. For the diagnostic-only change the English title is
+  `Could not read connectors and MCP servers`. Record handoff speech and the alert phrase separately.
+- **Native ARIA, capture, environment, date and result.** Unconfirmed. DOM tests cover the two removals, retained
+  Alert and button identity on retry, and the delayed role. A packaged macOS VoiceOver listening pass is pending.
+- **Reuse scope.** None until confirmed.
+
 ## Existing `StatusAnnouncer` callers and the case each matches
 
 Compared strictly against the rules above, from the code and the recordings. Paths are relative to `packages/ui/src`.
@@ -2617,6 +2639,8 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 
 ## Open items
 
+- In-place Alert control changes in Connectors and MCP need a listening pass for retained Try again focus and for
+  focus handed off when Details or Download Git disappears (OPEN-4).
 - KNW-9 preserves the E6 bare mark's duplicated sentence as a failure. FOCUS-4 heard the replacement in E8 for Error and
   Note, with one sentence in the opening phrase and focus returned on Escape. Warning, the restricted-change rich path
   line, other custom-body marks and the generic touch popover of `Tooltip` were not heard. Touch VoiceOver requires iOS/iPadOS

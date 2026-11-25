@@ -128,6 +128,11 @@ pub mod error_code {
     /// loaded), which the Enter would have run. The command was cleared from the input box and not
     /// sent. `params` names the `agent`, the `command` as written and the one `offered`, with its slash.
     pub const COMMAND_NOT_RECOGNISED: Code = Code("command_not_recognised");
+    /// A `send_command` whose command the session's agent has none of: its list said so (OpenCode's
+    /// `No matching items`), so the Enter would have sent it to the model as a prompt. The command
+    /// was cleared from the input box and not sent. `params` names the `agent` and the `command` as
+    /// written.
+    pub const COMMAND_NOT_FOUND: Code = Code("command_not_found");
     /// The confirmation of a provider that records trust per session (`Capabilities::
     /// per_session_trust`, Grok Build's) was accepted — pressed by Octoboard, or answered by the
     /// person in the terminal — but no trust entry for the folder reached the user's own store: the
@@ -334,6 +339,11 @@ pub mod error_code {
     /// it may already be queued or running, and is not sent again. As the notice of the same code;
     /// `params` names the `agent`.
     pub const MESSAGE_ACCEPTANCE_UNCONFIRMED: Code = Code("message_acceptance_unconfirmed");
+    /// A message written into the session was not reported sent by its agent, and its input box
+    /// then read empty: the message went elsewhere (into a dialog, say) and may be lost. It was
+    /// not delivered and is not written again, so the sender may send it again. As the notice of
+    /// the same code; `params` names the `agent` and carries the message's text as `detail`.
+    pub const MESSAGE_NOT_DELIVERED: Code = Code("message_not_delivered");
     /// A message for the session was refused outright by its agent's own queue, which took
     /// nothing of it: it is not sent by any route, and the messages queued after it go on. As
     /// the notice of the same code; `params` names the `agent` and gives the agent's reason as
@@ -461,9 +471,12 @@ pub mod error_code {
     /// An `update_daemon` for a daemon whose user may not replace its executable. Nothing was
     /// downloaded. `params` names the `path` of the executable.
     pub const DAEMON_UPDATE_NOT_WRITABLE: Code = Code("daemon_update_not_writable");
-    /// A `cancel_account_login` for an account that is not being signed in. `params` names
-    /// `agent`.
+    /// A `cancel_account_login` or an `answer_account_login_question` for an account that is not
+    /// being signed in. `params` names `agent`.
     pub const LOGIN_NOT_RUNNING: Code = Code("login_not_running");
+    /// An `answer_account_login_question` for a login that is not waiting on the question it
+    /// names: it was answered already, or the login has moved on. `params` names `agent`.
+    pub const LOGIN_QUESTION_NOT_OPEN: Code = Code("login_question_not_open");
     /// A `sign_in_account_mcp_server` while a sign-out of the same server of the account is
     /// running, or the reverse. Nothing was run. `params` names `agent` and `server`.
     pub const MCP_SERVER_AUTH_BUSY: Code = Code("mcp_server_auth_busy");
@@ -660,8 +673,9 @@ pub mod error_code {
     pub const DIRECTORY_UNAVAILABLE: Code = Code("directory_unavailable");
     pub const PATH_OPEN_FAILED: Code = Code("path_open_failed");
     /// A session's conversation could not be opened in its agent's desktop application: the
-    /// application is not installed, the agent has none, the session has no conversation to open
-    /// or one whose id the agent would not take, or the launch failed. `params` names `detail`.
+    /// application is not installed, the session has no conversation to open or one whose id the
+    /// agent would not take, or the launch failed. `params` names `detail`. An agent whose
+    /// provider declares no application is refused with `provider_unsupported` instead.
     pub const NATIVE_APP_UNAVAILABLE: Code = Code("native_app_unavailable");
     /// A push or a pull was asked for while `HEAD` is detached. Nothing was pushed or pulled.
     pub const NOT_ON_A_BRANCH: Code = Code("not_on_a_branch");
@@ -879,6 +893,13 @@ pub mod notice_code {
     /// box; later messages wait for a prompt to be sent, for 30 seconds at most once the message
     /// waits on the user, and then go into the box with it. `params` names the `agent`.
     pub const MESSAGE_NOT_SENT: Code = Code("message_not_sent");
+    /// A message written into the session was not reported sent by its agent, and its input box
+    /// then read empty: it went elsewhere (into a dialog the screen reader did not recognise,
+    /// say) and may be lost. It is not written again, nothing holds later messages for it, and
+    /// its sender is told by the error of the same code, or by a note where it was answered
+    /// already. A late report of it withdraws the notice. `params` names the `agent` and carries
+    /// the message's text as `detail`.
+    pub const MESSAGE_NOT_DELIVERED: Code = Code("message_not_delivered");
     /// The session's agent did not confirm accepting a message written into its own queue. The
     /// message may already be queued, and is not sent again. `params` names the `agent`.
     pub const MESSAGE_ACCEPTANCE_UNCONFIRMED: Code = Code("message_acceptance_unconfirmed");
@@ -891,6 +912,11 @@ pub mod notice_code {
     /// where it could be and not sent. As the error of the same code: `params` names the `agent`,
     /// the `command` as written and the command `offered` (with its slash, without arguments).
     pub const COMMAND_NOT_RECOGNISED: Code = Code("command_not_recognised");
+    /// A slash command written for the session was not run: the agent's list said it has no such
+    /// command, so an Enter would have sent it to the model as a prompt; it was cleared from the
+    /// input box where it could be and not sent. As the error of the same code: `params` names the
+    /// `agent` and the `command` as written.
+    pub const COMMAND_NOT_FOUND: Code = Code("command_not_found");
     /// A message Octoboard queued for the session could not be written as it was sent, through no
     /// fault of the agent's (its images were gone, or a command could only have gone beside text
     /// the input box holds and could not be cleared): it was not sent, and later messages go on.
@@ -946,6 +972,43 @@ pub mod notice_code {
     /// names the `agent` and carries the draft's text as the screen showed it as `detail` (a
     /// collapsed paste only as the placeholder the agent shows for it).
     pub const DRAFT_DISCARDED: Code = Code("draft_discarded");
+    /// A message Octoboard wrote into the session while a turn ran, which the agent held for the
+    /// end of the turn and put back in its input box, unsent, when the turn was cancelled, was
+    /// cleared from the box, at least in part, so that the next message would not be sent
+    /// together with it, and could not be queued to be written again as such a message
+    /// ordinarily is (`crate::messaging::cleared_messages`), so it was not carried out. `params`
+    /// names the `agent`, carries the message's text as the screen showed it as `detail`, and
+    /// `cleared: "part"` where the box did not empty.
+    pub const MESSAGE_CLEARED_AFTER_CANCEL: Code = Code("message_cleared_after_cancel");
+    /// A message the session's own server or extension channel had taken for the agent, which
+    /// the agent then gave back unsent (as one does that held it for a turn that was cancelled),
+    /// could not be queued to be written again as such a message ordinarily is
+    /// (`AppState::message_returned`), so it was not carried out. It never was in the input box,
+    /// and nothing was cleared. `params` names the `agent` and carries the message's text as
+    /// `detail`.
+    pub const MESSAGE_GIVEN_BACK_UNSENT: Code = Code("message_given_back_unsent");
+    /// A message Octoboard wrote into the session's terminal while a turn ran, which the agent
+    /// held for the turn and dropped when the turn was cancelled, putting nothing back in its
+    /// input box (`crate::session::screen::ScreenReader::cancel_drops_held_messages`), could not
+    /// be queued to be written again as such a message ordinarily is
+    /// (`AppState::write_dropped_messages_again`), so it was not carried out. Nothing was given
+    /// back and nothing was cleared. `params` names the `agent` and carries the message's text as
+    /// `detail`.
+    pub const MESSAGE_DROPPED_AT_CANCEL: Code = Code("message_dropped_at_cancel");
+    /// A message Octoboard wrote into the session's terminal while a turn ran may not have been
+    /// carried out: the turn was cancelled, the agent's cancel can drop the messages it holds,
+    /// and the launch is without the reports that tell a message the turn took from one dropped
+    /// (`crate::adapter::AgentProvider::launch_cancel_drops_held_messages` answered false), so it
+    /// is not written again (`AppState::write_dropped_messages_again`). `params` names the
+    /// `agent` and carries the message's text as `detail`.
+    pub const MESSAGE_MAYBE_DROPPED_AT_CANCEL: Code = Code("message_maybe_dropped_at_cancel");
+    /// A message Octoboard wrote into the session's terminal while a turn ran was not sent: the
+    /// agent confirms writes only by reporting each prompt it sends
+    /// (`crate::providers::DeliveryQuirks::confirms_by_reported_prompt`), and it reported none for
+    /// this message by the end of the turn and the grace after it
+    /// (`crate::messaging::untaken_messages`). It is not written again. `params` names the
+    /// `agent` and carries the message's text as `detail`.
+    pub const MESSAGE_NOT_TAKEN: Code = Code("message_not_taken");
     /// Past the draft's grace, text in the session's input box that no key could clear held a
     /// message for 30 seconds, so the message was written into the box as it stood and may be sent
     /// together with that text. `params` names the `agent` and carries the text the box showed

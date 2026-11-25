@@ -7,18 +7,21 @@
 //! an agent injects on its own; what it keeps for the package and this does not want is filtered
 //! here, with the provider's store saying which lines a history leaves out
 //! (`RecordStore::hidden_from_history`) and how a user line reads as typed, if it reads as typed at
-//! all (`RecordStore::user_text`). Nothing is written. A session that has had no conversation has
-//! an empty history; a record that cannot be found or read is `None`, which the caller reports as
-//! unavailable.
+//! all (`RecordStore::user_text`). Of a record that is a tree (`RecordStore::branching`) only the
+//! current branch is read. A record can also identify the current suffix with ordinal steps
+//! (`RecordStore::history_step_index`). A session that has had no conversation has an empty
+//! history. A record that cannot be found or read is `None`, which the caller reports as unavailable.
 
 use std::sync::Arc;
 
 use anyhow::Result;
+use serde_json::Value;
 
 use crate::adapter::provider;
 use crate::messaging::{sharing, texts};
 use crate::protocol::{Account, AgentId, HistoryMessage, HistorySpeaker, Session};
-use crate::records::conversation::{at_of, for_each_line, Entry};
+use crate::records::branch::{for_each_line_on_branch, for_each_row_on_branch, StepIndex, Steps};
+use crate::records::conversation::Entry;
 use crate::records::{history_branch, Branch, Hints, Locator};
 use crate::state::AppState;
 
@@ -65,6 +68,15 @@ pub fn of_session(
     if !session.has_conversation {
         return Some(Vec::new());
     }
+    if let Some(rows) = crate::records::rows::read(locator, session) {
+        let rows = rows.ok()?;
+        let store = provider(session.agent).records();
+        return told(session.agent, |visit| {
+            for_each_row_on_branch(store.branching(), &rows, |_, row| visit(row));
+            Ok(())
+        })
+        .ok();
+    }
     let Branch { stretches, .. } = history_branch(hints, locator, accounts, session)?;
     read(session.agent, &stretches?).ok()
 }
@@ -80,7 +92,7 @@ pub async fn of_session_blocking(
         let accounts = state.store.list_accounts()?;
         Ok(of_session(
             &state.record_hints,
-            &mut Locator::default(),
+            &mut Locator::default().with_store(&state.store),
             &accounts,
             &session,
         ))
@@ -91,6 +103,18 @@ pub async fn of_session_blocking(
 fn read(
     agent: AgentId,
     stretches: &[crate::records::Stretch],
+) -> std::io::Result<Vec<HistoryMessage>> {
+    let store = provider(agent).records();
+    told(agent, |visit| {
+        for_each_line_on_branch(store.branching(), stretches, visit)
+    })
+}
+
+/// The history the lines `each_line` hands over tell, in order: the lines of a conversation's
+/// current branch, from its files or from its rows.
+fn told(
+    agent: AgentId,
+    each_line: impl FnMut(&mut dyn FnMut(&Value)) -> std::io::Result<()>,
 ) -> std::io::Result<Vec<HistoryMessage>> {
     let store = provider(agent).records();
     let mut messages = Vec::new();
@@ -107,8 +131,8 @@ fn read(
             });
         }
     };
-    for_each_line(stretches, |line| {
-        let at = at_of(line);
+    let mut visit = |line: &Value| {
+        let at = store.history_at(line);
         if store.hidden_from_history(line) {
             return;
         }
@@ -140,9 +164,40 @@ fn read(
                 _ => {}
             }
         }
-    })?;
+    };
+    visit_current_steps(store.history_step_index(), each_line, &mut visit)?;
     close_turn(&mut messages, turn, &mut reply);
     Ok(messages)
+}
+
+/// Select reusable step indexes before reading any dialogue, so an abandoned suffix cannot open a
+/// turn. Keep only positions in the first pass, as the lines can hold large tool outputs.
+fn visit_current_steps(
+    index_of: Option<StepIndex>,
+    mut each_line: impl FnMut(&mut dyn FnMut(&Value)) -> std::io::Result<()>,
+    visit: &mut dyn FnMut(&Value),
+) -> std::io::Result<()> {
+    let Some(index_of) = index_of else {
+        return each_line(visit);
+    };
+    let mut steps = Steps::default();
+    let mut selected = Vec::new();
+    let mut position = 0_usize;
+    each_line(&mut |line| {
+        if let Some(cut) = index_of(line).and_then(|step| steps.follow(step, selected.len())) {
+            selected.truncate(cut);
+        }
+        selected.push(position);
+        position += 1;
+    })?;
+    let mut selected = selected.into_iter().peekable();
+    position = 0;
+    each_line(&mut |line| {
+        if selected.next_if_eq(&position).is_some() {
+            visit(line);
+        }
+        position += 1;
+    })
 }
 
 #[cfg(test)]
@@ -151,6 +206,88 @@ mod tests {
 
     use super::*;
     use crate::records::Stretch;
+
+    /// The history of a record that is a tree is its current branch: the turn the user went back
+    /// on is left out, though the file still holds it.
+    #[test]
+    fn the_history_of_a_tree_shaped_record_is_its_current_branch() {
+        use crate::records::fixtures::{session, test_record, CLAUDE_ID, TREE_BRANCH, TREE_TRUNK};
+        let _declared = crate::providers::test_provider::with_tree_records();
+        let dir = crate::test_support::ScratchDir::new("agent-records-history-tree");
+        let account = dir.join("account");
+        let own = session(AgentId::TEST, CLAUDE_ID, Some(&account));
+        let told = |lines: &str| -> Vec<(HistorySpeaker, String, u32)> {
+            test_record(&account, CLAUDE_ID, lines);
+            let mut locator = Locator::with_shell(std::collections::HashMap::new());
+            of_session(&Hints::default(), &mut locator, &[], &own)
+                .expect("a history")
+                .into_iter()
+                .map(|message| (message.speaker, message.text, message.turn))
+                .collect()
+        };
+        assert_eq!(
+            told(TREE_TRUNK),
+            [
+                (HistorySpeaker::User, "first".to_owned(), 1),
+                (HistorySpeaker::Agent, "reply one".to_owned(), 1),
+                (HistorySpeaker::User, "abandoned".to_owned(), 2),
+                (HistorySpeaker::Agent, "abandoned reply".to_owned(), 2),
+            ]
+        );
+        assert_eq!(
+            told(&format!("{TREE_TRUNK}{TREE_BRANCH}")),
+            [
+                (HistorySpeaker::User, "first".to_owned(), 1),
+                (HistorySpeaker::Agent, "reply one".to_owned(), 1),
+                (HistorySpeaker::User, "second".to_owned(), 2),
+                (HistorySpeaker::Agent, "reply two".to_owned(), 2),
+            ]
+        );
+    }
+
+    /// The history of a conversation kept as rows is read through the provider, from the
+    /// session's own account: its current branch in turns, and unavailable when the account does
+    /// not hold the conversation.
+    #[test]
+    fn the_history_of_a_conversation_kept_as_rows_is_its_current_branch() {
+        use crate::records::fixtures::{row_database, session, ROW_FORK, ROW_ID, ROW_TURNS};
+        let _declared = crate::providers::test_provider::with_row_records();
+        let dir = crate::test_support::ScratchDir::new("agent-records-history-rows");
+        let account = dir.join("account");
+        let told = |id: &str| -> Option<Vec<(HistorySpeaker, String, u32)>> {
+            let own = session(AgentId::TEST, id, Some(&account));
+            let mut locator = Locator::with_shell(std::collections::HashMap::new());
+            let history = of_session(&Hints::default(), &mut locator, &[], &own)?;
+            Some(
+                history
+                    .into_iter()
+                    .map(|message| (message.speaker, message.text, message.turn))
+                    .collect(),
+            )
+        };
+        row_database(&account, &[(ROW_ID, ROW_TURNS)]);
+        assert_eq!(
+            told(ROW_ID).expect("a history"),
+            [
+                (HistorySpeaker::User, "first".to_owned(), 1),
+                (HistorySpeaker::Agent, "reply one".to_owned(), 1),
+                (HistorySpeaker::User, "second".to_owned(), 2),
+                (HistorySpeaker::Agent, "reply two".to_owned(), 2),
+            ]
+        );
+        let forked = format!("{ROW_TURNS},{ROW_FORK}");
+        row_database(&account, &[(ROW_ID, forked.as_str())]);
+        assert_eq!(
+            told(ROW_ID).expect("a history"),
+            [
+                (HistorySpeaker::User, "first".to_owned(), 1),
+                (HistorySpeaker::Agent, "reply one".to_owned(), 1),
+                (HistorySpeaker::User, "third".to_owned(), 2),
+                (HistorySpeaker::Agent, "reply three".to_owned(), 2),
+            ]
+        );
+        assert_eq!(told("row_gone"), None);
+    }
 
     /// The prompt a restarted session is sent to carry on is Octoboard's, not the user's.
     #[test]

@@ -24,6 +24,130 @@ message that goes into Codex's own queue (see "Messages through Codex's own queu
 The rules, the cases where text the screen does not show can still go in with a message, and the notices are in
 `docs/product/draft-preservation.md`.
 
+**A message given back at a cancel and cleared is written again.** On an agent that holds a message written while a
+turn runs for the end of the turn and, when the turn is cancelled, puts it back in its input box unsent, the message is
+cleared from the box before the next message goes in (see "Clearing a draft past the grace period" in
+`docs/product/draft-preservation.md`). Its sender was answered that it was delivered when it went in, so the message has
+to arrive: it is put back at the front of the session's queue, as it was written (its header with it), and written
+again right after the message it was cleared for, still behind that message if that one has to wait. This holds
+whoever sent it and whatever has become of the sender since: an instruction from an owner, shared information, a report
+to an owner (also from a reporter archived since), a notice of Octoboard's own. Nobody is told: the user gets no alert,
+and the sender no message. A message is written again **twice** at most, so written three times in all; each time takes
+a turn cancelled while the agent held it.
+
+The message is dropped instead, and the user is sent `message_cleared_after_cancel` with its text, to copy and send
+again, only where it cannot be written again:
+
+- it has been written again twice already;
+- it was more than text — a message with images, a slash command — whose text alone is not the message;
+- it was not written by the session's queue, or the queue has written sixteen later messages into the session since;
+- the daemon is stopping and has saved its queues;
+- an owner's interrupt cleared it while the box showed only the agent's placeholder for a long paste (see the next
+  paragraph).
+
+**A message given back at an owner's interrupt is held until the next message.** An interrupt made with
+`interrupt_session` clears what the agent puts back in its input box right after its key (see "The input box
+afterwards" in `docs/product/interrupting-turns.md`). Where what it cleared is the message given back, recognized as
+above (the agent's provider declares that a cancel gives held messages back, and the box began with that message's
+own text, or with several messages written during the turn in the order written), the message is written again too,
+but held: no message is being written that it could follow, and writing it at
+once would start a new turn, while the interrupt is meant to leave the agent stopped. It is put back on the session's
+queue, and nothing writes it until another message is taken from that queue and written into the session; it is then
+written right after that message, ahead of any queued behind it. It counts against the same bound, and where it cannot
+be written again, in the cases listed above, the user is sent `message_cleared_after_cancel` with its text, here too.
+Where the box showed, in place of text, only the placeholder the agent shows for a long paste (Claude Code's
+`[Pasted text #1 +24 lines]`, for instance), nothing tells whether it stood for that message or for the interrupted
+prompt: written again, the message could be delivered twice, and dropped unseen, it could be lost. So it is not written
+again, and the user is sent `message_cleared_after_cancel` with the message's own text, as Octoboard wrote it, rather
+than the placeholder the box showed. Anything else the interrupt clears, such as the interrupted prompt the agent put back, is not written again. A held
+message counts as queued (`queued_messages` includes it) and goes where the session's queue goes: a planned stop saves
+it for the next daemon, and a handoff or a restart of the session's process carries it over, in each case as an ordinary
+queued message from then on, no longer held, so written as soon as the queue is next written; it is dropped with the
+queue when the session's process ends (an exit, an archive), and lost with the rest of the queue if the daemon stops
+without a planned stop.
+
+**A message that went through a channel of the agent's own is written again only when that channel says the agent
+gave it back.** Such a message (one the session's own server took, see "Messages through Codex's own queue" below, or its
+extension's channel, see "Messages through an extension's channel") was never
+written into the terminal, so nothing of it is looked for in the input box, nothing is cleared for it, and it is never
+written again because of what the box shows. An agent that drops a message it took through its channel when the turn
+is cancelled has its channel say so, once nothing of the message is left where the agent would send it by itself: the
+message is then put back on the session's queue held, exactly as one an interrupt cleared is (written right after the
+next message taken for the session, against the same bound of twice), and where it cannot be written again the user is
+sent `message_given_back_unsent` with its text, to copy and send again: a notice of its own, since nothing was put back
+in an input box and nothing was cleared from one. A message is written again whenever the channel says so, however
+soon after it took the message, even before Octoboard has finished handing it over. A channel that does not say so has
+delivered the message: none of the released agents gives back what its channel took.
+
+**Several messages given back at one cancel are each written again, in the order they were written in.** Octoboard
+keeps the text of every message it wrote into a session's terminal while the turn ran (the latest sixteen), until the
+next turn begins, the agent reports sending one, or a message is written at the prompt. An input box that begins with
+the latest of them, one after another in their order, whatever the agent puts between two (an empty row, a row break),
+holds those messages given back; what follows them, set off by whitespace, is the user's own text. The box is cleared
+as for one message; each message is put back at the front of the queue and written again after the message it was
+cleared for, each against its own bound of twice, and one that cannot be written again is told by its own
+`message_cleared_after_cancel`. The user's text is handed back by `draft_discarded` alone, without the messages. See
+"A message given back at a cancel" in `docs/product/draft-preservation.md`.
+
+**A message an agent drops at a cancel is written again too, where the agent's provider says its cancel drops them.**
+Some agents hold a message written while a turn runs and, cancelled before they have sent it, drop it with nothing put
+back in the input box (Qwen Code's Ctrl-C). For a provider that declares so, a cancel the agent reports (by a hook, by
+its status reports, or by the reported cancel its provider declares its status reports carry beside its hooks) for an
+open turn puts every message Octoboard wrote into that turn's terminal, and that the
+agent has not reported sending, back on the session's queue held: written after the next message taken for the
+session, in the order they were written in, against the same bound of twice, with nobody told. One that cannot be
+written again (it was more than text, the bound is used up, the queue did not write it) is told to the user by
+`message_dropped_at_cancel`, with its text: a notice of its own, since the agent gave nothing back and nothing was
+cleared from an input box. A message is never written into an agent that took it: only a provider
+whose agent reports a held message it takes, as a prompt sent with its text, declares such a cancel, and a launch
+without those reports (one whose hooks the user switched off in their own settings) has nothing written again at its
+cancel, as its provider answers for that launch: a message the turn took could not be told from one the cancel dropped,
+and would run twice. Instead every client is sent, for each message Octoboard wrote into that turn's terminal, a
+`message_maybe_dropped_at_cancel` notice with its text, shown as an error alert titled "Message may not have been
+carried out", for the user to check against the conversation and send again if the session did not act on it; a later
+cancel of the same turn names none of them again. The session that sent it, where a session did (an instruction, a
+report, shared information), is told the same with its text, in a notice of Octoboard's own ("Message from
+Octoboard: …", each message's text quoted), one note for all of its messages, through the channel a sender is told
+what became of what it sent: queued while it cannot take a message, kept for it while it is interrupted, refused once
+it is archived. Every path that tells the user a message a session sent was not carried out tells its sender the same
+way: a message no turn took, one a cancel may have dropped or dropped for good, one given back unsent, one gone
+elsewhere. The queue keeps who sent each message for as long as a cancel or a turn's end can still show it was not
+carried out; the user's own messages and Octoboard's have no sender to tell. That record does not cross a daemon
+restart, nor a message kept in the store for an interrupted session, nor one forwarded to the session that takes over
+a handoff: such a message has no sender Octoboard knows of, so only the user is told if it turns out not to have been
+carried out. A message the cancel told as possibly not carried out that the box then shows given back is cleared out of
+the way of the next message with nobody told again: its notice already carries its text, so it is never written again
+nor told as a draft. A message so reported is no longer among the ones put back, and one put back that the agent reports sending while it is still held
+leaves the queue again. Where the same agent's other cancel key gave the messages back instead, what the input box
+then shows of them is what is left of messages already put back: it is cleared out of the way of the next message,
+nothing is written twice, and only text the user typed after them is handed back, by `draft_discarded`; the user may
+then have been told by `message_dropped_at_cancel` of a message that could not be written again, though the key that
+cancelled put it back in the box, since nothing tells the two keys apart when the cancel is reported. A message already
+told by `message_cleared_after_cancel` is not told a second time. None of the released agents declares such a cancel.
+
+**A message no turn took is told as not sent, where the agent confirms writes by reported prompt.** For an agent whose
+writes are confirmed only by its report of each prompt it sends (Claude Code and OpenCode), a message Octoboard wrote
+into a turn's terminal is taken once the agent reports it: Claude Code reports a message it queues mid-turn as it
+queues it, OpenCode when a turn takes it, which can be a turn of its own that starts just after the idle. So a message
+written while a turn ran that the agent has not reported taking when the turn ends (by its end, not a cancel), nor
+within 10 seconds after, was not sent: every client is sent a `message_not_taken` notice with its text, shown as an
+error alert titled "Message not taken", and the session that sent it, where a session did, is told the same as above.
+It is not written again: it may still be in the input box. A message the agent reported taking, at any time before
+that, is never told so, nor is a slash command or a message of images alone, for which the agent reports no prompt; a
+prompt that looks like one the agent sends itself (a task notification it quotes, say) but is a message Octoboard wrote
+counts as that message taken. Where the agent reports taking it later after all, within 10 minutes of the notice, the
+notice about that message is withdrawn (`session_notice_withdrawn` naming its text) and its sender told that it ran,
+so neither sends it again. What is still untaken when the session's process ends, or when its terminal is handed to
+the next daemon, is told at once, as nothing would tell it after.
+
+**A launch may hold its first message until the agent can offer Octoboard's tools.** Some agents offer the tools of
+Octoboard's MCP server to their model only once that server has answered a listing of its tools, which can be later
+than the input box (Antigravity CLI). For a provider that declares a wait, nothing is written into a launch (its first
+task and every other message alike) until the session's MCP server has answered its first listing, or the time the
+provider states has passed since the launch, whichever comes first; the session's writes read as held for `starting`
+meanwhile. The listing counts whenever it is answered, before the launch is registered included, and a session whose
+process a restarted daemon took over does not wait. None of the released agents declares a wait.
+
 Octoboard retries queued messages automatically when the session can take them, including after its input box is
 redrawn. A sender told its message was queued must not send it again. The ordinary queue lifetime below still applies:
 relaunching a session does not preserve messages held only in its running process's queue.
@@ -67,14 +191,19 @@ after an account switch — because all of them can be model-authored and none i
 
 **An instruction `resume_session` hands a Claude Code session that resumes a conversation is not written at all**, nor
 is the prompt to continue that an account switch sends one (see "Continuing after a switch" in
-`docs/product/switching-session-accounts.md`): it is given to the relaunched agent as the prompt its launch starts
-with, since Claude Code can ask "Resume this conversation?" at a resume launched without one, and a message written
-into that dialog would be thrown away (see the screens that hold messages, below). The prompt is reshaped by the
-first three steps (with a single leading space as the guard, whatever the agent), and one that would then begin with
-`-` also gets a single leading space, so it is not read as a
-command-line option; one that is nothing but whitespace once reshaped is dropped, and the session resumes with no
-prompt. Such a prompt is neither queued nor checked as below. For any other session, Claude Code's included when it has
-no conversation to resume, the instruction or prompt is queued and written like any other message.
+`docs/product/switching-session-accounts.md`), nor the task a client's `open_session` request gives together with a
+conversation to resume (`resume_agent_session_id`; see "Opening a new session on a found conversation" in
+`docs/product/resuming-a-conversation-by-its-session-id.md`), which is that resume's instruction: it is given to the
+launched agent as the prompt its launch starts with, and a session opened that way comes up working on it, since Claude
+Code can ask "Resume this conversation?" at a resume launched without one, and a message written into that dialog would
+be thrown away (see the screens that hold messages, below). The prompt is reshaped by the first three steps (with a
+single leading space as the guard, whatever the agent) and then passed after a bare `--` (see "How each agent is given
+the injection" in `docs/product/per-agent-launch-specifics.md`), so one that begins with `-` is passed as it stands;
+one that is nothing but whitespace once reshaped is dropped, and the session resumes with no prompt. Such a prompt is
+neither queued nor checked as below. For any other session, Claude Code's included when it has no conversation to
+resume, the instruction or prompt is queued and written like any other message, and so is a task given with a
+conversation to resume to Codex or Grok Build, the session it opens coming up at its prompt until that message is
+written.
 
 **A blank message is refused.** A message passed to a client's `send_message` request or to an owner's
 `instruct_session` tool that is nothing but whitespace once its control characters and invisible characters are
@@ -212,7 +341,9 @@ up all the same; no setting of Codex hides its usage-limit prompt (measured on C
 screen is up the session reads as *waiting for the user* and raises its hand (see "What the statuses are derived from"
 in `docs/product/session-statuses.md`) — except Claude Code's three views of its background agents
 (`claude_agent_list_focus`, `claude_subagent_view`, `claude_agents_view`), which show it *dormant* and raise no hand (see
-"Dormant" in `docs/product/session-statuses.md`); the moment its screen no longer shows one, the queue is written,
+"Dormant" in `docs/product/session-statuses.md`), and a view the person opened themselves over the conversation (a
+list of commands, a picker, a help screen, where a provider marks its screens so), for which the session keeps the
+status it had, raises no hand and has nobody told that it waits, while its messages are held all the same; the moment its screen no longer shows one, the queue is written,
 oldest first, and the hand comes down. Octoboard never answers such a screen: the user does, in the session's terminal. A client's
 `send_message` request meanwhile is queued like any other message, not refused.
 
@@ -266,7 +397,7 @@ because its agent reported it is waiting for the user — at a permission prompt
 | `starting` | The agent has not yet signalled that it is past its startup screens, so its trust confirmation may still come — or, for Claude Code, has sent its first hook report but does not yet have bracketed paste on (see above). |
 | `trust_confirmation` | Its folder-trust confirmation is up and has not been answered. |
 | `agent_dialog` | It is showing a screen only the user can answer (above). |
-| `agent_action` | Codex's terminal title says it is waiting on the user. |
+| `agent_action` | Codex's terminal title says it is waiting on the user, or a status report of the program in its terminal does where its agent's provider declares that its reports say so (see "What reports can say beside an agent's hooks" in `docs/product/program-status-reports.md`). |
 | `agent_error` | The moment after a Grok Build error (above). |
 | `sharing_change` | It is being restarted for a change of its account's sharing of the default configuration, and is resumed on its conversation afterwards; what is queued for it is written into the resumed process (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`). |
 | `handoff` | It is being handed off to another agent. |
@@ -385,6 +516,47 @@ cause. When a message goes in, the terminal takes it, or Codex refuses it or doe
 and the notice is withdrawn (`session_notice_withdrawn` with that code), as it is when the session's server stops,
 which it does when the session ends; the window leaves a toast it is showing as it
 is.
+
+## Messages through an extension's channel
+
+An agent whose provider runs an extension inside the agent's process can take Octoboard's automatic messages through
+that extension instead of its terminal: the extension sends each as a user message, by the agent's own means, so
+the user's draft can stay in the input box. Pi uses this channel for plain-text messages, at idle and while it
+works. After Escape, a queued message that Pi restores to the editor is held again by Octoboard when the extension
+can remove the full returned text and preserve the user's draft. The channel follows these delivery rules:
+
+- A message is held until the session can take it, by the same rules: a frozen terminal, a trust confirmation or a
+  dialog on the screen holds it in the session's queue before the channel is tried.
+- A message the extension reports the agent took is delivered. Whether it joins the running turn or waits for its end
+  is the agent's own treatment of a user message sent that way.
+- A message the agent refuses fails as one Codex's own queue refuses does ("A message Codex's own queue refuses").
+- A message the extension was handed and reported nothing of is one whose acceptance is uncertain ("A message whose
+  acceptance is uncertain"): it is not written into the terminal, where a second copy could run.
+- An extension that is reloaded, or started again by its agent, is never handed a message the one before it was
+  handed and reported nothing of: the first may have sent it, and the second cannot know. Such a message is uncertain
+  too, and is not sent again.
+- A message the agent took and then gave back unsent (a turn cancelled while it was held) is written again, as
+  "Messages held until a session can take them" says of a channel.
+- An extension that connects while its session is still starting is told to ask again, and is served once the
+  session runs.
+- While no extension is connected, or it does not take a message in time, the message is written into the terminal as
+  it would be without a channel: an extension that failed to start, crashed or was turned off costs the session only
+  the channel, never a message and never the session. The same holds for a session started under an earlier build
+  whose process holder knows no channel.
+- A message with images, and a slash command sent as a command, go into the terminal.
+
+A daemon that restarts while the session runs serves the channel again once it has adopted the session; a message
+not yet handed to the extension when a planned stop begins stays in the queue for the next daemon, as any queued
+message does.
+
+## Messages through OpenCode's private server
+
+Slash commands and image messages use OpenCode’s terminal path. See `docs/product/slash-commands-and-image-messages.md` for its completion and attachment behavior.
+
+Octoboard starts a private OpenCode server with the terminal attached. A plain-text message for a known conversation
+can go through the server and steer a running turn. OpenCode owns an accepted prompt after an interruption and can
+send it to the model with the next prompt. Octoboard leaves it in that queue. The terminal path is used while the
+native conversation is still unknown and for messages that need a terminal.
 
 ## A message whose acceptance is uncertain
 
@@ -522,6 +694,23 @@ but its Enter has had its chance: no further Enter is pressed for it. This appli
 into such a session's terminal, mid-turn or at its prompt; a message that goes into Codex's own queue (see "Messages
 through Codex's own queue" above) is not written into the terminal, so none of this applies to it.
 
+**A message that went elsewhere.** For a provider that declares an empty input box after an unconfirmed write to mean
+the message went elsewhere (none of the released agents does: an empty box there may be a message sent whose report is
+late), where the check above ends with no prompt reported and the session's input box reads empty off a whole frame,
+the message is in neither the conversation nor the box: it went elsewhere (into a
+dialog Octoboard does not recognise, say, as OpenCode's are below 40 columns) and may be lost. It is not left unsent:
+it is not written again, no submit key is retried, and nothing holds the messages queued behind it, which are written
+and checked as it was. Every client is sent the `message_not_delivered` notice about that session, naming its agent and
+carrying the message's text, shown as an error alert titled "Message not delivered", which says the message went
+elsewhere and may be lost and tells the user to send it again if it is still needed, with the text below to copy. Its
+sender, where it waits on that write, is answered with the error of the same code, saying the message was not delivered
+and may be lost, never that it is in the input box or that it must not be sent again, so the sender may send it again;
+a sender already answered that the message was queued or written is told the same in a note of Octoboard's own. Where
+the agent reports sending the message after all within 10 minutes (a report late on a loaded host), the notice is
+withdrawn and the sender told that it ran. A box that cannot be read off a whole frame, or is not found on the screen (a dialog drawn
+over it, as OpenCode's session list covers its whole box at 30 columns), tells nothing: the message is left unsent, as
+below, and no submit key is retried into a box not read.
+
 **What a message left unsent does:**
 
 - Its text is not written again or put back in the queue: it is already in the session's input box.
@@ -554,7 +743,8 @@ through Codex's own queue" above) is not written into the terminal, so none of t
   text with the message. If anything has been typed into the session since the message was written, there is no retry
   at all. Otherwise the input box must read, off a whole frame, nothing but the message itself (compared without
   whitespace, so wrapping does not count), Claude Code's placeholder for a long paste (`[Pasted text #1 +24 lines]`) or
-  nothing at all; until it does, the retry waits for a later look, for 30 seconds after the message was marked unsent at
+  nothing at all, except where the provider declares that an empty box means the message went elsewhere (below): there
+  an empty box holds no message to send, and the Enter would act on whatever took it; until it does, the retry waits for a later look, for 30 seconds after the message was marked unsent at
   most. A retry that ends without its key, for typed keys or that bound, sends the `message_not_sent` notice again
   without `submit_retry`, and the message holds later messages until the agent reports a prompt sent (the user sends or
   clears it), for 30 seconds at most: then the next message goes into the input box with it, as the box stands, and
@@ -597,7 +787,9 @@ every client, gets the `message_not_sent` notice.
 **What is not checked:**
 
 - A message written while the agent is mid-turn. The agent queues it and sends it only when the turn ends, which no
-  short wait can see, so a mid-turn message Claude Code holds back is not detected and counts as delivered.
+  short wait can see, so a mid-turn message Claude Code holds back is not detected and counts as delivered. One an
+  agent gives back at a cancel and Octoboard then clears is written again (see "Messages held until a session can take
+  them" above).
 - Grok Build sessions, and Codex sessions outside a Windows daemon host: a message counts as delivered once it has been
   written. A Codex message written into the terminal on a Windows daemon host is checked only as "Codex on a Windows
   daemon host" above says. A message Codex's own queue takes counts as delivered once the queue has accepted it, with

@@ -2,6 +2,7 @@
 //! deletion and the reads.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use super::Result;
 use rusqlite::{params, Connection, OptionalExtension, Row};
@@ -80,6 +81,15 @@ pub(super) const SESSION_COLUMNS: &str =
                                observed_model, observed_effort, last_turn_abnormal, compatibility";
 
 impl Store {
+    pub(crate) fn session_working_directory(&self, session: &Session) -> Result<PathBuf> {
+        match &session.project_id {
+            Some(id) => Ok(PathBuf::from(self.require_project(id)?.path)),
+            None => Ok(PathBuf::from(
+                self.require_console(&session.console_id)?.workdir,
+            )),
+        }
+    }
+
     /// Inserts a session that is not a console session, or a console session whose colour and
     /// ordinal are already decided (a test fixture; the daemon itself always creates a console
     /// session through [`Self::insert_console_session`] instead, which decides them).

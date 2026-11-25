@@ -10,7 +10,8 @@ behaves" in `docs/product/labels-and-tooltips.md`), at its own width, with its c
 - **One tab per agent that is added and installed and has an account to list** (below), in the order of the added
   agents (see "Added agents" in `docs/product/agent-accounts.md`), each showing the agent's icon and name, as wide as
   its content, the tabs starting at the strip's start. An agent that is not added, or that has been determined
-  unavailable, has no tab; an added agent whose availability is not yet determined has one; an agent whose accounts are
+  unavailable, has no tab, nor has an agent whose quota Octoboard does not read (see "Agents whose quota Octoboard does
+  not read" in `docs/product/account-quotas.md`); an added agent whose availability is not yet determined has one; an agent whose accounts are
   all turned off has none. Each opening starts on the tab of the selected session's agent while
   the button shows that session's indicator (see "The selected session's quota indicator" in
   `docs/product/account-quotas.md`) and the agent has a tab, otherwise on the first agent's tab; a tab chosen in the
@@ -52,6 +53,11 @@ behaves" in `docs/product/labels-and-tooltips.md`), at its own width, with its c
 - **With agents added and installed but no tab left**, every account of each being turned off, the empty state carries
   the gauge icon, is titled "No enabled account", with a line saying that disabled accounts are not shown there, and
   offers a **Manage accounts** button, which closes the panel and opens Settings on its Agent accounts section.
+- The empty states above count only the agents whose quota Octoboard reads, so an added agent whose quota it does not
+  read neither keeps "No agent added" or "No agent available" away nor brings "No enabled account". **When every added
+  agent is one whose quota Octoboard does not read**, and at least one of them is installed or not yet determined
+  unavailable, the empty state instead carries the gauge icon, is titled "No agent reports usage", with a line saying
+  that Octoboard does not read the usage of the agents that are added, and offers nothing to press.
 - At the panel's foot, **Manage accounts** closes the panel and opens Settings on its Agent accounts section (see
   "Opening and closing Settings" in `docs/product/settings.md`). It is left out while the panel shows "No agent added"
   or "No enabled account", whose button already leads there.

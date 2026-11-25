@@ -43,6 +43,7 @@ use crate::protocol::{
     InteractionPrompt, PendingInteraction, QuestionAnswer, INTERACTION_LIMIT,
     INTERACTION_TEXT_LIMIT,
 };
+use crate::session::screen::ScreenText;
 
 /// How many of the current turn's tool calls are kept for a prompt to be matched to: the oldest
 /// goes once there are more. An agent asks about one call at a time, and the call it asks about is
@@ -109,6 +110,11 @@ pub enum Answer {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NextKey {
     Press(Input),
+    /// Several keys written together as one write, the screen read again only after the last: for
+    /// a prompt whose state between them cannot be read off the screen (a selection drawn in colour
+    /// alone), where a key on its own would leave the screen as it was. Each counts as a key
+    /// towards the most one answer may take. Never empty.
+    PressAll(Vec<Input>),
     /// The screen is in a state the provider cannot go on from.
     Stuck(&'static str),
 }
@@ -120,32 +126,41 @@ pub trait InteractionReader: Send + Sync {
     /// The tool call this hook event starts, or `None` for an event that starts none.
     fn call_started(&self, event: &str, payload: &Value) -> Option<CallSeen>;
 
-    /// Whether [`Self::read`] and [`Self::next_key`] are given the screen with its faint cells
-    /// blanked (`TerminalSnapshot::visible_text_undimmed`), for a provider that draws hints faint
-    /// where its prompts' text goes; by default they get every cell (`visible_text`).
-    fn faint_blanked(&self) -> bool {
+    /// Which screen [`Self::read`] and [`Self::next_key`] are given: the one with its faint cells
+    /// blanked for a provider that draws hints faint where its prompts' text goes; by default the
+    /// screen as drawn, every cell on it.
+    fn prompt_screen(&self) -> ScreenText {
+        ScreenText::AsDrawn
+    }
+
+    /// Whether what a prompt has selected cannot be read off the screen once a key has been typed
+    /// into it (a selection drawn in colour alone): then a prompt is published only where nothing
+    /// has been written into the session since the watch first saw it up, since a key typed at
+    /// the terminal may have moved its selection unseen, and never again once anything has been
+    /// ([`watch`]). By default a prompt reads the same after a key as before it.
+    fn prompt_unreadable_after_input(&self) -> bool {
         false
     }
 
-    /// What `screen` (the visible rows, faint cells blanked as [`Self::faint_blanked`] says) shows
+    /// What `screen` (the visible rows, as [`Self::prompt_screen`] asks for them) shows
     /// of a prompt, matched against `calls`, the current turn's calls oldest first.
     fn read(&self, screen: &str, calls: &[CallSeen]) -> Reading;
 
     /// The next key that takes the prompt on `screen`, for `call`, towards `answer`; called again
-    /// after each key, on the screen the key left, until the prompt is gone.
+    /// after each key, on the screen the key left, until the prompt is gone. The reader confirms
+    /// that the prompt on `screen` is `call`'s before choosing a key, and is [`NextKey::Stuck`]
+    /// where it cannot: the press goes on for as long as [`Self::read`] reads a prompt it cannot
+    /// match to a call ([`Reading::Up`]), taking it for the same prompt, so a key chosen without
+    /// that check could answer another call's prompt.
     fn next_key(&self, screen: &str, call: &CallSeen, answer: &Answer) -> NextKey;
 }
 
-/// `live`'s screen as `reader` reads it ([`InteractionReader::faint_blanked`]).
+/// `live`'s screen as `reader` reads it ([`InteractionReader::prompt_screen`]).
 pub(crate) fn screen_of(
     live: &crate::session::LiveSession,
     reader: &dyn InteractionReader,
 ) -> String {
-    if reader.faint_blanked() {
-        live.screen_text_undimmed()
-    } else {
-        live.screen_text()
-    }
+    live.screen_as(reader.prompt_screen())
 }
 
 /// The prompt published for a session, and what it was published from.
@@ -176,6 +191,16 @@ pub struct InteractionState {
 struct Inner {
     calls: VecDeque<CallSeen>,
     published: Option<Published>,
+    opened: Option<Opened>,
+}
+
+/// The prompt the watch saw up, and how many writes had been made into the session's input when
+/// it first saw it ([`InteractionState::opened_writes`]).
+#[derive(Debug, Clone)]
+struct Opened {
+    /// The call it belongs to, once the provider matched it to one.
+    call: Option<CallSeen>,
+    writes: u64,
 }
 
 impl InteractionState {
@@ -194,8 +219,43 @@ impl InteractionState {
 
     /// Forgets the calls of the turn before a new one.
     pub fn turn_started(&self) {
-        self.lock().calls.clear();
+        let mut inner = self.lock();
+        inner.calls.clear();
+        inner.opened = None;
+        drop(inner);
         self.clear_lowered();
+    }
+
+    /// Notes a prompt seen up, for `call` where the provider matched it to one, with `writes` made
+    /// into the session so far, and returns the writes made when that prompt was first seen up. A
+    /// prompt seen up with no call matched is taken for the one seen before; one matched to
+    /// another call than the one before is a new prompt.
+    pub(crate) fn opened_writes(&self, call: Option<&CallSeen>, writes: u64) -> u64 {
+        let mut inner = self.lock();
+        let opened = match (inner.opened.take(), call) {
+            (Some(opened), Some(call)) if opened.call.as_ref().is_some_and(|seen| seen != call) => {
+                Opened {
+                    call: Some(call.clone()),
+                    writes,
+                }
+            }
+            (Some(opened), call) => Opened {
+                call: opened.call.or_else(|| call.cloned()),
+                writes: opened.writes,
+            },
+            (None, call) => Opened {
+                call: call.cloned(),
+                writes,
+            },
+        };
+        let first = opened.writes;
+        inner.opened = Some(opened);
+        first
+    }
+
+    /// Forgets the prompt seen up: it has left the screen.
+    pub(crate) fn closed(&self) {
+        self.lock().opened = None;
     }
 
     /// Notes that a prompt leaving the screen put the session back to working, which no hook

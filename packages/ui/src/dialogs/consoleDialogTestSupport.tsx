@@ -5,7 +5,7 @@ import { onTestFinished, vi } from "vitest";
 
 import { consoleOf } from "../fixtures/builders";
 import { type Account, type Agent, type AgentAvailability, type AgentModel, type Console, type Event, type ModelsUnavailable, type ClientRequestBody } from "../protocol";
-import { TEST_AGENTS } from "../test/testProviders";
+import { BASELINE_AGENTS, BASELINE_PROVIDERS } from "../test/testProviders";
 import { createStateStore } from "../store";
 import { TestHost } from "../test/TestHost";
 import { buttons, click, inputLabelled, type as typeInto, withoutIsolates } from "../test/dom";
@@ -58,9 +58,10 @@ export function render(
   const request = vi.fn((body: ClientRequestBody) => respond?.(body) ?? Promise.resolve(body.type === "list_agent_models" ? listing(body, MODELS) : ({ type: "ack", id: null } as Event)));
   const daemon = testDaemon({
     state: {
+      providers: BASELINE_PROVIDERS,
       settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
       agentAvailability: new Map(
-        TEST_AGENTS.map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined", default_account_dir: null }]),
+        BASELINE_AGENTS.map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined", default_account_dir: null }]),
       ),
     },
     request,

@@ -1,5 +1,7 @@
 # Turns the agents' hooks do not report
 
+Antigravity CLI and Pi use program status reports to observe turn endings. Qwen Code reports a cancellation as `idle` immediately after `working`, even when its hooks say nothing. See “What reports can say beside an agent's hooks” in `docs/product/program-status-reports.md` for that case.
+
 A session's status follows the hook events its agent reports (see "What the statuses are derived from" in
 `docs/product/session-statuses.md`). A few ways a turn ends, or a raised hand comes down, are reported by no hook event,
 and Octoboard reads them from somewhere else instead: the agent's own record of the conversation, or its terminal title

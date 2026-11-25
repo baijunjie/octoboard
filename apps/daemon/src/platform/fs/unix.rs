@@ -20,6 +20,13 @@ pub(super) fn host_stat_of(file: &File) -> io::Result<Stat> {
     Ok(stat_from(file.metadata()?))
 }
 
+pub(super) fn host_change_time_ms(stat: &Stat) -> Option<f64> {
+    Some(super::node_ms(
+        stat.metadata.ctime(),
+        stat.metadata.ctime_nsec(),
+    ))
+}
+
 /// The pid of the process holding a lock on the file at `path`, where the host says and exactly one
 /// process does; `None` otherwise. Only Linux says, in `/proc/locks`.
 pub fn lock_holder(path: &Path) -> Option<u32> {

@@ -1,6 +1,7 @@
 import type { Reason } from "../format/reason";
 import type { Translate } from "../i18n/catalog";
 import type { AccountQuota, Agent, ProviderInfo, QuotaWindow } from "../protocol";
+import { hasPlanQuota } from "../agents/providers";
 import { AccountUsageBar } from "./AccountUsageBar";
 import { quotaNaming, quotaUsedUpDetail, quotaUsedUpShort, usageBarSummary, usageBarWindows } from "../accounts/quotaFormat";
 
@@ -8,7 +9,8 @@ import { quotaNaming, quotaUsedUpDetail, quotaUsedUpShort, usageBarSummary, usag
  * shows to the eye, for assistive technology. For an account whose quota is used up (`exhaustedBy`)
  * that is the full reason as the `detail` and the short one as the `reason` to draw under its name, its bar drawn grey;
  * for the others, what remains of their quota. A reading that is out of date has no bar and no
- * remainder to state. */
+ * remainder to state. An account of a provider that declares no plan quota (`hasPlanQuota`) has no usage to draw, so no
+ * bar and no words. */
 export function accountUsage(
   t: Translate,
   providers: readonly ProviderInfo[],
@@ -16,7 +18,8 @@ export function accountUsage(
   quota: AccountQuota | undefined,
   exhaustedBy: QuotaWindow | undefined,
   now: number,
-): { icon: React.ReactElement } & ({ detail?: undefined; reason?: undefined } | { detail: string; reason?: Reason }) {
+): { icon?: React.ReactElement } & ({ detail?: undefined; reason?: undefined } | { detail: string; reason?: Reason }) {
+  if (!hasPlanQuota(providers, agent)) return {};
   const icon = <AccountUsageBar agent={agent} quota={quota} now={now} usedUp={exhaustedBy !== undefined} />;
   // A used-up account always has the reading that says so, which names the window.
   if (exhaustedBy && quota) return { icon, detail: quotaUsedUpDetail(t, quotaNaming(quota, providers), exhaustedBy, now), reason: quotaUsedUpShort(t, exhaustedBy, now) };

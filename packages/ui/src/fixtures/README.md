@@ -53,11 +53,19 @@ It is excluded from the production type check and from release verification, and
   `builders.ts` builds protocol records and `snapshotState` builds a store state. `memoryBuilders.ts` builds memory
   entries, their scopes and the change events of a memory, for the memory tests and the gallery's memory scenarios. `interact.ts` is the step driver
   (`ui.press`, `ui.t`, `ui.chord`, ...) that names controls as a user does, in the language the window is in.
-  `fixtureProviders.ts` holds the providers the daemon serves in its snapshot (`FIXTURE_PROVIDERS`, with the real daemon's
-  values), which `snapshotState` and the fixture daemon's store start with, and `servedLabel` for the name the daemon writes
-  into its own text; UI text names a provider through `providerLabel` instead. `fixtureProviders.test.ts` holds that copy to the
-  daemon's descriptors (`apps/daemon/src/providers/`), so a descriptor that changes there fails it until the copy follows.
-  `UNPRESENTED_PROVIDER` is a provider with no presentation module, which a scenario serves beside the registered ones.
+  `sameForEveryAgent` makes an entry of a per-agent group for every agent the fixture daemon serves.
+  `fixtureProviders.ts` holds the providers the daemon serves in its snapshot (`FIXTURE_PROVIDERS`), which `snapshotState`
+  and the fixture daemon's store start with, and `servedLabel` for the name the daemon writes into its own text; UI text
+  names a provider through `providerLabel` instead. Their values are not written here: each built-in presentation module has a
+  served-info fixture beside it (`providers/<id>.fixture.ts`, exporting `served` with the real daemon's values), which
+  `providers/servedFixtures.ts` gathers in registry order (a registered module with no fixture throws).
+  `FIXTURE_PROVIDERS` is an explicit list of the released ids mapped over them, which the gallery, the fixture daemon and the
+  website preview serve, and releasing a provider appends its id; the tests serve every registered module and the test-only
+  provider (`TEST_PROVIDERS`, `test/testProviders.ts`). `fixtureProviders.test.ts` holds those fixtures to the daemon's
+  descriptors (`apps/daemon/src/providers/`), so a descriptor that changes there fails it until the fixture follows.
+  `UNPRESENTED_PROVIDER` is a provider with no presentation module, which a scenario serves beside the registered ones;
+  `DEFAULT_ACCOUNT_ONLY_PROVIDER` is one of the same kind that has the default account only (`owned_accounts: false`), and `NO_QUOTA_PROVIDER` one that
+  declares no plan quota and no login flow.
 - `fixtureConfiguration.ts` answers the export, inspection and import of configuration. An import's progress is the scenario's
   `ConfigurationFixture.progress`: the items that have left `waiting`, as the last report of each says. The fixture daemon
   announces every item the request makes it handle `waiting` first, then sends those reports, to the listener of the

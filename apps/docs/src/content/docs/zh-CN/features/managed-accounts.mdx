@@ -25,8 +25,8 @@ import Screenshot from "../../../../components/Screenshot.astro";
 <Steps>
 
 1. 打开<strong>设置 › 智能体账户</strong>。每个已添加的智能体各有一个标签页。起初，这些标签页就是这台电脑上已安装的智能体。如果你用的智能体不在其中，选择<strong>添加智能体</strong>，再点击它旁边的<strong>添加</strong>。
-2. 选择<strong>添加账户</strong>，即最后一个标签页后面的图标按钮。选择智能体，为账户起一个在该智能体下不重复的名字，保留建议的文件夹（例如 <code dir="ltr">{accountFolders.claude}</code>、<code dir="ltr">{accountFolders.codex}</code> 或 <code dir="ltr">{accountFolders.grok}</code>），或另选一个。文件夹不必已经存在。
-3. 登录账户。新账户在<strong>状态</strong>列显示<strong>未登录</strong>，后面紧跟一个<strong>登录</strong>按钮；账户的操作菜单里也有<strong>登录</strong>。对 Claude Code 和 Codex，{productName} 会在浏览器中打开授权页面；Grok Build 则自己打开页面，对话框里会显示需要在页面上确认的代码。授权完成后，对话框会自动关闭。如果 10 分钟内没有完成，登录会超时；也可以用<strong>取消登录</strong>提前结束。
+2. 选择<strong>添加账户</strong>，即最后一个标签页后面的图标按钮。选择智能体，为账户起一个在该智能体下不重复的名字，保留建议的文件夹（例如 <code dir="ltr">{accountFolders.claude}</code>、<code dir="ltr">{accountFolders.codex}</code> 或 <code dir="ltr">{accountFolders.grok}</code>），或另选一个。可选择尚未创建的文件夹。Antigravity CLI 和 OpenCode 仅使用默认账户。
+3. 登录账户。新账户在<strong>状态</strong>列显示<strong>未登录</strong>，后面紧跟一个<strong>登录</strong>按钮；账户的操作菜单里也有<strong>登录</strong>。对 Claude Code 和 Codex，{productName} 会在浏览器中打开授权页面；Grok Build 则自己打开页面，对话框里会显示需要在页面上确认的代码。GitHub Copilot CLI 也使用设备代码，并可能询问是否以明文保存令牌。Pi 支持用设备代码登录 xAI。Qwen Code 通过自身的 Web Shell 接收服务商密钥。Antigravity CLI 会打开 Google 授权页面，请在对话框中输入取得的授权码。OpenCode 需要在运行会话的主机上执行 <code dir="ltr">opencode auth login</code>。选择<strong>取消登录</strong>可结束在应用中发起的登录。
 4. 查看这一行：<strong>状态</strong>徽章现在显示<strong>已登录</strong>，<strong>用量</strong>列显示出账户的用量，名称下方也会显示它的邮箱。
 5. 整理账户：拖动一行前面的手柄，或在它的操作菜单中选择<strong>前移</strong>或<strong>后移</strong>。这个顺序也是 {productName} 中所有账户选项遵循的顺序。用<strong>停用</strong>开关停用账户；对默认账户，可以用<strong>重命名</strong>给它起你自己的名字。
 

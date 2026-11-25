@@ -18,7 +18,7 @@ use crate::platform::term::Command;
 use crate::test_support::cgroups::ChildCgroup;
 #[cfg(unix)]
 use crate::test_support::code_of;
-use crate::test_support::{accept_unprobed, ScratchDir, PATIENCE};
+use crate::test_support::{ScratchDir, PATIENCE};
 
 /// What the scripted holder does once it has been asked to start a program.
 #[derive(Clone, Copy)]
@@ -65,9 +65,7 @@ async fn scripted_holder(
     let port = listener.local_addr().unwrap().port();
     let (reached, spawn_reached) = tokio::sync::oneshot::channel();
     tokio::spawn(async move {
-        let stream = accept_unprobed(&listener)
-            .await
-            .expect("the daemon connects");
+        let stream = crate::test_support::accepted_past_probes(&listener).await;
         let mut socket = tokio_tungstenite::accept_async(stream)
             .await
             .expect("a websocket");
@@ -346,9 +344,7 @@ async fn one_shot_holder() -> (u16, crate::test_support::ClosedPort) {
         .await
         .expect("the port");
     tokio::spawn(async move {
-        let stream = accept_unprobed(&listener)
-            .await
-            .expect("the daemon connects");
+        let stream = crate::test_support::accepted_past_probes(&listener).await;
         drop(listener);
         let mut socket = tokio_tungstenite::accept_async(stream)
             .await
@@ -456,14 +452,16 @@ async fn a_link_that_cannot_be_opened_again_for_now_is_pending_and_never_ends_th
 
 /// A holder of this build's version that welcomes the first connection, turns the next `refused`
 /// away, then welcomes again: one alive but too busy to take a link for a while. A running
-/// daemon's probe of the port is not counted ([`accept_unprobed`]).
+/// daemon's probe of the port is not counted ([`crate::test_support::accepted_past_probes`]).
 #[cfg(unix)]
 async fn refusing_holder(refused: usize) -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("a port");
     let port = listener.local_addr().unwrap().port();
     tokio::spawn(async move {
         let mut accepted = 0;
-        while let Ok(stream) = accept_unprobed(&listener).await {
+        loop {
+            // A port probe is not a link, and is not counted as one.
+            let stream = crate::test_support::accepted_past_probes(&listener).await;
             accepted += 1;
             let welcomes = accepted == 1 || accepted > refused + 1;
             if !welcomes {
@@ -998,9 +996,7 @@ async fn a_large_write_goes_in_chunks_and_a_failure_counts_what_went_in() {
     let writes = Arc::new(std::sync::Mutex::new(Vec::<usize>::new()));
     let seen = writes.clone();
     tokio::spawn(async move {
-        let stream = accept_unprobed(&listener)
-            .await
-            .expect("the daemon connects");
+        let stream = crate::test_support::accepted_past_probes(&listener).await;
         let mut socket = tokio_tungstenite::accept_async(stream)
             .await
             .expect("a websocket");
@@ -1432,9 +1428,7 @@ async fn a_holder_that_does_not_carry_out_a_handover_is_not_sent_one() {
     let received = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
     let seen = received.clone();
     tokio::spawn(async move {
-        let stream = accept_unprobed(&listener)
-            .await
-            .expect("the daemon connects");
+        let stream = crate::test_support::accepted_past_probes(&listener).await;
         let mut socket = tokio_tungstenite::accept_async(stream)
             .await
             .expect("a websocket");
@@ -1572,9 +1566,7 @@ async fn launch_holder(
     let received = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
     let seen = received.clone();
     tokio::spawn(async move {
-        let stream = accept_unprobed(&listener)
-            .await
-            .expect("the daemon connects");
+        let stream = crate::test_support::accepted_past_probes(&listener).await;
         let mut socket = tokio_tungstenite::accept_async(stream)
             .await
             .expect("a websocket");

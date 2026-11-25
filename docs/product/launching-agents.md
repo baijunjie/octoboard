@@ -1,10 +1,13 @@
 # Launching agents
 
-Every session is a native agent CLI process. Octoboard supports three agents — **Claude Code**, **Codex** and **Grok
-Build** (see `docs/product/supported-agents.md`) — and starts each one's own binary, resolved from the user's `PATH`.
+Every session is a native agent CLI process. Octoboard starts the selected agent’s binary, resolved from the user’s `PATH`. The eight agents and their order are listed in `docs/product/supported-agents.md`.
 What each agent's launch does differently is in `docs/product/per-agent-launch-specifics.md`.
 
 ## What Octoboard never modifies
+
+Antigravity CLI model listing uses a private directory. Starting a session can create Antigravity CLI’s standard
+`antigravity-cli` and `config/projects` directories under `~/.gemini`. Octoboard starts no migration of that directory.
+See "Antigravity CLI" in `docs/product/per-agent-launch-specifics.md` for how to prepare an earlier layout.
 
 Octoboard leaves the user's own system — the agents' configuration and everything else outside Octoboard's own
 directories — as it finds it, apart from what this section lists. What Octoboard does inside a project the user added
@@ -169,8 +172,7 @@ Outside the agents' configuration, the desktop application and the server form p
 Claude Code's folder trust and Codex's permission preset affect what Octoboard can promise for a session (see
 `docs/product/per-agent-launch-specifics.md` and "The raised hand" in `docs/product/session-statuses.md`). Their
 configuration files are read at launch and never rewritten. Claude Code's trust is given by answering its trust
-confirmation. All three agents' permission choices can be overridden for every account of the agent
-in Settings; see "Approval modes" in `docs/product/per-agent-settings.md`.
+confirmation. For agents that declare permission choices, Settings can override the choice for every account of the agent; see "Approval modes" in `docs/product/per-agent-settings.md`.
 
 An agent may retain native session settings in its saved conversation: Codex's Custom permission choice preserves
 saved permissions on resume (see "Approval modes" in `docs/product/per-agent-settings.md`). A project's own
@@ -277,8 +279,7 @@ never an address, whatever form the status hooks take, since it reads a list the
 scratch directory and calls neither the holder nor the daemon. It prints nothing unless it refuses the call, and a
 failure of its own, its timeout included, lets the call through.
 
-**The launch description can remain in the conversation after the role changes.** Two of the three agents record that
-text on the first turn and replay it on every resume. The coordinator or worker role and reporting relationship can
+**The launch description can remain in the conversation after the role changes.** Claude Code and Grok Build record that text on the first turn and replay it on every resume. The coordinator or worker role and reporting relationship can
 still change: Octoboard's notices supersede the earlier description, and tools follow the current relationship (see
 "When a binding changes while a session runs" in `docs/product/changing-session-owners.md`). For the same reason, a
 session opened to resume a conversation started outside Octoboard (see
@@ -286,7 +287,7 @@ session opened to resume a conversation started outside Octoboard (see
 Grok Build, which keep what that conversation recorded; the status hooks and Octoboard's MCP server are injected as on
 any resume.
 
-A resume reassembles the full injection, because all three agents resolve hooks and MCP servers from the launch
+A resume reassembles the full injection, because the agents resolve hooks and MCP servers from the launch
 arguments every time and a resume that omitted them would leave a session nobody can observe and nothing to report
 with.
 
@@ -445,8 +446,7 @@ Octoboard chooses it (see "The default model" in `docs/product/model-and-reasoni
 
 Octoboard checks neither value against anything at launch. Which models and which effort levels exist is the agent's
 own business — the dialogs that set them offer what the agent itself answers, and the agent is what answers for a
-value it does not know anyway, in the session's own output, like any other complaint it has about its arguments. What
-the three do differs, and is worth knowing before a value is set:
+value it does not know anyway, in the session's own output, like any other complaint it has about its arguments. Each CLI applies the launch values in its own way.
 
 - **Claude Code** silently lowers an effort the chosen model does not support down to `high`, rather than refusing it.
   It refuses a model the account cannot use, with its own message saying so.
@@ -456,6 +456,12 @@ the three do differs, and is worth knowing before a value is set:
   session reaches the file the link leads to when the session exits, if it differs from both the model passed at launch
   and the copy taken at launch; reasoning effort is never carried back (see "The per-session Grok home" in
   `docs/product/per-agent-launch-specifics.md` for the rules).
+- **Antigravity CLI** groups model IDs that differ only by effort. With an effort but no model, the CLI applies it
+  to its default model and can warn that it is using a supported level instead.
+- **GitHub Copilot CLI** accepts the models and efforts from its account catalogue, including Auto where available.
+- **OpenCode** offers its model IDs without an effort picker.
+- **Qwen Code** lists models from the account’s selected authentication method.
+- **Pi** uses a provider/model ID and the selected model’s available thinking levels.
 
 ## The launch environment
 
@@ -511,19 +517,39 @@ terminal's own shell runs the rc file itself and starts its own helpers, but an 
 captured environment and no shell, may inherit variables that point at an rc helper the capture started and has since
 stopped.
 
-Two groups of variables are removed from that snapshot:
+**What an outer session's launch set is put back first.** A daemon started from inside an agent session — a
+development daemon run from an agent's terminal — inherits that session's environment, and so does the shell it
+captures. Every launch therefore records, in a variable of its own, `OCTOBOARD_SESSION_EXPORTS`, each variable it set
+over the shell environment, and each variable its agent's CLI is known to set for the commands it runs under names
+people set themselves (pagers, colour and progress switches, `GIT_EDITOR`, the locale; each agent's list, with the
+exact value its CLI sets, is its own): for each, a short digest of the value, never the value itself, and the value
+the shell environment held before, if any. In an inherited environment each recorded variable that still holds the
+recorded value gets back the value the shell environment held before that launch, or is removed if it held none. A
+variable holding anything else was set since, by the user inside the session or by their shell profile, and is kept,
+as is one that already held the same value before the session. So a session the inner daemon starts on the default
+account runs on the user's own configuration directory, not the outer session's account, and inherits none of the
+outer session's switches, files or git hook variables. The record stays within 24 KiB as written: a previous value too
+long for it is not recorded, and that variable is then removed rather than left holding the outer session's value,
+which the daemon logs at the launch. `PATH` is left as inherited: Claude Code does not change it, and Codex and Grok
+Build run commands through the user's shell with its profile read again, so the inherited `PATH` is the profile's doing
+as much as the CLI's, and the capture rebuilds it.
+
+Then two groups of variables are removed from that snapshot:
 
 - the snapshot shell's own terminal variables, which would otherwise make the agent downgrade its renderer, colours
   and mouse handling; the session's terminal is declared as `xterm-256color` instead;
-- the variables that mark a process as *running inside an agent session*. Without this, an Octoboard started from
-  inside an agent session would hand that session's identity to every agent it launches, which silently changes their
-  behaviour. Authentication is unaffected — credentials are not kept in these variables.
+- the variables that mark a process as *running inside an agent session*: Octoboard's own session variables, the
+  launch's record above among them, and those each agent's CLI sets only to mark its session, by name, each agent's
+  list its own. Without this, an Octoboard started from inside an agent session would hand that session's identity to
+  every agent it launches, which silently changes their behaviour. Authentication is unaffected — credentials are not
+  kept in these variables.
 
 Besides the terminal type, the variables set over the snapshot are:
 
 - `OCTOBOARD_PROCESS_TAG`, a fresh identity for every launch, including resumes and account switches, inherited by its
   subprocesses so Octoboard can follow and clean up the launch's background work (see "Which processes belong to a
   launch" in `docs/product/background-processes.md`). An inherited tag from the environment snapshot is removed;
+- `OCTOBOARD_SESSION_EXPORTS`, the launch's record of what it changed (described above), which no snapshot passes on;
 - `HOME`, when the user's shell leaves it unset, empty or relative: the daemon's own home directory (`HOME` when
   absolute, else the user's entry in the system user database, else `/`), so that every directory an agent or
   Octoboard takes from it is one place rather than one relative to the session's working directory;
@@ -572,6 +598,13 @@ say — cannot report the session's status.
 
 Which directory a session holds, and the refusal of a launch whose directory no longer exists, are described in "Agent
 config directories" in `docs/product/consoles.md`.
+
+**The daemon's own environment is read the same way, once, as it starts**, when it was inherited from a session —
+something in it marks one: what the outer launch set is put back and the session's marks are removed, so everything
+the daemon starts or opens on its machine — the system terminal, the file manager, a file or link opened through the
+system, on every operating system — gets the user's values. A daemon not started inside a session keeps its
+environment exactly as it is. The helper programs Octoboard runs inside a session — its hooks, its git reports, the
+status line, the session's MCP server — keep that session's environment.
 
 **What a session may do under macOS's privacy rules is Octoboard's, not the agent's.** macOS attributes a privacy
 request made by a session's process — taking a screenshot, driving another application's interface — to Octoboard, so

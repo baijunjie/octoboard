@@ -6,10 +6,9 @@
 use crate::accounts::shared_config::{
     config_dir, config_file, history_dir, history_lines, thread_database, SharedItem,
 };
-use crate::protocol::AgentId;
 use crate::providers::codex::{
-    CODEX_ARCHIVED_DIR, CODEX_CONFIG_FILE, CODEX_PROMPT_HISTORY, CODEX_RECORDS_DIR,
-    CODEX_TITLE_INDEX,
+    CODEX_ARCHIVED_DIR, CODEX_CONFIG_FILE, CODEX_INSTRUCTION_FILE, CODEX_PROMPT_HISTORY,
+    CODEX_RECORDS_DIR, CODEX_TITLE_INDEX,
 };
 
 // The thread state database is a file item: where SQLite follows a link, it keeps the `-wal` and
@@ -20,7 +19,7 @@ use crate::providers::codex::{
 // unshared (`Repaired::unshared_databases`) until the catalog is updated.
 pub(super) const ITEMS: &[SharedItem] = &[
     config_file(CODEX_CONFIG_FILE),
-    config_file(AgentId::CODEX.descriptor().instruction_file),
+    config_file(CODEX_INSTRUCTION_FILE),
     config_file("AGENTS.override.md"),
     config_file("hooks.json"),
     config_dir("rules"),

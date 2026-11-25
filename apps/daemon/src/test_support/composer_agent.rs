@@ -13,14 +13,16 @@ use crate::session::term::MessageTransport;
 /// into the box, turns a pasted `.png` path into an `[Image #n]` placeholder after `DELAY`
 /// seconds when `IMAGES` is `yes` (and shows the path as text otherwise), draws a multi-line
 /// paste as `[Pasted text #n +m lines]` when `COLLAPSE` is `yes`, offers the completion
-/// `COMPLETE` for a pasted slash command when it is given, empties its box at Ctrl-U, stashes
-/// the box at Ctrl-S when `STASH` is `yes` (a `STASH` line is drawn while it is) and puts it back
+/// `COMPLETE` for a pasted slash command when it is given (closed by a space typed after it, as
+/// OpenCode's list is), empties its box at Ctrl-U, empties it of its own accord `FORGET` seconds
+/// after the last key typed into it when `FORGET` is given (logging `FORGOT`), stashes the box at
+/// Ctrl-S when `STASH` is `yes` (a `STASH` line is drawn while it is) and puts it back
 /// once a prompt is sent, as Claude Code and Grok Build do, and logs what happened to `LOG`, one
 /// line each. It notes `EARLY` when another paste is already waiting as it shows a placeholder.
 const AGENT: &str = r#"
 use strict; use warnings; use Time::HiRes qw(sleep);
-my ($log, $images, $delay, $complete, $collapse, $can_stash) =
-  @ENV{qw(LOG IMAGES DELAY COMPLETE COLLAPSE STASH)};
+my ($log, $images, $delay, $complete, $collapse, $can_stash, $forget) =
+  @ENV{qw(LOG IMAGES DELAY COMPLETE COLLAPSE STASH FORGET)};
 system('stty raw -echo');
 $| = 1;
 my ($box, $n, $pastes, $acc, $in, $comp, $stash) = ('', 0, 0, '', 0, '', undef);
@@ -32,7 +34,14 @@ sub draw {
   print "COMPLETE $comp\r\n" if $comp ne '';
 }
 draw();
-while (sysread(STDIN, my $c, 1)) {
+while (1) {
+  if ($forget ne '' && $box ne '') {
+    my $rin = ''; vec($rin, fileno(STDIN), 1) = 1;
+    if (select($rin, undef, undef, $forget) == 0) {
+      note('FORGOT'); $box = ''; $comp = ''; draw(); next;
+    }
+  }
+  sysread(STDIN, my $c, 1) or last;
   $acc .= $c;
   if (!$in) {
     if ($acc =~ /\e\[200~$/) { $in = 1; $acc = ''; }
@@ -49,7 +58,7 @@ while (sysread(STDIN, my $c, 1)) {
       else { $stash = $box; $box = ''; }
       draw();
     }
-    elsif ($acc =~ /^[ -~]$/) { $box .= $acc; $acc = ''; draw(); }
+    elsif ($acc =~ /^[ -~]$/) { $comp = '' if $acc eq ' '; $box .= $acc; $acc = ''; draw(); }
   } elsif ($acc =~ /\e\[201~$/) {
     my $text = substr($acc, 0, length($acc) - 6); $in = 0; $acc = '';
     (my $shown = $text) =~ s/\n/\\n/g;
@@ -85,6 +94,9 @@ pub(crate) struct AgentOptions<'a> {
     pub collapse: bool,
     /// Whether the session stashes the box around a message, as the agent restores it.
     pub stash: bool,
+    /// Seconds after the last key typed into a box that holds text before the agent empties it of
+    /// its own accord, if ever.
+    pub forget: &'a str,
     pub transport: Option<Arc<dyn MessageTransport>>,
 }
 
@@ -96,6 +108,7 @@ impl Default for AgentOptions<'_> {
             complete: "",
             collapse: false,
             stash: false,
+            forget: "",
             transport: None,
         }
     }
@@ -142,13 +155,15 @@ pub(crate) fn agent_with(name: &str, options: AgentOptions<'_>) -> Agent {
     std::fs::write(&program, AGENT).unwrap();
     let yes = |on: bool| if on { "yes" } else { "no" };
     let script = format!(
-        "LOG='{}' IMAGES={} DELAY={} COMPLETE='{}' COLLAPSE={} STASH={} exec /usr/bin/perl '{}'",
+        "LOG='{}' IMAGES={} DELAY={} COMPLETE='{}' COLLAPSE={} STASH={} FORGET='{}' \
+         exec /usr/bin/perl '{}'",
         log.display(),
         options.images,
         options.delay,
         options.complete,
         yes(options.collapse),
         yes(options.stash),
+        options.forget,
         program.display(),
     );
     let scratch = dir.join("scratch");
@@ -160,7 +175,7 @@ pub(crate) fn agent_with(name: &str, options: AgentOptions<'_>) -> Agent {
     live.enable_native_stash(options.stash);
     crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
     let started = Instant::now();
-    while live.input_box(&live.screen_text_undimmed()) != Some(String::new()) {
+    while live.input_box(&live.box_screen()) != Some(String::new()) {
         assert!(started.elapsed() < PATIENCE, "the agent drew no box");
         std::thread::sleep(Duration::from_millis(20));
     }

@@ -5,11 +5,13 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { accountOf, consoleOf } from "../fixtures/builders";
 import type { Account } from "../protocol";
 import { withoutIsolates } from "../test/dom";
+import { BASELINE_PROVIDERS } from "../test/testProviders";
 import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { work, lastStore, render, buttons, click, clickButton, choose, sent, asked, type, openAdvanced, clickTab, groupPicker, optionTexts, picker, tabNames } from "./consoleDialogTestSupport";
 import { matchesWidthQuery } from "../test/viewport";
 
 const codexWork: Account = accountOf("a-codex", "codex", "Codex work", "/home/dev/.codex-work");
+const agentLabelsWithoutCodex = BASELINE_PROVIDERS.filter(({ id }) => id !== "codex").map(({ label }) => label);
 
 it("names the agent project sessions follow on the Same as entry, and keeps it current", async () => {
   render(consoleOf("c-1", "Main", { default_agent: "codex" }));
@@ -186,10 +188,10 @@ it("lists only the agents that may be picked, and the accounts of those", () => 
 it("leaves the missing agents out of both default agent pickers", async () => {
   render(undefined, [], undefined, { codex: "unavailable" });
   await click(picker("Console sessions"));
-  expect(optionTexts()).toEqual(["Claude Code", "Grok Build", "Test Agent"]);
+  expect(optionTexts()).toEqual(agentLabelsWithoutCodex);
   await choose("Claude Code");
   await click(picker("Project sessions"));
-  expect(optionTexts()).toEqual(["Same as console sessions, Claude Code", "Claude Code", "Grok Build", "Test Agent"]);
+  expect(optionTexts()).toEqual(["Same as console sessions, Claude Code", ...agentLabelsWithoutCodex]);
 });
 
 it("keeps the stored agent in its picker as not installed while it is the value, and drops it once moved off", async () => {
@@ -200,7 +202,7 @@ it("keeps the stored agent in its picker as not installed while it is the value,
   expect(codex?.getAttribute("aria-selected")).toBe("true");
   await choose("Claude Code");
   await click(picker("Console sessions"));
-  expect(optionTexts()).toEqual(["Claude Code", "Grok Build", "Test Agent"]);
+  expect(optionTexts()).toEqual(agentLabelsWithoutCodex);
 });
 
 it("keeps a missing agent's row while the console pins a named account for it, and drops it once moved off", async () => {
@@ -273,5 +275,5 @@ it("keeps the Advanced tab of an agent that is not added while the console store
 it("lists every agent before availability has been determined", async () => {
   render();
   await click(picker("Console sessions"));
-  expect(optionTexts()).toEqual(["Claude Code", "Codex", "Grok Build", "Test Agent"]);
+  expect(optionTexts()).toEqual(BASELINE_PROVIDERS.map(({ label }) => label));
 });

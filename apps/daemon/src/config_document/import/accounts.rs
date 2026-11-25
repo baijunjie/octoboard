@@ -93,6 +93,9 @@ fn judge_account(
         in_use_by: None,
         error: Some(ImportFailure::of(&err)),
     };
+    if let Err(err) = coordinator::accounts::require_owned_accounts(agent) {
+        return Ok(invalid(proposed.ok(), err));
+    }
     let name = match coordinator::accounts::normalize_account_name(&account.name) {
         Ok(name) => name,
         Err(err) => return Ok(invalid(proposed.ok(), err)),
@@ -1298,6 +1301,80 @@ mod tests {
         assert!(!stored[0].share_default_config_incomplete);
         assert!(!area.join("shared").join("settings.json").exists());
         assert!(!default_dir.join("settings.json").is_symlink());
+    }
+
+    /// An account of a provider whose accounts cannot each have a directory of their own is
+    /// marked invalid by the inspection with `provider_unsupported` for `owned_accounts`, whatever
+    /// its name and directory, and importing it creates nothing and reports it failed the same way;
+    /// an account of a provider that has them, in the same document, is not affected.
+    #[tokio::test]
+    async fn an_account_of_a_provider_without_accounts_of_its_own_is_invalid_and_not_created() {
+        let area = ScratchDir::new("import-owned-accounts-area");
+        let (state, _state_dir) = account_state("import-owned-accounts", &area);
+        let _declared = crate::providers::test_provider::without_owned_accounts();
+        let document = with_accounts(
+            document(Vec::new()),
+            &[],
+            vec![
+                agent_entry(
+                    "claude",
+                    None,
+                    vec![doc_account("Fine", &path_text(&area.join("fine")))],
+                ),
+                agent_entry(
+                    AgentId::TEST.wire_name(),
+                    None,
+                    vec![
+                        doc_account("Work", &path_text(&area.join("work"))),
+                        doc_account("Relative", "a/b"),
+                    ],
+                ),
+            ],
+        );
+
+        let inspection = inspected_accounts(&state, &document)
+            .await
+            .accounts
+            .unwrap();
+
+        let claude = &inspection.agents[0];
+        assert_eq!(claude.accounts[0].status, AccountStatus::New);
+        let single = &inspection.agents[1];
+        assert_eq!(single.agent, AgentId::TEST);
+        for row in &single.accounts {
+            assert_eq!(row.status, AccountStatus::Invalid, "{}", row.name);
+            let error = row.error.as_ref().expect("the reason it is invalid");
+            assert_eq!(error.code, error_code::PROVIDER_UNSUPPORTED, "{}", row.name);
+            assert_eq!(error.params["agent"], AgentId::TEST.wire_name());
+            assert_eq!(error.params["operation"], "owned_accounts");
+        }
+
+        let imported = apply(
+            &state,
+            &document,
+            Vec::new(),
+            ApplyOptions {
+                settings: Vec::new(),
+                accounts: Some(Vec::new()),
+                consoles: true,
+                clone_dir: true,
+                agents: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let agents = imported.accounts.unwrap().agents;
+        assert_eq!(agents[0].accounts[0].status, AccountOutcome::Created);
+        for outcome in &agents[1].accounts {
+            assert_eq!(outcome.status, AccountOutcome::Failed);
+            let error = outcome.error.as_ref().expect("the reason it failed");
+            assert_eq!(error.code, error_code::PROVIDER_UNSUPPORTED);
+            assert_eq!(error.params["operation"], "owned_accounts");
+        }
+        let stored = state.store.list_accounts().unwrap();
+        assert_eq!(stored.len(), 1, "only the Claude Code account was created");
+        assert_eq!(stored[0].agent, AgentId::CLAUDE);
     }
 
     #[tokio::test]

@@ -256,7 +256,7 @@ fn write_notice_rerouted(
 ) -> Result<(Delivery, Session)> {
     let write = |owner: &Session| {
         let text = text(owner);
-        delivery::write_to_owner(state, owner, about, &text, ownership, |kept| {
+        delivery::write_to_owner(state, owner, about, &text, ownership, None, |kept| {
             format!("{text}\n\n{kept}")
         })
     };

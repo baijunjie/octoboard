@@ -13,7 +13,10 @@ export function errorAlertOf(request: NotificationRequest): ErrorAlertRequest {
     message: request.message,
     session: request.session,
     sessionName: request.daemonTitle?.params.title,
-    notice: request.session !== undefined && request.code !== undefined ? { session: request.session, code: request.code } : undefined,
+    notice:
+      request.session !== undefined && request.code !== undefined
+        ? { session: request.session, code: request.code, detail: request.daemonError?.params.detail }
+        : undefined,
     error: request.error ?? request.daemonError ?? request.message,
     recovery: request.recovery,
     title,
@@ -21,6 +24,7 @@ export function errorAlertOf(request: NotificationRequest): ErrorAlertRequest {
     attached,
     details,
     remedyInBody,
+    acknowledgedNotice: request.kind === "acknowledged" || undefined,
   };
 }
 

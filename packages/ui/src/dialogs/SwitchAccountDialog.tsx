@@ -1,8 +1,11 @@
 import React, { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
+import { accountConfigDir } from "../accounts/accountDir";
 import { accountDisabled, quotaSignedOut } from "../accounts/choiceEntries";
+import { offersLoginFlow } from "../agents/providers";
 import { canSwitchTo } from "./accountSwitchBatch";
+import { accountRefusalMessage } from "./accountRefusalMessage";
 import { InlineReference } from "../i18n/InlineReference";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
@@ -45,6 +48,7 @@ export function SwitchAccountDialog({
   const quotas = useDaemonStore((s) => s.accountQuotas);
   const providers = useProviders();
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   const now = useNow();
   // The account being switched to may have been turned off, found not logged in, or have no quota left, since the dialog opened: the
@@ -54,6 +58,9 @@ export function SwitchAccountDialog({
   const quota = accountQuotaOf(quotas, session.agent, account);
   const exhaustedBy = exhaustedQuotaWindow(quota, now);
   const signedOut = quotaSignedOut(quota);
+  const signIn = { providers, agent: session.agent, dir: accountConfigDir(accounts, agentAvailability, providers, session.agent, account) };
+  // Where the provider has no login flow and the directory is known, the way to log in is its own.
+  const logsIn = offersLoginFlow(providers, session.agent) || signIn.dir === "";
   const [scope, setScope] = useState<Scope>("session");
   // A session an account switch already holds is left out: it is on its way, and cannot be claimed twice.
   const targetsIn = ({ sessions: all, queuedAccountSwitches }: Pick<State, "sessions" | "queuedAccountSwitches">, chosen: Scope): Session[] => {
@@ -90,8 +97,12 @@ export function SwitchAccountDialog({
           : signedOut
             ? {
               message: t("accountChoice.signedOut.refusal", { name: isolate(accountName) }),
-              content: <Message id="accountChoice.signedOut.refusal" params={{ name: <InlineReference dir="auto" wrap>{accountName}</InlineReference> }} />,
-              recovery: "accountNotSignedIn" as const,
+              // Where the provider has no login flow, the way to log in is its own, and the generic advice to log in
+              // (and its button to Settings) is left out.
+              content: logsIn
+                ? <Message id="accountChoice.signedOut.refusal" params={{ name: <InlineReference dir="auto" wrap>{accountName}</InlineReference> }} />
+                : accountRefusalMessage("accountChoice.signedOut.description", accountName, signIn),
+              recovery: logsIn ? "accountNotSignedIn" as const : "none" as const,
             }
             : quota && exhaustedBy && { message: quotaUsedUpSentence(t, quotaNaming(quota, providers), accountName, exhaustedBy, now), content: quotaUsedUpMessage(t, quotaNaming(quota, providers), accountName, exhaustedBy, now), recovery: "none" as const };
         if (refusal) {

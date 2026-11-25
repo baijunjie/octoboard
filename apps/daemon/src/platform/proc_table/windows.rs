@@ -242,6 +242,17 @@ pub(crate) fn list() -> Option<Vec<ProcInfo>> {
     )
 }
 
+/// The pid the process `pid` was started by, or `None` when there is no such process or the
+/// snapshot cannot be taken. Windows never reparents, and reuses pids: the pid may since have
+/// passed to another process, which a caller that reads that process has to allow for.
+pub(crate) fn parent_of(pid: i32) -> Option<i32> {
+    let pid = u32::try_from(pid).ok()?;
+    snapshot()?
+        .into_iter()
+        .find(|listed| listed.pid == pid)
+        .map(|listed| listed.ppid as i32)
+}
+
 /// When the process `pid` started, or `None` when there is none or it has exited.
 pub(crate) fn start_of(pid: i32) -> Option<u64> {
     let process = Process::query(pid as u32)?;

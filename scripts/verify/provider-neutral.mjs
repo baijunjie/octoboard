@@ -1,15 +1,120 @@
-// Search production core code for provider knowledge; exceptions are exact source lines with reasons.
+// Search production core code for provider knowledge; the only exceptions are the registered
+// providers' adapter registration lines.
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const EXCEPTIONS = [
-  ...["CLAUDE", "CODEX", "GROK"].map((id) => ({
-    file: "apps/daemon/src/adapter/mod.rs",
-    line: `(AgentId::${id}, &${id.toLowerCase()}::${id[0]}${id.slice(1).toLowerCase()}Provider),`,
+// The spellings each provider is known by besides its id: product names, quoted name forms,
+// dot-directories, instruction files, environment variables (a trailing `_` is a prefix), CLI flags,
+// URL schemes, hook event names and other file names. One entry per provider id; an entry applies
+// whether or not its descriptor is present, and a registered provider with no entry is still
+// guarded by its id.
+export const VOCABULARY = {
+  claude: {
+    names: ["Claude"],
+    quoted: ["claude-code"],
+    directories: [".claude"],
+    files: ["CLAUDE.md"],
+    environment: ["CLAUDECODE", "CLAUDE_"],
+    flags: ["--permission-mode", "--dangerously-skip-permissions"],
+    schemes: ["claude"],
+    events: ["PreToolUse", "PostToolUse", "UserPromptSubmit"],
+  },
+  codex: {
+    names: ["Codex"],
+    directories: [".codex"],
+    files: ["AGENTS.md", "config.toml", "auth.json"],
+    environment: ["CODEX_"],
+    flags: ["--approval-policy", "--ask-for-approval", "--dangerously-bypass-approvals-and-sandbox"],
+    schemes: ["codex"],
+  },
+  grok: {
+    names: ["Grok"],
+    quoted: ["grok-build"],
+    directories: [".grok"],
+    environment: ["GROK_"],
+    schemes: ["grok"],
+    events: ["StopCancelled", "idle_prompt"],
+  },
+  antigravity: {
+    names: ["Antigravity"],
+    quoted: ["agy"],
+    directories: [".gemini"],
+    environment: ["AGY_", "ANTIGRAVITY_"],
+  },
+  copilot: {
+    names: ["Copilot"],
+    directories: [".copilot"],
+    environment: ["COPILOT_"],
+  },
+  opencode: {
+    names: ["OpenCode"],
+    directories: [".opencode"],
+    files: ["opencode.json", "opencode.jsonc"],
+    environment: ["OPENCODE_"],
+  },
+  qwen: {
+    names: ["Qwen"],
+    directories: [".qwen"],
+    files: ["QWEN.md"],
+    environment: ["QWEN_"],
+  },
+  // Only spellings that cannot collide with ordinary code: its quoted id and id constant (from the id), its
+  // dot-directory and its variable prefix; a bare `Pi` or `pi` is ordinary text.
+  pi: {
+    directories: [".pi"],
+    environment: ["PI_"],
+  },
+};
+
+const DESCRIPTORS = "apps/daemon/src/providers";
+const NOT_DESCRIPTORS = new Set(["mod.rs", "layout.rs", "test_provider.rs"]);
+const ADAPTER_REGISTRY = "apps/daemon/src/adapter/mod.rs";
+
+// The ids of the registered providers: one descriptor file per provider, named for its id.
+export function providerIds(root) {
+  const directory = path.join(root, DESCRIPTORS);
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".rs") && !NOT_DESCRIPTORS.has(entry.name))
+    .map((entry) => entry.name.slice(0, -3))
+    .sort();
+}
+
+const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const word = (text) => `${/^\w/.test(text) ? "\\b" : ""}${escape(text)}${/\w$/.test(text) ? "\\b" : ""}`;
+
+// The search for provider knowledge: the ids of `ids` and of every vocabulary entry, as constants
+// and quoted, and every vocabulary spelling.
+export function knowledgePattern(ids = []) {
+  const all = [...new Set([...Object.keys(VOCABULARY), ...ids])];
+  const alternatives = [];
+  for (const id of all) {
+    const entry = VOCABULARY[id] ?? {};
+    alternatives.push(`AgentId\\s*::\\s*${escape(id.toUpperCase())}\\b`);
+    for (const quoted of [id, ...(entry.quoted ?? [])]) alternatives.push(`["'\`]${escape(quoted)}\\\\?["'\`]`);
+    for (const name of entry.names ?? []) alternatives.push(word(name));
+    for (const directory of entry.directories ?? []) alternatives.push(`${escape(directory)}\\b`);
+    for (const file of entry.files ?? []) alternatives.push(word(file));
+    for (const variable of entry.environment ?? []) {
+      alternatives.push(variable.endsWith("_") ? `\\b${escape(variable)}[A-Z0-9_]+\\b` : word(variable));
+    }
+    for (const flag of entry.flags ?? []) alternatives.push(escape(flag));
+    for (const scheme of entry.schemes ?? []) alternatives.push(`${escape(scheme)}:\\/\\/`);
+    for (const event of entry.events ?? []) alternatives.push(word(event));
+  }
+  return new RegExp(alternatives.join("|"), "g");
+}
+
+// The one permitted registration point: each registered provider's line in the adapter registry,
+// pairing its id with its implementation, with or without a `cfg` attribute before it.
+export function registrationExceptions(ids) {
+  return ids.map((id) => ({
+    file: ADAPTER_REGISTRY,
+    pattern: new RegExp(`^(?:#\\[cfg\\([^\\]]*\\)\\]\\s*)?\\(AgentId::${escape(id.toUpperCase())},\\s*&${escape(id)}::[A-Z]\\w*\\),$`),
     reason: "The provider adapter registry is the one permitted registration point.",
-  })),
-];
+  }));
+}
 
 // Retain positions and newlines so diagnostics name the original source line. Strings are kept:
 // their contents are exactly the agent facts this check must inspect.
@@ -67,21 +172,21 @@ export function productionSource(source, rust = false, structureOnly = false, cs
   return chars.join("");
 }
 
-const KNOWLEDGE = /AgentId\s*::\s*(?:CLAUDE|CODEX|GROK)\b|["'`](?:claude(?:-code)?|codex|grok(?:-build)?)\\?["'`]|(?:\bClaude\b|\bGrok\b|\bCodex\b)|\.(?:claude|codex|grok)\b|(?:CLAUDE|AGENTS)\.md|\b(?:CLAUDECODE|(?:CLAUDE|CODEX|GROK)_[A-Z0-9_]+)\b|(?:--permission-mode|--approval-policy|--ask-for-approval|--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox)|(?:codex|claude|grok):\/\/|\b(?:PreToolUse|PostToolUse|UserPromptSubmit|StopCancelled|idle_prompt)\b|\b(?:config\.toml|auth\.json)\b/g;
-
-export function violations(file, source, exceptions = EXCEPTIONS) {
+export function violations(file, source, { ids = Object.keys(VOCABULARY), exceptions = registrationExceptions(ids) } = {}) {
   const production = productionSource(source, file.endsWith(".rs"), false, file.endsWith(".css"));
   const lines = source.split("\n");
-  const hitLines = new Set([...production.matchAll(KNOWLEDGE)].map((match) => production.slice(0, match.index).split("\n").length - 1));
+  const hitLines = new Set([...production.matchAll(knowledgePattern(ids))].map((match) => production.slice(0, match.index).split("\n").length - 1));
   return [...hitLines].flatMap((index) => {
     const line = lines[index].trim();
-    if (exceptions.some((exception) => exception.file === file && exception.line === line && exception.reason)) return [];
+    if (exceptions.some((exception) => exception.file === file && exception.pattern.test(line) && exception.reason)) return [];
     return [{ file, line: index + 1, text: line }];
   });
 }
 
 export function checkProviderNeutral(root) {
   const failures = [];
+  const ids = providerIds(root);
+  const options = { ids, exceptions: registrationExceptions(ids) };
   const testModules = new Set();
   const testModule = /#\[cfg\((test|all\([^\]]*\))\)\]\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*;/g;
   const discover = (directory) => {
@@ -111,7 +216,7 @@ export function checkProviderNeutral(root) {
           if (relative === "apps/daemon/src/adapter" && existsSync(path.join(root, "apps/daemon/src/providers", `${entry.name}.rs`))) continue;
           walk(file);
         } else if (entry.isFile() && /\.(?:rs|tsx?|m?js|css)$/.test(file) && !/(?:\.test\.|_tests?\.rs$|\/tests\.rs$|\/(?:fixtures?|test_support)\.rs$|TestSupport\.|TestState\.|\/testSupport\.|\/test_provider\.rs$)/.test(file)) {
-          failures.push(...violations(file, readFileSync(path.join(root, file), "utf8")));
+          failures.push(...violations(file, readFileSync(path.join(root, file), "utf8"), options));
         }
       }
     };

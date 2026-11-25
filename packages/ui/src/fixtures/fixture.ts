@@ -372,6 +372,8 @@ export interface Fixture {
    * device code); `failed` carries `login_failed`. Left out, a started login stays waiting until it is cancelled. A
    * state shown from the start is set in `state.accountLogins` instead. */
   loginOutcome?: "succeeded" | "failed" | "timed_out";
+  /** The failure the agent reports after the user declines a login question. */
+  loginQuestionDeclined?: FixtureError;
   /** How `use_reset_credit` ends for any Codex account: the outcome Codex answers with, a refusal as the daemon
    * words one, or `"pending"` for a use never answered, which keeps the confirmation busy. The quota is read again
    * after the answer and after a failure of Codex's run, but not after a refusal that comes before Codex runs

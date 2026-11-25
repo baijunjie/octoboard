@@ -39,7 +39,11 @@ const button = (name: string) => [...document.querySelectorAll<HTMLButtonElement
 
 it("lists every agent with whether it is installed or added", () => {
   render({ claude: "available", codex: "unavailable", grok: "not_determined" }, ["claude"]);
-  expect(rows().map((row) => row.textContent)).toEqual(["Claude Code, Added", "Codex, Not installedHow to install", "Grok Build, Checking…Add", "Test Agent, Checking…Add"]);
+  expect(rows().map((row) => row.textContent)).toEqual(TEST_PROVIDERS.map(({ id, label }) => {
+    if (id === "claude") return "Claude Code, Added";
+    if (id === "codex") return "Codex, Not installedHow to install";
+    return `${label}, Checking…Add`;
+  }));
 });
 
 it("offers Add only for an installed agent that is not added yet", () => {
@@ -56,9 +60,9 @@ it("cannot add an agent whose installation is not determined yet, or any while t
 });
 
 it("links each agent that is not installed to its provider's install instructions", () => {
-  render({ claude: "unavailable", codex: "unavailable", grok: "unavailable", test_agent: "unavailable" }, []);
+  render(Object.fromEntries(TEST_PROVIDERS.map(({ id }) => [id, "unavailable" as const])), []);
   const links = [...document.querySelectorAll<HTMLAnchorElement>("a")];
-  expect(links.map((link) => link.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, ""))).toEqual(["How to install Claude Code", "How to install Codex", "How to install Grok Build", "How to install Test Agent"]);
+  expect(links.map((link) => link.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, ""))).toEqual(TEST_PROVIDERS.map(({ label }) => `How to install ${label}`));
   expect(links.map((link) => link.getAttribute("href"))).toEqual(TEST_PROVIDERS.map((provider) => new URL(provider.install_url).href));
 });
 

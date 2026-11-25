@@ -2,7 +2,7 @@ import { ArrowUp, ArrowDown, Bot, Info, LogIn, Pencil, Plug, Settings2, Trash2, 
 import React, { useContext, useEffect, useRef, useState } from "react";
 
 import { defaultAccountName, isAgentUnavailable } from "../../agents/agents";
-import { defaultProviderAgent } from "../../agents/providers";
+import { defaultProviderAgent, offersLoginFlow, offersOwnedAccounts } from "../../agents/providers";
 import { ICON_TRIGGER_CLASS } from "../../components/controls/iconTrigger";
 import { takeMenuFocusToRestore } from "../../components/focus/menuFocus";
 import type { ActionMenuEntry } from "../../components/menus/menuEntries";
@@ -109,7 +109,9 @@ function IconAction({ label, icon: Icon, onPress, buttonRef }: { label: string; 
  * view. The three switches, one that picks a new session's account by the weekly quota resetting
  * soonest, one that switches a session stopped at its account's usage limit to another account, and
  * one that starts a usage window that has not begun counting, sit above that list, once: all apply
- * to every agent, including when none is added. While the daemon has not decided the list every
+ * to every agent, including when none is added. The Add account button is left out while the tab in view is of an agent
+ * that cannot have accounts beyond the default (`capabilities.owned_accounts`), whose section shows the default
+ * account only. While the daemon has not decided the list every
  * agent is shown, and the agents cannot be removed or reordered yet. The default account is not a
  * record: it is the state of pinning nothing, so it is shown from the agent's availability and can
  * be renamed but not edited or removed. Opening the section asks the daemon to refresh the quotas
@@ -216,6 +218,8 @@ export function AgentAccountsSection(): React.ReactElement {
   const [chosen, setChosen] = useState<Agent>(agents[0] ?? defaultProviderAgent(providers));
   // The tab in view: the chosen one unless its agent has left the list.
   const selected = agents.includes(chosen) ? chosen : agents[0];
+  // Whether the tab in view is of an agent that can have accounts beyond the default.
+  const addsAccounts = selected !== undefined && offersOwnedAccounts(providers, selected);
   // An account Settings was asked to show: its agent's tab comes forward and its settings open with the sharing
   // switch focused.
   useEffect(() => {
@@ -310,11 +314,11 @@ export function AgentAccountsSection(): React.ReactElement {
               label={t("settings.accounts.agents")}
               tabRef={added === null ? undefined : tabRef}
               onReorder={added === null ? undefined : reorder}
-              trailingWidth="pe-[4.75rem]"
+              trailingWidth={addsAccounts ? "calc(2 * var(--row-control-size) + 0.25rem)" : undefined}
               trailing={
                 <div className="flex items-center gap-1">
                   <IconAction label={t("settings.accounts.addAgent")} icon={Bot} buttonRef={addAgentButton} onPress={() => setAddingAgent(true)} />
-                  <IconAction label={t("settings.accounts.add")} icon={UserPlus} onPress={() => setEditing(null)} />
+                  {addsAccounts && <IconAction label={t("settings.accounts.add")} icon={UserPlus} onPress={() => setEditing(null)} />}
                 </div>
               }
               tabActions={added === null ? undefined : (agent) => (
@@ -436,6 +440,7 @@ function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, o
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const defaultName = defaultAccountName(t, defaultNames, agent);
   const readsMcp = useReadsMcpInventory(agent);
+  const logsIn = offersLoginFlow(useProviders(), agent);
   const { stopDrag } = order;
   useEffect(() => stopDrag, [stopDrag]);
   // What an account's menu holds. The default account is not a record: it can be named, not edited or removed. A
@@ -443,7 +448,8 @@ function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, o
   const accountMenu = (account: Account | null): ActionMenuEntry[] => {
     const row = account?.id ?? `default:${agent}`;
     // Whatever the login state, so an account that is logged in can log in again; focus goes back to the menu's button.
-    const login = { label: t("settings.accounts.login"), icon: LogIn, disabled: loginIsActive(accountLoginOf(logins, agent, account?.id ?? null)), onClick: () => onLogin(agent, account?.id ?? null, () => handOff(() => rowActionsTrigger(row))) };
+    // Only for a provider that can sign an account in without a terminal; the others' signed-out accounts say how instead.
+    const login: ActionMenuEntry[] = logsIn ? [{ label: t("settings.accounts.login"), icon: LogIn, disabled: loginIsActive(accountLoginOf(logins, agent, account?.id ?? null)), onClick: () => onLogin(agent, account?.id ?? null, () => handOff(() => rowActionsTrigger(row))) }] : [];
     const details = { label: t("settings.accounts.detailsItem"), icon: Info, onClick: () => onOpenAccount("details", account?.id ?? null) };
     const settings = { label: t("settings.accounts.settingsItem"), icon: Settings2, onClick: () => onOpenAccount("settings", account?.id ?? null) };
     // Only for a provider that can list an account's connectors and MCP servers.
@@ -454,13 +460,13 @@ function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, o
       { label: t("settings.accounts.moveEarlier"), icon: ArrowUp, disabled: order.busy || index <= 0, onClick: () => order.move(account?.id ?? null, -1) },
       { label: t("settings.accounts.moveLater"), icon: ArrowDown, disabled: order.busy || index >= order.ids.length - 1, onClick: () => order.move(account?.id ?? null, 1) },
     ];
-    if (!account) return [details, settings, ...mcp, { label: t("settings.accounts.renameDefault"), icon: Pencil, onClick: () => onRenameDefault(agent) }, login, ...moves];
+    if (!account) return [details, settings, ...mcp, { label: t("settings.accounts.renameDefault"), icon: Pencil, onClick: () => onRenameDefault(agent) }, ...login, ...moves];
     return [
       details,
       settings,
       ...mcp,
       { label: t("common.edit"), icon: Pencil, onClick: () => onEdit(account) },
-      login,
+      ...login,
       ...moves,
       "separator",
       { label: t("common.remove"), icon: Trash2, destructive: true, onClick: () => onRemove(account) },

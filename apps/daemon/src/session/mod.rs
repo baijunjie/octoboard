@@ -21,6 +21,7 @@
 //! taken in parts through `upload` from a client on a slow link.
 
 pub(crate) mod attachment;
+pub(crate) mod channel;
 pub(crate) mod composer;
 pub(crate) mod dialogs;
 mod draft;
@@ -40,6 +41,7 @@ mod swap;
 pub(crate) mod term;
 #[cfg(test)]
 pub(crate) mod test_support;
+mod text;
 pub(crate) mod title_activity;
 pub(crate) mod title_interrupt;
 pub(crate) mod trust;
@@ -52,9 +54,13 @@ pub(crate) mod wait;
 mod rendered_tests;
 
 use draft::Draft;
+pub(crate) use draft::{ToldLost, HELD_KEPT};
 #[cfg(test)]
 pub(crate) use paste_apart::submits_paste_apart_for;
 pub(crate) use paste_apart::NotSubmitted;
+#[cfg(test)]
+pub(crate) use program_status::shorten_turn_message_bound;
+pub use program_status::ReportedSignals;
 use std::io;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
@@ -131,6 +137,9 @@ pub struct LiveSession {
     /// Permission hooks can describe automatic reviews without a dialog. Visible action prompts
     /// are observed separately, since this setting does not rule out manual approvals.
     pub resolves_approvals_itself: bool,
+    /// The launch wrote its first task as the session's first message
+    /// ([`Self::note_first_task_queued`]).
+    first_task_queued: AtomicBool,
     /// Watches the session's output for its agent's folder-trust confirmation.
     pub trust: TrustState,
     /// The tool calls of the current turn and the prompt published for the session
@@ -217,6 +226,40 @@ pub struct LiveSession {
     status_from_reports: bool,
     /// The moves of the program's root status record on their way to the session's status.
     status_reports: Arc<program_status::StatusReports>,
+    /// How long a `done` straight after `working` is held as a possible gap inside the turn, as
+    /// the provider declares (`AgentProvider::reported_done_gap`); `None` where a `done` ends the
+    /// turn at once, and where the reports do not give this session its status.
+    done_gap: Option<std::time::Duration>,
+    /// Whether the provider's cancel puts the messages it held back into its input box
+    /// (`screen::ScreenReader::cancel_restores_held_messages`), read once at the launch.
+    cancel_gives_back: bool,
+    /// Whether the launch's cancel can drop the messages its agent held, as its provider answered
+    /// for the launch (`AgentProvider::launch_cancel_drops_held_messages`).
+    cancel_drops: bool,
+    /// Whether the launch's cancel can drop the messages its agent held although nothing queues
+    /// them again: the provider's reader declares such a cancel
+    /// (`screen::ScreenReader::cancel_drops_held_messages`) and the launch is without the reports
+    /// that tell a message the turn took from one the cancel dropped
+    /// (`AgentProvider::launch_cancel_drops_held_messages` answered false). Such messages may not
+    /// have been carried out, which the user is told (`crate::messaging::cleared_messages`).
+    cancel_drops_unseen: bool,
+    /// What the reports say beside the provider's own status integration, where it declares that
+    /// they do; see [`program_status::ReportedSignals`].
+    signals: program_status::DeclaredSignals,
+    /// The message the provider read for the current turn, for the turn end a report closes.
+    turn_messages: Arc<program_status::TurnMessages>,
+    /// The launch gave the agent a prompt on its command line and the reports have not shown its
+    /// turn start yet; see [`program_status`], "The idle before a launch's first turn".
+    awaits_launch_turn: AtomicBool,
+    /// Until when the launch waits, before anything is written into it, for the session's MCP
+    /// server to have answered a listing of its tools ([`Self::await_tool_listing`]); `None`
+    /// where the provider declares no such wait, or for a launch a daemon adopted.
+    tool_listing_until: Mutex<Option<Instant>>,
+    /// The agent's configuration directory this launch runs on, where the launch named one.
+    config_dir: Option<std::path::PathBuf>,
+    /// What the provider's hook interpreter keeps for this session from one event to the next
+    /// (`crate::hooks::HookSession::carry`); gone with the process.
+    pub(crate) hook_carry: crate::hooks::HookCarry,
 }
 
 impl std::ops::Deref for LiveSession {
@@ -259,6 +302,18 @@ pub struct NewSession {
     pub before_scratch_removal: Option<Box<dyn FnOnce() + Send>>,
     /// See `NewPty::display`.
     pub display: crate::terminal::display::DisplaySeed,
+    /// Whether the program's reports give this launch its status, as its provider answered for
+    /// the launch (`AgentProvider::launch_has_status_integration`); `None` where nobody asked (a
+    /// launch adopted from a build that did not record it, a stand-in), which takes the provider's
+    /// answer for all its launches.
+    pub status_from_reports: Option<bool>,
+    /// Whether a cancel of this launch can drop the messages its agent held, as its provider
+    /// answered for the launch (`AgentProvider::launch_cancel_drops_held_messages`); `None` where
+    /// nobody asked (a launch adopted from a build that did not record it, a stand-in), which
+    /// takes the provider's reader's declaration.
+    pub cancel_drops: Option<bool>,
+    /// The agent's configuration directory the launch runs on (`LaunchSpec::config_dir`).
+    pub config_dir: Option<std::path::PathBuf>,
 }
 
 impl LiveSession {
@@ -274,7 +329,25 @@ impl LiveSession {
         // Every session's terminal supports the protocol: it keeps the reports and answers their
         // support query. Only an agent with no status of its own takes its status from them.
         pty.keep_program_status();
-        let status_from_reports = !crate::adapter::provider(session.agent).has_status_integration();
+        // Read here, on the thread that launches: the declarations are the provider's for the
+        // whole launch.
+        let provider = crate::adapter::provider(session.agent);
+        let status_from_reports = session
+            .status_from_reports
+            .unwrap_or_else(|| !provider.has_status_integration());
+        let cancel_gives_back = provider.screen().cancel_restores_held_messages();
+        let cancel_drops = session
+            .cancel_drops
+            .unwrap_or_else(|| provider.screen().cancel_drops_held_messages());
+        let cancel_drops_unseen = provider.screen().cancel_drops_held_messages() && !cancel_drops;
+        let signals = if status_from_reports {
+            program_status::ReportedSignals::NONE
+        } else {
+            provider.reported_signals()
+        };
+        let awaits_turn_message = status_from_reports && provider.hooks().supplies_turn_message();
+        let done_gap = provider.reported_done_gap().filter(|_| status_from_reports);
+        let msg_is_turn_message = provider.hooks().report_msg_is_turn_message();
         let host_renders = crate::platform::term::facts().host_renders;
         if host_renders {
             pty.report_titles();
@@ -295,6 +368,7 @@ impl LiveSession {
             host_renders: AtomicBool::new(host_renders),
             action_required: AtomicBool::new(false),
             resolves_approvals_itself: session.resolves_approvals_itself,
+            first_task_queued: AtomicBool::new(false),
             trust: TrustState::new(session.agent, session.carried_trust),
             interaction: interaction::InteractionState::default(),
             input_writes: AtomicU64::new(0),
@@ -321,6 +395,19 @@ impl LiveSession {
             exit_settled: AtomicBool::new(false),
             status_from_reports,
             status_reports: Arc::default(),
+            done_gap,
+            cancel_gives_back,
+            cancel_drops,
+            cancel_drops_unseen,
+            signals: program_status::DeclaredSignals::new(signals),
+            turn_messages: Arc::new(program_status::TurnMessages::new(
+                awaits_turn_message,
+                msg_is_turn_message,
+            )),
+            awaits_launch_turn: AtomicBool::new(false),
+            tool_listing_until: Mutex::new(None),
+            config_dir: session.config_dir,
+            hook_carry: crate::hooks::HookCarry::default(),
         }
     }
 
@@ -354,6 +441,20 @@ impl LiveSession {
         drop(observer);
         // Reports the program made before then are applied now.
         self.apply_program_status();
+        if self.signals.waits() {
+            self.publish_declared_wait();
+        }
+    }
+
+    /// The state the session was registered with ([`Self::observe_titles`]), for code that acts
+    /// on the session from where it holds no handle of the state of its own; `None` before it is
+    /// registered, or once the state is gone.
+    pub(crate) fn app_state(&self) -> Option<Arc<crate::state::AppState>> {
+        self.title
+            .lock()
+            .expect("title observer lock poisoned")
+            .state
+            .upgrade()
     }
 
     /// Whether a key or a message of Octoboard's may go into the session now: nothing holds its
@@ -429,16 +530,19 @@ impl LiveSession {
     }
 
     /// [`Self::waits_for_user`], except that a usage-limit dialog on the screen (see
-    /// `Dialog::is_usage_limit`) or a view of the background agents is not a wait that keeps the
-    /// session from being switched.
+    /// `Dialog::is_usage_limit`), a view of the background agents or a view the person opened
+    /// themselves is not a wait that keeps the session from being switched.
     pub(crate) fn waits_for_user_beyond_usage_limit(&self) -> bool {
-        self.waits_for_user_unless(|dialog| dialog.is_usage_limit() || dialog.is_agents_view())
+        self.waits_for_user_unless(|dialog| {
+            dialog.is_usage_limit() || dialog.is_agents_view() || dialog.is_own_view()
+        })
     }
 
     /// [`Self::waits_for_user`] as the status shown judges it: a view of the background agents is
-    /// no wait for the user there, since the session is shown dormant for it instead.
-    pub(crate) fn waits_for_user_outside_agents_view(&self) -> bool {
-        self.waits_for_user_unless(Dialog::is_agents_view)
+    /// no wait for the user there, since the session is shown dormant for it instead, and a view
+    /// the person opened themselves is none either, the session reading as it did before it.
+    pub(crate) fn waits_for_user_outside_views(&self) -> bool {
+        self.waits_for_user_unless(|dialog| dialog.is_agents_view() || dialog.is_own_view())
     }
 
     /// [`Self::waits_for_user`] with the dialogs `not_a_wait` picks out left out of it.
@@ -457,13 +561,49 @@ impl LiveSession {
             .is_some_and(|dialog| dialog.is_agents_view())
     }
 
-    pub(crate) fn needs_user_action(&self) -> bool {
-        self.action_required.load(Ordering::Acquire)
+    /// The launch's provider offers Octoboard's tools to its model only once the session's MCP
+    /// server has answered a listing of them
+    /// (`crate::adapter::AgentProvider::awaits_tool_listing`): nothing is written into the
+    /// session for `bound` from now, unless the listing is answered first
+    /// (`crate::state::AppState::awaits_tool_listing`). Only a launch waits: a daemon that
+    /// adopts one finds the listing long answered.
+    pub(crate) fn await_tool_listing(&self, bound: Duration) {
+        *self
+            .tool_listing_until
+            .lock()
+            .expect("tool listing lock poisoned") = Some(Instant::now() + bound);
     }
 
+    /// Has the wait [`Self::await_tool_listing`] began run out now, as its bound passing does,
+    /// for a test of what picks that up.
+    #[cfg(test)]
+    pub(crate) fn end_tool_listing_wait(&self) {
+        *self
+            .tool_listing_until
+            .lock()
+            .expect("tool listing lock poisoned") = Some(Instant::now());
+    }
+
+    /// Whether the wait [`Self::await_tool_listing`] began has not run out.
+    pub(crate) fn tool_listing_wait_open(&self) -> bool {
+        self.tool_listing_until
+            .lock()
+            .expect("tool listing lock poisoned")
+            .is_some_and(|until| Instant::now() < until)
+    }
+
+    /// Whether the agent says only the user can act: by its title, or by a `blocked` status report
+    /// where its provider declares its reports say so (`program_status::ReportedSignals`).
+    pub(crate) fn needs_user_action(&self) -> bool {
+        self.action_required.load(Ordering::Acquire) || self.signals.waits()
+    }
+
+    /// Notes whether `title` says only the user can act, and says whether that changed. A title
+    /// says nothing of it once the program's reports do.
     pub(crate) fn observe_action_title(&self, title: Option<&str>) -> bool {
         let screen = crate::adapter::provider(self.agent).screen();
-        let waiting = title.is_some_and(|title| screen.title_needs_user(title));
+        let waiting = !self.signals.say_the_wait()
+            && title.is_some_and(|title| screen.title_needs_user(title));
         self.action_required.swap(waiting, Ordering::AcqRel) != waiting
     }
 
@@ -504,13 +644,44 @@ impl LiveSession {
         self.schedule_input_recovery();
     }
 
-    /// The rows of the agent's input box as `screen` (the visible rows, faint cells blanked) shows
-    /// them ([`input_box::input_box_rows`]); where the host renders what the program draws
-    /// ([`Self::host_renders`]), a box that shows only the provider's placeholder is an empty one
-    /// whatever it is drawn with ([`input_box::placeholder_as_empty`]).
+    /// The screen the agent's input box is read off now, as its provider's reader asks for it
+    /// ([`screen::ScreenReader::input_box_screen`]): with faint cells blanked, or as drawn. Every
+    /// reading of what the box holds takes its screen from here, so none knows which provider
+    /// reads which.
+    pub(crate) fn box_screen(&self) -> String {
+        self.screen_as(
+            crate::adapter::provider(self.agent)
+                .screen()
+                .input_box_screen(),
+        )
+    }
+
+    /// The visible rows of the screen now, as the text a reader asked for. The one place a
+    /// [`screen::ScreenText`] becomes a rendering, for every reader that declares one.
+    pub(crate) fn screen_as(&self, text: screen::ScreenText) -> String {
+        match text {
+            screen::ScreenText::FaintBlanked => self.screen_text_undimmed(),
+            screen::ScreenText::AsDrawn => self.screen_text(),
+        }
+    }
+
+    /// Whether the agent's input box is read off the screen as drawn, faint cells included.
+    fn reads_box_as_drawn(&self) -> bool {
+        crate::adapter::provider(self.agent)
+            .screen()
+            .input_box_screen()
+            == screen::ScreenText::AsDrawn
+    }
+
+    /// The rows of the agent's input box as `screen` (the visible rows, as [`Self::box_screen`]
+    /// gives them) shows them ([`input_box::input_box_rows`]); where a faint cell reaches the
+    /// reader as text, because the host renders what the program draws ([`Self::host_renders`])
+    /// or the box is read off the screen as drawn, a box that shows only the provider's
+    /// placeholder is an empty one whatever it is drawn with
+    /// ([`input_box::placeholder_as_empty`]).
     pub(crate) fn input_box_rows(&self, screen: &str) -> Option<Vec<String>> {
         let rows = input_box::input_box_rows(self.agent, screen)?;
-        Some(if self.host_renders() {
+        Some(if self.host_renders() || self.reads_box_as_drawn() {
             input_box::placeholder_as_empty(self.agent, rows)
         } else {
             rows
@@ -669,6 +840,8 @@ impl LiveSession {
         if self.pty.is_frozen() {
             return Err(swap::archived_refusal());
         }
+        // Read before the typing record is locked, as a key's is (`Self::write_raw_input`).
+        let mid_turn = self.turn_reading().escape_mid_turn();
         if needs_empty_box && matches!(box_is, BoxIs::Unclearable { .. }) {
             tracing::warn!(session = %self.id, "a command was refused: the input box holds text that could not be cleared");
             return Err(Tail::refuse_beside_text());
@@ -803,7 +976,7 @@ impl LiveSession {
         if finish.is_none_or(|tail| tail.records_prompt) {
             draft.submission(None, prompt.to_string());
         }
-        let box_before = finish.map(|_| self.input_box(&self.screen_text_undimmed()));
+        let box_before = finish.map(|_| self.input_box(&self.box_screen()));
         self.input_writes.fetch_add(1, Ordering::AcqRel);
         let written = self.pty.write_input_locked(&input, now);
         let saw = box_before.map(|box_before| Written {
@@ -816,7 +989,16 @@ impl LiveSession {
                 // What the box held goes with the message: the typing record holds nothing of it.
                 draft.cleared_by_octoboard();
             }
-            draft.message_written(Instant::now(), prompt);
+            if mid_turn {
+                draft.message_written_mid_turn(
+                    Instant::now(),
+                    prompt,
+                    finish.is_none_or(|tail| tail.records_prompt),
+                );
+            } else {
+                draft.message_written(Instant::now(), prompt);
+            }
+            draft.message_written_as(self.queued_as());
             self.end_torn_run();
             self.note_message_written();
             self.end_unclearable_wait();
@@ -850,22 +1032,34 @@ impl LiveSession {
     /// not count), or one placeholder the agent shows for a long paste
     /// ([`screen::ScreenReader::collapsed_paste`]).
     fn holds_only_the_message(&self, text: &str, message: Option<&str>) -> bool {
-        let bare = |text: &str| {
-            text.chars()
-                .filter(|c| !c.is_whitespace())
-                .collect::<String>()
-        };
-        let shown = bare(text);
+        let shown = self::text::bare(text);
         if shown.is_empty() {
             return true;
         }
         let Some(message) = message else {
             return false;
         };
-        shown == bare(message)
+        shown == self::text::bare(message)
             || crate::adapter::provider(self.agent)
                 .screen()
                 .collapsed_paste(text.trim())
+    }
+
+    /// The launch queued its first task as the session's first message
+    /// (`crate::adapter::LaunchPlan::first_message`) in place of giving it on the command line: the
+    /// agent is at its prompt, not in a turn, until that message is written.
+    pub(crate) fn note_first_task_queued(&self) {
+        self.first_task_queued.store(true, Ordering::Release);
+    }
+
+    /// Whether the launch queued its first task as a message ([`Self::note_first_task_queued`]).
+    pub(crate) fn first_task_queued(&self) -> bool {
+        self.first_task_queued.load(Ordering::Acquire)
+    }
+
+    /// The agent's configuration directory this launch runs on, where the launch named one.
+    pub(crate) fn config_dir(&self) -> Option<&std::path::Path> {
+        self.config_dir.as_deref()
     }
 
     pub(crate) fn note_launch_prompt(&self, prompt: String) {
@@ -1101,7 +1295,8 @@ impl LiveSession {
     /// Presses the submit key once more for a message marked unsent ([`Self::mark_unsent`]), once
     /// its grace has passed, and says whether it did. Never where the Enter could send something
     /// of the user's with the message: keys typed since the message went in end the retry, the hold
-    /// staying until a prompt is reported, and a box that shows anything but the message itself,
+    /// staying until a prompt is reported, and a box that shows anything but the message itself
+    /// (an empty one too, where the provider declares that one means the message went elsewhere),
     /// or is not read off a whole frame, puts it off to the next look, for [`UNSENT_RETRY_BOUND`]
     /// at most, after which the retry ends as for typed keys.
     fn retry_unsent_submit(
@@ -1123,10 +1318,15 @@ impl LiveSession {
         let (typed, alone) = {
             let draft = self.draft.lock().expect("draft lock poisoned");
             let (composer, whole, _) = self.read_box();
+            // Never an empty box where the provider declares that one means the message went
+            // elsewhere: it is then not there to send, and the Enter would act on whatever took it
+            // (a dialog the reader did not recognise, say).
+            let elsewhere = self.empty_box_is_elsewhere();
             let alone = whole.is_some()
-                && composer
-                    .as_deref()
-                    .is_some_and(|text| self.holds_only_the_message(text, draft.message_text()));
+                && composer.as_deref().is_some_and(|text| {
+                    !(elsewhere && self::text::bare(text).is_empty())
+                        && self.holds_only_the_message(text, draft.message_text())
+                });
             (draft.typed_since_message(), alone)
         };
         let mut unsent = self.unsent_at.lock().expect("unsent mark lock poisoned");
@@ -1220,15 +1420,58 @@ impl LiveSession {
         });
     }
 
-    /// Holds later messages briefly after one, written when the acknowledgement count stood at
-    /// `before`, may have been taken by the session's own server without that being confirmed;
-    /// nothing is written into its input box. The queue is written out again once the hold has run
-    /// its course, which nothing else watches for promptly.
-    pub fn mark_submission_uncertain(&self, before: u64) {
-        *self
-            .uncertain_at
-            .lock()
-            .expect("uncertain submission lock poisoned") = Some((before, Instant::now()));
+    /// Whether a message written into the session, which the agent did not report sending, went
+    /// elsewhere: the provider declares that an empty box then means so
+    /// (`screen::ScreenReader::empty_box_means_write_went_elsewhere`) and the box reads empty off a
+    /// whole frame now. A box that cannot be read so (a dialog drawn over it) tells nothing.
+    /// Where it went elsewhere, the typing record holds nothing of it any more
+    /// (`Draft::cleared_by_octoboard`): the box was read empty, and the messages queued behind it
+    /// are not to wait on its text as on a draft. Read and noted under the input lock, so no key
+    /// goes in between.
+    pub(crate) fn write_went_elsewhere(&self) -> bool {
+        if !self.empty_box_is_elsewhere() {
+            return false;
+        }
+        let _input = self.pty.lock_input();
+        if !self.input_box_reads_empty() {
+            return false;
+        }
+        let mut draft = self.draft.lock().expect("draft lock poisoned");
+        if draft.at_input_boundary(Instant::now()) {
+            draft.cleared_by_octoboard();
+        }
+        true
+    }
+
+    /// Whether the provider declares that an empty box after an unconfirmed write means the
+    /// message went elsewhere (`screen::ScreenReader::empty_box_means_write_went_elsewhere`).
+    fn empty_box_is_elsewhere(&self) -> bool {
+        crate::adapter::provider(self.agent)
+            .screen()
+            .empty_box_means_write_went_elsewhere()
+    }
+
+    /// Whether the agent's input box reads empty off a whole frame now (nothing at all, once
+    /// whitespace is left out); `false` where it cannot be read so.
+    fn input_box_reads_empty(&self) -> bool {
+        let (composer, whole, _) = self.read_box();
+        whole.is_some()
+            && composer
+                .as_deref()
+                .is_some_and(|text| self::text::bare(text).is_empty())
+    }
+
+    /// Has the session's queue written out again on the daemon's runtime, at once, for a drain
+    /// that stopped with nothing left to hold what is queued behind it. Nothing where the session
+    /// is not bound to a runtime (as under a test that drains by hand).
+    pub(crate) fn retry_queue_soon(&self) {
+        self.retry_queue_after(Duration::ZERO);
+    }
+
+    /// Has the session's queue written out again on the daemon's runtime once `delay` has passed,
+    /// where this launch of the session is still the live one then. Nothing where the session is
+    /// not bound to a runtime (as under a test that drains by hand).
+    fn retry_queue_after(&self, delay: Duration) {
         let observer = self.title.lock().expect("title observer lock poisoned");
         let (state, runtime) = (observer.state.clone(), observer.runtime.clone());
         drop(observer);
@@ -1237,7 +1480,9 @@ impl LiveSession {
         };
         let (id, launch) = (self.id.clone(), self.launch_id.clone());
         runtime.spawn(async move {
-            tokio::time::sleep(crate::messaging::outbox::DRAFT_WAIT).await;
+            if !delay.is_zero() {
+                tokio::time::sleep(delay).await;
+            }
             if let Some(state) = state.upgrade() {
                 if state
                     .live_session(&id)
@@ -1247,6 +1492,18 @@ impl LiveSession {
                 }
             }
         });
+    }
+
+    /// Holds later messages briefly after one, written when the acknowledgement count stood at
+    /// `before`, may have been taken by the session's own server without that being confirmed;
+    /// nothing is written into its input box. The queue is written out again once the hold has run
+    /// its course, which nothing else watches for promptly.
+    pub fn mark_submission_uncertain(&self, before: u64) {
+        *self
+            .uncertain_at
+            .lock()
+            .expect("uncertain submission lock poisoned") = Some((before, Instant::now()));
+        self.retry_queue_after(crate::messaging::outbox::DRAFT_WAIT);
     }
 
     /// Whether a message marked by [`Self::mark_submission_uncertain`] still holds later ones: for
@@ -1449,14 +1706,16 @@ mod tests {
     /// A Claude Code session whose message "peer" went in and was left unsent, its draft grace
     /// spent so that the submit key may be retried.
     fn unsent_session(name: &str) -> crate::test_support::StandIn {
-        let live = crate::test_support::fake_live_session(
-            name,
-            crate::protocol::AgentId::CLAUDE,
-            120,
-            40,
-            "sleep 30",
-        )
-        .with_composer();
+        unsent_session_of(name, crate::protocol::AgentId::CLAUDE)
+    }
+
+    /// [`unsent_session`] for a session of `agent`.
+    fn unsent_session_of(
+        name: &str,
+        agent: crate::protocol::AgentId,
+    ) -> crate::test_support::StandIn {
+        let live = crate::test_support::fake_live_session(name, agent, 120, 40, "sleep 30")
+            .with_composer();
         draw_box(&live, "");
         live.write_message_input(&[Input::Text("peer".into())], "peer", false)
             .unwrap();
@@ -1467,6 +1726,66 @@ mod tests {
             true,
         ));
         live
+    }
+
+    /// A reader of Claude Code's input box whose provider declares that an empty box after an
+    /// unconfirmed write means the message went elsewhere, for the test-only provider.
+    struct EmptyBoxElsewhere;
+
+    impl crate::session::screen::ScreenReader for EmptyBoxElsewhere {
+        fn input_box_screen(&self) -> crate::session::screen::ScreenText {
+            claude_reader().input_box_screen()
+        }
+        fn input_box_rows(&self, screen: &str) -> Option<Vec<String>> {
+            claude_reader().input_box_rows(screen)
+        }
+        fn input_placeholder(&self, row: &str) -> bool {
+            claude_reader().input_placeholder(row)
+        }
+        fn empty_box_means_write_went_elsewhere(&self) -> bool {
+            true
+        }
+    }
+
+    static EMPTY_BOX_ELSEWHERE: EmptyBoxElsewhere = EmptyBoxElsewhere;
+
+    fn claude_reader() -> &'static dyn crate::session::screen::ScreenReader {
+        crate::adapter::provider(crate::protocol::AgentId::CLAUDE).screen()
+    }
+
+    /// Where the provider declares that an empty box after an unconfirmed write means the message
+    /// went elsewhere, an empty box gets no Enter: the message is not there to send, and the key
+    /// would act on whatever took it. The message itself alone still gets it.
+    #[test]
+    fn a_submit_retry_presses_no_enter_into_an_empty_box_where_declared() {
+        let _reader = crate::test_support::test_provider::declaring_screen(&EMPTY_BOX_ELSEWHERE);
+        let live = unsent_session_of("unsent-empty-declared", crate::protocol::AgentId::TEST);
+        draw_box(&live, "");
+        let before = live.input_writes();
+        assert!(!live.retry_unsent_submit(|| true).unwrap());
+        assert_eq!(live.input_writes(), before, "no Enter into an empty box");
+        draw_box(&live, "peer");
+        assert!(live.retry_unsent_submit(|| true).unwrap());
+    }
+
+    /// A write goes elsewhere only where the provider declares an empty box to mean so and the box
+    /// reads empty off a whole frame: an undeclared provider's empty box, a declared one's box
+    /// that holds text, and one that cannot be read (a dialog drawn over it) tell nothing.
+    #[test]
+    fn a_write_went_elsewhere_only_where_declared_and_the_box_reads_empty() {
+        let undeclared = unsent_session("elsewhere-undeclared");
+        draw_box(&undeclared, "");
+        assert!(!undeclared.write_went_elsewhere());
+
+        let _reader = crate::test_support::test_provider::declaring_screen(&EMPTY_BOX_ELSEWHERE);
+        let live = unsent_session_of("elsewhere-declared", crate::protocol::AgentId::TEST);
+        draw_box(&live, "");
+        assert!(live.write_went_elsewhere());
+        draw_box(&live, "peer");
+        assert!(!live.write_went_elsewhere());
+        live.on_output(b"\x1b[2J\x1b[Ha dialog drawn over the whole box");
+        live.settle_input();
+        assert!(!live.write_went_elsewhere(), "a box not read tells nothing");
     }
 
     /// The submit key retried for a message left unsent never sends the user's text with it: keys

@@ -376,6 +376,25 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
       }, LOGIN_WAITING_MS);
       return { type: "ack", id: null };
     },
+    answer_account_login_question: (body) => {
+      const account = body.account ?? null;
+      const agent = servedLabel(body.agent);
+      const running = store.getState().accountLogins.find((login) => login.agent === body.agent && login.account === account && login.status === "waiting");
+      if (!running) return fail({ code: "login_not_running", params: { agent }, message: `${agent} is not being signed in for this account` });
+      const acceptsAnswer = running.question?.answer_kind === "secret_text" ? typeof body.answer === "object" : typeof body.answer === "string";
+      if (running.question?.id !== body.question || !acceptsAnswer) {
+        return fail({ code: "login_question_not_open", params: { agent }, message: `${agent} is not waiting on that question` });
+      }
+      const failure = body.answer === "no" ? scenario.loginQuestionDeclined ?? null : null;
+      const status = failure ? "failed" : body.answer === "no" ? "cancelled" : "succeeded";
+      const { question: _, ...answered } = running;
+      store.setState((state) => ({
+        accountLogins: state.accountLogins.map((login) => login === running
+          ? { ...answered, status, failure, authorization_url: null, device_code: null }
+          : login),
+      }));
+      return { type: "ack", id: null };
+    },
     cancel_account_login: (body) => {
       const account = body.account ?? null;
       const running = store.getState().accountLogins.find((login) => login.agent === body.agent && login.account === account && (login.status === "starting" || login.status === "waiting"));

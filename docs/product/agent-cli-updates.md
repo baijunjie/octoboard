@@ -27,17 +27,32 @@ followed. It decides both the command that updates the CLI and where the latest 
 | Install method | The binary lies | Updated by | Latest version read from |
 |---|---|---|---|
 | Its own installer | Claude Code: `~/.local/share/claude/versions` (on Windows `~/.local/bin/claude.exe`); Codex: `~/.codex/packages/standalone`; Grok Build: `~/.grok` | `<cli> update`, run with the CLI's own binary | Grok Build: `grok update --check --json`; Claude Code and Codex: the npm registry |
-| npm | Under `node_modules/@anthropic-ai/claude-code` (Claude Code) or `node_modules/@openai/codex` (Codex) of any prefix | `npm install -g <package>@latest`, given the install's prefix where one can be told, using the `npm` on the shell's `PATH` | The npm registry |
+| Its own installer | Antigravity CLI: in the vendor's native installation | `agy update` | Google's update manifest for the host platform |
+| Its own installer | OpenCode: `~/.opencode/bin` | `opencode upgrade` | No version source for the native install |
+| Its own installer | Pi: a launcher beside the marked managed install | `pi update --self` | The npm registry |
+| npm | Under `node_modules/@anthropic-ai/claude-code` (Claude Code) or `node_modules/@openai/codex` (Codex) of any prefix | `npm install -g <package>@latest`, given the install's prefix where one can be told, using the `npm` on the shell's `PATH` | The npm registry for the installed package |
+| npm | GitHub Copilot CLI: `@github/copilot` | `npm install -g @github/copilot@latest` | The npm registry |
+| npm | OpenCode: `opencode-ai` or `@opencode/cli` | `npm install -g <package>@latest` | The npm registry |
+| npm | Qwen Code: `@qwen-code/qwen-code` | `npm install -g @qwen-code/qwen-code@latest` | The npm registry |
+| npm | Pi: `@earendil-works/pi-coding-agent` | `npm install -g @earendil-works/pi-coding-agent@latest` | The npm registry |
 | Homebrew | Under Homebrew's `Cellar` or `Caskroom`, in the cask `claude-code` (Claude Code), or the formula or cask `codex` (Codex) | `brew upgrade <name>`, with `--cask` for a cask, using the `brew` of the install's own Homebrew | Homebrew's own record of the formula or cask (`brew info`), as its metadata stands |
+| Homebrew | OpenCode: the `opencode` formula | `brew upgrade opencode` | Homebrew metadata |
 | Unknown | Anywhere else, or where nothing can be told | Not updated | Not looked up |
 
 A path through pnpm's, Bun's or Yarn's directories is an unknown install, though it lies under `node_modules`. Grok
-Build is recognised only from its own installer.
+Build is recognised only from its own installer. An agent whose own installer may put it in a directory of any name is
+recognised by a marker file that installer leaves beside the binary. An agent's own installer that has no check of its
+own may have its latest version read from the manifest its maker publishes for each platform, as that installer reads
+it; on a platform with no manifest no latest version is looked up.
+
+The version shown is the one the default account runs. An agent whose accounts can each update themselves to a version
+of their own has it read from the default account's directory, and a session starts with its own account's version
+known the same way.
 
 ## Where the latest version comes from
 
-Only the npm registry lookup reaches the network, over HTTPS, at `https://registry.npmjs.org/<package>/latest`, with a
-time limit of **20 seconds**; `grok update --check` and `brew info` are given the same limit. The lookup goes out as the
+Only the npm registry lookup, at `https://registry.npmjs.org/<package>/latest`, and a maker's manifest reach the
+network, over HTTPS, with a time limit of **20 seconds**; `grok update --check` and `brew info` are given the same limit. The lookup goes out as the
 user's own network does:
 
 - through the proxy the login shell environment names, `HTTPS_PROXY`, `ALL_PROXY` or `HTTP_PROXY` (the first set in
@@ -47,7 +62,8 @@ user's own network does:
   `No_Proxy`): where the upper-case spelling is not set, any spelling that differs from it only in case counts, the
   lower-case one included, and of several such spellings the one that sorts first by character code wins;
 - trusting the system's certificate store, so a corporate certificate authority that inspects TLS is accepted;
-- always to the public registry: a custom registry set in an `.npmrc` is not read.
+- always to the public registry: a custom registry set in an `.npmrc` is not read; a manifest goes to the address the
+  agent's maker publishes it at.
 
 The lookup is best-effort. When it fails, or the source answers with no version that can be read, no latest version is
 shown and the reason is a warning mark on the Version row (see "The Version row" below); no error alert is raised and
@@ -149,7 +165,7 @@ not be read in time (`shell_environment_timeout`), when the agent's provider kno
 A client asks for a check with the protocol request `check_agent_clis`, optionally naming one agent, and for an update
 with `update_agent_cli`, naming the agent; both are answered at once, and each result follows as the event
 `agent_cli_status_updated`, which carries the agent's whole status: the installed version, the install method
-(`native`, `npm`, `homebrew` or `unknown`), the latest version or the reason it is missing (`agent_cli_latest_failed`
-with its text, or `agent_cli_latest_unreadable`), when the check ended, and the last update (`running`, `succeeded` or
-`failed`, with `agent_cli_update_failed` and its failure line, or `agent_cli_update_timed_out`). A snapshot replays every
-status the daemon holds. When an update changes whether the agent is installed, `agent_availability_updated` follows.
+(`native`, `npm`, `homebrew` or `unknown`), the npm package name when the daemon identifies it, the latest version or
+the reason it is missing (`agent_cli_latest_failed` with its text, or `agent_cli_latest_unreadable`), when the check
+ended, and the last update (`running`, `succeeded` or `failed`, with `agent_cli_update_failed` and its failure line,
+or `agent_cli_update_timed_out`). A snapshot replays every status the daemon holds. When an update changes whether the agent is installed, `agent_availability_updated` follows.

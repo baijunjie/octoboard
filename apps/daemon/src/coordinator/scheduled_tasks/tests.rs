@@ -221,6 +221,12 @@ async fn a_create_is_refused_for_each_ill_formed_or_unopenable_task() {
             error_code::FIELD_REQUIRED,
             "`prompt` is required",
         ),
+        // Blank as a launch reads it: control and invisible characters are no prompt.
+        (
+            new_task(" \u{1}\u{2068}\u{2069}\u{200B} ", daily()),
+            error_code::FIELD_REQUIRED,
+            "`prompt` is required",
+        ),
         (
             new_task(
                 "Run",

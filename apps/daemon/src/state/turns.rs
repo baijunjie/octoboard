@@ -21,8 +21,12 @@ pub(super) struct TurnState {
     /// acted on while this holds, which is what keeps a turn-end signal that arrives twice from
     /// being read as two turns ending.
     open: bool,
-    /// The session called `report` during this turn, so its stop needs no synthesised report.
+    /// The session called `report` during this turn, so its stop needs no synthesised report. Its
+    /// own report only: a credit the turn spent is [`Self::credited`].
     reported: bool,
+    /// The credit the open turn spent (see [`Self::credits`]): the turn is Octoboard's own, so its
+    /// stop needs no synthesised report either.
+    credited: Option<String>,
     /// Its owner has been told during this turn that the session waits for the user (see
     /// [`AppState::claim_waiting_notice`]).
     waiting_told: bool,
@@ -42,6 +46,13 @@ pub(super) struct TurnState {
     /// of Octoboard's own that needs no report back: the turn whose prompt opens with that text
     /// (`credit_turn_opened_by`). Each is spent by that turn's start.
     credits: Vec<String>,
+    /// The open turn was started with no prompt to go by (a program's own `working` report), so
+    /// for an agent whose opening prompt may follow its turn's start, the first prompt reported
+    /// while it stays open is its own, arriving late.
+    awaits_prompt: bool,
+    /// The credit the open turn spent on starting with no prompt was taken back since
+    /// (`clear_turn_credit`), so its late prompt does not return it to the credits.
+    credit_withdrawn: bool,
     /// The turn was closed off the terminal title, as cancelled, rather than by a hook
     /// (`end_turn_off_title`), so a turn end the agent still reports for it is its real end.
     ended_off_title: bool,
@@ -112,13 +123,51 @@ impl AppState {
     /// and otherwise waits for the turn that does: the next turn to start is not always the one
     /// credited, since a backgrounded tool call's result arrives as a turn of its own and nothing
     /// orders it against a message written into the session. With no prompt to go by, the oldest
-    /// credit is spent by this turn.
+    /// credit is spent by this turn. A prompt reported while the turn is open joins it, as a steer
+    /// does, and decides afresh: what the session reported before it and any credit spent are the
+    /// turn's no longer. A start with no prompt on a turn already open changes nothing.
     pub fn turn_started(&self, id: &str, prompt: Option<&str>) {
+        self.start_turn(id, prompt, false, true);
+    }
+
+    /// [`Self::turn_started`], for an agent whose turn's opening prompt can be reported after the
+    /// turn started with none (`HookInterpreter::opening_prompt_may_follow_start`): the first
+    /// prompt reported after such a start is the turn's own, not a steer. The credit the start
+    /// spent goes back to the credits, unless it was taken back meanwhile (`clear_turn_credit`),
+    /// and the prompt decides the credit as it would have at the start; a report the session made
+    /// before its prompt arrived stays the turn's. Only a later prompt is a steer.
+    pub fn turn_started_prompt_may_follow(&self, id: &str, prompt: Option<&str>) {
+        self.start_turn(id, prompt, true, true);
+    }
+
+    /// [`Self::turn_started`] with no prompt, for a turn that was already running before it was
+    /// known here (one a restart of the daemon reopens from what the program last reported): its
+    /// opening prompt was reported to the daemon before, if at all, so none follows, and the
+    /// first prompt reported while it stays open is a steer.
+    pub fn turn_resumed(&self, id: &str) {
+        self.start_turn(id, None, false, false);
+    }
+
+    /// Opens or joins the turn; `opening_prompt_unseen` says a start with no prompt may yet have
+    /// its opening prompt reported ([`TurnState::awaits_prompt`]).
+    fn start_turn(
+        &self,
+        id: &str,
+        prompt: Option<&str>,
+        prompt_may_follow: bool,
+        opening_prompt_unseen: bool,
+    ) {
         self.cancel_recoveries_silently(id);
         // While Octoboard holds its writes for a usage limit, none of them opened this turn: how
         // it ends says whether the account can run turns again.
         if let Some(live) = self.live_session(id) {
             live.usage_limit.turn_started();
+            // A turn that opens here: the agent no longer holds what was written while the turn
+            // before ran. Told before the turns are locked, since the typing record is read
+            // under its own lock by code that asks about turns.
+            if !self.turn_is_open(id) {
+                live.note_turn_began();
+            }
         }
         let mut turns = self.turns.lock().expect("turn lock poisoned");
         let turn = turns.entry(id.to_string()).or_default();
@@ -131,6 +180,24 @@ impl AppState {
         }
         turn.open = true;
         turn.ended_off_title = false;
+        turn.last_event_at = now_millis();
+        if !opening && prompt.is_none() {
+            return;
+        }
+        let late_prompt = !opening && prompt_may_follow && turn.awaits_prompt;
+        let was_credited = turn.credited.is_some();
+        if late_prompt {
+            if let Some(spent) = turn.credited.take() {
+                if !turn.credit_withdrawn {
+                    turn.credits.insert(0, spent);
+                }
+            }
+        } else {
+            turn.reported = false;
+            turn.credited = None;
+        }
+        turn.awaits_prompt = opening && prompt.is_none() && opening_prompt_unseen;
+        turn.credit_withdrawn = false;
         let credit = match prompt {
             Some(prompt) => turn
                 .credits
@@ -138,16 +205,14 @@ impl AppState {
                 .position(|opening| prompt.starts_with(opening.as_str())),
             None => (!turn.credits.is_empty()).then_some(0),
         };
-        turn.reported = credit.is_some();
-        if let Some(credit) = credit {
-            turn.credits.remove(credit);
-        } else if opening {
-            // A credited turn is Octoboard's own, which nothing reports back on, so the report
-            // before it stays the session's last.
+        turn.credited = credit.map(|credit| turn.credits.remove(credit));
+        // A turn of the session's own opens: one that opens uncredited, or one whose late prompt
+        // shows it is not the credited turn its start took it for. A credited turn is Octoboard's
+        // own, which nothing reports back on, so the report before it stays the session's last.
+        if turn.credited.is_none() && (opening || (late_prompt && was_credited)) {
             turn.last_report = None;
             turn.opened = next_number();
         }
-        turn.last_event_at = now_millis();
     }
 
     /// The turn of this session that just started ([`Self::turn_started`]) carries the agent
@@ -233,6 +298,7 @@ impl AppState {
         if let Some(turn) = self.turns.lock().expect("turn lock poisoned").get_mut(id) {
             turn.open = false;
             turn.reported = false;
+            turn.credited = None;
             turn.ended_off_title = false;
             turn.last_event_at = now_millis();
             turn.ends += 1;
@@ -348,11 +414,16 @@ impl AppState {
     pub fn clear_turn_credit(&self, id: &str, opening: &str) {
         if let Some(turn) = self.turns.lock().expect("turn lock poisoned").get_mut(id) {
             turn.credits.retain(|credit| credit != opening);
+            // Spent already by a turn that started with no prompt: not given back by its prompt.
+            if turn.credited.as_deref() == Some(opening) {
+                turn.credit_withdrawn = true;
+            }
         }
     }
 
-    /// Takes that credit back, for a report that turned out not to reach its owner. Left set, the
-    /// session's stop would produce no synthesised report either and the owner would get nothing.
+    /// Takes the session's own report back, for one that turned out not to reach its owner. Left
+    /// set, the session's stop would produce no synthesised report either and the owner would get
+    /// nothing. A credit the turn spent stays: the turn is still Octoboard's own.
     pub fn clear_reported(&self, id: &str) {
         self.set_reported(id, false);
     }
@@ -431,9 +502,10 @@ impl AppState {
             // The title closed the turn as cancelled, and this is the turn's own end after all,
             // reported late: it is what the turn amounted to. Its echo is the one the title's close
             // already armed.
-            let reported = turn.reported;
+            let reported = turn.reported || turn.credited.is_some();
             turn.ended_off_title = false;
             turn.reported = false;
+            turn.credited = None;
             turn.last_event_at = now_millis();
             turn.ends += 1;
             self.capacity_retries.turn_ended(id);
@@ -464,9 +536,10 @@ impl AppState {
                 return TurnClose::NotThisTurn;
             }
         }
-        let reported = turn.reported;
+        let reported = turn.reported || turn.credited.is_some();
         turn.open = false;
         turn.reported = false;
+        turn.credited = None;
         turn.ended_off_title = false;
         turn.last_event_at = now_millis();
         turn.ends += 1;
@@ -575,6 +648,164 @@ mod tests {
         assert_eq!(state.close_turn("s", false), TurnClose::Reported);
         state.turn_started("s", None);
         assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+    }
+
+    /// A turn a program reports before its prompt is reported (Pi's `working`, then the prompt its
+    /// extension forwards) spends one credit, the one its prompt names: the oldest, spent on the
+    /// start with no prompt, is given back for the turn it belongs to.
+    #[test]
+    fn a_prompt_reported_after_its_turn_started_spends_its_own_credit_only() {
+        let (state, _dir) = app_state("state-turn-credit-late-prompt");
+        state.credit_turn_opened_by("s", "Restart notice".to_string());
+        state.credit_turn_opened_by("s", "Outcome notice".to_string());
+        let late = |prompt| state.turn_started_prompt_may_follow("s", prompt);
+        late(None);
+        late(Some("Outcome notice: done"));
+        assert_eq!(state.close_turn("s", false), TurnClose::Reported);
+        late(None);
+        late(Some("Restart notice: what ended"));
+        assert_eq!(state.close_turn("s", false), TurnClose::Reported);
+        late(None);
+        late(Some("Outcome notice: again"));
+        assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+    }
+
+    /// A turn reopened after a restart had its opening prompt reported before it: the first prompt
+    /// reported while it stays open is a steer, which takes what the session reported before it
+    /// from the turn, not that turn's own prompt arriving late.
+    #[test]
+    fn a_prompt_in_a_resumed_turn_is_a_steer() {
+        let (state, _dir) = app_state("state-turn-resumed-steer");
+        state.turn_resumed("s");
+        state.mark_reported("s");
+        state.turn_started_prompt_may_follow("s", Some("steered in"));
+        assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+    }
+
+    /// The prompt of the credited turn, reported after the turn started, keeps the turn credited;
+    /// one that is not the credited text gives the credit back to the turn that is, and makes the
+    /// turn the session's own.
+    #[test]
+    fn a_late_prompt_decides_the_credit_its_turn_spends() {
+        let (state, _dir) = app_state("state-turn-credit-late-own");
+        let late = |prompt| state.turn_started_prompt_may_follow("s", prompt);
+        state.credit_turn_opened_by("s", "Message from Octoboard".to_string());
+        late(None);
+        let opened = state.turn_opened("s");
+        late(Some("Message from Octoboard about it"));
+        assert_eq!(state.turn_opened("s"), opened, "still Octoboard's turn");
+        assert_eq!(state.close_turn("s", false), TurnClose::Reported);
+
+        state.credit_turn_opened_by("s", "Message from Octoboard".to_string());
+        late(None);
+        let opened = state.turn_opened("s");
+        late(Some("typed by the user"));
+        assert_ne!(
+            state.turn_opened("s"),
+            opened,
+            "a turn of the session's own"
+        );
+        assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+        late(None);
+        late(Some("Message from Octoboard about it"));
+        assert_eq!(state.close_turn("s", false), TurnClose::Reported);
+    }
+
+    /// A start with no prompt on a turn already open spends no credit and keeps what the turn's
+    /// own start decided.
+    #[test]
+    fn a_start_with_no_prompt_on_an_open_turn_changes_no_credit() {
+        let (state, _dir) = app_state("state-turn-credit-repeat");
+        state.credit_turn_opened_by("s", "First".to_string());
+        state.credit_turn_opened_by("s", "Second".to_string());
+        state.turn_started("s", Some("First message"));
+        state.turn_started("s", None);
+        assert_eq!(state.close_turn("s", false), TurnClose::Reported);
+        state.turn_started("s", Some("Second message"));
+        assert_eq!(state.close_turn("s", false), TurnClose::Reported);
+    }
+
+    /// A report the session made before its turn's late prompt arrived stays the turn's, whether
+    /// or not its start spent a credit the prompt then gives back.
+    #[test]
+    fn a_report_made_before_the_late_prompt_stays_the_turns() {
+        let (state, _dir) = app_state("state-turn-credit-late-report");
+        let late = |prompt| state.turn_started_prompt_may_follow("s", prompt);
+        late(None);
+        state.mark_reported("s");
+        late(Some("typed by the user"));
+        assert_eq!(state.close_turn("s", false), TurnClose::Reported);
+
+        state.credit_turn_opened_by("s", "Message from Octoboard".to_string());
+        late(None);
+        state.mark_reported("s");
+        late(Some("typed by the user"));
+        assert_eq!(state.close_turn("s", false), TurnClose::Reported);
+        // The credit went back, for the turn it belongs to.
+        late(None);
+        late(Some("Message from Octoboard about it"));
+        assert_eq!(state.close_turn("s", false), TurnClose::Reported);
+    }
+
+    /// Only the first prompt after a start with no prompt is the turn's own: the next one is a
+    /// steer, which takes back the session's report and spends a credit only as its own text does.
+    #[test]
+    fn a_prompt_after_the_late_one_is_a_steer() {
+        let (state, _dir) = app_state("state-turn-credit-late-steer");
+        let late = |prompt| state.turn_started_prompt_may_follow("s", prompt);
+        state.credit_turn_opened_by("s", "Message from Octoboard".to_string());
+        late(None);
+        late(Some("Message from Octoboard about it"));
+        state.mark_reported("s");
+        late(Some("typed by the user"));
+        assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+        // The credit was spent by the turn, not given back by the steer.
+        late(None);
+        late(Some("Message from Octoboard about it"));
+        assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+    }
+
+    /// A credit taken back after a turn with no prompt spent it is not returned by that turn's
+    /// late prompt: nothing will start the turn it was for.
+    #[test]
+    fn a_withdrawn_credit_is_not_given_back_by_the_late_prompt() {
+        let (state, _dir) = app_state("state-turn-credit-late-withdrawn");
+        let late = |prompt| state.turn_started_prompt_may_follow("s", prompt);
+        state.credit_turn_opened_by("s", "Message from Octoboard".to_string());
+        late(None);
+        state.clear_turn_credit("s", "Message from Octoboard");
+        late(Some("typed by the user"));
+        assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+        late(None);
+        late(Some("Message from Octoboard about it"));
+        assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+    }
+
+    /// For an agent whose opening prompt never follows its turn's start, a prompt reported while
+    /// a turn that started with none is open is a steer: it neither gives the start's credit back
+    /// nor keeps the session's report.
+    #[test]
+    fn without_the_declaration_a_prompt_on_an_open_turn_is_a_steer() {
+        let (state, _dir) = app_state("state-turn-credit-no-late");
+        state.credit_turn_opened_by("s", "Message from Octoboard".to_string());
+        state.turn_started("s", None);
+        state.mark_reported("s");
+        state.turn_started("s", Some("typed by the user"));
+        assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+        state.turn_started("s", Some("Message from Octoboard about it"));
+        assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+    }
+
+    /// A report that did not reach its owner takes back the session's own report only: a turn
+    /// that spent a credit stays Octoboard's.
+    #[test]
+    fn taking_the_report_back_leaves_the_credit() {
+        let (state, _dir) = app_state("state-turn-credit-clear-reported");
+        state.credit_turn_opened_by("s", "Message from Octoboard".to_string());
+        state.turn_started("s", Some("Message from Octoboard about it"));
+        state.mark_reported("s");
+        state.clear_reported("s");
+        assert_eq!(state.close_turn("s", false), TurnClose::Reported);
     }
 
     /// A clock-attributed end left over from a finished turn must not close the turn running now,

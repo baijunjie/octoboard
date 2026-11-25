@@ -932,13 +932,13 @@ mod wait_tests {
 
     #[test]
     fn a_condition_that_holds_ends_the_wait_at_once() {
-        assert!(wait_for(Duration::from_secs(5), || true));
+        assert!(wait_for(crate::test_support::PATIENCE, || true));
     }
 
     #[test]
     fn a_condition_that_comes_true_is_waited_for() {
         let polls = AtomicUsize::new(0);
-        assert!(wait_for(Duration::from_secs(5), || polls
+        assert!(wait_for(crate::test_support::PATIENCE, || polls
             .fetch_add(1, Ordering::SeqCst)
             >= 3));
     }

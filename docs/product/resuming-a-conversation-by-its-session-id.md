@@ -2,7 +2,7 @@
 
 A project session can be opened on a conversation that already exists, given its session ID — the one the agent's own
 resume command takes — instead of starting a new one: a conversation the user had with the agent outside Octoboard
-(Claude Code, Codex or Grok Build run in a terminal), or one a session of the same project already holds, which is then
+(an agent run in a terminal), or one a session of the same project already holds, which is then
 reopened, resumed or gone to rather than continued a second time, since one conversation is never shared by two
 sessions. The session dialog's **Resume conversation** tab, beside the default **New conversation** tab at the head of
 the dialog, does this. The tabs are offered for a project session only, from the project list, the terminal's **New

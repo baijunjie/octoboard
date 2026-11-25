@@ -107,6 +107,11 @@ where
             return Handover::Escalated;
         }
     };
+    // What a session's agent left untaken is kept on this daemon's record of the process, which
+    // the next daemon does not inherit: told now, as the grace would not end in time.
+    for live in &sessions {
+        state.tell_untaken_now(live);
+    }
     let shells = state.shell_terminals.processes();
     let watching = state.clone();
     let handing = tokio::task::spawn_blocking(move || {

@@ -23,9 +23,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::hooks::TurnEnd;
 use crate::protocol::SessionStatus;
 use crate::records::line_file;
-use crate::state::AppState;
+use crate::state::{AppState, TurnClose};
 
 /// What one scan of a record found.
 pub struct Scan<T> {
@@ -170,7 +171,7 @@ where
     let session_id = session_id.to_string();
     let line_found = Arc::new(line_found);
     let mut on_found = on_found;
-    tokio::spawn(async move {
+    let task = tokio::spawn(async move {
         loop {
             tokio::time::sleep(watch.interval).await;
 
@@ -251,8 +252,54 @@ where
             return;
         }
     });
+    // The watch runs detached; only a test keeps its task.
+    #[cfg(test)]
+    LAST_TASK.set(Some(task));
+    #[cfg(not(test))]
+    drop(task);
     Some(generation)
 }
+
+#[cfg(test)]
+thread_local! {
+    /// The task of the watch [`spawn`] last started from this thread.
+    static LAST_TASK: std::cell::RefCell<Option<tokio::task::JoinHandle<()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Returns once the watch [`spawn`] last started from the calling thread has ended, for a test
+/// asserting what a watch that stops (retired, superseded, owed nothing, or done with its finding)
+/// did not do: its task having ended is the signal that it never will. For a test on tokio's
+/// paused clock (`#[tokio::test(start_paused = true)]`), where the wait for the watch's next poll
+/// costs no real time; panics if the watch is still running after
+/// [`crate::test_support::PATIENCE`] of that clock.
+#[cfg(test)]
+pub(crate) async fn last_ended() {
+    let task = LAST_TASK
+        .take()
+        .expect("no watch was started from this thread");
+    tokio::time::timeout(crate::test_support::PATIENCE, task)
+        .await
+        .expect("the watch never ended")
+        .expect("the watch's task");
+}
+
+/// Lets a watch polling every `interval` poll [`TEST_POLLS`] times, for a test on tokio's paused
+/// clock that then reads what the polls did; for a watch that goes on watching, which has no end
+/// to wait for ([`last_ended`] is the wait for one that stops). A poll's reads are blocking tasks,
+/// which hold that clock until they end, so each poll it reaches has run to its end when this
+/// returns, however slowly the machine ran it; the last one falls due as this returns and may not
+/// have run yet. A test that waits on the watch this way must not hold the clock with a blocking
+/// wait of its own (`test_support::within`).
+#[cfg(test)]
+pub(crate) async fn polls_ran(interval: Duration) {
+    tokio::time::sleep(interval * TEST_POLLS).await;
+}
+
+/// How many polls [`polls_ran`] lets a watch make: a few, so that a write the test made is read
+/// by at least two.
+#[cfg(test)]
+const TEST_POLLS: u32 = 3;
 
 /// Puts the session back at its prompt, from the `expected` status watch `generation` was armed
 /// for, after a watch saw `found` — a rejection or an interrupt in the agent's record, or a cancel
@@ -302,13 +349,80 @@ pub(crate) fn back_at_prompt(
     }
 }
 
+/// Ends the open turn as a failed one, as if the agent had fired a failure event for it, for a
+/// watch that found the failure in the agent's record: the turn closes with `message` as its
+/// error text, a bound session's owner gets its report, and the session goes back to awaiting
+/// instructions, paused ([`settle_failed_turn`]). Nothing is done once watch `generation` is no
+/// longer the session's current one: the next prompt has retired it, and the turn now open is
+/// not the one that failed.
+pub(crate) fn end_failed_turn(
+    state: &Arc<AppState>,
+    session_id: &str,
+    generation: u64,
+    message: Option<String>,
+) {
+    let ended = state.while_record_watch_current(session_id, generation, || {
+        let turn = TurnEnd {
+            last_assistant_message: message,
+            failed: true,
+            backstop: false,
+        };
+        let close = crate::messaging::reporting::close_turn_and_report(state, session_id, turn);
+        settle_failed_turn(state, session_id, close);
+    });
+    if ended.is_none() {
+        tracing::debug!(
+            session = %session_id,
+            "a failed turn was found in the record, but the session had already moved on"
+        );
+    }
+}
+
+/// Puts the session back at its prompt, paused, after the turn it ended as failed was closed with
+/// `close`. Whether it did: no turn open means a hook ended it first, and the session is already
+/// where it belongs.
+pub(crate) fn settle_failed_turn(
+    state: &Arc<AppState>,
+    session_id: &str,
+    close: TurnClose,
+) -> bool {
+    match close {
+        // `NotThisTurn` cannot come back for an end that is not clock-attributed; it is grouped
+        // here only to keep the match exhaustive.
+        TurnClose::NoTurn | TurnClose::NotThisTurn => {
+            tracing::debug!(
+                session = %session_id,
+                "a failed turn was found in the record, but no turn was open"
+            );
+            false
+        }
+        TurnClose::OwesReport | TurnClose::Reported => {
+            tracing::debug!(
+                session = %session_id,
+                "a turn ended in an error; the agent is back at its prompt"
+            );
+            // Before the status write, so the record it publishes carries the flag.
+            state.set_paused(session_id, true);
+            if let Err(err) = state.apply_hook_status(session_id, SessionStatus::Idle) {
+                tracing::debug!(
+                    session = %session_id, %err,
+                    "applying the status after a failed turn failed"
+                );
+            }
+            state.spawn_flush_outbox(session_id, SessionStatus::Idle);
+            true
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs::File;
     use std::io::Write;
 
     use super::*;
-    use crate::test_support::ScratchFile;
+    use crate::protocol::{AgentId, Console, Session, SessionKind};
+    use crate::test_support::{bare_session, idle_stand_in, ScratchDir, ScratchFile, StandIn};
 
     const LINE: &str = "{\"type\":\"summary\"}\n";
     const HIT: &str = "{\"type\":\"hit\"}\n";
@@ -405,5 +519,132 @@ mod tests {
         std::fs::remove_file(&path).ok();
         let err = scan_lines(&path, 0, is_hit).err().expect("an error");
         assert_eq!(err.kind(), io::ErrorKind::NotFound);
+    }
+    /// A working session of the test-only provider with an open turn and a live process.
+    struct Working {
+        _live: StandIn,
+        _dir: ScratchDir,
+        state: Arc<AppState>,
+    }
+
+    impl Working {
+        fn new(name: &str) -> Self {
+            let (state, dir) = crate::test_support::app_state(&format!("record-watch-{name}"));
+            state
+                .store
+                .insert_console(&Console {
+                    id: "console-1".to_string(),
+                    name: "Console".to_string(),
+                    workdir: dir.to_string_lossy().into_owned(),
+                    default_agent: AgentId::TEST,
+                    project_session_agent: None,
+                    accounts: Default::default(),
+                    launch: Default::default(),
+                    project_session_launch: Default::default(),
+                    icon: None,
+                    console_session_prompt: None,
+                    created_at: 0,
+                    versions: Default::default(),
+                })
+                .expect("console");
+            state
+                .store
+                .insert_session(&Session {
+                    agent: AgentId::TEST,
+                    status: SessionStatus::Working,
+                    has_conversation: true,
+                    ..bare_session("s", SessionKind::Project)
+                })
+                .expect("session");
+            let live = idle_stand_in("s");
+            state.register_live(live.clone());
+            state.turn_started("s", None);
+            Self {
+                _live: live,
+                _dir: dir,
+                state,
+            }
+        }
+
+        fn status(&self) -> SessionStatus {
+            self.state.store.get_session("s").unwrap().unwrap().status
+        }
+
+        fn paused(&self) -> bool {
+            self.state
+                .wire_session(self.state.session_record("s").unwrap())
+                .paused
+        }
+    }
+
+    /// A turn closed as failed, with a report owed or made, puts the session back at its prompt,
+    /// paused, and says it did; no turn open means a hook ended it first and nothing is touched.
+    #[tokio::test]
+    async fn a_failed_turn_that_was_closed_puts_the_session_back_at_its_prompt_paused() {
+        for close in [TurnClose::OwesReport, TurnClose::Reported] {
+            let working = Working::new("settle-closed");
+            assert!(settle_failed_turn(&working.state, "s", close));
+            assert_eq!(working.status(), SessionStatus::Idle, "{close:?}");
+            assert!(working.paused(), "{close:?}");
+        }
+    }
+
+    #[test]
+    fn a_failed_turn_with_no_turn_open_leaves_the_session_where_it_is() {
+        for close in [TurnClose::NoTurn, TurnClose::NotThisTurn] {
+            let working = Working::new("settle-open");
+            assert!(!settle_failed_turn(&working.state, "s", close));
+            assert_eq!(working.status(), SessionStatus::Working, "{close:?}");
+            assert!(!working.paused(), "{close:?}");
+        }
+    }
+
+    /// A failed turn found by the session's current watch ends the open turn failed: closed, back at
+    /// its prompt and paused.
+    #[tokio::test]
+    async fn the_current_watch_ends_the_failed_turn() {
+        let working = Working::new("end-current");
+        let generation = working.state.begin_record_watch("s");
+        end_failed_turn(
+            &working.state,
+            "s",
+            generation,
+            Some("it failed".to_string()),
+        );
+        assert_eq!(working.status(), SessionStatus::Idle);
+        assert!(working.paused());
+        assert_eq!(working.state.close_turn("s", false), TurnClose::NoTurn);
+    }
+
+    /// A watch that has been superseded, or retired by the next prompt, writes nothing: the turn
+    /// now open is not the one that failed.
+    #[tokio::test]
+    async fn a_superseded_or_retired_watch_ends_nothing() {
+        let working = Working::new("end-superseded");
+        let old = working.state.begin_record_watch("s");
+        let _newer = working.state.begin_record_watch("s");
+        end_failed_turn(&working.state, "s", old, Some("it failed".to_string()));
+        assert_eq!(working.status(), SessionStatus::Working);
+        assert!(!working.paused());
+        assert_ne!(working.state.close_turn("s", false), TurnClose::NoTurn);
+
+        let working = Working::new("end-retired");
+        let generation = working.state.begin_record_watch("s");
+        working.state.end_record_watch("s");
+        end_failed_turn(&working.state, "s", generation, None);
+        assert_eq!(working.status(), SessionStatus::Working);
+        assert!(!working.paused());
+        assert_ne!(working.state.close_turn("s", false), TurnClose::NoTurn);
+    }
+
+    /// With the current watch but no turn open, nothing changes: a hook ended the turn first.
+    #[test]
+    fn a_failure_found_with_no_turn_open_changes_nothing() {
+        let working = Working::new("end-no-turn");
+        assert_ne!(working.state.close_turn("s", false), TurnClose::NoTurn);
+        let generation = working.state.begin_record_watch("s");
+        end_failed_turn(&working.state, "s", generation, None);
+        assert_eq!(working.status(), SessionStatus::Working);
+        assert!(!working.paused());
     }
 }

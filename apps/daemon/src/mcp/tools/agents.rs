@@ -1,5 +1,7 @@
 //! The tool with which a session reads the agents it could start a session on, `list_agents`: each
-//! one's tags and the plan quota each of its accounts has left. It returns the readings the daemon
+//! one's tags and the plan quota each of its accounts has left; an agent whose usage Octoboard does
+//! not read lists its accounts with no plan, no windows and `exhausted` false, and its `can_open`
+//! follows only whether the account is logged in. It returns the readings the daemon
 //! already holds (`AccountQuotas`), so what it says is as old as each reading's `fetched_at`; only
 //! a call that asks to `refresh` waits for new ones, and then only for the accounts not read within
 //! the last minute, whichever way the last reading came (`quotas::refresh_on_demand`). A refresh
@@ -309,6 +311,55 @@ mod tests {
         assert_eq!(failed["windows"][0]["remaining_percent"], 0.0);
     }
 
+    /// The accounts of a provider that declares no quota window are listed with no plan and no
+    /// windows, never exhausted, and by their sign-in reading alone: a signed-in one can open, a
+    /// signed-out one cannot.
+    #[tokio::test]
+    async fn the_accounts_of_a_provider_with_no_quota_are_listed_with_no_quota() {
+        let (state, _dir) = shared_console_state("quotas-none-listed");
+        available(&state, &[AgentId::TEST]);
+        for id in ["in", "out"] {
+            insert_account(&state, AgentId::TEST, id);
+        }
+        let reading = |account: &str, unavailable: Option<QuotaUnavailable>| AccountQuota {
+            plan: None,
+            email: unavailable.is_none().then(|| "me@example.com".to_string()),
+            unavailable,
+            ..quota(AgentId::TEST, Some(account), Vec::new())
+        };
+        state
+            .account_quotas
+            .hold_in_dir_for_test(&reading("in", None), "/tmp/in");
+        state.account_quotas.hold_in_dir_for_test(
+            &reading(
+                "out",
+                Some(QuotaUnavailable::new(
+                    crate::protocol::quota_unavailable_code::NOT_SIGNED_IN,
+                    "not signed in",
+                    &[],
+                )),
+            ),
+            "/tmp/out",
+        );
+
+        let result = list_agents(&state, &arguments(json!({ "agent": "test_agent" })))
+            .await
+            .unwrap();
+
+        for id in ["in", "out"] {
+            let listed = entry(&result, "test_agent", id);
+            assert_eq!(listed["plan"], Value::Null, "{id}");
+            assert_eq!(listed["windows"], json!([]), "{id}");
+            assert_eq!(listed["exhausted"], false, "{id}");
+        }
+        assert_eq!(entry(&result, "test_agent", "in")["can_open"], true);
+        assert_eq!(entry(&result, "test_agent", "out")["can_open"], false);
+        assert_eq!(
+            entry(&result, "test_agent", "out")["cannot_open_reason"],
+            NOT_SIGNED_IN
+        );
+    }
+
     /// An account is exhausted by the rule that keeps a switch or a handoff off it: a used-up
     /// window that has not reset. One that has reset is not.
     #[tokio::test]
@@ -489,14 +540,16 @@ mod tests {
         assert_eq!(on["auto_select_account"], true);
     }
 
-    /// `agent` narrows the list to one agent. An agent that is not installed is not listed, nor is
-    /// one not on the added list; one not detected yet lists its accounts, not read yet.
+    /// `agent` narrows the list to one agent. An agent that is not installed (every one but Claude
+    /// Code and Codex here) is not listed, nor is one not on the added list; one not detected yet
+    /// lists its accounts, not read yet.
     #[tokio::test]
     async fn the_agent_argument_filters_and_an_uninstalled_agent_is_not_listed() {
         let (state, _dir) = shared_console_state("agents-filter");
         state.set_agent_availability(
-            [AgentId::GROK, AgentId::TEST]
+            AgentId::ALL
                 .into_iter()
+                .filter(|agent| ![AgentId::CLAUDE, AgentId::CODEX].contains(agent))
                 .map(|agent| AgentAvailability {
                     agent,
                     availability: Availability::Unavailable,
@@ -533,10 +586,10 @@ mod tests {
         assert_eq!(agents_of(&added).len(), 1);
         assert_eq!(agent_entry(&added, "claude")["agent"], "claude");
 
-        let err = list_agents(&state, &arguments(json!({ "agent": "gemini" })))
+        let err = list_agents(&state, &arguments(json!({ "agent": "no-such-agent" })))
             .await
             .expect_err("unknown agent");
-        assert!(err.to_string().contains("gemini"), "{err}");
+        assert!(err.to_string().contains("no-such-agent"), "{err}");
     }
 
     /// The agents are the added ones in the order the user keeps them in, each with its tags (an

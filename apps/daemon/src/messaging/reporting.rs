@@ -220,6 +220,8 @@ fn deliver_and_archive(
             &session,
             &render(owner, None),
             Ownership::Any,
+            // The report is the session's own: told to it too where the owner's turn drops it.
+            Some(session.id.as_str()),
             |kept| render(owner, Some(kept)),
         )
         .map_err(|err| from_reporters_side(err, owner))
@@ -441,6 +443,8 @@ pub fn close_turn_and_report(
     // holds Octoboard's writes from here on.
     if closed {
         crate::messaging::usage_limit::turn_closed(state, session_id, turn.failed);
+        // A message written during the turn that the agent never reported taking was not sent.
+        state.watch_untaken_messages(session_id);
     }
     // Read with the turn just closed: a turn that opens while the report waits makes it stale.
     let opened = state.turn_opened(session_id);
@@ -574,11 +578,12 @@ pub(crate) fn report_failed_turn(state: &Arc<AppState>, session_id: &str, messag
 /// does, and what a session binding itself to an owner does with its summary. `lead` is a sentence
 /// of Octoboard's own to put with the report (see [`Report::lead`]).
 ///
-/// The session is credited with having reported before delivery, even if its owner cannot take the
-/// message yet, so its stop does not also produce a synthesised report. The credit is given after
-/// the session's queued hooks and program status reports, whose turn start would otherwise reset
-/// it, and is taken back when delivery definitely failed, so the owner gets a synthesised report
-/// instead of neither. An uncertain native submission keeps its credit: synthesising another report
+/// The session is credited with having reported before delivery, so that its stop while the report
+/// is on its way does not also produce a synthesised report. The credit is given after the
+/// session's queued hooks and program status reports, whose turn start would otherwise reset it,
+/// and is taken back (`AppState::clear_reported`) when delivery definitely failed, so the owner
+/// gets a synthesised report instead of neither. A report kept for an interrupted owner counts as
+/// delivered and keeps it, and so does an uncertain native submission: synthesising another report
 /// could duplicate one the native queue already accepted.
 pub async fn deliver_own_report(
     state: &Arc<AppState>,

@@ -222,12 +222,14 @@ impl AgentProvider for GrokProvider {
     fn cli_packaging(&self) -> &'static super::CliPackaging {
         &super::CliPackaging {
             native_layouts: &[&[".grok"]],
+            native_markers: &[],
             native_update: &["update"],
             native_latest: Some(super::NativeLatest {
                 args: &["update", "--check", "--json"],
                 version_field: "latestVersion",
             }),
-            npm_package: None,
+            native_manifest: None,
+            npm_packages: &[],
             homebrew_formula: None,
             homebrew_cask: None,
         }
@@ -373,8 +375,12 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: Option<&Path>) -> Result<Launch
         args.push(effort.to_string());
     }
 
+    // After a bare `--`, which ends Grok's options: a task that starts with `-` is otherwise
+    // refused as an unexpected argument, or read as an option (`-p x` runs a headless turn).
+    // Everything after the `--` is the prompt, so it comes last.
     if spec.resume_agent_session_id.is_none() {
         if let Some(task) = spec.task {
+            args.push("--".to_string());
             args.push(task.to_string());
         }
     }
@@ -416,10 +422,13 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: Option<&Path>) -> Result<Launch
         Some(TerminalAppearance::Dark) => "groknight",
         None => "auto",
     };
+    let (home_var, home_value) = grok::LAYOUT
+        .config_dir_export(&grok_home)
+        .expect("Grok Build's variable names its configuration directory itself");
     let mut env = vec![
         (
-            grok::LAYOUT.config_dir_var.to_string(),
-            grok_home.to_string_lossy().into_owned(),
+            home_var.to_string(),
+            home_value.to_string_lossy().into_owned(),
         ),
         ("GROK_THEME".to_string(), theme.to_string()),
     ];

@@ -40,8 +40,8 @@ pub struct Exhausted {
 impl Exhausted {
     /// The window's name for a sentence about `agent`'s account, as that agent's own interface
     /// calls it (`session` or `5h` for the five-hour window, `Weekly · all models` for the weekly
-    /// window beside a model's own, per [`crate::providers::QuotaWindowNaming`]); any other name as
-    /// `window` has it.
+    /// window beside a model's own, and a native name for the credit pool, per
+    /// [`crate::providers::QuotaWindowNaming`]).
     pub fn named_for(&self, agent: AgentId) -> &str {
         let naming = &agent.descriptor().quota_windows;
         match self.kind {
@@ -49,6 +49,9 @@ impl Exhausted {
             QuotaWindowKind::Weekly if self.has_model_weekly && naming.weekly_all_models => {
                 "Weekly · all models"
             }
+            QuotaWindowKind::CreditPeriod => naming
+                .credit_period
+                .map_or(self.window.as_str(), |name| name.text()),
             _ => &self.window,
         }
     }

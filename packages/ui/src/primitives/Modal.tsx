@@ -124,7 +124,8 @@ export function ModalCloseButton({ label, describedBy, disabled, className, ...d
 }
 
 /** HeroUI's alert dialog icon, in the colour of its `status`: the mark at the start of a dialog's header that a failure
- * (`danger`) or a consequential confirmation (`warning`) carries. It stands in either kind of modal. */
+ * (`danger`), a consequential confirmation or a notice to acknowledge (`warning`) carries. It stands in either kind of
+ * modal. */
 export function ModalStatusIcon({ status }: { status: "danger" | "warning" }): React.ReactElement {
   return <AlertDialog.Icon status={status} />;
 }

@@ -1,5 +1,5 @@
-//! What a provider's accounts can be asked beyond launching: their quota, the email they sign in
-//! with, their reset credits, signing in (to the agent, and to its MCP servers), reading their MCP
+//! What a provider's accounts can be asked beyond launching: their quota, whether they are signed
+//! in and the email they sign in with, their reset credits, signing in (to the agent, and to its MCP servers), reading their MCP
 //! servers and connectors, and the configuration they can share with the default account's.
 //! `AgentProvider::accounts` is `None` for a provider that has no accounts in this sense, and every
 //! method here has a default, so a provider implements only what it has.
@@ -13,14 +13,16 @@ use super::mcp_sign_in::McpServerAuth;
 use super::quotas::kick::KickCommand;
 use super::quotas::probe::QuotaProbe;
 use super::quotas::reset_credit::ResetCredits;
-use super::shared_config::SharedItem;
+use super::quotas::sign_in::SignInReading;
+use super::shared_config::{FileRegistry, SharedItem};
 use super::thread_registry::ThreadRegistry;
 use crate::adapter::account_cli::{BackgroundRun, RunHome, RunWait};
 
 /// A provider's accounts, beyond launching a session against one.
 pub(crate) trait AccountOps: Send + Sync {
-    /// The quota probe: the conversation with the CLI and how its reply reads. `None`: the quota is
-    /// never read, and the provider's accounts are left out of the quota poll.
+    /// The quota probe: the conversation with the CLI and how its reply reads. `None`: Octoboard
+    /// reads no plan quota for the provider (its `QuotaWindowNaming::kinds` is empty), and the
+    /// account poll takes [`AccountOps::sign_in_state`] in its place.
     fn quota_probe(&self) -> Option<&'static dyn QuotaProbe> {
         None
     }
@@ -55,13 +57,39 @@ pub(crate) trait AccountOps: Send + Sync {
 
     /// The email the account under `config_dir` (`None` for the default account, whose directory
     /// follows `shell_env` as the CLI's would) signs in with, read from the provider's own sign-in
-    /// record; `None` when there is none or it cannot be read.
+    /// record; `None` when there is none or it cannot be read. For a provider with no quota probe
+    /// it is the fallback for a [`AccountOps::sign_in_state`] that says signed in with no email.
     fn email(
         &self,
         _config_dir: Option<&Path>,
         _shell_env: &HashMap<String, String>,
     ) -> Option<String> {
         None
+    }
+
+    /// Whether the account under `config_dir` (`None` for the default account, whose directory
+    /// follows `shell_env` as the CLI's would) is signed in, read from the agent's own files or by
+    /// a short query of its CLI under the bounds every agent query has
+    /// (`crate::adapter::account_cli`), never with a credential. The poll calls this directly for
+    /// a provider with no [`AccountOps::quota_probe`]. The
+    /// default cannot tell. The email of a signed-in answer is the one its record gives; where it
+    /// gives none the poll asks [`AccountOps::email`].
+    fn sign_in_state(
+        &self,
+        _config_dir: Option<&Path>,
+        _shell_env: &HashMap<String, String>,
+    ) -> SignInReading {
+        SignInReading::CannotTell
+    }
+
+    /// The sign-in reading a provider offers when its quota probe fails. The default leaves
+    /// the sign-in unknown.
+    fn sign_in_after_quota_failure(
+        &self,
+        _config_dir: Option<&Path>,
+        _shell_env: &HashMap<String, String>,
+    ) -> SignInReading {
+        SignInReading::CannotTell
     }
 
     /// Using a rate limit reset credit, for a provider declaring `Capabilities::reset_credits`.
@@ -101,6 +129,22 @@ pub(crate) trait AccountOps: Send + Sync {
         None
     }
 
+    /// Path fields kept in a shared configuration file.
+    fn file_registries(&self) -> &'static [FileRegistry] {
+        &[]
+    }
+
+    /// Whether the provider can link the whole item, given the account and default entries.
+    /// A refusal is shown on the same item as any other sharing failure.
+    fn check_shared_item(
+        &self,
+        _item: &SharedItem,
+        _account: &Path,
+        _default: &Path,
+    ) -> std::io::Result<()> {
+        Ok(())
+    }
+
     /// The shared directory item in which the provider keeps per-project memory, which a launch
     /// of an account that shares it points at the default account's copy
     /// (`LaunchSpec::shared_default_dir`).
@@ -113,5 +157,68 @@ pub(crate) trait AccountOps: Send + Sync {
     /// finds records by name.
     fn thread_registry(&self) -> Option<&'static dyn ThreadRegistry> {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::AccountOps;
+    use crate::accounts::quotas::sign_in::SignInReading;
+    use crate::adapter::provider;
+    use crate::protocol::AgentId;
+    use crate::providers::descriptors;
+
+    /// A provider hands out a quota probe exactly when it declares a kind of quota window.
+    #[test]
+    fn a_provider_has_a_quota_probe_exactly_when_it_declares_a_quota_window() {
+        for (agent, descriptor) in AgentId::ALL.into_iter().zip(descriptors()) {
+            let probe = provider(agent).accounts().and_then(|ops| ops.quota_probe());
+            assert_eq!(
+                probe.is_some(),
+                !descriptor.quota_windows.kinds.is_empty(),
+                "{}",
+                descriptor.id
+            );
+        }
+    }
+
+    /// A provider declares a login flow exactly when it hands one out.
+    #[test]
+    fn a_provider_declares_a_login_flow_exactly_when_it_hands_one_out() {
+        for (agent, descriptor) in AgentId::ALL.into_iter().zip(descriptors()) {
+            let login = provider(agent).accounts().and_then(|ops| ops.login());
+            assert_eq!(
+                login.is_some(),
+                descriptor.capabilities.login_flow,
+                "{}",
+                descriptor.id
+            );
+        }
+    }
+
+    /// A provider that implements no sign-in reading cannot tell.
+    #[test]
+    fn the_default_sign_in_reading_cannot_tell() {
+        struct Bare;
+        impl AccountOps for Bare {
+            fn run_home(
+                &self,
+                _: &std::path::Path,
+                _: crate::adapter::account_cli::BackgroundRun,
+                _: &std::path::Path,
+                _: &std::collections::HashMap<String, String>,
+                _: &crate::adapter::account_cli::RunWait<'_>,
+            ) -> anyhow::Result<Option<crate::adapter::account_cli::RunHome>> {
+                Ok(None)
+            }
+        }
+        let env = HashMap::new();
+        assert_eq!(Bare.sign_in_state(None, &env), SignInReading::CannotTell);
+        assert_eq!(
+            Bare.sign_in_state(Some(std::path::Path::new("/nowhere")), &env),
+            SignInReading::CannotTell
+        );
     }
 }

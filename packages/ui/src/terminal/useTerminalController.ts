@@ -7,6 +7,7 @@ import { useT } from "../i18n/react";
 import { useOctoboardTheme } from "../preferences/theme";
 import { usePlatform } from "../platform/react";
 import type { ViewedFile } from "../viewer/viewedFile";
+import { takesMessageImages } from "../agents/providers";
 import { useDaemon } from "../store";
 import { useHostPaths } from "../components/hooks/useHostPaths";
 import { openPathInDefaultApplication } from "../components/host/openPathInDefaultApplication";
@@ -67,9 +68,9 @@ export function useTerminalController({
    * the host from a click. */
   viewFile?: (file: ViewedFile) => void;
   /** Whether the terminal's process takes files as paths (an agent session's terminal): an image pasted into it is saved
-   * on the daemon and its path pasted, rather than pasted as the clipboard's text, empty or not (a shell), and files
-   * dropped on it are uploaded there where the window cannot give their paths (`useTerminalFileDrop`). Read once,
-   * when the controller is built. */
+   * on the daemon and its path pasted where the session's agent takes images (`takesMessageImages`), rather than pasted
+   * as the clipboard's text, empty or not (a shell), and files dropped on it are uploaded there where the window cannot
+   * give their paths (`useTerminalFileDrop`). Read once, when the controller is built. */
   takesAttachments?: boolean;
   /** Read once, when the controller is built. */
   options?: Omit<TerminalControllerOptions, "host">;
@@ -84,7 +85,14 @@ export function useTerminalController({
   const holdingSize = resizing || dragging;
   const resizingRef = useLatest(holdingSize);
   const pendingFitRef = useRef(false);
-  const latest = useLatest({ t, request, project: project ?? undefined, viewFile });
+  // Whether the session's agent takes a pasted image file's path as an attached image, as its provider declares; a
+  // session the store no longer holds takes none.
+  const takesImages = (sessionId: string): boolean => {
+    const state = store.getState();
+    const session = state.sessions.get(sessionId);
+    return session !== undefined && takesMessageImages(state.providers, session.agent);
+  };
+  const latest = useLatest({ t, request, project: project ?? undefined, viewFile, takesImages });
   // Read once with the controller, like `isLocal` was.
   const hostActions = isLocal !== false;
   // What the controller's theme currently is: the construction below reads it for the initial

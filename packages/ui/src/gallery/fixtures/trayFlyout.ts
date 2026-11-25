@@ -70,9 +70,15 @@ const buildServer: TrayFlyoutTabFixture = {
 /** Production: its connection is held for the browser, with no window to list sessions from. */
 const production: TrayFlyoutTabFixture = { remote: "Production", held: true };
 
-/** Opens Claude Code's quota row in place. The row is named by its account's reading, which begins with the agent's own
- * name. */
-const openClaudeUsage: Step = (ui) => ui.press(describing("Claude Code's usage row", (name) => name.includes("Claude Code")));
+/** Opens the row whose accessible name summarizes the default Claude Code account's live quota. */
+const openClaudeUsage: Step = (ui) => {
+  const prefix = ui.t("rail.quota.selected", {
+    agent: ui.t("provider.claude.label"),
+    account: ui.t("settings.accounts.defaultName"),
+    quota: "{quota}",
+  }).split("{quota}")[0];
+  return ui.press(describing("Claude Code's usage row", (name) => name.startsWith(prefix)));
+};
 
 /** What every scenario of the flyout shares: the Windows host, and this PC's state to say so of the machine (the
  * flyout's page has no daemon behind it, so nothing else reads it). */

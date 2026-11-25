@@ -87,6 +87,13 @@
 //!   sighted and the person's answer are watched for by [`supervise`]
 //!   (`release_when_the_screen_goes`).
 //!
+//! - A provider that marks the end of its startup with neither a hook nor its title — it runs no
+//!   hook until its first prompt, or runs one before its screen is answered
+//!   (`HookInterpreter::past_startup`) — has its messages held until its input box is seen on the
+//!   parsed screen with the screen not up ([`StartSignal::InputBox`],
+//!   `release_when_the_input_box_comes`), through a sighted screen and the agent starting over
+//!   after it.
+//!
 //! So none of Octoboard's own writes can be what ends a wait, and the input counted since a
 //! sighting is the person's alone.
 //!
@@ -185,6 +192,49 @@ const ADOPTED_RECHECK: Duration = Duration::from_secs(2);
 /// ([`NO_SCREEN`]). A provider of the latter kind without hooks has its launch-time messages held
 /// for all of it.
 pub(crate) const HOOK_FALLBACK: Duration = Duration::from_secs(30);
+
+/// What the matcher reads off one capture of a provider's trust screen ([`reading_of`]).
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Reading {
+    /// The capture holds the screen as it is first drawn, which is what sights it.
+    pub(crate) shown: bool,
+    /// Read as a parsed screen, the capture shows the screen up, wherever its cursor is.
+    pub(crate) up: bool,
+    /// Where the cursor is: `Some(true)` on the option Octoboard presses, `Some(false)` on
+    /// another option, `None` where no cursor is read.
+    pub(crate) cursor_on_accept: Option<bool>,
+    /// Read as what was printed after Octoboard's own key, the capture shows the screen gone.
+    pub(crate) gone: bool,
+    /// Read as what was printed since the sighting and typed at by the person, the capture shows
+    /// the screen replaced.
+    pub(crate) replaced: bool,
+}
+
+/// Reads `capture`, raw terminal output or a parsed screen's text, against `screen` with the
+/// matcher the watch and the press use, for a provider's own tests to replay what was measured of
+/// its screen.
+#[cfg(test)]
+pub(crate) fn reading_of(screen: &Screen, capture: &[u8]) -> Reading {
+    Reading {
+        shown: screen.is_shown_in(capture),
+        up: screen.is_up_in(capture),
+        cursor_on_accept: screen
+            .cursor_on(capture)
+            .map(|cursor| cursor == Cursor::Accept),
+        gone: screen.gone_in(capture),
+        replaced: screen.replaced_in(capture),
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn rendered_cursor_on_accept(agent: AgentId, rendered: &str) -> Option<bool> {
+    let reader = crate::adapter::provider(agent).screen();
+    reader
+        .trust_screen()
+        .cursor_in_region(rendered, reader.trust_cursor_bounds()?)
+        .map(|cursor| cursor == Cursor::Accept)
+}
 
 /// Whether Octoboard may answer this session's screen without asking: a console session always
 /// may, because its working directory is the console's own, which holds nothing but the
@@ -396,8 +446,10 @@ pub fn supervise(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     let Some(mut sightings) = live.trust.take_sightings() else {
         return;
     };
-    if !live.trust.screen.hook_at_start() {
-        release_when_the_screen_goes(state, live);
+    match live.trust.screen.start_signal {
+        StartSignal::Hook => {}
+        StartSignal::TerminalTitle => release_when_the_screen_goes(state, live),
+        StartSignal::InputBox => release_when_the_input_box_comes(state, live),
     }
     if live.trust.screen.waits_for_paste_mode {
         release_when_paste_mode_comes(state, live);
@@ -407,8 +459,11 @@ pub fn supervise(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     }
     if let Some(bound) = live.trust.screen.hook_fallback {
         release_when_no_hook_comes(state, live, bound);
-        // A screen that is never looked for is never sighted, so there is nothing to watch go.
-        if live.trust.screen.can_be_sighted() {
+        // A screen that is never looked for is never sighted, so there is nothing to watch go; and
+        // one whose going is not the end of the hold is not watched for it.
+        if live.trust.screen.can_be_sighted()
+            && live.trust.screen.start_signal != StartSignal::InputBox
+        {
             release_when_the_sighted_screen_goes(state, live);
         }
     }
@@ -493,6 +548,69 @@ fn release_when_the_screen_goes(state: &Arc<AppState>, live: &Arc<LiveSession>) 
     });
 }
 
+/// Releases the messages held for a session whose agent shows its startup behind it by its input
+/// box alone ([`StartSignal::InputBox`]): once the parsed screen shows the box with the trust screen
+/// not up at two looks in a row, a poll apart, so that a frame drawn in passing (between a screen
+/// that was answered and the agent starting over, say) is not taken for it. A look renders the
+/// screen, so a poll that finds nothing printed since the last look reuses what that look saw, and
+/// none is made while the fallback has let the messages through with no screen sighted. A hook ends
+/// the watch as it ends the hold.
+fn release_when_the_input_box_comes(state: &Arc<AppState>, live: &Arc<LiveSession>) {
+    let state = state.clone();
+    let live = Arc::downgrade(live);
+    tokio::spawn(async move {
+        let look = |live: &LiveSession| {
+            let screen = live.screen_text();
+            let shows_input_box = live.input_box_rows(&screen).is_some();
+            (screen, shows_input_box)
+        };
+        // The output total at the latest look, and whether it showed the agent at its input box.
+        let mut looked: Option<(u64, bool)> = None;
+        loop {
+            tokio::time::sleep(RELEASE_POLL).await;
+            let Some(live) = live.upgrade() else { break };
+            let trust = &live.trust;
+            if trust.hook_seen.load(Ordering::Acquire) {
+                break;
+            }
+            // Let through by the fallback with no screen sighted: nothing is held for the box, and
+            // a box the reader does not recognise would be looked for as long as the session
+            // prints. A screen sighted after that holds the messages again, and the looks go on.
+            if trust.released_without_hook.load(Ordering::Acquire)
+                && !trust.sighted.load(Ordering::Acquire)
+            {
+                looked = None;
+                continue;
+            }
+            let output = live.output_total();
+            let shown = match looked {
+                Some((total, shown)) if total == output => shown,
+                _ => {
+                    let (screen, shows_input_box) = look(&live);
+                    trust.shows_start(&screen, shows_input_box)
+                }
+            };
+            let again = shown && looked.is_some_and(|(_, before)| before);
+            looked = Some((output, shown));
+            if !again {
+                continue;
+            }
+            let (screen, shows_input_box) = look(&live);
+            match trust.start_at_input_box(&screen, shows_input_box) {
+                Some(started) => {
+                    if started.answered_in_terminal {
+                        publish_status(&state, &live);
+                    }
+                    release_held(&state, &live.id);
+                    break;
+                }
+                // It changed just then, or a hook came, which the next round finds.
+                None => looked = None,
+            }
+        }
+    });
+}
+
 /// Releases the messages held for a session whose agent turns bracketed paste on only once it
 /// reads its input ([`Screen::waits_for_paste_mode`]), or, where the parsed screen is read, draws
 /// its input box after its `SessionStart` hook, when that comes after its first hook: the
@@ -564,8 +682,9 @@ pub(crate) fn stand_in_for_start(live: &LiveSession) -> bool {
 }
 
 /// Lets through the messages held for a session whose agent should have run a hook by now and has
-/// not (Grok Build; [`Screen::hook_fallback`]): once `bound` has passed since the launch, with no
-/// hook seen and no trust screen sighted. A sighted screen stays held until it is answered
+/// not (Grok Build; [`Screen::hook_fallback`]), or should have shown its input box
+/// ([`StartSignal::InputBox`]): once `bound` has passed since the launch, with no hook seen and no
+/// trust screen sighted. A sighted screen stays held until it is answered
 /// ([`release_when_the_sighted_screen_goes`]). Nothing here looks for a dialog of the agent's: the
 /// drain refuses a session that shows one, and the dialog watch writes out what waited when it
 /// goes ([`crate::session::dialogs`]).
@@ -595,12 +714,12 @@ fn release_when_no_hook_comes(state: &Arc<AppState>, live: &Arc<LiveSession>, bo
 /// ([`Screen::gone_in`]) twice, a moment apart; a hook ends the watch as it ends the hold.
 fn release_when_the_sighted_screen_goes(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     let state = state.clone();
-    let live = Arc::downgrade(live);
+    let weak = Arc::downgrade(live);
     tokio::spawn(async move {
         let gone = |live: &LiveSession| live.trust.screen.gone_in(live.screen_text().as_bytes());
         loop {
             tokio::time::sleep(RELEASE_POLL).await;
-            let Some(live) = live.upgrade() else { break };
+            let Some(live) = weak.upgrade() else { break };
             let trust = &live.trust;
             if trust.hook_seen.load(Ordering::Acquire) {
                 break;
@@ -612,13 +731,14 @@ fn release_when_the_sighted_screen_goes(state: &Arc<AppState>, live: &Arc<LiveSe
             if trust.hook_seen.load(Ordering::Acquire) {
                 break;
             }
-            if gone(&live) {
-                trust.dismissed.store(true, Ordering::Release);
-                trust.needs_user.store(false, Ordering::Release);
-                publish_status(&state, &live);
-                release_held(&state, &live.id);
-                break;
+            if !gone(&live) {
+                continue;
             }
+            trust.dismissed.store(true, Ordering::Release);
+            trust.needs_user.store(false, Ordering::Release);
+            publish_status(&state, &live);
+            release_held(&state, &live.id);
+            break;
         }
     });
 }
@@ -668,10 +788,10 @@ pub fn on_hook(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     });
 }
 
-/// The agent's `SessionStart` hook reached the daemon, ahead of [`on_hook`] for the same hook:
-/// where the parsed screen is read, the input box it shows from now on says that the agent reads
-/// its input, as bracketed paste does ([`TrustState::note_session_start`]), and one already up
-/// says so at once.
+/// The agent announced its session start (`HookInterpreter::announces_session_start`), ahead of
+/// [`on_hook`] for the same hook: where the parsed screen is read, the input box it shows from now
+/// on says that the agent reads its input, as bracketed paste does
+/// ([`TrustState::note_session_start`]), and one already up says so at once.
 pub fn on_session_start(live: &LiveSession) {
     live.trust.note_session_start();
     live.look_for_input_box();

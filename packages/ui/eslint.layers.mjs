@@ -67,8 +67,8 @@ const onlyRoot = (depth, message, roots = ROOT_SHARED) =>
  * barrel of primitives/. */
 const layer = (dir, allowed, message, roots = ROOT_SHARED) => DEPTHS.map((depth) => ({
   files: [below(dir, depth)],
-  ignores: UI_TESTS,
-  rules: { "no-restricted-imports": uiImports([onlyInto(depth, allowed, message), onlyRoot(depth, `${message} ${PRIMITIVES_NOTE}`, [PRIMITIVES, ...roots])]) },
+  ignores: [...UI_TESTS, ...PROVIDER_FIXTURES],
+  rules: { "no-restricted-imports": uiImports([onlyInto(depth, allowed, message), onlyRoot(depth, `${message} ${PRIMITIVES_NOTE}`, [PRIMITIVES, ...roots]), providerFixtureImport(depth), ...(dir === "providers" && depth === 1 ? [PROVIDER_SIBLING_FIXTURE_IMPORT] : [])]) },
 }));
 // The pure layers, which import no component, no store and no feature directory.
 const PURE_LAYERS = ["values", "providers", "i18n", "platform", "preferences", "input", "format", "agents", "git", "sessions", "errors", "browse"];
@@ -81,7 +81,14 @@ const APP_ROOT_IMPORT = { regex: "^\\./app(?:/|$)", message: APP_MESSAGE, caseSe
 const PRODUCTION_MESSAGE = "Production code does not import fixtures/ or gallery/: they are the runtime of the gallery and the website preview.";
 const GALLERY_MESSAGE = "gallery/ is the dev-only gallery: the website preview and fixtures/ depend on nothing in it.";
 const PROTOCOL_MESSAGE = "protocol.ts imports only protocol.generated, the wire types it is the one door to.";
-const ROOT_PRODUCTION_IMPORT = { regex: "^\\./(?:fixtures|gallery)(?:/|$)", message: PRODUCTION_MESSAGE };
+const ROOT_PRODUCTION_IMPORT = { regex: "^\\./(?:(?:fixtures|gallery)(?:/|$)|providers/(?:servedFixtures|[^/]*\\.fixture)$)", message: PRODUCTION_MESSAGE };
+// The served-info fixtures beside the providers' modules (`providers/<id>.fixture.ts`, `providers/servedFixtures.ts`) are
+// fixture data the fixture daemon and the tests read: they sit in providers/ for the modules' sake, but are fixtures/'s
+// kind, so production code does not import them.
+const PROVIDER_FIXTURES = [`${UI_SRC}/providers/*.fixture.ts`, `${UI_SRC}/providers/servedFixtures.ts`];
+const PROVIDER_FIXTURE_IMPORT = "providers/(?:servedFixtures|[^/]*\\.fixture)$";
+const providerFixtureImport = (depth) => ({ regex: `^(?:\\.\\./){${depth}}${PROVIDER_FIXTURE_IMPORT}`, message: PRODUCTION_MESSAGE });
+const PROVIDER_SIBLING_FIXTURE_IMPORT = { regex: "^\\./(?:servedFixtures|[^/]*\\.fixture)$", message: PRODUCTION_MESSAGE };
 const notIntoApp = (depth) => ({ ...notInto(depth, ["app"], APP_MESSAGE), caseSensitive: true });
 
 // The third-party UI libraries that reach the application only through the wrapper layer, `src/primitives/`
@@ -117,18 +124,18 @@ export default [
   // tests) imports neither fixtures/ nor gallery/; the fixtures are the runtime the gallery and the preview share.
   ...DEPTHS.map((depth) => ({
     files: [below("*", depth)],
-    ignores: [...UI_TESTS, `${UI_SRC}/{shell,app,gallery,fixtures,website-preview,test}/**`],
-    rules: { "no-restricted-imports": uiImports([notInto(depth, ["shell"], SHELL_MESSAGE), notIntoApp(depth), notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE), onlyRoot(depth, ROOT_MESSAGE), primitivesFile(depth)]) },
+    ignores: [...UI_TESTS, ...PROVIDER_FIXTURES, `${UI_SRC}/{shell,app,gallery,fixtures,website-preview,test}/**`],
+    rules: { "no-restricted-imports": uiImports([notInto(depth, ["shell"], SHELL_MESSAGE), notIntoApp(depth), notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE), providerFixtureImport(depth), onlyRoot(depth, ROOT_MESSAGE), primitivesFile(depth)]) },
   })),
   ...DEPTHS.map((depth) => ({
     files: [below("shell", depth)],
     ignores: UI_TESTS,
-    rules: { "no-restricted-imports": uiImports([notIntoApp(depth), notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE), primitivesFile(depth)]) },
+    rules: { "no-restricted-imports": uiImports([notIntoApp(depth), notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE), providerFixtureImport(depth), primitivesFile(depth)]) },
   })),
   ...DEPTHS.map((depth) => ({
     files: [below("app", depth)],
     ignores: UI_TESTS,
-    rules: { "no-restricted-imports": uiImports([notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE), primitivesFile(depth)]) },
+    rules: { "no-restricted-imports": uiImports([notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE), providerFixtureImport(depth), primitivesFile(depth)]) },
   })),
   ...DEPTHS.map((depth) => ({
     files: [below("{gallery,test}", depth)],
@@ -146,6 +153,12 @@ export default [
     ignores: UI_TESTS,
     rules: { "no-restricted-imports": uiImports([notInto(depth, ["shell"], SHELL_MESSAGE), notIntoApp(depth), notInto(depth, ["gallery"], GALLERY_MESSAGE), primitivesFile(depth)]) },
   })),
+  // The providers' served-info fixtures read the wire types and the registry beside them.
+  {
+    files: PROVIDER_FIXTURES,
+    ignores: UI_TESTS,
+    rules: { "no-restricted-imports": uiImports([primitivesFile(1)]) },
+  },
   {
     files: [`${UI_SRC}/*.{ts,tsx}`],
     ignores: [...UI_TESTS, `${UI_SRC}/App.tsx`],
@@ -207,7 +220,7 @@ export default [
   },
   {
     files: [`${UI_SRC}/**/*.{ts,tsx}`],
-    ignores: [...UI_TESTS, `${UI_SRC}/{primitives,platform,gallery,fixtures,website-preview,test}/**`],
+    ignores: [...UI_TESTS, ...PROVIDER_FIXTURES, `${UI_SRC}/{primitives,platform,gallery,fixtures,website-preview,test}/**`],
     rules: { "@typescript-eslint/no-restricted-imports": importBans([{ group: WRAPPED_LIBRARIES, message: WRAPPED_MESSAGE }, TAURI_PATTERN]) },
   },
   {

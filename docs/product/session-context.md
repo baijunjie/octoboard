@@ -15,6 +15,16 @@ agent's records say nothing yet, the context size is unknown, which is not the s
   forked thread is unknown until its first turn.
 - **Grok Build**: a forked session starts with its parent's figure.
 
+For an agent whose record is a tree (see "What the history lists" in `docs/product/session-history.md`), the figure is
+that of the conversation's current branch: going back to an earlier point and carrying on from there shows the figure
+the conversation had at that point, never one from the turns abandoned.
+
+For an agent that keeps its conversations as rows of a database of its own (see "What the history lists" in
+`docs/product/session-history.md`), the figure is read through the agent's own means while the session's process is
+running: once when Octoboard first sees the session running, again whenever the agent reports an event of the session,
+and a last time after the process stops. It is not read once a second, and the conversation of a session with no
+process is not read again when Octoboard starts: the figure it had while it ran is the one kept.
+
 Where each agent's figure comes from:
 
 | Agent | Context size | Context window |
@@ -22,6 +32,11 @@ Where each agent's figure comes from:
 | Claude Code | The input of the main conversation's latest request, cache reads and cache writes included and output left out, as Claude Code's own status line counts it. | The model's context window as Claude Code gives it to a status line, reported by the one Octoboard injects (see "Claude Code's context window" below). |
 | Codex | The latest request's token count, as Codex's own `/status` shows it. | The model's context window, as in `/status`. |
 | Grok Build | The context figure Grok Build shows in its footer. | The window Grok Build records beside it. |
+| Antigravity CLI | The latest model request's input-token count. | Unavailable. |
+| GitHub Copilot CLI | The latest main-conversation input-token count. | The recorded prompt-token limit. |
+| OpenCode | The latest completed assistant request's token count. | Unavailable. |
+| Qwen Code | The latest input-token count on the active chat branch. | The running launch's hook reports the window. |
+| Pi | The running extension reports Pi's context figure after a rewind, even before another prompt. The record supplies assistant usage on the persisted branch. | Pi reports the running model's window. |
 
 ## Claude Code's context window
 

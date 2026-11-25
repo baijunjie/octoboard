@@ -39,7 +39,28 @@ pub(crate) fn of_session(
     session: &Session,
 ) -> UserPrompt {
     let store = provider(session.agent).records();
-    let mut unknown = false;
+    if let Some(rows) = super::rows::read(locator, session) {
+        return match rows {
+            Ok(rows) => {
+                let mut unknown = false;
+                for row in rows {
+                    match store.is_user_prompt(&row.to_string()) {
+                        Some(true) => return UserPrompt::Held,
+                        Some(false) => {}
+                        None => unknown = true,
+                    }
+                }
+                if unknown {
+                    UserPrompt::Unknown
+                } else {
+                    UserPrompt::NotHeld
+                }
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => UserPrompt::NotHeld,
+            Err(_) => UserPrompt::Unknown,
+        };
+    }
+    let mut unknown = !locator.alternate_root_complete(session);
     for path in record_paths(hints, locator, accounts, session) {
         let file = store.conversation_file(path);
         match std::fs::metadata(&file) {
@@ -99,8 +120,18 @@ pub(crate) fn conversation_file_of(
     agent_id: &str,
     record: &Path,
 ) -> Option<PathBuf> {
+    let dir = records_dir(agent, root)?;
+    conversation_file_under(agent, &dir, agent_id, record)
+}
+
+pub(super) fn conversation_file_under(
+    agent: AgentId,
+    dir: &Path,
+    agent_id: &str,
+    record: &Path,
+) -> Option<PathBuf> {
     let store = provider(agent).records();
-    own_paths(agent, agent_id, record, &records_dir(agent, root))
+    own_paths(agent, agent_id, record, dir)
         .into_iter()
         .map(|path| store.conversation_file(path))
         .find(|file| std::fs::metadata(file).is_ok_and(|meta| meta.is_file()))
@@ -143,7 +174,7 @@ mod tests {
     use super::*;
     use crate::records::fixtures::*;
 
-    fn locator() -> Locator {
+    fn locator() -> Locator<'static> {
         Locator::with_shell(HashMap::new())
     }
 
@@ -281,7 +312,9 @@ mod tests {
     #[test]
     fn a_provider_that_cannot_tell_a_prompt_leaves_the_record_unknown() {
         let dir = crate::test_support::ScratchDir::new("user-prompt-cannot-tell");
-        let record = records_dir(AgentId::TEST, &dir).join(format!("{CLAUDE_ID}.jsonl"));
+        let record = records_dir(AgentId::TEST, &dir)
+            .unwrap()
+            .join(format!("{CLAUDE_ID}.jsonl"));
         std::fs::create_dir_all(record.parent().unwrap()).unwrap();
         std::fs::write(&record, "{\"user\":\"Fix the test\"}\n").unwrap();
         assert_eq!(asked(AgentId::TEST, CLAUDE_ID, &dir), UserPrompt::Unknown);

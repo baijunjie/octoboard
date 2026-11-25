@@ -1,0 +1,89 @@
+[>4;2m[?u[?2026$p[?1049h[?2004h[?1004h[?1003h[?1006h[?25l[?12$p[?1007$p[c[H[2J[>q[14t]10;?\]11;?\]4;0;?\]4;1;?\]4;2;?\]4;3;?\]4;4;?\]4;5;?\]4;6;?\]4;7;?\]4;8;?\]4;9;?\]4;10;?\]4;11;?\]4;12;?\]4;13;?\]4;14;?\]4;15;?\[?25l[22;0t]0;GitHub Copilot]7501;state=idle:app=copilot\[H[2J [1;97;44m[Current][m  Sessions  [2m Issues [m [2m Pull requests [m  Gists[?996n
+
+[2;90m╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│[116C│
+│[m [34m ╭─╮╭─╮[5;39H[2;90m│[m  [1;34mGetting started[61C[0;2;90m│
+│[m [34m ╰─╯╰─╯[m  Copilot v1.0.114 uses AI.  [2;90m│[m  Use the tabs above to explore your sessions and pull requests[15C[2;90m│
+│[m [35m █ [96m▘▝[35m █[m  Check for mistakes.[7;39H[2;90m│[m  /model — Switch models across providers, or use Auto[24C[2;90m│
+│[m [35m  ▔▔▔▔ [8;39H[2;90m│[78C│
+│[116C│
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[m[9B[90m╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│[m [1mConfirm folder trust[97C[0;90m│
+│[m [90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m [90m│
+│[m [90m╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮[m [90m│
+│[m [90m│[m /Volumes/2TB/AgentData/tmp/claude/claude-501/-Volumes-2TB-Document-Code-App-octoboard/113ecdb1-b352-43ae-b272-bb [90m│[m [90m│
+│[m [90m│[m 578b3f412b/scratchpad/p/work[85C[90m│[m [90m│
+│[m [90m╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[m [90m│
+│[118C│
+│[m Copilot can read files in this folder and, with your permission, edit them or run code and shell commands. It will   [90m│
+│[m remember your permissions for the rest of this session.[62C[90m│
+│[118C│
+│[m Git commands run in this folder may use configuration from the enclosing repository and execute programs configured  [90m│
+│[m by that repository.[98C[90m│
+│[118C│
+│[m Do you trust the files in this folder?[79C[90m│
+│[118C│
+│[m [97;44m❯ 1. Yes[39m                                                                                                            [m [90m│
+│[m   2. Yes, and remember this folder for future sessions[63C[90m│
+│[m   3. No (Esc)[104C[90m│
+│[118C│
+│[m [1m↑/↓[m to navigate · [1menter[m to select · [1mesc[m to cancel[68C[90m│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[?7l╯[?7h[m[12;2H[33m![m Model "standin" is not in the built-in catalog. Using defaults for: prompt tokens
+   (COPILOT_PROVIDER_MAX_PROMPT_TOKENS), output tokens (COPILOT_PROVIDER_MAX_OUTPUT_TOKENS). Run [37m copilot help 
+[3Cproviders [m for configuration details.[7;6H[96m╴╶[35m [m[96m  [35m [m[96m╴╶[35m [m[96m▘▝[35m [m[96m╴╶[35m [m[96m  [35m [m[96m╴╶[35m [m[96m▘▝[35m [m[96m╴╶[35m [m[96m  [35m [m[96m╴╶[35m [m[96m▘▝[35m [m[96m╴╶[35m [m[96m  [35m [m[96m╴╶[35m [m[96m▘▝[35m [m[12B[J[17B /Volumes/2TB/AgentData/tmp/claude/claude-501/.../work[36;73HRun on: This computer [1mctrl+e[m change environment
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[m❯
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[C[0;1m←[m open sidebar · Interactive · Manual Approval · [1m/[m commands · [1m?[m help · [1mtab[m next tab[28Cstandin[38;3H[?25h[?25l[22A[34m●[m MCP Servers reloaded: 0 servers connected[38;3H[?25h[?25l[5;6H[34m─╮╭╮
+[5C─╯╰╯
+[4C[35m█ [96m▘▝[35m▐
+[4C ▔[m[38;3H[?25h[?25l[5;6H[34m╮╭─╮
+[5C╯╰─╯
+[4C[35m [96m▘▝[35m █
+[4C▔▔[m[38;3H[?25h[?25luse echo
+
+ Interactive · Manual Approval · [1m@[m files/sessions · [1m#[m issues                        [38;11H[?25h[?25l[36;95H[K
+
+❯ [K
+
+ [94m●[m [94mW[34morking[m [1mctrl+c[m interrupt                                 [38;3H[?25h[?25l[20A❯ use echo[102C23:02[38;3H[?25h[?25l
+
+ [94m◉[m [34mWo[94mrk[m[38;3H[?25h]7501;state=working:app=copilot\[?25l[7;6H[96m╴╶[35m [m[38;3H[?25h[?25l[7;6H[96m  [35m [m[38;3H[?25h[?25l[7;6H[96m╴╶[35m [40;2H[34m○[m [2A[?25h[?25l[36;47H-Volumes-2TB-Document-Code-App-octoboard/.../work
+
+❯ [?25h[?25l[7;6H[96m▘▝[35m [m[38;3H[?25h]0;use echo - GitHub Copilot[?25l
+
+ [34m◎[m [34mWorki[94mng[m[38;3H[?25h[?25l
+
+ [34m◉[6Cng[m[38;3H[?25h[?25l
+
+ [34m●[m [2A[?25h[?25l[40;12H· 2 B [1mctrl+c[m interrupt[38;3H[?25h]7501;state=done:app=copilot\[?25l
+
+ [1m←[m open sidebar · Interactive · Manual Approval · [1m/[m commands · [1m?[m help · [1mtab[m next tab[38;3H[?25h[?25l[18A[34m●[m ok[38;3H[?25h[?25l[21;38r[38;1H
+[r[37;3HCMD:tool ask_user {"message": "Pick one?", "requestedSchema": {"properties": {"choice": {"type": "string", "enum":
+  ["alpha", "beta"]}, "note": {"type": "string", "description": "a note"}}, "required": ["choice"]}}
+
+ Interactive · Manual Approval · [1m@[m files/sessions · [1m#[m issues                        [38;101H[?25h[?25l[21;37r[21;1HM[r[38;1H❯[K
+
+ [94m●[m [94mW[34morking[m [1mctrl+c[m interrupt                                 [38;3H[?25h[?25l[16A❯ CMD:tool ask_user {"message": "Pick one?", "requestedSchema": {"properties": {"choice": {"type": "string",    23:02
+   "enum": ["alpha", "beta"]}, "note": {"type": "string", "description": "a note"}}, "required": ["choice"]}}[38;3H[?25h[?25l
+
+ [94m◉[m [34mWo[94mrk[m[38;3H[?25h]7501;state=working:app=copilot\[?25l[4AQueued (1)
+ └ CMD:tool ask_user {"message": "Pick one?", "requestedSchema": {"properties": {"choice": {"type": "string", "enum": […
+
+
+❯ [?25h[?25l[4A[K
+[K[5B [34m◎[m [94mW[34morki[94mng[m[38;3H[?25h[?25l
+
+ [34m○[m [34mWo[94mrk[34ming[m[38;3H[?25h]7501;state=blocked:app=copilot:kind=question\[?25l[10A────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ [1mCopilot needs information.
+[C[mPick one?
+
+ [1;97;44m[choice][m  note
+
+ [1mchoice:
+[C[36m❯ alpha
+[C[m  beta[K
+   Other (type your answer)[K
+[K
+ [1m↑/↓[m select · [1menter[m accept · [1mtab[m next · [1mctrl+d[m decline · [1mesc[m cancel[K
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[?7l─[?7h[25;2H○ [1mAsking user [mPick one?[7;6H[96m╴╶[35m [m[96m  [35m [m[96m╴╶[35m [m[96m▘▝[35m [m[25;117H5s[7;6H[96m╴╶[35m [m[96m  [35m [m

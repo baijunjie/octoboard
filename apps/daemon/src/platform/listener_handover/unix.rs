@@ -151,8 +151,7 @@ mod tests {
         // The duplicate shares the runtime's non-blocking mode; waiting here is what shows the
         // connection was queued rather than refused, however late the handshake completes.
         adopted.set_nonblocking(false).unwrap();
-        let (accepted, _) = adopted.accept().expect("the queued connection");
-        assert_eq!(accepted.peer_addr().unwrap(), client.local_addr().unwrap());
+        crate::test_support::accept_from(&adopted, client.local_addr().unwrap());
         drop((adopted, kept));
         assert!(freed(port), "the port is free again");
     }
@@ -178,11 +177,10 @@ mod tests {
         // SAFETY: only reads the flags of the descriptor the listener holds.
         let flags = unsafe { libc::fcntl(adopted.as_raw_fd(), libc::F_GETFD) };
         assert_ne!(flags & libc::FD_CLOEXEC, 0);
-        assert_eq!(
-            adopted.accept().err().map(|err| err.kind()),
-            Some(io::ErrorKind::WouldBlock),
-            "non-blocking"
-        );
+        // Read from the descriptor, not by accepting: a connection can be waiting on the port.
+        // SAFETY: only reads the status flags of the descriptor the listener holds.
+        let status = unsafe { libc::fcntl(adopted.as_raw_fd(), libc::F_GETFL) };
+        assert_ne!(status & libc::O_NONBLOCK, 0, "non-blocking");
 
         // A refused descriptor is left open, as it is not taken over: each is checked open, then
         // closed by the test.
@@ -245,8 +243,7 @@ mod tests {
         let client = tokio::net::TcpStream::connect(("127.0.0.1", port))
             .await
             .expect("connected");
-        let (accepted, _) = adopted.accept().await.expect("accepted");
-        assert_eq!(accepted.peer_addr().unwrap(), client.local_addr().unwrap());
+        crate::test_support::accepted_from(&adopted, client.local_addr().unwrap()).await;
     }
 
     /// A listener of its own on the kept socket accepts on the kept port, and is close-on-exec
@@ -264,8 +261,7 @@ mod tests {
         let client = std::net::TcpStream::connect(("127.0.0.1", port)).expect("queued");
         // Shares the runtime listener's non-blocking mode; wait for the handshake to complete.
         own.set_nonblocking(false).unwrap();
-        let (accepted, _) = own.accept().expect("accepted on the listener of its own");
-        assert_eq!(accepted.peer_addr().unwrap(), client.local_addr().unwrap());
+        crate::test_support::accept_from(&own, client.local_addr().unwrap());
     }
 
     /// Dropping the listener of its own does not let the port go: the kept duplicate holds it,
@@ -305,7 +301,8 @@ mod tests {
         let mut client = tokio::net::TcpStream::connect(("127.0.0.1", port))
             .await
             .expect("connected");
-        let (connection, _) = own.accept().await.expect("accepted");
+        let connection =
+            crate::test_support::accepted_from(&own, client.local_addr().unwrap()).await;
         connection.set_zero_linger().expect("zero linger");
         drop(connection);
         let mut buffer = [0u8; 16];

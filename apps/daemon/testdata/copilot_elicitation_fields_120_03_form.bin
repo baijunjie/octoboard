@@ -1,0 +1,23 @@
+[?25lCMD:elicit
+
+ Interactive · Manual Approval · [1m@[m files/sessions · [1m#[m issues                        [38;13H[?25h[?25l[36;95H[K
+
+❯ [K
+
+ [94m●[m [94mW[34morking[m [1mctrl+c[m interrupt                                 [38;3H[?25h[?25l[20A❯ CMD:elicit[100C18:11[38;3H[?25h]7501;state=working:app=copilot\]0;CMD:elicit - GitHub Copilot[?25l
+
+ [94m◉[m [34mWo[94mrk[m[38;3H[?25h[?25l[36;73H[K[4B [34m◎[m [94mW[34morki[94mng[m[38;3H[?25h[?25l
+
+ [34m○[m [34mWo[94mrk[34ming[m[38;3H[?25h[?25l[40;12H· 13 B [1mctrl+c[m interrupt[38;3H[?25h]7501;state=blocked:app=copilot:kind=question\[?25l[18A○ [1melicit [m(MCP: stub)[8B────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ [1mstub needs information.
+[C[mWhich fruit should the stub use?
+
+ [1;97;44m[fruit][m  note
+
+ [1mfruit:
+[C[mFruit
+ [1;36m❯ apple[m[K
+   pear[K
+[K
+ [1m↑/↓[m select · [1menter[m accept · [1mtab[m next · [1mctrl+d[m decline · [1mesc[m cancel[K
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[?7l─[?7h[20A5s[7;6H[96m╴╶[35m [m[96m  [35m [m[96m╴╶[35m [m[96m▘▝[35m [m[20;117H6s7s8s9s10s1s

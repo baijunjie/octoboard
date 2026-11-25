@@ -16,6 +16,7 @@ use crate::test_support::{
 };
 
 mod on_the_parsed_screen;
+mod start_signals;
 
 // What Claude Code 2.1.289 actually printed, captured from a real PTY in a directory it had
 // never seen; only the directory's name and the account's plan were replaced. The screen as
@@ -172,10 +173,10 @@ fn a_screen_is_gone_only_when_something_else_is_drawn_in_its_place() {
 #[test]
 fn codexs_cursor_is_read_off_its_latest_redraw_and_grok_has_none() {
     assert_eq!(CODEX.cursor_on(CODEX_SCREEN), Some(Cursor::Accept));
-    assert_eq!(CODEX.cursor_on(CODEX_AFTER_DOWN), Some(Cursor::Decline));
+    assert_eq!(CODEX.cursor_on(CODEX_AFTER_DOWN), Some(Cursor::Other));
     assert_eq!(
         CODEX.cursor_on(&[CODEX_SCREEN, CODEX_AFTER_DOWN].concat()),
-        Some(Cursor::Decline)
+        Some(Cursor::Other)
     );
     assert_eq!(GROK.cursor_on(GROK_SCREEN), None);
     assert_eq!(CODEX.cursor_on(CODEX_FOLDER_ACCESS), Some(Cursor::Accept));
@@ -184,7 +185,7 @@ fn codexs_cursor_is_read_off_its_latest_redraw_and_grok_has_none() {
         "› 2. Back to Agent Command Center".as_bytes(),
     ]
     .concat();
-    assert_eq!(CODEX.cursor_on(&moved), Some(Cursor::Decline));
+    assert_eq!(CODEX.cursor_on(&moved), Some(Cursor::Other));
 }
 
 /// A fixture's path as a shell script names it, quoted.
@@ -453,7 +454,7 @@ fn the_screen_is_recognised_although_the_raw_bytes_never_spell_its_words() {
         "words are cursor-positioned"
     );
     assert!(CLAUDE.is_shown_in(SCREEN));
-    assert_eq!(CLAUDE.cursor_on(SCREEN), Some(Cursor::Decline));
+    assert_eq!(CLAUDE.cursor_on(SCREEN), Some(Cursor::Other));
 }
 
 #[test]
@@ -1089,7 +1090,7 @@ fn the_same_screen_drawn_again_after_the_enter_fails_the_press() {
         );
         assert!(
             wait_for(PATIENCE, || CLAUDE.cursor_on(&as_the_press_reads(live))
-                == Some(Cursor::Decline)),
+                == Some(Cursor::Other)),
             "the screen drawn again never reached the daemon"
         );
         assert!(crate::session::wait::wait_quiet(live, PATIENCE));

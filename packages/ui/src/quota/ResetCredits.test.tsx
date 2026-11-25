@@ -361,4 +361,3 @@ it("holds confirm and says none is left once the reading shows no reset", () => 
   expect(dialogText()).toContain("has no usage limit resets available.");
   expect(submit().disabled).toBe(true);
 });
-

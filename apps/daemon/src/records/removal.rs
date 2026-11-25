@@ -7,7 +7,8 @@ use crate::adapter::provider;
 use crate::hostfs::{lexically_normalise, lexically_within};
 use crate::protocol::{Account, AgentId, Session};
 use crate::records::locate::{
-    in_real_directories, own_paths, plausible_id, record_paths, records_dir, Hints, Locator,
+    account_roots, in_real_directories, own_paths, plausible_id, record_paths, records_dir, Hints,
+    Locator,
 };
 
 /// [`record_paths`] cut to what deleting `session` may remove: when `session` is on another
@@ -26,6 +27,7 @@ pub fn removable_record_paths(
 ) -> Vec<PathBuf> {
     let agent = session.agent;
     let paths = record_paths(hints, locator, accounts, session);
+    let beside = removable_beside_records(locator, accounts, session);
     let keeps_default = match session.config_dir.as_deref() {
         None => true,
         Some(dir) => {
@@ -39,27 +41,70 @@ pub fn removable_record_paths(
         }
     };
     if keeps_default {
-        return paths;
+        return paths.into_iter().chain(beside).collect();
     }
-    let default = locator
+    let default_root = locator
         .root(agent, None)
-        .map(|root| records_dir(agent, &lexically_normalise(&root)));
-    let default_real = default
+        .map(|root| lexically_normalise(&root));
+    let default_records = default_root
         .as_deref()
-        .and_then(|default| crate::hostfs::canonical(default).ok());
-    paths
+        .and_then(|root| records_dir(agent, root));
+    // Whether `path` lies in the directory `default`, by its spelling or with links resolved.
+    let in_default = |path: &Path, default: Option<&Path>| {
+        let Some(default) = default else {
+            return false;
+        };
+        lexically_within(path, default)
+            || crate::hostfs::canonical(default).is_ok_and(|default| {
+                path.parent()
+                    .and_then(|parent| crate::hostfs::canonical(parent).ok())
+                    .is_some_and(|parent| parent.starts_with(default))
+            })
+    };
+    let records = paths
         .into_iter()
-        .filter(|path| {
-            !default
-                .as_ref()
-                .is_some_and(|default| lexically_within(path, default))
-                && !default_real.as_ref().is_some_and(|default| {
-                    path.parent()
-                        .and_then(|parent| crate::hostfs::canonical(parent).ok())
-                        .is_some_and(|parent| parent.starts_with(default))
-                })
-        })
-        .collect()
+        .filter(|path| !in_default(path, default_records.as_deref()));
+    // What the agent keeps beside its records lies anywhere in the account's directory.
+    let beside = beside
+        .into_iter()
+        .filter(|path| !in_default(path, default_root.as_deref()));
+    records.chain(beside).collect()
+}
+
+/// What the agent keeps of `session`'s conversation outside its records directories, in every
+/// account that could hold it, for a provider whose deletion removes it
+/// (`RecordStore::removes_beside_records`). Held to the rule of [`record_paths`]: a canonical id,
+/// and each path taken only when it lies lexically inside the account's directory, below
+/// directories that are real up to that directory, so that a link never leads the removal
+/// elsewhere. A path may not exist.
+fn removable_beside_records(
+    locator: &Locator,
+    accounts: &[Account],
+    session: &Session,
+) -> Vec<PathBuf> {
+    let store = provider(session.agent).records();
+    let Some(agent_id) = session
+        .agent_session_id
+        .as_deref()
+        .filter(|id| plausible_id(id) && store.removes_beside_records())
+    else {
+        return Vec::new();
+    };
+    let (roots, _) = account_roots(locator, accounts, session);
+    let mut paths: Vec<PathBuf> = Vec::new();
+    for root in &roots {
+        for path in store.beside_records(root, agent_id) {
+            let path = lexically_normalise(&path);
+            if path != *root
+                && lexically_within(&path, root)
+                && in_real_directories(&path, root)
+                && !paths.contains(&path)
+            {
+                paths.push(path);
+            }
+        }
+    }
+    paths
 }
 
 /// Every file the agent keeps of conversation `agent_id` in the account directory `root`, found
@@ -81,7 +126,7 @@ pub fn conversation_files_in(
         return Vec::new();
     }
     let mut files: Vec<PathBuf> = Vec::new();
-    if let Some(records) = Resolved::of(records_dir(agent, root)) {
+    if let Some(records) = records_dir(agent, root).and_then(Resolved::of) {
         let found = locator
             .index_at(agent, records.real())
             .records
@@ -198,6 +243,97 @@ mod tests {
         crate::test_support::symlink(&default, &alias).unwrap();
         let through_alias = removable(&mut locator, &[], Some(&alias));
         assert!(through_alias.is_empty(), "{through_alias:?}");
+    }
+
+    /// For a provider that keeps part of a conversation outside the records directory and removes
+    /// it with the session (the test-only provider's tree-shaped variant), deleting a session
+    /// names that part too: in the session's own account and every other account that could hold
+    /// a copy, never in the default account for a session on another, and never through a link.
+    #[test]
+    fn what_a_provider_keeps_beside_its_records_is_removed_only_where_it_says_so() {
+        use crate::adapter::test_provider::TREE_STATE_DIR;
+        let dir = crate::test_support::ScratchDir::new("agent-records-removable-beside");
+        let (account, home) = (dir.join("account"), dir.join("home"));
+        let default = home.join(crate::providers::layout::layout(AgentId::TEST).default_dir);
+        let state = |root: &Path| root.join(TREE_STATE_DIR).join(format!("{CLAUDE_ID}.db"));
+        let record = |root: &Path| root.join("sessions").join(format!("{CLAUDE_ID}.jsonl"));
+        for root in [&account, &default] {
+            touch(&record(root));
+            touch(&state(root));
+            touch(&root.join(TREE_STATE_DIR).join(format!("{CODEX_ID}.db")));
+        }
+        let shell = || HashMap::from([("HOME".to_owned(), home.to_string_lossy().into_owned())]);
+        let removable = |on: Option<&Path>| {
+            let mut paths = removable_record_paths(
+                &Hints::default(),
+                &mut Locator::with_shell(shell()),
+                &[],
+                &session(AgentId::TEST, CLAUDE_ID, on),
+            );
+            paths.sort();
+            paths
+        };
+
+        // The plain provider says nothing is removed beside its records.
+        assert_eq!(removable(Some(&account)), [record(&account)]);
+        assert_eq!(removable(None), [record(&default)]);
+
+        let _declared = crate::providers::test_provider::with_tree_records();
+        // On its own account: the record and the state beside it, nothing of the default account.
+        assert_eq!(
+            removable(Some(&account)),
+            [record(&account), state(&account)]
+        );
+        // On the default account: its own, and the copy a switch left in no other known account.
+        assert_eq!(removable(None), [record(&default), state(&default)]);
+        // An id that is no canonical UUID names nothing.
+        assert!(removable_record_paths(
+            &Hints::default(),
+            &mut Locator::with_shell(shell()),
+            &[],
+            &session(AgentId::TEST, "..", Some(&account)),
+        )
+        .is_empty());
+
+        // A state directory that is a link is not followed: what it leads to is not removed.
+        let linked = dir.join("linked");
+        touch(&record(&linked));
+        std::fs::create_dir_all(dir.join("elsewhere")).unwrap();
+        touch(&dir.join("elsewhere").join(format!("{CLAUDE_ID}.db")));
+        crate::test_support::symlink(dir.join("elsewhere"), linked.join(TREE_STATE_DIR)).unwrap();
+        assert_eq!(removable(Some(&linked)), [record(&linked)]);
+
+        // An account directory that is a link to the default one reaches nothing of the default's.
+        let alias = dir.join("alias");
+        crate::test_support::symlink(&default, &alias).unwrap();
+        assert!(removable(Some(&alias)).is_empty());
+    }
+
+    /// What Claude Code keeps beside its transcripts (the rewind checkpoints) is not named for
+    /// removal: its store does not say a deletion removes it.
+    #[test]
+    fn a_released_providers_files_beside_its_records_are_left() {
+        let dir = crate::test_support::ScratchDir::new("agent-records-removable-claude");
+        let account = dir.join("account");
+        let transcript = account
+            .join("projects/one")
+            .join(format!("{CLAUDE_ID}.jsonl"));
+        touch(&transcript);
+        touch(&account.join("file-history").join(CLAUDE_ID).join("1"));
+        let shell = HashMap::from([(
+            "HOME".to_owned(),
+            dir.join("home").to_string_lossy().into_owned(),
+        )]);
+        let paths = removable_record_paths(
+            &Hints::default(),
+            &mut Locator::with_shell(shell),
+            &[],
+            &session(AgentId::CLAUDE, CLAUDE_ID, Some(&account)),
+        );
+        assert_eq!(
+            paths,
+            [transcript, account.join("projects/one").join(CLAUDE_ID)]
+        );
     }
 
     /// Every file of one conversation in an account: Claude Code's transcript, the subagent

@@ -1067,6 +1067,29 @@
       },
       "description": "A change to one agent's launch settings: absent fields leave their values alone. A model or\neffort of `null` or a blank string uses the agent's own default; compatibility entries follow\nthe level behind on `null` and hold their own boolean otherwise."
     },
+    "LoginAnswer": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "yes",
+            "no"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "secret_text": {
+              "$ref": "#/$defs/SecretLoginText"
+            }
+          },
+          "required": [
+            "secret_text"
+          ]
+        }
+      ],
+      "description": "The user's answer to a `LoginQuestion`."
+    },
     "ProcessTarget": {
       "anyOf": [
         {
@@ -2593,7 +2616,7 @@
             "session",
             "command"
           ],
-          "description": "Writes a slash command, `command`, one line beginning with `/` and its arguments, into a\nrunning session for its agent to run as one of its own commands, for a provider that\ndeclares `slash_commands`. Answered with `ack` once written. Refused as `send_message` is,\nand with `command_not_recognised` where the agent would run another command in its place\n(its completion offers a different one), the command then cleared from the input box."
+          "description": "Writes a slash command, `command`, one line beginning with `/` and its arguments, into a\nrunning session for its agent to run as one of its own commands, for a provider that\ndeclares `slash_commands`. Answered with `ack` once written. Refused as `send_message` is,\nwith `command_not_recognised` where the agent would run another command in its place (its\ncompletion offers a different one), and with `command_not_found` where its list says it has\nno such command, the command then cleared from the input box."
         },
         {
           "type": "object",
@@ -2652,7 +2675,7 @@
             "type",
             "session"
           ],
-          "description": "Saves an image the user pasted into the terminal of a running session as a file on the daemon\nhost, for its agent to read by path: `data` is the image as a PNG, JPEG, GIF or WebP file,\nbase64-encoded, of at most 10 MiB decoded (see `crate::session::pasted_image`), or `upload`\nnames an upload of this connection whose parts hold it; exactly one of the two is given.\nAnswered with `pasted_image_saved`. Refused with `unknown_session` or\n`session_not_running`, and for an upload with `upload_unavailable` or\n`upload_parts_mismatch`."
+          "description": "Saves an image the user pasted into the terminal of a running session as a file on the daemon\nhost, for its agent to read by path: `data` is the image as a PNG, JPEG, GIF or WebP file,\nbase64-encoded, of at most 10 MiB decoded (see `crate::session::pasted_image`), or `upload`\nnames an upload of this connection whose parts hold it; exactly one of the two is given.\nAnswered with `pasted_image_saved`. Refused with `unknown_session` or\n`session_not_running`, with `provider_unsupported` (operation `message_images`) for a\nsession whose provider takes no images, and for an upload with `upload_unavailable` or\n`upload_parts_mismatch`."
         },
         {
           "type": "object",
@@ -2675,7 +2698,7 @@
             "session",
             "size"
           ],
-          "description": "Starts uploading a pasted image of `size` bytes (1 to 10 MiB) in parts, for a running\nsession; served on the control connection, which holds the parts. Answered with\n`pasted_image_upload_created`. Refused with `unknown_session`, `session_not_running`, or\n`limit_exceeded` (`image_uploads`, `image_upload_bytes`). See\n`crate::session::upload`."
+          "description": "Starts uploading a pasted image of `size` bytes (1 to 10 MiB) in parts, for a running\nsession; served on the control connection, which holds the parts. Answered with\n`pasted_image_upload_created`. Refused with `unknown_session`, `session_not_running`,\n`provider_unsupported` (as `save_pasted_image` is), or `limit_exceeded` (`image_uploads`,\n`image_upload_bytes`). See `crate::session::upload`."
         },
         {
           "type": "object",
@@ -3674,7 +3697,7 @@
             "type",
             "agent"
           ],
-          "description": "Reads the MCP servers and platform connectors of an account through the agent's own CLI\n(`codex app-server`, `claude mcp list`). `agent` is the provider, `account` an account id,\nnull for the agent's default account. `refresh` asks the agent to refetch what it\ncaches (Codex's Apps) instead of reading what it holds. Answered with\n`account_mcp_inventory_read` once the CLI has answered, which can take a minute (a minute\nand a quarter for Claude Code, whose sign-in is checked first): every server is connected\nto. A second request for the same account while one is running joins\nit and gets the same inventory. Nothing the account holds is written. Refused only with\n`unknown_account` for an account that does not exist or is not `agent`'s; every other\nfailure (not signed in, CLI missing, timeout, an agent that cannot list) is the\ninventory's `unavailable`. See \"Account MCP inventory\" in `PROTOCOL.md`."
+          "description": "Reads the MCP servers and platform connectors of an account through the agent's own CLI\n(`codex app-server`, `claude mcp list`). `agent` is the provider, `account` an account id,\nnull for the agent's default account. `refresh` asks the agent to refetch what it\ncaches (Codex's Apps) instead of reading what it holds. Answered with\n`account_mcp_inventory_read` once the CLI has answered, which can take a minute (a minute\nand a quarter for Claude Code, whose sign-in is checked first): every server is connected\nto. A second request for the same account while one is running joins it and gets the same\ninventory. Nothing the account holds is written. Refused with `unknown_account` for an\naccount that does not exist or is not `agent`'s, and with `provider_unsupported` (operation\n`mcp_inventory`) for a provider that cannot list; every other failure (not signed in, CLI\nmissing, timeout) is the inventory's `unavailable`. See \"Account MCP inventory\" in\n`PROTOCOL.md`."
         },
         {
           "type": "object",
@@ -3779,6 +3802,37 @@
             "agent"
           ],
           "description": "Ends the login of an account that is being signed in, and its CLI with it. Answered with\n`ack`; the `cancelled` update follows. Refused with `login_not_running` when there is none."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "agent": {
+              "$ref": "#/$defs/Agent"
+            },
+            "account": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "question": {
+              "type": "string"
+            },
+            "answer": {
+              "$ref": "#/$defs/LoginAnswer"
+            },
+            "type": {
+              "type": "string",
+              "const": "answer_account_login_question"
+            }
+          },
+          "required": [
+            "type",
+            "agent",
+            "question",
+            "answer"
+          ],
+          "description": "Brings the user's answer to the question an account's login waits on (`AccountLogin`'s\n`question`): `question` is that question's `id`, so an answer to one that is no longer asked\nis not taken for the next. Answered with `ack`; the login goes on, and its next\n`account_login_updated` no longer carries the question. The daemon never answers a question\nby itself: a login whose question nobody answers ends as any other does, cancelled or timed\nout. Refused with `login_not_running` when the account has no login running, and with\n`login_question_not_open` when its login is not waiting on that question."
         },
         {
           "type": "object",
@@ -4084,7 +4138,7 @@
             "type",
             "session"
           ],
-          "description": "Opens a session's conversation in its agent's own desktop application (the Claude app for\nClaude Code, the Codex app for Codex) on the daemon's host. Answered with `ack` once the\napplication has been asked to open. An archived session is opened as it is. Any other is\narchived first, as a user's `archive_session` does it, so that nothing resumes the\nconversation the application holds: the sessions bound to it are archived with it, running\nones included, and the open waits until its own process is gone; no branch or worktree is\nremoved. A session with a process must be at rest (waiting for instructions, or stopped on\nits account's usage limit). The process trees in `keep_process_ids` are kept running, as an\narchive keeps them. The session stays archived if the application then fails to open, or\nits process does not end in time. Refused, with nothing archived, with `session_working`\nwhile the session is at work (starting, mid-turn, waiting for the user, showing its\nbackground agents or running work in the background), with `session_locked` for it or a\nsession bound to it, with `session_already_starting` while a launch or another operation\nholds it, with `account_sharing_in_progress` while a change of its account's sharing moves\nthe account's directory, with `daemon_shutting_down` once a planned stop has begun, with\n`process_shares_agent_console` or `process_in_agent_command_group` for a tree that cannot\nbe kept, and with `native_app_unavailable` for an agent with no such application, one that\nis not installed, a session with no conversation yet and a conversation id the agent would\nnot take, and with `shell_environment_timeout` when the shell environment cannot be\ncaptured; `native_app_unavailable` also answers a failed launch, and `session_did_not_stop`\n(param `cause` `open_in_app`) a process that does not end, after the archive. A\n`session_working` found only by the check repeated after the chosen trees were kept leaves\nthem kept, and the session running. Where the application may not see the conversation (the\ndefault account's directory, the only one it reads, does not hold its latest record, which\n`probe_native_apps` tells) it is opened all the same. An unknown session is\n`unknown_session`."
+          "description": "Opens a session's conversation in its agent's own desktop application (the Claude app for\nClaude Code, the Codex app for Codex) on the daemon's host. Answered with `ack` once the\napplication has been asked to open. An archived session is opened as it is. Any other is\narchived first, as a user's `archive_session` does it, so that nothing resumes the\nconversation the application holds: the sessions bound to it are archived with it, running\nones included, and the open waits until its own process is gone; no branch or worktree is\nremoved. A session with a process must be at rest (waiting for instructions, or stopped on\nits account's usage limit). The process trees in `keep_process_ids` are kept running, as an\narchive keeps them. The session stays archived if the application then fails to open, or\nits process does not end in time. Refused, with nothing archived, with `session_working`\nwhile the session is at work (starting, mid-turn, waiting for the user, showing its\nbackground agents or running work in the background), with `session_locked` for it or a\nsession bound to it, with `session_already_starting` while a launch or another operation\nholds it, with `account_sharing_in_progress` while a change of its account's sharing moves\nthe account's directory, with `daemon_shutting_down` once a planned stop has begun, with\n`process_shares_agent_console` or `process_in_agent_command_group` for a tree that cannot\nbe kept, with `provider_unsupported` (operation `native_app`) for an agent with no such\napplication, with `native_app_unavailable` for one that is not installed, a session with no\nconversation yet and a conversation id the agent would not take, and with\n`shell_environment_timeout` when the shell environment cannot be captured;\n`native_app_unavailable` also answers a failed launch, and `session_did_not_stop` (param\n`cause` `open_in_app`) a process that does not end, after the archive. A\n`session_working` found only by the check repeated after the chosen trees were kept leaves\nthem kept, and the session running. Where the application may not see the conversation (the\ndefault account's directory, the only one it reads, does not hold its latest record, which\n`probe_native_apps` tells) it is opened all the same. An unknown session is\n`unknown_session`."
         },
         {
           "type": "object",
@@ -4696,6 +4750,10 @@
         }
       },
       "description": "The launch settings of a scheduled task's session, with the rules `open_session` gives the same\nfields: each is checked as `open_session` checks it when the task is saved, and read again at\nevery run."
+    },
+    "SecretLoginText": {
+      "type": "string",
+      "description": "One transient line of login input. Its debug representation is always redacted."
     },
     "SessionBranchKind": {
       "type": "string",

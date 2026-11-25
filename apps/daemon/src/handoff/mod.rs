@@ -64,6 +64,10 @@ pub struct Package {
     pub brief: Option<String>,
     /// The agent's own record of the conversation, when it was found.
     pub record: Option<PathBuf>,
+    /// Whether the agent keeps the conversation as rows of a database of its own
+    /// (`records::rows`), which no path names, and the session's account holds it or could not
+    /// be asked.
+    pub in_database: bool,
     /// The package the session itself read when it took another session over, while that file is
     /// still kept: the conversation before its own is there, not in its record. It is found under
     /// the session's own id, since a receiving session's package is named for it.
@@ -83,7 +87,12 @@ pub struct Package {
 /// caller has it; the first user message in the conversation is the same text when the agent
 /// recorded it. Blocking: it reads the conversation record and runs `git`.
 pub fn build(state: &AppState, session: &Session, brief: Option<&str>) -> Result<Package> {
-    build_with(state, session, brief, &mut Locator::default())
+    build_with(
+        state,
+        session,
+        brief,
+        &mut Locator::default().with_store(&state.store),
+    )
 }
 
 fn build_with(
@@ -128,17 +137,31 @@ fn build_with(
         })
         .collect();
 
-    let branch = conversation_branch(&state.record_hints, locator, &accounts, session);
-    let conversation = match &branch {
-        Some(Branch {
-            stretches: Some(stretches),
-            ..
-        }) => conversation::read_stretches(session.agent, stretches)
+    // A conversation kept as rows is read through its provider and has no record file.
+    let rows = crate::records::rows::read(locator, session);
+    let in_database = rows.as_ref().is_some_and(
+        |rows| !matches!(rows, Err(err) if err.kind() == std::io::ErrorKind::NotFound),
+    );
+    let branch = match rows {
+        Some(_) => None,
+        None => conversation_branch(&state.record_hints, locator, &accounts, session),
+    };
+    let conversation = match (rows, &branch) {
+        (Some(rows), _) => rows
+            .map(|rows| conversation::read_rows(session.agent, &rows))
             .map_err(|err| format!("the record could not be read: {err}")),
-        Some(_) => Err(
+        (
+            None,
+            Some(Branch {
+                stretches: Some(stretches),
+                ..
+            }),
+        ) => conversation::read_stretches(session.agent, stretches)
+            .map_err(|err| format!("the record could not be read: {err}")),
+        (None, Some(_)) => Err(
             "the record of the conversation lacks a history segment it continues from".to_owned(),
         ),
-        None => Err("the agent's record of the conversation was not found".to_owned()),
+        (None, None) => Err("the agent's record of the conversation was not found".to_owned()),
     };
     let record = branch.map(|branch| branch.record);
     let earlier = package_path_in(state.handoff_dir(), &session.id).filter(|path| path.is_file());
@@ -161,6 +184,7 @@ fn build_with(
         },
         brief: trimmed_or_none(brief),
         record,
+        in_database,
         earlier,
         conversation,
         compaction,
@@ -253,6 +277,10 @@ impl Package {
             Some(path) => out.push_str(&format!(
                 "- Its own record: {} (the agent's native format; read it only for what this file leaves out, such as tool output)\n",
                 path.display()
+            )),
+            None if self.in_database => out.push_str(&format!(
+                "- Its own record: kept in {}'s own database, with no file of its own to read\n",
+                session.agent.label()
             )),
             None => out.push_str("- Its own record: not found\n"),
         }

@@ -7,7 +7,9 @@ use crate::adapter::provider;
 use crate::hostfs::lexically_normalise;
 use crate::protocol::{Account, Session};
 use crate::providers::layout::layout;
-use crate::records::locate::{account_roots, plausible_id, walk_records, Hints, Locator, Step};
+use crate::records::locate::{
+    account_roots, index_records_at, plausible_id, walk_records, Hints, Locator, Step,
+};
 use crate::records::removal::removable_record_paths;
 
 /// The agent's id of the conversation a relaunch of this session resumes, or none when it has not
@@ -40,6 +42,14 @@ pub fn presence(
     session: &Session,
 ) -> crate::protocol::SessionRecordPresence {
     use crate::protocol::SessionRecordPresence::{Absent, Present, Unknown};
+    if crate::records::rows::shaped(session.agent).is_some() {
+        // Rows are removed from the session's own account alone, so that is where they count.
+        return match locator.holds_conversation(session) {
+            Some(true) => Present,
+            Some(false) => Absent,
+            None => Unknown,
+        };
+    }
     if !provider(session.agent).records().recognises_records()
         || !session
             .agent_session_id
@@ -52,6 +62,7 @@ pub fn presence(
     for root in &roots {
         complete &= locator.index(session.agent, root).complete;
     }
+    complete &= locator.alternate_root_complete(session);
     for path in removable_record_paths(hints, locator, accounts, session) {
         match std::fs::symlink_metadata(&path) {
             Ok(meta) if meta.file_type().is_file() || meta.file_type().is_dir() => return Present,
@@ -123,6 +134,12 @@ pub fn resumability(locator: &Locator, session: &Session) -> Resumability {
 /// those links lead (`RecordStore::archived_behind_links`).
 pub fn judge(locator: &Locator, session: &Session) -> Judgement {
     let store = provider(session.agent).records();
+    if store.rows().is_some() {
+        return Judgement {
+            resumability: resumability_of_rows(locator, session),
+            needs_unarchive: false,
+        };
+    }
     let (resumability, needs_unarchive) = match locate_own_record(locator, session) {
         Err(answer) => (answer, false),
         Ok(Located::Present) => (Resumability::Resumable, false),
@@ -142,6 +159,23 @@ pub fn judge(locator: &Locator, session: &Session) -> Judgement {
     }
 }
 
+/// [`resumability`] for a provider whose records are rows (`crate::records::rows`): the
+/// conversation is looked for in the listing of the session's own account, which the provider
+/// gives. One the listing lacks is proven gone only for a store whose absence is conclusive
+/// (`RecordStore::absence_is_conclusive`); an account that cannot be listed, or a session that
+/// names no conversation of its agent's shape, proves nothing.
+fn resumability_of_rows(locator: &Locator, session: &Session) -> Resumability {
+    if !session.has_conversation {
+        return Resumability::Resumable;
+    }
+    let conclusive = provider(session.agent).records().absence_is_conclusive();
+    match locator.holds_conversation(session) {
+        Some(true) => Resumability::Resumable,
+        Some(false) if conclusive => Resumability::Unresumable,
+        _ => Resumability::Unknown,
+    }
+}
+
 /// `Err` carries the answer when the record need not, or cannot, be looked for.
 fn locate_own_record(locator: &Locator, session: &Session) -> Result<Located, Resumability> {
     if !session.has_conversation {
@@ -155,6 +189,15 @@ fn locate_own_record(locator: &Locator, session: &Session) -> Result<Located, Re
     else {
         return Err(Resumability::Unknown);
     };
+    let alternate = locator.alternate_root(session);
+    let mut uncertain = alternate.is_err();
+    if let Ok(Some((dir, depth))) = &alternate {
+        let index = index_records_at(agent, dir, *depth);
+        if index.records.contains_key(&agent_id.to_ascii_lowercase()) {
+            return Ok(Located::Present);
+        }
+        uncertain |= !index.complete;
+    }
     let Some(root) = locator.root(agent, session.config_dir.as_deref()) else {
         return Err(Resumability::Unknown);
     };
@@ -168,7 +211,11 @@ fn locate_own_record(locator: &Locator, session: &Session) -> Result<Located, Re
         return Err(Resumability::Unknown);
     }
     let layout = layout(agent);
-    let dirs: Vec<&str> = std::iter::once(layout.records_dir)
+    // An agent that keeps no records has no directory to look in.
+    let Some(records) = layout.records() else {
+        return Err(Resumability::Unknown);
+    };
+    let dirs: Vec<&str> = std::iter::once(records)
         .chain(layout.archived_records_dir)
         .collect();
     let depth = layout.search_depth;
@@ -177,6 +224,7 @@ fn locate_own_record(locator: &Locator, session: &Session) -> Result<Located, Re
     if !dirs
         .iter()
         .any(|dir| std::fs::symlink_metadata(root.join(dir)).is_ok())
+        && !matches!(&alternate, Ok(Some((dir, _))) if std::fs::symlink_metadata(dir).is_ok())
     {
         return Err(Resumability::Unknown);
     }
@@ -187,7 +235,7 @@ fn locate_own_record(locator: &Locator, session: &Session) -> Result<Located, Re
     };
     // The first directory is the one a resume reads; a record found only in a later one is
     // archived. A directory that cannot be searched does not stop the next from being.
-    let (mut archived, mut uncertain) = (false, false);
+    let mut archived = false;
     for (at, dir) in dirs.iter().enumerate() {
         match scan_for_record(&root.join(dir), depth, &is_record) {
             Located::Present if at == 0 => return Ok(Located::Present),
@@ -249,7 +297,10 @@ mod tests {
             )])
         };
         let hints = Hints::default();
-        for agent in AgentId::ALL {
+        for agent in AgentId::ALL
+            .into_iter()
+            .filter(|agent| provider(*agent).records().rows().is_none())
+        {
             let expected = if provider(agent).records().recognises_records() {
                 Absent
             } else {
@@ -316,6 +367,96 @@ mod tests {
         );
     }
 
+    /// A conversation kept as rows is judged from the listing its provider gives of the
+    /// session's own account: held there it can be resumed, missing from a listing it is gone
+    /// (the test-only provider's variant says its absence is conclusive), and an account that
+    /// cannot be listed, or an id of another shape, proves nothing. Its presence, for the
+    /// cleanup that removes it, is read the same way.
+    #[test]
+    fn a_conversation_kept_as_rows_is_judged_from_its_accounts_listing() {
+        use crate::protocol::SessionRecordPresence::{Absent, Present};
+        let _declared = crate::providers::test_provider::with_row_records();
+        let dir = crate::test_support::ScratchDir::new("agent-records-resumability-rows");
+        let account = dir.join("account");
+        let own = session(AgentId::TEST, ROW_ID, Some(&account));
+        let hints = Hints::default();
+        let locator = || Locator::with_shell(HashMap::new());
+
+        // No database to list: nothing is proven.
+        assert_eq!(resumability(&locator(), &own), Resumability::Unknown);
+        assert_eq!(
+            presence(&hints, &mut locator(), &[], &own),
+            crate::protocol::SessionRecordPresence::Unknown
+        );
+
+        row_database(&account, &[(ROW_ID, ROW_TURNS)]);
+        assert_eq!(
+            judge(&locator(), &own),
+            Judgement {
+                resumability: Resumability::Resumable,
+                needs_unarchive: false
+            }
+        );
+        assert_eq!(presence(&hints, &mut locator(), &[], &own), Present);
+
+        row_database(&account, &[("row_other", ROW_TURNS)]);
+        assert_eq!(resumability(&locator(), &own), Resumability::Unresumable);
+        assert_eq!(presence(&hints, &mut locator(), &[], &own), Absent);
+
+        // A session that has had no conversation relaunches into a fresh one; an id that is not
+        // of the agent's shape is never looked up.
+        let mut unused = own.clone();
+        unused.has_conversation = false;
+        assert_eq!(resumability(&locator(), &unused), Resumability::Resumable);
+        let stranger = session(AgentId::TEST, CLAUDE_ID, Some(&account));
+        assert_eq!(resumability(&locator(), &stranger), Resumability::Unknown);
+    }
+
+    /// A store whose record is a tree and whose conversations lie partly outside the records
+    /// directory (the test-only provider's variant) is judged like any that recognises its
+    /// records: a record missing from an account searched whole is a conversation gone, and what
+    /// is kept beside the records counts as present for the cleanup that removes it.
+    #[test]
+    fn a_tree_shaped_store_proves_a_missing_record_gone_and_counts_what_lies_beside_it() {
+        use crate::adapter::test_provider::TREE_STATE_DIR;
+        use crate::protocol::SessionRecordPresence::{Absent, Present};
+        let _declared = crate::providers::test_provider::with_tree_records();
+        let dir = crate::test_support::ScratchDir::new("agent-records-tree-absence");
+        let account = dir.join("account");
+        let shell = || {
+            HashMap::from([(
+                "HOME".to_owned(),
+                dir.join("home").to_string_lossy().into_owned(),
+            )])
+        };
+        let own = session(AgentId::TEST, CLAUDE_ID, Some(&account));
+        let judged = || resumability(&Locator::with_shell(shell()), &own);
+        let present = || {
+            presence(
+                &Hints::default(),
+                &mut Locator::with_shell(shell()),
+                &[],
+                &own,
+            )
+        };
+
+        // Another conversation's record shows the records directory is there to be searched.
+        test_record(&account, CODEX_ID, TREE_TRUNK);
+        assert_eq!(judged(), Resumability::Unresumable);
+        assert_eq!(present(), Absent);
+
+        // What the agent keeps of the conversation outside the records directory is not a record
+        // a resume reads, but it is there to be removed.
+        let state = account.join(TREE_STATE_DIR).join(format!("{CLAUDE_ID}.db"));
+        touch(&state);
+        assert_eq!(judged(), Resumability::Unresumable);
+        assert_eq!(present(), Present);
+
+        test_record(&account, CLAUDE_ID, TREE_TRUNK);
+        assert_eq!(judged(), Resumability::Resumable);
+        assert_eq!(present(), Present);
+    }
+
     /// A provider whose store recognises no record (the test-only provider, on `NoRecords`) never
     /// has a record proven absent: a session of it is neither unresumable, which would refuse its
     /// resume and let an archived session's cleanup delete it, nor without records, and deleting
@@ -366,6 +507,34 @@ mod tests {
             resumability(&Locator::with_shell(shell), &fresh),
             Resumability::Resumable
         );
+    }
+
+    /// An agent that keeps no record files has nothing to look for, and its account directory is
+    /// never searched as a records directory: even where the store would take any file it is shown
+    /// for the record (the test-only provider's variant), and the account directory holds one named
+    /// for the conversation, the verdict is `Unknown`, not `Resumable`.
+    #[test]
+    fn a_layout_with_no_records_directory_is_never_judged_from_the_account_directory() {
+        let _declared = crate::providers::test_provider::without_records();
+        let dir = crate::test_support::ScratchDir::new("agent-records-resume-none");
+        let account = dir.join("account");
+        touch(&account.join(format!("{CLAUDE_ID}.jsonl")));
+        touch(&account.join(CLAUDE_ID).join("usage.json"));
+        let shell = HashMap::from([(
+            "HOME".to_owned(),
+            dir.join("home").to_string_lossy().into_owned(),
+        )]);
+        let locator = Locator::with_shell(shell);
+        let own = session(AgentId::TEST, CLAUDE_ID, Some(&account));
+        let judgement = judge(&locator, &own);
+        assert_eq!(judgement.resumability, Resumability::Unknown);
+        assert!(!judgement.needs_unarchive);
+        // An empty account directory is the same.
+        let empty = dir.join("empty");
+        std::fs::create_dir_all(&empty).unwrap();
+        let judgement = judge(&locator, &session(AgentId::TEST, CLAUDE_ID, Some(&empty)));
+        assert_eq!(judgement.resumability, Resumability::Unknown);
+        assert!(!judgement.needs_unarchive);
     }
 
     fn judged(session: &Session) -> Resumability {

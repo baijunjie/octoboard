@@ -1,0 +1,52 @@
+[?25lCALL run_command {"CommandLine":"echo octo > made.txt","toolSummary":"make a file","WaitMsBeforeAsync":5000}
+
+[11D[1K [2mG[m[2A[9C[?25h[?25l]7501;state=working:app=antigravity[2A[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL run_command {"CommandLine":"echo octo > made.txt","toolSummary":"make a file","WaitMsBeforeAsync":5000}[m[K
+⢿  [90mGenerating...[m[K
+
+[94m>[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l[2A[K
+[33m○[m [33;1mRunning[m [37m(echo octo > made.txt)[m [37m(ctrl+o to expand)[m[K
+⣻  [94mRunn[90ming command...[m
+
+[94m>[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l[0 q]7501;state=blocked:kind=permission:app=antigravity:msg=QXBwcm92ZSBCYXNoOiBlY2hvIG9jdG8gPiBtYWRlLnR4dA==[3A[33m●[m [33;1mRan[m [4P
+[K
+[33;1mCommand[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[K
+[37;1mRequesting permission for:[m[K
+[37m   echo octo > made.txt[m
+
+[1mRun this command?[m
+[94m> 1. Yes, run command[K[m
+  2. Yes, and always allow in this conversation for commands that start with 'echo octo > made.txt'
+  3. Yes, and always allow for commands that start with 'echo octo > made.txt' (Persist to settings.json)
+  4. No, cancel
+
+  [94;1m↑/↓[90;22m Navigate · [94;1mtab[90;22m Amend · [94;1mctrl+g[90;22m edit/expand command[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[0 q]7501;state=working:app=antigravity[9A[J[6A[33m○[m [33;1mRunning[m [37m(echo octo > made.txt)[m [37m(ctrl+o to expand)[m
+⣾  [90mRunning command[94m...[m
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[94m>[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l[3A[32m●[m [33;1mRan[m [4P
+[12C[90m.[94m.[m
+
+[18D[?25h[?25l[2A⣷ 
+
+[?25h[?25l[2A[K
+  Stub: tool finished.[K
+⣷  [90mRunning command..[94m.[m
+
+[94m>[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l[2A⣯ 
+
+[?25h[?25l]7501;state=done:app=antigravity:msg=U3R1YjogdG9vbCBmaW5pc2hlZC4=[2A[K
+
+
+
+[90m? for shortcuts[m[2A[13D[?25h

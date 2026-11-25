@@ -18,11 +18,21 @@
 //! Code run `/probecmd` for a pasted `/probe` whose own file was not loaded yet, and Grok Build only
 //! completes a pasted prefix and sends nothing. So a completion that offers another command than
 //! the one written has the input box cleared and the command refused
-//! ([`super::term::CommandNotRecognised`]); no completion, or the one written, gets its Enter. An
+//! ([`super::term::CommandNotRecognised`], or [`super::term::CommandNotFound`] where the agent's
+//! list says it has no such command); no completion, or the one written, gets its Enter. An
 //! agent's own commands report no prompt, so the Enter is confirmed by the box emptying, not by a
 //! hook, and a command left in the box is a message not sent. A completion is shown only for a
-//! lone `/word`, so a command with arguments has nothing to check; a provider that cannot clear its
-//! box ([`super::screen::ScreenReader::clears_input_box_with_ctrl_u`]) is refused such a bare
+//! lone `/word`, so a command with arguments has nothing to check. A provider whose first Enter on a
+//! lone `/word` takes the completion into the box instead of running it
+//! ([`super::screen::ScreenReader::writes_lone_command_with_trailing_space`]) has a space typed
+//! after the lone command once its completion has been looked at and its list read up, as a key of
+//! its own, and its Enter waits for the provider to read its list closed
+//! ([`super::screen::ScreenReader::list_shown`]), which shows the space landed; no list read up
+//! before the space, a list still up after it, or one the provider cannot tell of, leaves the
+//! command unsent. OpenCode runs `/name ` on one
+//! Enter, and loses an Enter written together with the space. A provider with no way to clear its
+//! box ([`super::screen::ScreenReader::clears_input_box_with_ctrl_u`], or a key emptying it at the
+//! idle prompt, [`super::screen::ScreenReader::input_box_clearing_key`]) is refused such a bare
 //! command before anything is written (`coordinator::messages`), since a wrong completion could
 //! not be taken back.
 //!
@@ -107,11 +117,12 @@ impl Target for Gated<'_> {
     }
 }
 
-/// Pastes `paste`, a later key of a message already begun, through `gated`; `written` counts what
-/// of the message is in. A paste not written leaves the message in the box, as it stands.
-fn paste_later(gated: &Gated<'_>, paste: &Input, written: &mut usize) -> Result<(), PartialWrite> {
-    let size = term::encode(std::slice::from_ref(paste)).len();
-    match gated.press(std::slice::from_ref(paste)) {
+/// Writes `input`, a later key or paste of a message already begun, through `gated`; `written`
+/// counts what of the message is in, and takes `input`'s bytes once it is. One not written leaves
+/// the message in the box, as it stands.
+fn write_later(gated: &Gated<'_>, input: &Input, written: &mut usize) -> Result<(), PartialWrite> {
+    let size = term::encode(std::slice::from_ref(input)).len();
+    match gated.press(std::slice::from_ref(input)) {
         Ok(true) => {
             *written += size;
             Ok(())
@@ -119,13 +130,13 @@ fn paste_later(gated: &Gated<'_>, paste: &Input, written: &mut usize) -> Result<
         Ok(false) => {
             tracing::warn!(
                 session = %gated.live.id,
-                "a later paste of a message was not written: someone else wrote into the session, \
-                 or it cannot take keys now"
+                "a later key or paste of a message was not written: someone else wrote into the \
+                 session, or it cannot take keys now"
             );
             Err(not_submitted(*written))
         }
         Err(partial) if partial.written == 0 => {
-            tracing::warn!(session = %gated.live.id, error = %partial.error, "a later paste of a message could not be written");
+            tracing::warn!(session = %gated.live.id, error = %partial.error, "a later key or paste of a message could not be written");
             Err(not_submitted(*written))
         }
         Err(partial) => Err(PartialWrite {
@@ -207,7 +218,7 @@ impl LiveSession {
         let gated = Gated::after(self, written.writes, None);
         for (shown, path) in images.iter().enumerate() {
             if shown > 0 {
-                paste_later(&gated, &Input::Paste(path.clone()), &mut sent)?;
+                write_later(&gated, &Input::Paste(path.clone()), &mut sent)?;
             }
             if !self.wait_for_placeholders(baseline + shown + 1, timing.paste_taken) {
                 tracing::warn!(
@@ -223,7 +234,7 @@ impl LiveSession {
         }
         let now: Vec<Input> = text.into_iter().cloned().collect();
         if let Some(paste) = text {
-            paste_later(&gated, paste, &mut sent)?;
+            write_later(&gated, paste, &mut sent)?;
         }
         paste_apart::submit_checked(
             &gated,
@@ -232,13 +243,13 @@ impl LiveSession {
             &[Input::Enter],
             false,
             !written.stashed,
-            |_| Ok(()),
+            |_| Ok(0),
         )
     }
 
     /// How many images the input box shows as attachments now, `None` where no box is recognised.
     fn image_placeholders(&self) -> Option<usize> {
-        let text = self.input_box(&self.screen_text_undimmed())?;
+        let text = self.input_box(&self.box_screen())?;
         Some(
             crate::adapter::provider(self.agent)
                 .screen()
@@ -262,7 +273,8 @@ impl LiveSession {
 
     /// Writes the slash command `command` (one line, stripped) for the agent to run as one of its
     /// own; see the module header. A failure is as a message's, and
-    /// [`super::term::CommandNotRecognised`] where the agent would have run another command, or
+    /// [`super::term::CommandNotRecognised`] where the agent would have run another command,
+    /// [`super::term::CommandNotFound`] where its list says it has no such command, or
     /// [`super::term::Unwritable`] where the box holds text that could not be cleared. **Blocks.**
     pub(crate) fn write_command(
         &self,
@@ -316,14 +328,70 @@ impl LiveSession {
             alone,
             !written.stashed,
             |_| match self.other_completion(name) {
-                Some(offered) => Err(self.refuse_other_command(command, offered, &gated)),
-                None => Ok(()),
+                Some(offered) => Err(self.refuse_command(command, Some(offered), &gated)),
+                None if self.offers_no_command(command) => {
+                    Err(self.refuse_command(command, None, &gated))
+                }
+                None => self.space_after_lone_command(
+                    &gated,
+                    command,
+                    timing,
+                    term::encode(&paste).len(),
+                ),
             },
         );
         // A popup that came up after the look refused the Enter itself.
         match (result, gated.late.take()) {
-            (Err(_), Some(offered)) => Err(self.refuse_other_command(command, offered, &gated)),
+            (Err(_), Some(offered)) => Err(self.refuse_command(command, Some(offered), &gated)),
             (result, _) => result,
+        }
+    }
+
+    /// For a provider whose first Enter on a lone `/name` takes its completion rather than running
+    /// it ([`super::screen::ScreenReader::writes_lone_command_with_trailing_space`]), the space
+    /// typed after a lone command once its completion has been looked at and its list read up,
+    /// and the wait for the provider's list to be read closed
+    /// ([`super::screen::ScreenReader::list_shown`]), which is what shows the space landed, so
+    /// that the Enter after it runs the command: no list read up before the space, a list still up
+    /// after it, or one the provider cannot tell of, leaves the command in the box unsent. `written` counts
+    /// the bytes of the command already in; the answer is the bytes written here. Nothing for any
+    /// other command or provider.
+    fn space_after_lone_command(
+        &self,
+        gated: &Gated<'_>,
+        command: &str,
+        timing: Timing,
+        written: usize,
+    ) -> Result<usize, PartialWrite> {
+        let screen = crate::adapter::provider(self.agent).screen();
+        if command.contains(char::is_whitespace)
+            || !screen.writes_lone_command_with_trailing_space()
+        {
+            return Ok(0);
+        }
+        // The space goes in only over the list seen up for the command: with no list, or one the
+        // provider cannot tell of, the space could not be seen to land, and the agent may not
+        // know the command; it is left in the box unsent.
+        if screen.list_shown(&self.screen_text_undimmed()) != Some(true) {
+            tracing::warn!(
+                session = %self.id,
+                "no list was seen up for a lone command; it was not sent"
+            );
+            return Err(not_submitted(written));
+        }
+        let mut sent = written;
+        write_later(gated, &Input::Text(" ".to_string()), &mut sent)?;
+        let closed = wait::wait_for(timing.submit_taken, || {
+            screen.list_shown(&self.screen_text_undimmed()) == Some(false) || Target::gone(self)
+        });
+        if closed && !Target::gone(self) {
+            Ok(sent - written)
+        } else {
+            tracing::warn!(
+                session = %self.id,
+                "the list was not seen closed after the space typed after a command"
+            );
+            Err(not_submitted(sent))
         }
     }
 
@@ -336,17 +404,26 @@ impl LiveSession {
         (offered.trim_start_matches('/') != name).then_some(offered)
     }
 
+    /// Whether the agent's list, up for the lone command `command` (`/name`, no arguments), says
+    /// it has no such command ([`super::screen::ScreenReader::list_offers_no_command`]).
+    fn offers_no_command(&self, command: &str) -> bool {
+        !command.contains(char::is_whitespace)
+            && crate::adapter::provider(self.agent)
+                .screen()
+                .list_offers_no_command(&self.screen_text_undimmed())
+    }
+
     /// Refuses the command `command`, with the box cleared, because `offered` would run in its
-    /// place.
-    fn refuse_other_command(
+    /// place, or, with none, because the agent has no such command.
+    fn refuse_command(
         &self,
         command: &str,
-        offered: String,
+        offered: Option<String>,
         gated: &Gated<'_>,
     ) -> PartialWrite {
         let screen = crate::adapter::provider(self.agent).screen();
-        let offered = offered.trim_start_matches('/').to_string();
-        let cleared = if screen.clears_input_box_with_ctrl_u() {
+        let offered = offered.map(|offered| offered.trim_start_matches('/').to_string());
+        let cleared = if super::screen::clears_input_box(screen) {
             let mut writes = gated.expected.get();
             // Inside the replacement where the draft was stashed around the command: the clear is
             // the message's own.
@@ -378,28 +455,37 @@ impl LiveSession {
             session = %self.id,
             agent = %self.agent.label(),
             cleared = ?cleared,
-            "a slash command would have run another command; it was not sent"
+            offered = offered.is_some(),
+            "a slash command would have run another command, or names none; it was not sent"
         );
+        let why = match &offered {
+            Some(offered) => format!("the agent would run /{offered} instead of {command}"),
+            None => format!("the agent has no command {command}"),
+        };
         let reason = if cleared == Cleared::Empty {
-            format!(
-                "the agent would run /{offered} instead of {command}; the command was cleared \
-                 from its input box and not sent"
-            )
+            format!("{why}; the command was cleared from its input box and not sent")
         } else {
             format!(
-                "the agent would run /{offered} instead of {command}; it was not sent, but the \
-                 command could not be cleared from its input box"
+                "{why}; it was not sent, but the command could not be cleared from its input box"
             )
         };
-        PartialWrite {
-            written: term::encode(&[Input::Paste(command.to_string())]).len(),
-            error: std::io::Error::other(super::term::CommandNotRecognised {
-                command: command.to_string(),
+        let written = term::encode(&[Input::Paste(command.to_string())]).len();
+        let command = command.to_string();
+        let cleared = cleared == Cleared::Empty;
+        let error = match offered {
+            Some(offered) => std::io::Error::other(super::term::CommandNotRecognised {
+                command,
                 offered: format!("/{offered}"),
-                cleared: cleared == Cleared::Empty,
+                cleared,
                 reason,
             }),
-        }
+            None => std::io::Error::other(super::term::CommandNotFound {
+                command,
+                cleared,
+                reason,
+            }),
+        };
+        PartialWrite { written, error }
     }
 }
 

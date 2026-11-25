@@ -203,24 +203,28 @@ export interface AccountReviewState {
   leftOut: Agent[];
 }
 
-/** Whether an account is invalid for its name (taken, or blank), which no other directory fixes. `field_required`
- * names the field that is blank, which is the directory as often as the name. */
-export function hasNameProblem(account: InspectedAccount): boolean {
+/** Whether an account is invalid for something no other directory fixes: its name (taken, or blank), or its agent, which
+ * has the default account only. `field_required` names the field that is blank, which is the directory as often as the
+ * name; `provider_unsupported` names the operation refused, and only the one for owned accounts is this. */
+export function hasUnfixableProblem(account: InspectedAccount): boolean {
   const error = account.status === "invalid" ? account.error : null;
   if (error === null) return false;
-  return error.code === "account_name_taken" || (error.code === "field_required" && error.params.field === "name");
+  return error.code === "account_name_taken"
+    || (error.code === "field_required" && error.params.field === "name")
+    || (error.code === "provider_unsupported" && error.params.operation === "owned_accounts");
 }
 
 /** Whether an account cannot be created because the document's directory for it was written on another operating
  * system, which no reason of the daemon's says better (it only says the directory is not absolute). An account that is
- * invalid for its name is not: another directory would not fix that. */
+ * invalid for a cause another directory cannot fix (see `hasUnfixableProblem`) is not. */
 export function hasForeignDirectoryProblem(account: InspectedAccount): boolean {
-  return account.status === "invalid" && account.foreign_directory && !hasNameProblem(account);
+  return account.status === "invalid" && account.foreign_directory && !hasUnfixableProblem(account);
 }
 
 /** The choices an account's status allows, in the order the review lists them; none for an account that exists already,
  * which is used as it is. A directory in use or a directory the form would refuse can be put right with another
- * directory; an account whose name is the problem, or of a status this build does not know, can only be left out. */
+ * directory; an account whose problem another directory cannot fix (see `hasUnfixableProblem`: its name, or its agent
+ * having the default account only), or of a status this build does not know, can only be left out. */
 export function accountChoicesFor(account: InspectedAccount): AccountRowState["choice"][] {
   switch (account.status) {
     case "new":
@@ -229,7 +233,7 @@ export function accountChoicesFor(account: InspectedAccount): AccountRowState["c
       return [];
     case "directory_in_use":
     case "invalid":
-      return hasNameProblem(account) ? ["leave_out"] : ["directory", "leave_out"];
+      return hasUnfixableProblem(account) ? ["leave_out"] : ["directory", "leave_out"];
     default:
       // A status this build does not know says nothing of what would fix it: the account can only be left out.
       return ["leave_out"];
@@ -317,7 +321,7 @@ function boundAccounts(accounts: InspectedAccounts, review: AccountReviewState):
   const bound = new Set<string>();
   accounts.agents.forEach((agent, a) =>
     agent.accounts.forEach((account, i) => {
-      if (account.status === "existing" || (agentImported(review, agent.agent) && review.rows[a]?.[i]?.choice !== "leave_out" && !hasNameProblem(account))) bound.add(accountKey(agent.agent, account.name));
+      if (account.status === "existing" || (agentImported(review, agent.agent) && review.rows[a]?.[i]?.choice !== "leave_out" && !hasUnfixableProblem(account))) bound.add(accountKey(agent.agent, account.name));
     }),
   );
   return bound;

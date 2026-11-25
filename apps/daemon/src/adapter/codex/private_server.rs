@@ -48,7 +48,7 @@ pub struct PrivateServerPlan {
     pub args: Vec<String>,
     /// The terminal's arguments before the endpoint is added, without the task.
     pub tui_args: Vec<String>,
-    /// The task the terminal is started with, passed after every option.
+    /// The task the terminal is started with, passed after every option and a bare `--`.
     pub task: Option<String>,
     /// The hook command the launch generated, whose trust a resume grants by its fingerprint.
     pub hook_command: String,
@@ -92,6 +92,18 @@ impl PrivateServerPlan {
             resume_permissions: resume_thread.and(resume_permissions),
         }
     }
+
+    /// The terminal's arguments as a client of the server `client_args` name: its options, the
+    /// endpoint, then the task after a bare `--`, so that a task which starts with `-` is the
+    /// prompt and not an option (`codex --remote <endpoint> -- <task>`, measured).
+    fn terminal_args(&self, client_args: Vec<String>) -> Vec<String> {
+        let mut args = self.tui_args.clone();
+        args.extend(client_args);
+        if let Some(task) = &self.task {
+            args.extend(["--".to_string(), task.clone()]);
+        }
+        args
+    }
 }
 
 impl PrivateServer for PrivateServerPlan {
@@ -105,11 +117,8 @@ impl PrivateServer for PrivateServerPlan {
         launch_id: &str,
     ) -> Result<StartedServer> {
         let transport = CodexTransport::start(binary, self, environment, cwd, host, launch_id)?;
-        let mut args = self.tui_args.clone();
-        args.extend(transport.client_args());
-        args.extend(self.task.iter().cloned());
         Ok(StartedServer {
-            args,
+            args: self.terminal_args(transport.client_args()),
             env: transport.client_env(),
             transport: Arc::new(transport),
         })
@@ -244,7 +253,7 @@ mod tests {
     }
 
     #[test]
-    fn the_terminal_is_told_its_workspace_and_the_task_comes_last() {
+    fn the_terminal_is_told_its_workspace_and_its_task_is_kept_apart_from_its_options() {
         let args = strings(&["--dangerously-bypass-hook-trust", "-c", "model=\"m\""]);
         let plan = PrivateServerPlan::new(
             &args,
@@ -268,6 +277,62 @@ mod tests {
         assert_eq!(plan.args, strings(&["-c", "model=\"m\""]));
         assert_eq!(plan.task.as_deref(), Some("first task"));
         assert_eq!(plan.resume_thread, None);
+    }
+
+    /// The terminal's task comes after the endpoint and a bare `--`, whatever it starts with; a
+    /// resume, which has no task, gets no `--`.
+    #[test]
+    fn the_terminals_task_is_the_one_argument_after_a_bare_double_dash() {
+        let options = strings(&["-c", "model=\"m\""]);
+        let endpoint = || strings(&["--remote", "unix:///run/codex.sock"]);
+        for task in ["first task", "- a list", "--help me with this", "-p x"] {
+            let plan = PrivateServerPlan::new(
+                &options,
+                Path::new("/work"),
+                Some(task),
+                "hook".into(),
+                None,
+                None,
+                None,
+            );
+            assert_eq!(
+                plan.terminal_args(endpoint()),
+                strings(&[
+                    "--cd",
+                    "/work",
+                    "-c",
+                    "model=\"m\"",
+                    "--remote",
+                    "unix:///run/codex.sock",
+                    "--",
+                    task
+                ]),
+                "{task:?}"
+            );
+        }
+        let resume = strings(&["resume", "thread-1", "-c", "model=\"m\""]);
+        let plan = PrivateServerPlan::new(
+            &resume,
+            Path::new("/work"),
+            None,
+            "hook".into(),
+            None,
+            Some("thread-1"),
+            None,
+        );
+        assert_eq!(
+            plan.terminal_args(endpoint()),
+            strings(&[
+                "resume",
+                "thread-1",
+                "--cd",
+                "/work",
+                "-c",
+                "model=\"m\"",
+                "--remote",
+                "unix:///run/codex.sock"
+            ])
+        );
     }
 
     #[test]

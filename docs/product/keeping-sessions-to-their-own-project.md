@@ -26,14 +26,18 @@ when the session launched: a project registered afterwards is not covered until 
 
 ### Which calls it checks
 
-A synchronous `PreToolUse` hook, with a timeout of **10 seconds**, is run before each call of the agent's file-edit
-tools (how each agent is given it is in "How each agent is given the injection" in
+The agent runs a synchronous check before its file-edit tools (how each agent is given it is in "How each agent is given the injection" in
 `docs/product/per-agent-launch-specifics.md`):
 
 - **Claude Code**: `Edit`, `Write`, `MultiEdit` and `NotebookEdit`;
 - **Codex**: `apply_patch`, judged by every file its patch names, a move's destination included;
 - **Grok Build**: its edit tools, under whichever of their names it calls them by: Claude Code's four above,
   `search_replace`, `write`, `hashline_edit`, `StrReplace` and `EditNotebook`.
+- **Antigravity CLI** checks native edits in its pre-tool hook.
+- **GitHub Copilot CLI** checks native edits in its launch plugin's pre-tool hook.
+- **OpenCode** checks file-edit calls in its launch plugin, including every target a patch names.
+- **Qwen Code** checks native edits in its pre-tool hook.
+- **Pi** checks native edits in the launch extension's `tool_call` event.
 
 Shell commands are not checked, so a file a session writes through its shell is caught only by the git check, when it
 is committed. A call whose target cannot be read, or a relative target with no working directory to resolve it against,

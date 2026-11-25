@@ -16,6 +16,7 @@ import { isolate } from "../../i18n/isolate";
 import { currentLanguage, setLanguage, t } from "../../i18n/language";
 import type { Console, Project, Session } from "../../protocol";
 import { TestHost } from "../../test/TestHost";
+import { TEST_PROVIDERS } from "../../test/testProviders";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
 import { account, availability, consoles, projects, request, sectionEntry, sessions, settings, startDaemon } from "./agentAccountsSectionTestState";
@@ -447,7 +448,7 @@ it("shows only the added agents, in the list's order", () => {
 it("shows every agent while the list is undecided, with no menu to remove or reorder them", async () => {
   settings.added_agents = null;
   const { container } = mount();
-  expect(tabNames(container)).toEqual(["Claude Code", "Codex", "Grok Build", "Test Agent"]);
+  expect(tabNames(container)).toEqual(TEST_PROVIDERS.map((provider) => provider.label));
   await act(async () => {
     container.querySelector('[role="tab"]')!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
   });

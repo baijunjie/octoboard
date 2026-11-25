@@ -588,7 +588,10 @@ const LIST_AGENTS_FROM_WEEKLY: &str =
     limit until the reset. `can_open` says the account is usable now: automatic \
     account selection may choose it, and a session can be switched or handed off \
     to it; when it is false `cannot_open_reason` says why (used up, not logged \
-    in, or a change of its sharing settings is running). `auto_select_account` \
+    in, or a change of its sharing settings is running). An agent whose usage \
+    Octoboard does not read lists its accounts with `plan` null, `windows` empty \
+    and `exhausted` false, and its `can_open` follows only whether the account is \
+    logged in. `auto_select_account` \
     says whether automatic account selection is enabled for sessions opened \
     without naming an account. \
     Naming an agent that is not listed returns `agents: []`. These are the \

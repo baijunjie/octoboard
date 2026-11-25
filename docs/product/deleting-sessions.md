@@ -102,9 +102,9 @@ A session still *starting* (see `docs/product/session-statuses.md`) is offered *
 of these hold: deleting it is refused until its launch has settled, while archiving it goes through.
 
 **Deleting an unused session needs no confirmation**, including when it is archived. Whether its agent has created
-records does not affect the shortcut or add a confirmation: Claude Code, Codex and Grok Build follow the same rule.
-Its agent records are automatically moved to the system Trash under the rules in "Moving the agent's own records to
-the Trash" below, unless they turn out to hold a prompt sent to it or may hold one. The session must still be unused
+records does not affect the shortcut or add a confirmation: the same rule applies to all agents.
+Its agent record files automatically go to the system Trash under the rules below, unless they hold or may hold a
+prompt sent to the session. Conversations kept in an agent database stay there. The session must still be unused
 when deletion takes place; if it no longer qualifies, deletion is refused and an error is shown.
 
 Deleting removes the session's record as described in "Deleting archived sessions" above, its bound branches and
@@ -129,9 +129,11 @@ unknown session.
   meanwhile is refused, and changes nothing (see
   `docs/product/changing-session-owners.md`).
 
+Octoboard’s Trash operation affects local records, including for accounts whose CLI syncs their history.
+
 ## Moving the agent's own records to the Trash
 
-**Deleting one session automatically moves the records of every removed session with no conversation to the Trash**,
+**Deleting one session automatically moves the record files of every removed session with no conversation to the Trash**,
 including such archived descendants of a deleted owner, unless those records hold, or may hold, a prompt sent to the
 session (see below). This applies even when the confirmation's cleanup option is left unticked. Deleting all archived
 sessions at once always requires opting in to record cleanup.
@@ -177,23 +179,24 @@ below for **every session the deletion removes**, including archived descendants
 record is found, **absent** only when the whole scope is proved to have no records, and **unknown** when that cannot
 be established.
 A missing or invalid agent session ID, an account location that cannot be determined, an unreadable location or a
-symbolic link can leave the result unknown. Having no conversation does not itself prove that no files exist.
+symbolic link can leave the result unknown. Having no conversation does not itself prove that no files exist. What an
+agent keeps of a conversation outside its records directory counts as a record here wherever deleting moves it too
+(see below). For an agent that keeps its conversations as rows of a database of its own, the result is read from the
+agent's own listing of the account the session runs under: present when it lists the conversation, absent when it does
+not, and unknown when the account cannot be listed.
 
 The confirmation — for one session or all archived sessions at once — hides its cleanup option when the result is
-absent. Otherwise it offers an **unchecked by default** checkbox to also move the agent's own session records to the
-Trash, including while the check is pending or its result is unknown. It is a plain block, not inside an alert, and its
-hint says that the session, or the sessions, can then no longer be resumed in the agent itself and that the records can
-be recovered from the Trash. While it is ticked, a line in the confirmation's consequences, the body text after its
-options and before its buttons, says that the agent's own records of the session — and of the sessions deleted with it,
-or of all the sessions deleted at once — are also moved to the Trash; it comes after the other consequence lines (see
-"The confirmation" in `docs/product/branch-and-worktree-cleanup.md` for how the consequences hold their list and their
-lines). Unticked, used sessions' agent records are kept; for a bulk deletion, every session's agent records are kept.
+absent. Otherwise it offers an **unchecked by default** checkbox to also clean up the agent's own session records,
+including while the check is pending or its result is unknown. Its hint says that record files go to the Trash and
+records kept in a database are permanently deleted. While the option is ticked, the confirmation lists the cleanup
+among its consequences after the other consequence lines (see "The confirmation" in
+`docs/product/branch-and-worktree-cleanup.md`). Unticked, used sessions' agent records are kept; for a bulk deletion, every session's agent records are kept.
 Either way the confirmation's message says that the project's files are kept. How ticking the option changes the confirm
 button's label is set in "What a confirmation's confirm button names" in `docs/product/dialogs.md`. While a deletion
 runs, the button shows as pending and the confirmation stays open until it has finished, including moving the records
 when the option is ticked; the option cannot be changed meanwhile.
 
-- **The records are moved to the system Trash, never deleted outright**, after the sessions themselves are deleted.
+- **Record files go to the system Trash** after the sessions themselves are deleted.
   For each agent they are:
 
   | Agent | What is moved |
@@ -201,6 +204,10 @@ when the option is ticked; the option cannot be changed meanwhile.
   | Claude Code | the session's transcript, in every project directory it appears in, with the directory of its subagents' transcripts beside it |
   | Codex | the session's rollout files: the thread's first rollout and every later history segment, compressed or not (see "Agent session data" in `docs/product/launching-agents.md`) |
   | Grok Build | the session's directory |
+  | Antigravity CLI | the conversation database and its SQLite sidecars, transcript directory, presence lock and title annotation. Shared indexes and prompt recall are kept |
+  | GitHub Copilot CLI | the session directory and its operation lock. Copilot maintains its own index |
+  | Qwen Code | the chat and its title and runtime sidecars. Account-wide counters and project cursors are kept |
+  | Pi | the matching session JSONL, including a record in the configured alternate sessions directory |
 
 - **They are looked for wherever this machine's accounts of that agent could hold them**: the account the session last
   ran under and every account of that agent known to Octoboard, since a session switched to another account leaves its
@@ -214,7 +221,20 @@ when the option is ticked; the option cannot be changed meanwhile.
   environment.
 - **Only the session's own records are taken.** A record is found by the agent's own id of the session, which has to be
   a canonical UUID, at the exact place the agent's layout puts it in the account's directory; a record under a
-  symbolically linked directory is left, and nothing else in the account's directory is touched.
+  symbolically linked directory is left, and nothing else in the account's directory is touched, except as the next
+  point says.
+- **What an agent keeps of a conversation outside its records directory is moved only for an agent that says a deletion
+  removes it**, which none of Claude Code, Codex and Grok Build does. For such an agent those files go with the
+  records, under the same rules: found by the session's canonical id, only inside the account's own directory, never
+  through a symbolically linked directory, and never from the default account's directory for a session on another
+  account.
+- **A conversation an agent keeps as rows of a database of its own is removed by the agent's own means, not moved**:
+  such a conversation has no file to move, and Octoboard never writes the agent's database itself. It is removed from
+  the account the session runs under alone, only under an id of exactly the shape the agent gives its conversations,
+  and only when that account's listing shows it; an agent with no means to remove a conversation keeps it. What is
+  removed this way is gone for good. Only a confirmation with its cleanup option ticked can remove database records.
+  Deleting an unused session and automatic archived-session cleanup both keep them. This applies to OpenCode on both
+  supported generations.
 - **A record another remaining session still refers to is left**: when a session that is not deleted runs the same
   agent on the same agent conversation, that conversation's records are not moved.
 - A record that is missing is skipped.

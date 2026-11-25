@@ -9,13 +9,16 @@ select an account" in `docs/product/opening-sessions.md`, "Automatically switch 
 `docs/product/automatic-account-switch.md` and "Start usage windows automatically" in
 `docs/product/starting-usage-windows.md`), switches for the whole application, not controls on one agent's tab. They stay there while agents are listed, while the
 added-agent list is still undecided, and while no agent is added. Below the switches sits the agent strip, which ends in
-the **Add agent** and **Add account** buttons, with the selected agent's accounts under it. What an account is and how
+the **Add agent** and **Add account** buttons (Add account not on the tab of an agent that has only its default account;
+see "The accounts the user owns" below), with the selected agent's accounts under it. What an account is and how
 consoles, projects and sessions use one are in "Agent config directories" in `docs/product/consoles.md`; signing an
 account in from this section is in `docs/product/logging-accounts-in.md`; the settings that apply to every account of
 an agent, opened from the agent's menu, are in `docs/product/per-agent-settings.md`, and the version of the agent's CLI
 and its update in `docs/product/agent-cli-updates.md`.
 
 ## Added agents
+
+Antigravity CLI and OpenCode offer just their default accounts. Antigravity CLI uses the same system credential-store login even when `--gemini_dir` changes. OpenCode stores its credentials and conversations together under `XDG_DATA_HOME` and has no agent-specific override for that directory.
 
 Octoboard keeps a list of the agents the user has **added**, in an order the user sets. It is kept by the daemon with
 the other application settings, so every window shows the same list. A configuration export that includes the
@@ -41,7 +44,7 @@ user changes it; a list the user has emptied stays empty.
 
 **While the list is undecided** — before Octoboard has determined which agents are installed, and for the whole run when
 the user's login shell environment could not be read (until Octoboard next starts) — the section lists every agent, in
-the order Claude Code, Codex, Grok Build. The agents then have no menu and no actions button and cannot be dragged, and
+the order in “The agents and their order” in `docs/product/supported-agents.md`. The agents then have no menu and no actions button and cannot be dragged, and
 the Add agent list adds nothing; the Add agent and Add account buttons are still there. Meanwhile every other place that
 follows the list treats every agent as added, in that same order.
 
@@ -79,7 +82,7 @@ determined has no icon, no tooltip and no such line, and while the list is undec
 ## Adding an agent
 
 **Add agent** opens a dialog with a line saying that only an agent installed on this machine can be added, and a list
-of every agent, in the order Claude Code, Codex, Grok Build, each with its icon and name, followed by a separate
+of every agent, in the order in “The agents and their order” in `docs/product/supported-agents.md`, each with its icon and name, followed by a separate
 status badge in every state:
 
 | Status | What the row offers |
@@ -131,7 +134,7 @@ titled "Agent settings", whichever agent it is opened on; the first line of its 
 and under it a muted line says that these settings apply to every account of the agent, naming it. That line is said
 once for the whole dialog; no row repeats it. Then come the agent's **Tags** row (see "Agent tags" in
 `docs/product/per-agent-settings.md`) and a row for each setting its provider declares (see "Provider settings" in
-`docs/product/per-agent-settings.md`) — for all three agents, the agent's **Permission approval** row (see "Approval
+`docs/product/per-agent-settings.md`) — for agents that declare approval modes, the **Permission approval** row (see "Approval
 modes" there), then, for Codex and Grok Build, the agent's **Claude compatibility** row (see "Claude compatibility"
 there), then, for Claude Code and Grok Build, the agent's **Codex compatibility** row (see "Codex compatibility"
 there), then, for Claude Code, its **Simple shell commands** row (see "Simple shell commands" there). It is offered for
@@ -198,7 +201,8 @@ configuration directory, which new sessions use when no account is chosen and wh
 share. Its directory cannot be edited, and the default account cannot be removed, but it can be turned off like any
 other account (see "Turning an account off" below). It has no sharing switch: its directory is the one other accounts
 share. Its actions menu holds **Details**, **Settings**, **Connectors and MCP** (for an agent whose accounts' MCP
-servers can be read), **Rename**, **Log in**, **Move earlier** and **Move later** (see "The account details dialog" and
+servers can be read), **Rename**, **Log in** (for an agent Octoboard can log in; see "Agents Octoboard cannot log in"
+in `docs/product/logging-accounts-in.md`), **Move earlier** and **Move later** (see "The account details dialog" and
 "The account settings dialog" below, and "The Connectors and MCP dialog" in
 `docs/product/account-mcp-servers-and-connectors.md`); where else **Log in** appears is in
 "Where Log in appears" in `docs/product/logging-accounts-in.md`.
@@ -226,10 +230,28 @@ settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-
 
 The accounts the user owns each have their name, directory and an actions menu holding **Details**, **Settings**,
 **Connectors and MCP** (for an agent whose accounts' MCP servers can be read; see "The Connectors and MCP dialog" in
-`docs/product/account-mcp-servers-and-connectors.md`), **Edit**, **Log in**, **Move earlier** and **Move later** and,
+`docs/product/account-mcp-servers-and-connectors.md`), **Edit**, **Log in** (for an agent Octoboard can log in),
+**Move earlier** and **Move later** and,
 set apart, **Remove** (see `docs/product/removing-accounts.md`); where else **Log in** appears is
 in "Where Log in appears" in `docs/product/logging-accounts-in.md`. Both kinds of directory are shown as in "How paths
 are shown" in `docs/product/settings.md`.
+
+**An agent that has only its default account.** An agent whose accounts cannot each be given a directory of their own
+has the default account alone. Antigravity CLI uses one system credential and OpenCode uses one data directory, so
+neither offers additional accounts, account switching or default-configuration sharing. Pi, Qwen Code and GitHub
+Copilot CLI support additional configuration directories. Each provider the daemon serves
+says which it is (the `owned_accounts` capability, `false` for such an agent). For such an agent:
+
+- while its tab is in view the agent strip has no **Add account** button, the Add agent button staying, and the Add
+  account form's agent picker leaves it out (see "Adding, editing and removing an account" below); its accounts table
+  holds the default account alone;
+- the daemon refuses to add an account of it, to import one (see "Importing accounts" in
+  `docs/product/configuration-export-and-import.md`) and to point an account of it at another directory, with
+  `provider_unsupported` (operation `owned_accounts`), whose message says that the agent supports only the default
+  account, so other accounts cannot be added or imported;
+- its default account is not affected: it is renamed, turned off and used as any other agent's.
+
+A window connected to a daemon that does not send the capability treats every agent as able to have accounts of its own.
 
 ## The accounts table
 
@@ -240,8 +262,8 @@ in the agent settings dialog (see "The agent settings dialog" above) — named f
 |---|---|
 | No heading (first column) | The account's drag grip (see "Reordering accounts" below). |
 | **Account** | The account's name and, when the agent names one, its plan as a badge; under them, when its reading carries one, the email the account is signed in with (see "The account's sign-in email" in `docs/product/account-quota-readings.md`), in smaller muted text on a single line. A name or email too long for its space fades at its end as in "Names too long for their space" in `docs/product/labels-and-tooltips.md`, the email with the whole address as its tooltip while it is cut. A row with no email has no line, nor room, for one. The name is in the muted text colour while the account is used up (see "A used-up account" in `docs/product/account-quotas.md`). |
-| **Usage** | The account's compact usage bar, the same as an account picker's, with no numbers: the five-hour window with the account-wide weekly window's thinner bar beneath it, or one bar for the account-wide weekly window or the credit pool (see "In an account picker" in `docs/product/account-quotas.md`); assistive technology reads what remains of those windows in words. While the first reading is on its way it says usage is being read. Out-of-date windows, the dash that stands in when there is no window to draw, and the marks that follow them are as in "How an account's quota is shown" and "Quota states" in `docs/product/account-quotas.md`; a dash with no mark after it is read by assistive technology as "No usage reading". A used-up account's bar is grey and followed by a **Limit reached** badge (see "A used-up account" in `docs/product/account-quotas.md`). Model-specific windows are left to the account details dialog. |
-| **Status** | The account's login state (below) and, for an account known to be signed out, the **Log in** icon button (see `docs/product/logging-accounts-in.md`); while the account is turned off, a neutral **Disabled** badge in their place and no Log in icon button (Log in stays in the actions menu). |
+| **Usage** | The account's compact usage bar, the same as an account picker's, with no numbers: the five-hour window with the account-wide weekly window's thinner bar beneath it, or one bar for the account-wide weekly window or the credit pool (see "In an account picker" in `docs/product/account-quotas.md`); assistive technology reads what remains of those windows in words. While the first reading is on its way it says usage is being read. Out-of-date windows, the dash that stands in when there is no window to draw, and the marks that follow them are as in "How an account's quota is shown" and "Quota states" in `docs/product/account-quotas.md`; a dash with no mark after it is read by assistive technology as "No usage reading". A used-up account's bar is grey and followed by a **Limit reached** badge (see "A used-up account" in `docs/product/account-quotas.md`). Model-specific windows are left to the account details dialog. The table has no such column for an agent whose quota Octoboard does not read (see "Agents whose quota Octoboard does not read" in `docs/product/account-quotas.md`). |
+| **Status** | The account's login state (below) and, for an account known to be signed out, the **Log in** icon button (see `docs/product/logging-accounts-in.md`), or, for an agent Octoboard cannot log in, a help tip saying how to log in (see "Agents Octoboard cannot log in" in `docs/product/logging-accounts-in.md`); while the account is turned off, a neutral **Disabled** badge in their place and no Log in icon button (Log in stays in the actions menu). |
 | **Disable** | The account's Disable switch (see "Turning an account off" below). The column's heading carries a "?" help tip. |
 | No heading | The account's actions menu button (see "The default account" and "The accounts the user owns" above). |
 
@@ -251,7 +273,10 @@ in its place, with a dot too): **Logged in**, in the success colour, once a read
 — the latest reading succeeded, or the windows of an earlier one are still held after a newer reading failed; **Not
 logged in**, in the warning colour, while its quota is in the not-logged-in state (see "Quota states" in
 `docs/product/account-quotas.md`). While neither is known — the quota not read yet, or a reading that failed with
-nothing read before — there is nothing.
+nothing read before — there is nothing. For an agent whose quota Octoboard does not read, the badge follows the
+account's sign-in reading: **Logged in** while it reads as signed in and gives the account's email, **Not logged in**
+while it reads as signed out, and nothing otherwise (see "Reading the sign-in of an agent whose quota is not read" in
+`docs/product/account-quota-readings.md`).
 
 **In a narrow window** the table keeps its columns' widths: once the section is narrower than they need, the table
 scrolls sideways, and while it does it is a tab stop of its own, named for the agent's accounts as scrollable (see
@@ -301,8 +326,12 @@ account is turned off is not shown here. Under that line, when the account's rea
 signed in with (see "The account's sign-in email" in `docs/product/account-quota-readings.md`), muted, on a line of its
 own, wrapping within the dialog when it is too long for one line. The next line is the account's directory; for the
 default account a "?" help tip follows it (see "The default account" above). For an account the user owns of an agent
-that is not available, a line under the directory says it is not usable until the agent is on `PATH`. Then comes
-**Usage** — the account's quota drawn as in the rail's account quota panel: the five-hour and account-wide weekly
+that is not available, a line under the directory says it is not usable until the agent is on `PATH`. For an agent
+Octoboard cannot log in, an account that reads as not logged in has a line under those that says how to log in (see
+"Agents Octoboard cannot log in" in `docs/product/logging-accounts-in.md`). Then, for an agent whose quota Octoboard
+reads, comes **Usage** — an agent whose quota it does not read has no such part, and its login state reads "Unknown"
+rather than "Checking…" until a reading says (see "Agents whose quota Octoboard does not read" in
+`docs/product/account-quotas.md`). **Usage** holds the account's quota drawn as in the rail's account quota panel: the five-hour and account-wide weekly
 windows as one meter, every other window, model-specific ones included, as a meter of its own, one to a row. How long
 ago the windows were read, with the out-of-date mark when it applies, ends the heading. It says usage is being read
 while the first reading is on its way, says for an account that is not logged in that it is not logged in yet and to log
@@ -520,7 +549,7 @@ user first (see "Starting a session on an account whose last change is incomplet
 
 **Add account**, the icon button at the end of the agent strip, opens a form that asks for the agent, starting on the
 agent of the tab in view — every added agent is listed, in the list's order (every agent while the list is undecided),
-and can be picked, one that is not installed included and marked with a Not installed badge after its name, since an
+except an agent that has only its default account (see "The accounts the user owns" above), and can be picked, one that is not installed included and marked with a Not installed badge after its name, since an
 account may be set up before its agent is, unlike the agent pickers elsewhere (see "Which agents the agent pickers list"
 in `docs/product/consoles.md`) — then a name and a directory, which can be typed or picked with the directory picker
 (see "Browsing directories" in `docs/product/projects.md`). Editing an account offers its name and its directory, never

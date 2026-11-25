@@ -3,10 +3,9 @@ import React from "react";
 import type { ErrorPresentation } from "../../errors/errorPresentation";
 import { retryCanHelp } from "../../errors/errorRecovery";
 import { useT } from "../../i18n/react";
-import { AlertButton } from "./AlertButton";
 import { DaemonErrorMessage } from "./DaemonErrorMessage";
 import { errorDetails, errorRemedy } from "./errorParts";
-import { failureRecoveryAction, RecoveryLink } from "./ErrorGuidance";
+import { failureRecoveryAction } from "./ErrorGuidance";
 import { ErrorAlert, type AlertStatus } from "./ErrorAlert";
 
 /** The Alert of a failure that is the state of what the screen shows: `title` says what failed, the failure's sentence
@@ -19,13 +18,15 @@ import { ErrorAlert, type AlertStatus } from "./ErrorAlert";
  * the same words announce again) are `ErrorAlert`'s. The button never takes focus from a press, so a retry started with
  * the pointer leaves focus where it was. `otherwise` is what the Alert says and offers in place of Try again where
  * there is none, because no retry can change the failure or `onRetry` is not given: the one thing to do about it, and
- * the button that does it, after any link out. */
+ * the button that does it, after any link out. A focused control removed by a new failure hands focus to Try again
+ * or to the view's `focusFallback`. */
 export function FailureAlert({
   textId,
   title,
   message,
   onRetry,
   otherwise,
+  focusFallback,
   pending = false,
   announce,
   attempt,
@@ -40,6 +41,7 @@ export function FailureAlert({
   message: ErrorPresentation;
   onRetry?: () => void;
   otherwise?: { remedy: React.ReactNode; action: React.ReactNode };
+  focusFallback?: () => HTMLElement | null | undefined;
   pending?: boolean;
   announce: boolean;
   attempt?: number;
@@ -51,12 +53,8 @@ export function FailureAlert({
   const t = useT();
   const action = failureRecoveryAction(t, message);
   // Only a link out stands among the buttons; any other recovery's control is not this alert's.
-  const link = action?.kind === "link" ? <RecoveryLink action={action} size="sm" /> : null;
-  const retry = onRetry && retryCanHelp(message) && (
-    <AlertButton kind="action" size="sm" focusOnPress={false} pending={pending} onPress={onRetry}>
-      {t("error.tryAgain")}
-    </AlertButton>
-  );
+  const recoveryLink = action?.kind === "link" ? action : undefined;
+  const retry = onRetry && retryCanHelp(message) ? { onPress: onRetry, pending } : undefined;
   return (
     <ErrorAlert
       textId={textId}
@@ -69,7 +67,10 @@ export function FailureAlert({
       status={status}
       remedy={retry || !otherwise ? errorRemedy(message) : otherwise.remedy}
       details={errorDetails(message)}
-      actions={retry || !otherwise ? (link || retry) && <>{link}{retry}</> : <>{link}{otherwise.action}</>}
+      recoveryLink={recoveryLink}
+      retry={retry}
+      actions={retry ? undefined : otherwise?.action}
+      focusFallback={focusFallback}
     >
       <DaemonErrorMessage error={message} part="summary" />
     </ErrorAlert>

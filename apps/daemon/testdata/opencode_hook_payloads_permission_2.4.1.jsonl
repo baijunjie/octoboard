@@ -1,0 +1,6 @@
+{"format":1,"hook_event_name":"turn.started","turn_id":"msg_20c2573fb001V2KhVTKYqtTbKp","prompt":"M35 measured prompt","session_id":"ses_df3da9824ffeAJ0DAbnmk6Hwd0"}
+{"format":1,"hook_event_name":"permission.asked","session_id":"ses_df3da9824ffeAJ0DAbnmk6Hwd0","request_id":"per_20c257422001f7ezIQc1GK1Hj4","tool":"bash","call_id":"probe-call","input":{"patterns":["echo M35_EXECUTED"],"always":["echo *"],"v2":"true","command":"echo M35_EXECUTED"}}
+{"format":1,"hook_event_name":"permission.replied","session_id":"ses_df3da9824ffeAJ0DAbnmk6Hwd0","request_id":"per_20c257422001f7ezIQc1GK1Hj4"}
+{"format":1,"hook_event_name":"record.changed","session_id":"ses_df3da9824ffeAJ0DAbnmk6Hwd0"}
+{"format":1,"hook_event_name":"record.changed","session_id":"ses_df3da9824ffeAJ0DAbnmk6Hwd0"}
+{"format":1,"hook_event_name":"session.idle","turn_id":"msg_20c2573fb001V2KhVTKYqtTbKp","last_assistant_message":"M35 stand-in answer","session_id":"ses_df3da9824ffeAJ0DAbnmk6Hwd0"}

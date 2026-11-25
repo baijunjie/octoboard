@@ -42,6 +42,10 @@ enum Op {
         whose: Whose,
     },
     /// Waits until `file` exists.
+    WriteFile {
+        file: PathBuf,
+        text: String,
+    },
     WaitFor {
         file: PathBuf,
     },
@@ -92,6 +96,10 @@ enum Op {
     /// what is written into it as typed keys, a paste's markers lost and a line held until its
     /// Enter, so a process that says it is ready to read says so after this.
     RawInput,
+    /// Records bytes read from the input in a file, without drawing them on the terminal.
+    RecordInput {
+        file: PathBuf,
+    },
     /// Copies its input to its output, byte for byte, until the input closes, with its console's
     /// line editing, echo and Ctrl-C handling off: what `stty raw -echo; cat` is on a Unix
     /// terminal.
@@ -114,6 +122,14 @@ enum Op {
     EchoAsTerminal {
         ready: PathBuf,
     },
+    Ask {
+        prompt: String,
+        answer_file: Option<PathBuf>,
+        yes: Vec<Op>,
+        no: Vec<Op>,
+        on_pipes: Vec<Op>,
+    },
+    Fail,
     Exit,
 }
 
@@ -243,6 +259,10 @@ impl Steps {
         self.with(Op::RawInput)
     }
 
+    pub(crate) fn record_input(self, file: &Path) -> Self {
+        self.with(Op::RecordInput { file: file.into() })
+    }
+
     pub(crate) fn echo_raw(self) -> Self {
         self.with(Op::EchoRaw)
     }
@@ -265,6 +285,34 @@ impl Steps {
         self.0.iter().find_map(|op| match op {
             Op::EchoAsTerminal { ready } => Some(ready.as_path()),
             _ => None,
+        })
+    }
+
+    pub(crate) fn ask(
+        self,
+        prompt: &str,
+        answer_file: Option<&Path>,
+        yes: Steps,
+        no: Steps,
+        on_pipes: Steps,
+    ) -> Self {
+        self.with(Op::Ask {
+            prompt: prompt.into(),
+            answer_file: answer_file.map(Into::into),
+            yes: yes.0,
+            no: no.0,
+            on_pipes: on_pipes.0,
+        })
+    }
+
+    pub(crate) fn fail(self) -> Self {
+        self.with(Op::Fail)
+    }
+
+    pub(crate) fn write_file(self, file: &Path, text: &str) -> Self {
+        self.with(Op::WriteFile {
+            file: file.into(),
+            text: text.into(),
         })
     }
 
@@ -406,6 +454,7 @@ fn run(steps: &[Op]) {
                 };
                 write_whole(file, &pid.to_string());
             }
+            Op::WriteFile { file, text } => write_whole(file, text),
             Op::WaitFor { file } => {
                 while !file.exists() {
                     std::thread::sleep(std::time::Duration::from_millis(20));
@@ -492,12 +541,43 @@ fn run(steps: &[Op]) {
                 println!("reply {}", line.trim_end_matches(['\r', '\n']));
             }
             Op::RawInput => raw_input(),
+            Op::RecordInput { file } => {
+                let mut target = std::fs::File::create(file).expect("open the input record");
+                std::io::copy(&mut std::io::stdin().lock(), &mut target).expect("record input");
+            }
             Op::EchoRaw => echo(None, |read| (read.to_vec(), false)),
             Op::EchoRawDrawingPastes => {
                 let mut paste_box = PasteBox::default();
                 echo(None, |read| (paste_box.echo(read), false))
             }
             Op::EchoAsTerminal { ready } => echo(Some(ready), as_echoed),
+            Op::Ask {
+                prompt,
+                answer_file,
+                yes,
+                no,
+                on_pipes,
+            } => {
+                use std::io::{IsTerminal, Write};
+                if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+                    run(on_pipes);
+                    continue;
+                }
+                print!("{prompt}");
+                std::io::stdout().flush().expect("flush the prompt");
+                let mut line = String::new();
+                std::io::stdin()
+                    .read_line(&mut line)
+                    .expect("read the answer");
+                let answer = line.trim_end_matches(['\r', '\n']);
+                if let Some(file) = answer_file {
+                    write_whole(file, answer);
+                }
+                let accepted =
+                    answer.eq_ignore_ascii_case("y") || answer.eq_ignore_ascii_case("yes");
+                run(if accepted { yes } else { no });
+            }
+            Op::Fail => std::process::exit(1),
             Op::Exit => std::process::exit(0),
         }
     }

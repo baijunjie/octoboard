@@ -46,8 +46,6 @@ pub enum McpInventoryFailure {
     CliMissing,
     /// The CLI did not answer in time.
     TimedOut,
-    /// The agent has no way of listing its MCP servers.
-    UnsupportedAgent,
     /// Anything else; `detail` says what.
     Failed,
 }

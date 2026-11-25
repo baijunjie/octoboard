@@ -1,11 +1,9 @@
 # Folder trust
 
-Each of the three agents stops the first time it runs in a folder it has not been told to trust, on a
+An agent that needs to trust a folder can stop at a
 confirmation of its own, and waits for a person. Octoboard never makes a project's trust decision itself.
 For a project session it presses the agent's own confirmation on the agent's own screen, with the keystrokes
-a person would type, and only once the user has given Octoboard permission. The agent then records the trust
-in its own configuration, as it does when a person answers, so its later launches in that folder do not ask
-again. Grok Build is the one agent whose record cannot reach the user's own configuration by itself; for a
+a person would type, and only once the user has given Octoboard permission. Some answers persist in the agent’s own configuration, while others trust only the session, as described below. For a Grok Build
 project session Octoboard carries the entry Grok wrote over, unchanged (see "Carrying Grok Build's trust
 record" below). A console session runs in a directory of Octoboard's own, so its trust is Octoboard's to
 give and the user is not asked: Grok Build is trusted there for the launch alone, and a confirmation that comes up
@@ -19,6 +17,11 @@ below).
 | Claude Code | The first time it runs in a directory it has not been trusted with. | A two-option list, "No, exit" and "Yes, I trust this folder", with the cursor starting on "No, exit". | Its own configuration. |
 | Codex | Only when the working directory is inside a git repository Codex has not been told to trust; outside one it never asks. | A two-option folder-trust confirmation, with the cursor starting on trust and continue. Octoboard recognises both the form whose other option quits and the folder-access form whose other option returns to the Agent Command Center. | `config.toml` in the Codex home that launch uses, for the **root of the git repository**: from a subfolder it records the repository's root, and from a linked worktree the main repository's root, so the record can cover more than the project asked about. |
 | Grok Build | Only when the folder holds content Grok's trust gates, such as an `AGENTS.md`, git repository or not. | "Do you trust the contents of this directory?", with "Yes, proceed" (`y`) and "No, quit" (`n`), and no cursor. A decline exits Grok. | Its trust store, `trusted_folders.toml`, in the session's own Grok home, from which Octoboard carries it to the user's own for a project session. |
+| Antigravity CLI | An untrusted project folder. | Yes, I trust this folder, or No. | In `trustedWorkspaces` in the launch’s private settings. |
+| GitHub Copilot CLI | An untrusted folder. | Trust for this session, remember the folder, or decline. | Only the remember option adds to `trustedFolders` in `config.json`. |
+| OpenCode | It shows no folder-trust confirmation. | — | — |
+| Qwen Code | An untrusted folder when folder trust is enabled in the account. | Trust the folder, trust the parent, or decline. | `trustedFolders.json`. |
+| Pi | A folder that holds Pi project resources. | Trust the folder, trust the parent, trust for this session, decline, or exit. | `trust.json` for a persistent choice. |
 
 Until its confirmation is answered the session does nothing else and reports nothing (see "What the statuses are derived
 from" in `docs/product/session-statuses.md`). Until the folder is trusted, Claude Code ignores the project's own `allow`
@@ -58,6 +61,11 @@ and no permission of Octoboard's is recorded for it. How the directory comes to 
 | Claude Code | Its confirmation comes up the first time Claude Code runs in each console's directory — Claude Code has no documented way to trust a directory for one launch — and Octoboard presses it at once. Claude Code then records the trust in its own trust list, as an entry naming that console's directory, and does not ask again for that console. |
 | Codex | Normally nothing comes up and nothing is recorded: Codex never asks outside a git repository. Only where the console's directory lies inside a git repository — a home directory kept in git, say — does Codex ask, and no per-launch setting answers it then; Octoboard presses it at once, and Codex records the trust for the **root of that repository**, which covers more than the console's directory. |
 | Grok Build | Nothing comes up and nothing is recorded in the user's trust list. Each launch writes an entry for the console's directory into the session's own copy of the trust store in the per-session Grok home (see "The per-session Grok home" in `docs/product/per-agent-launch-specifics.md`), which Grok takes without asking; the entry goes with that home. Nothing is carried to the user's own `trusted_folders.toml` for a console session, an answer given in the terminal included. Where the session's copy of the store cannot be read as a trust store, or the entry cannot be written, none is written, and Grok's confirmation comes up: Octoboard presses it at once, as it does any console session's, and whatever Grok records for that answer stays in the session's own Grok home. |
+| Antigravity CLI | The launch trusts the console in its private settings. |
+| GitHub Copilot CLI | Octoboard answers with the one-session choice, which leaves the user's trust list alone. |
+| OpenCode | It shows no folder-trust confirmation. |
+| Qwen Code | The launch supplies a temporary trust file. The account's trust file stays as it was. |
+| Pi | The launch uses `--approve` to trust the console for this run. |
 
 A press for a console session is made with the same keys and checks, and reported the same way when it fails, as any
 other confirmation Octoboard presses (see "How a confirmation is pressed" below): a failed press leaves a notice on the
@@ -83,7 +91,7 @@ agent keeps it:
 
 ## The trust permission
 
-What lets Octoboard press a confirmation without asking is one permission, **shared by all three agents**. It is
+What lets Octoboard press a confirmation without asking is one permission, **shared by agents that ask for folder trust**. It is
 Octoboard's own record, not any agent's trust record, and it comes in two forms; either one is enough:
 
 - **A project's permission** belongs to one project, is stored with it, and covers every later trust confirmation in
@@ -204,6 +212,11 @@ Octoboard sends only the keys that accept the confirmation, checking before each
 | Claude Code | A Down, then an Enter | Before the Down, that the confirmation as it was recognised is still showing and the cursor is on "No, exit"; before the Enter, that the cursor has moved to "Yes, I trust this folder" and the terminal has gone quiet. |
 | Codex | An Enter | That the confirmation as it was recognised is still showing with the cursor on "1. Trust and continue", and the terminal has gone quiet. |
 | Grok Build | `y` | That the session has sent no hook report and its process is still running. Grok keeps animating its logo while it waits, so neither its first drawing still showing nor a quiet terminal can be checked for. |
+| Antigravity CLI | Enter | The cursor is on the trust option. |
+| GitHub Copilot CLI | Enter | The cursor is on the one-session option. |
+| OpenCode | — | There is no folder-trust confirmation. |
+| Qwen Code | Enter | The cursor is on the folder option. A press is sent once, with time for the CLI to restart. |
+| Pi | Enter | The cursor is on the trust option. |
 
 Before any key, nothing else may have written into the session's input — since the attempt began for Claude Code,
 since the confirmation was recognised for Codex and Grok Build: the user typing in the terminal, or a message Octoboard

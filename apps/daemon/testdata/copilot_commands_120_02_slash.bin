@@ -1,0 +1,10 @@
+[?25l[7A[36m┃[m ❯ /add-dir[31;41HAllow file access to a directory and load its .github skills and agents as trus…
+┃   /agent[32;41HBrowse and select agents: /agent [name]
+┃   /ahp[33;41HAgent Host Protocol: manage the hosts your sessions run on, and the sessions on…
+┃   /allow-all[34;41HEnable all permissions (tools, paths, and URLs)
+┃   /app[35;41HPrefer a visual workspace? Try out the GitHub Copilot desktop app
+┃   /ask                                Ask a side question or reopen a recently cached answer without adding to history
+
+❯ /add-dir
+
+ Interactive · Manual Approval · [1m/help[m show help                                    [38;4H[?25h

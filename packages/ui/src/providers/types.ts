@@ -23,13 +23,28 @@ export type ProviderMessageName =
   | "dirHint"
   /** The action that opens a session's conversation in the provider's own desktop application, for a provider that
    * declares one (`capabilities.native_app_scheme`). */
-  | "openInApp";
+  | "openInApp"
+  /** The command of the agent's own CLI that signs an account of the provider in, for a provider that has no login flow
+   * (`capabilities.login_flow`), said where Octoboard cannot log the account in itself. Octoboard has no field for a key
+   * or any other credential: the command is all the window offers. The message may name the account's configuration
+   * directory as `{dir}` (a reference the window fills), the directory the CLI has to be pointed at to sign in that
+   * account and not the default one. A provider without one is worded by a generic
+   * sentence that names no agent and no command. */
+  | "signInHint"
+  /** A general note about the provider's sessions that holds whatever its settings are set to (that what a session
+   * changes in its own configuration is lost when it ends, and how to keep such a change), shown in the agent's settings
+   * dialog under the line saying what the settings apply to. It belongs to no one setting, so it is not a setting's
+   * help. A provider without one shows nothing there. */
+  | "sessionNote";
 
 /** What the UI presents of one provider, apart from the facts the daemon serves about it (`ProviderInfo`): its mark, its
  * colour, its brand-name placeholders, its messages and its error codes. `messages` holds the provider's catalog entries
  * per language, keys under `provider.<id>.`, for the catalogs to merge in: its names, the copy named by
  * `ProviderMessageName`, the copy of each setting its descriptor declares (`provider.<id>.setting.<setting>.*`, see
- * `settingMessageKey`) and the words of each code it declares (`provider.<id>.<code>`, with `.summary`, `.recovery` and
+ * `settingMessageKey`), the wording of each question its login asks (`provider.<id>.loginQuestion.<question>`, with its
+ * answers under `.yes` and `.no` for a choice, or `.field` and `.submit` for secret text; it may name the question's own params, which are technical
+ * literals such as a path or a file name, drawn as such, and never names; the dialog's first sentence already names the
+ * agent and the account) and the words of each code it declares (`provider.<id>.<code>`, with `.summary`, `.recovery` and
  * variants as for a core code). A provider without a `colour` draws in the neutral foreground. */
 export interface ProviderPresentation<Id extends string = string, Messages extends Record<string, string> = Record<string, string>> {
   readonly id: Id;

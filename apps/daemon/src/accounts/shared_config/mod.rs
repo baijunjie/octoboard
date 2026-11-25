@@ -55,6 +55,7 @@ pub(crate) use keep::{
 };
 pub use launch::before_launch;
 pub(crate) use link::entries;
+pub(crate) use registries::FileRegistry;
 pub(crate) use take_back::own_conversations;
 
 /// What the daemon holds in memory of the accounts' sharing.

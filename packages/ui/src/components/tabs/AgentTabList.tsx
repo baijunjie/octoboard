@@ -38,8 +38,8 @@ export function tabActionsTrigger(root: ParentNode, agent: Agent): HTMLElement |
  * `trailing` is a control at the end of the strip, flush with the container's end. With a trailing control, or with
  * `spanning` when there is none (for a divider drawn under it), the container spans its row; the tabs keep their
  * content width either way.
- * The container is padded at its end (`trailingWidth`, a Tailwind end-padding class) so the tabs scroll clear of it,
- * and HeroUI's scroll-forward chevron, which would sit under it, is moved to just before it.
+ * The controls' width (`trailingWidth`, a CSS length) leaves room for them and the scroll-forward chevron at the end
+ * of the strip.
  * `tabActions` gives each agent a control of its own at the end of its tab (see `useTabActionPlaces`): a tab is itself
  * the control, so nothing can be nested in it, and the control is a sibling placed over room the tab keeps for it. It is
  * hidden while its tab is not wholly in view, unless it holds keyboard focus, and a control that held focus when the
@@ -54,7 +54,7 @@ export function AgentTabList({
   notInstalledTip,
   onReorder,
   trailing,
-  trailingWidth = "pe-14",
+  trailingWidth = "var(--row-control-size)",
   spanning,
   tabActions,
   ...container
@@ -106,7 +106,8 @@ export function AgentTabList({
     <TabListContainer
       {...container}
       data-trailing-control={trailing ? "" : undefined}
-      className={`min-w-0 max-w-full ${trailing ? trailingWidth : spanning ? "" : "w-max self-start"} ${container.className ?? ""}`}
+      style={trailing ? { ...container.style, "--tab-trailing-width": trailingWidth } as React.CSSProperties : container.style}
+      className={`min-w-0 max-w-full ${trailing || spanning ? "" : "w-max self-start"} ${container.className ?? ""}`}
       after={(
         <>
           {tabActions && (

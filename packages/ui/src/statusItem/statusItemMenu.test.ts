@@ -255,6 +255,42 @@ describe("buildStatusItemMenu quota submenus", () => {
     expect(menuOf([], source({ addedAgents: [], agentAvailability: available("claude") })).submenus).toEqual([]);
   });
 
+  it("has no submenu for an agent whose provider declares no plan quota, whatever its accounts read", () => {
+    const menu = menuOf([], source({
+      agentAvailability: available("claude", "test_agent"),
+      accountQuotas: [quotaOf("claude", null), quotaOf("test_agent", null, { plan: null, windows: [], email: "dev@example.com" })],
+    }));
+    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["\u2068Claude\u2069 usage"]);
+    expect(menuOf([], source({ addedAgents: ["test_agent"], agentAvailability: available("test_agent") })).submenus).toEqual([]);
+  });
+
+  it("leaves the selected session's quota fields empty for an agent whose provider declares no plan quota, whatever its account reads", () => {
+    const sessionsOf = [
+      sessionOf("own", "c", undefined, "Own", "idle", { agent: "test_agent" }),
+      sessionOf("home", "c", undefined, "Home", "idle", { agent: "claude" }),
+    ];
+    const quota = source({ agentAvailability: available("claude", "test_agent"), accountQuotas: [quotaOf("claude", null), quotaOf("test_agent", null)] });
+    const menu = (selectedSessionId: string) => buildStatusItemMenu(t, {
+      quota,
+      consoles,
+      projects,
+      sessions: sessionsOf,
+      consoleMap: new Map(consoles.map((c) => [c.id, c])),
+      projectMap: new Map(projects.map((p) => [p.id, p])),
+      delegating: new Set(),
+      queuedSwitches: new Set(),
+      order: DEFAULT_SESSION_ORDER,
+      selectedSessionId,
+      currentConsoleId: "c",
+    });
+    const own = menu("own");
+    expect(own.quota_remaining).toBeUndefined();
+    expect(own.quota_weekly_remaining).toBeUndefined();
+    expect(own.quota_label).toBeUndefined();
+    expect(own.keep_awake_label).toBe("Octoboard is keeping the computer awake");
+    expect(menu("home").quota_remaining).toBe(82);
+  });
+
   it("still leaves out an added agent that is not available", () => {
     const menu = menuOf([], source({ addedAgents: ["codex", "claude"], agentAvailability: available("claude") }));
     expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["\u2068Claude\u2069 usage"]);

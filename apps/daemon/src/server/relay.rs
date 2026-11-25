@@ -67,9 +67,14 @@ fn locked(held: &Mutex<Option<Vec<RelayRequest>>>) -> MutexGuard<'_, Option<Vec<
 /// Handles a report on the calling thread, which is the reader of a holder's link: a panic in the
 /// handler is logged and must not take the reader, and with it the link, down.
 fn handle_report(state: &Arc<AppState>, request: RelayRequest) {
-    let RelayRequest { route, param, body } = request;
+    let RelayRequest {
+        route,
+        param,
+        body,
+        event,
+    } = request;
     let handled = catch_unwind(AssertUnwindSafe(|| {
-        callbacks::report(state.clone(), route, param, Bytes::from(body));
+        callbacks::report(state.clone(), route, param, Bytes::from(body), event);
     }));
     if handled.is_err() {
         tracing::error!(
@@ -96,8 +101,13 @@ impl RelayHandler for DaemonRelay {
         let state = self.state.clone();
         self.runtime.spawn(async move {
             state.await_adoption(ADOPTION_WAIT).await;
-            let RelayRequest { route, param, body } = request;
-            let reply = callbacks::handle(state, route, param, Bytes::from(body)).await;
+            let RelayRequest {
+                route,
+                param,
+                body,
+                event,
+            } = request;
+            let reply = callbacks::handle(state, route, param, Bytes::from(body), event).await;
             RelayReply {
                 status: reply.status.as_u16(),
                 body: reply.body,
@@ -174,6 +184,56 @@ mod tests {
             .unwrap();
     }
 
+    /// A helper's hook posted to the holder with an `event` and a payload that names none reaches
+    /// the daemon's hook handling under that event: the background work its payload lists is
+    /// recorded as a `Stop` records it, which the payload alone would not.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_hook_posted_to_the_holder_with_an_event_name_is_applied_under_it() {
+        let (state, dir) = app_state("relay-hook-event");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::console_session(
+                "s",
+                SessionStatus::Idle,
+            ))
+            .unwrap();
+        let relay = Arc::new(DaemonRelay::new(state.clone()));
+        let holders = in_process_relaying(dir.join("holders"), relay).expect("holders");
+
+        let (holders, issued) = tokio::task::spawn_blocking(move || {
+            let issued = holders
+                .issue_launch("s", None)
+                .expect("the holder issues a key");
+            (holders, issued)
+        })
+        .await
+        .unwrap();
+        let (port, key) = (issued.port, issued.key.clone());
+        let payload = br#"{"background_tasks": [{"id": "b1", "type": "shell"}]}"#;
+        let posted = tokio::task::spawn_blocking(move || {
+            crate::loopback::post(port, &key, "/hook/s?event=Stop", payload, PATIENCE)
+        })
+        .await
+        .unwrap();
+        assert!(posted.expect("answered").is_empty());
+
+        let waited = state.clone();
+        assert!(
+            crate::test_support::within(PATIENCE, move || {
+                waited.background_tasks_of("s").len() == 1
+            })
+            .await,
+            "the named hook never reached the daemon"
+        );
+        tokio::task::spawn_blocking(move || drop((issued, holders)))
+            .await
+            .unwrap();
+    }
+
     /// A report that arrives while the adopted sessions are not there yet is held, and applied
     /// once they are; a question waits for them the same way.
     #[tokio::test(start_paused = true)]
@@ -198,11 +258,13 @@ mod tests {
             route: crate::holder::protocol::RelayRoute::Hook,
             param: "s".to_string(),
             body: stop.to_vec(),
+            event: None,
         });
         let question = relay.relay(RelayRequest {
             route: crate::holder::protocol::RelayRoute::Mcp,
             param: "no-such-token".to_string(),
             body: br#"{"tool":"x"}"#.to_vec(),
+            event: None,
         });
         // Everything the report and the question could do before the adoption ends has run by
         // then, short of the wait for it running out.
@@ -327,5 +389,35 @@ mod tests {
         tokio::task::spawn_blocking(move || drop((issued, holders)))
             .await
             .unwrap();
+    }
+
+    /// A poll of a session's channel posted to the holder, with the launch's key, reaches that
+    /// session's channel in the daemon; a session with no channel is answered `404`, which ends
+    /// its helper.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_channel_poll_posted_to_the_holder_reaches_the_sessions_channel() {
+        let (state, dir) = app_state("relay-channel");
+        let channel = Arc::new(crate::session::channel::Channel::new());
+        let live = crate::test_support::idle_stand_in_of("s", crate::protocol::AgentId::TEST)
+            .with_transport(channel);
+        state.register_live(live.clone());
+        let relay = Arc::new(DaemonRelay::new(state.clone()));
+        let holders = in_process_relaying(dir.join("holders"), relay).expect("holders");
+        let (polled, no_channel) = tokio::task::spawn_blocking(move || {
+            let issued = holders.issue_launch("s", None).expect("a key");
+            let other = holders.issue_launch("t", None).expect("a key");
+            let poll = br#"{"wait":false}"#;
+            let polled =
+                crate::loopback::post(issued.port, &issued.key, "/channel/s", poll, PATIENCE);
+            let no_channel =
+                crate::loopback::post(other.port, &other.key, "/channel/t", poll, PATIENCE);
+            drop((issued, other, holders));
+            (polled, no_channel)
+        })
+        .await
+        .unwrap();
+        assert_eq!(polled.expect("answered"), br#"{"messages":[]}"#);
+        let no_channel = no_channel.expect_err("no channel");
+        assert_eq!(crate::loopback::error_status(&no_channel), Some(404));
     }
 }

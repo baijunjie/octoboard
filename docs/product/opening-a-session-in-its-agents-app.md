@@ -14,6 +14,11 @@ sessions on start** (see "Resuming the interrupted sessions at start" in
 | Claude Code | the Claude desktop application | `claude --desktop --resume <conversation id>`, run as the session's account (its config directory in the environment) in the session's directory; the application stays open once the command has exited |
 | Codex | the Codex application (the ChatGPT application) | the address `codex://threads/<conversation id>`, opened with the system's opener |
 | Grok Build | none | — |
+| Antigravity CLI | No supported conversation opener | — |
+| GitHub Copilot CLI | No supported conversation opener | — |
+| OpenCode | No supported conversation opener | — |
+| Qwen Code | No supported conversation opener | — |
+| Pi | No supported conversation opener | — |
 
 Everything happens on the **daemon's host**: for a remote window (see `docs/product/remote-daemons.md`) that is the
 remote machine, not the one the window runs on.
@@ -73,8 +78,10 @@ The daemon refuses the open, **with nothing archived, ended or changed**, when:
 - the session's account is having its sharing of the default configuration changed (`account_sharing_in_progress`;
   see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`);
 - the daemon has begun to shut down (`daemon_shutting_down`);
-- the agent has no application, the application is not installed, the session has no conversation yet or its
-  conversation id is not one the agent would take (`native_app_unavailable`; see "When opening fails" below);
+- the agent's provider declares no application (`provider_unsupported`, operation `native_app`; see "The error alert"
+  in `docs/product/error-alerts.md`);
+- the application is not installed, the session has no conversation yet or its conversation id is not one the agent
+  would take (`native_app_unavailable`; see "When opening fails" below);
 - the daemon's login-shell environment cannot be captured (`shell_environment_timeout`);
 - a process tree chosen to be kept cannot be kept (`process_shares_agent_console` or `process_in_agent_command_group`;
   see "Processes that cannot be kept" in `docs/product/background-processes.md`).
@@ -156,7 +163,7 @@ in the agent's app, and that the session is archived but may still be running; a
 again, and, if it keeps failing, to exit the agent from the session's terminal with its quit command. A retry waits for
 the process again.
 
-**The application cannot be asked.** The daemon answers `native_app_unavailable` when the agent has no application, the application is not installed, the
+**The application cannot be asked.** The daemon answers `native_app_unavailable` when the application is not installed, the
 session has no conversation yet, its conversation id is not one the agent would take, or the launch fails (for Claude
 Code, the `claude --desktop` command not running or exiting with an error). The window shows an error alert titled
 "Could not open the agent's app" (see `docs/product/error-alerts.md`), naming the session, saying that the app may not

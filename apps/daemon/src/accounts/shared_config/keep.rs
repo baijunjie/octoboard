@@ -48,7 +48,7 @@ pub(super) fn registries_in_default(
 /// so a session an account switch has since recorded on another account still names the one it
 /// left.
 pub(crate) async fn after_exit(state: &Arc<AppState>, session: &Session) {
-    if registries::registries(session.agent).is_empty() {
+    if !registries::has_registries(session.agent) {
         return;
     }
     let account = match super::launch::account_of(state, session) {
@@ -88,9 +88,7 @@ async fn every_account(state: &Arc<AppState>, until: Option<Instant>) {
         }
     };
     for account in accounts {
-        if registries::registries(account.agent).is_empty()
-            || !super::launch::links_anything(&account)
-        {
+        if !registries::has_registries(account.agent) || !super::launch::links_anything(&account) {
             continue;
         }
         if until.is_some_and(|until| Instant::now() >= until) {

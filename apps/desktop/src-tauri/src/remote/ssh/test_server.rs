@@ -5,12 +5,15 @@
 //! (a POSIX one unless told otherwise) and takes the commands in that shell's forms. Given a home
 //! directory, it runs the other `sh -c` commands there for real and also accepts the keys its
 //! `.ssh/authorized_keys` lists, so installing a device key can be seen working. Its connections
-//! can be dropped while it keeps listening, as a network that went away and came back. It can stand
-//! in for a host that signs in through keyboard-interactive alone, as PAM hosts do, and for one
-//! that never finishes some commands. It refuses a `direct-tcpip` channel unless it is told to carry
-//! them, to a listener of the test, and then reports a port nothing answers at (or a loopback address
-//! it is told nothing listens on) as a connection that failed, as OpenSSH on Unix does, or, told to
-//! stand in for Win32-OpenSSH, confirms the channel and then closes it.
+//! can be dropped while it keeps listening, as a network that went away and came back. Its port is
+//! one the system hands out, which anything else on the machine can connect to (see
+//! `crate::test_support::port_probe`): it counts as its connections only those that begin as an SSH
+//! client's does, and answers any other as a web server that knows no such page. It can stand in
+//! for a host that signs in through keyboard-interactive alone, as PAM hosts do, and for one that
+//! never finishes some commands. It refuses a `direct-tcpip` channel unless it is told to carry
+//! them, to a listener of the test, and then reports a port nothing answers at (or a loopback
+//! address it is told nothing listens on) as a connection that failed, as OpenSSH on Unix does, or,
+//! told to stand in for Win32-OpenSSH, confirms the channel and then closes it.
 
 use std::sync::{Arc, Mutex};
 
@@ -21,8 +24,32 @@ use russh::server::{self, Auth, Msg, Response as Answers, Session, VerifiedPubli
 use russh::{Channel, ChannelId, ChannelOpenFailure, MethodKind, MethodSet};
 
 use crate::remote::octoboardd::{Shell, SHELL_PROBE};
-use tokio::net::TcpListener;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
+
+/// What a client that speaks SSH sends first: its identification string (RFC 4253, 4.2).
+const SSH_IDENTIFICATION: &[u8; 4] = b"SSH-";
+
+/// The most of a request that is not SSH that is read before it is answered.
+const REQUEST_AT_MOST: usize = 8 * 1024;
+
+/// Answers a connection that began with `first`, which is not SSH, as a web server that knows no
+/// such page, once its request has come whole, so that the answer is read rather than the
+/// connection reset.
+async fn answer_stranger(mut stream: TcpStream, first: &[u8]) {
+    let mut request = first.to_vec();
+    let mut buffer = [0u8; 1024];
+    while !request.ends_with(b"\r\n\r\n") && request.len() < REQUEST_AT_MOST {
+        match stream.read(&mut buffer).await {
+            Ok(read) if read > 0 => request.extend_from_slice(&buffer[..read]),
+            _ => break,
+        }
+    }
+    let _ = stream
+        .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+        .await;
+}
 
 /// A user key encrypted with the passphrase `secret phrase`, made by `ssh-keygen` for these tests
 /// alone; the server does not authorize it.
@@ -75,12 +102,38 @@ pub struct Behaviour {
     /// The loopback addresses a `direct-tcpip` channel asks for that nothing listens on, as for a server
     /// listening on the other family alone.
     pub not_listening_on: Vec<String>,
-    /// How long the host takes to find that nothing listens where a `direct-tcpip` channel asks, as a
-    /// Windows host does while its connect attempt is retried. Channels are answered each on its own.
-    pub refusal_delay: std::time::Duration,
+    /// When the host says that nothing listens where a `direct-tcpip` channel asks: a Windows host
+    /// takes its connect attempt's time to find out. Channels are answered each on its own.
+    pub refusal: Refusal,
     /// Whether a `direct-tcpip` channel to where nothing listens is confirmed and then closed, as
     /// Win32-OpenSSH does, rather than refused.
     pub confirms_then_closes: bool,
+}
+
+/// When the host answers a `direct-tcpip` channel to where nothing listens. A host that takes its
+/// time is stood in for by an event, not a delay, so that no test's outcome is a matter of how long
+/// something took.
+#[derive(Clone, Copy, Default, PartialEq)]
+pub enum Refusal {
+    /// As soon as it is asked.
+    #[default]
+    AtOnce,
+    /// Once this many such channels have been waiting for their answer at once, as channels asked
+    /// for at once wait out the host's time together; after `PATIENCE` all the same, so that a
+    /// client that asks for one after the other is answered in the end.
+    Together(usize),
+    /// Not until the test says so (`TestServer::refuse`).
+    Held,
+}
+
+/// The `direct-tcpip` channels to where nothing listens that wait for their answer.
+#[derive(Clone, Copy, Default)]
+struct Refusals {
+    waiting: usize,
+    /// The most that have waited at once.
+    most: usize,
+    /// Whether `TestServer::refuse` was called.
+    let_go: bool,
 }
 
 /// How the host takes the password.
@@ -142,6 +195,7 @@ struct Shared {
     /// The host and port each `direct-tcpip` channel asked for.
     forwarded: Vec<(String, u32)>,
     sessions: Vec<JoinHandle<()>>,
+    refusals: Arc<tokio::sync::watch::Sender<Refusals>>,
 }
 
 pub struct TestServer {
@@ -179,20 +233,33 @@ impl TestServer {
                 let config = config.clone();
                 // The host's side of the connection runs on one end of a pipe, the client's TCP
                 // stream relayed to the other by a task of its own: aborting that task drops the
-                // client's stream, as a network gone away does.
+                // client's stream, as a network gone away does. The relay begins once the client
+                // has said it speaks SSH, which every SSH client does unasked, and counts the
+                // connection then; one that says anything else is none of the host's.
                 let (near, far) = tokio::io::duplex(64 * 1024);
                 tokio::spawn(async move {
                     if let Ok(running) = server::run_stream(config, far, handler).await {
                         let _ = running.await;
                     }
                 });
+                let counting = accepting.clone();
                 let session = tokio::spawn(async move {
                     let (mut stream, mut near) = (stream, near);
+                    let mut first = [0u8; SSH_IDENTIFICATION.len()];
+                    if stream.read_exact(&mut first).await.is_err() {
+                        return;
+                    }
+                    if &first != SSH_IDENTIFICATION {
+                        answer_stranger(stream, &first).await;
+                        return;
+                    }
+                    counting.lock().unwrap().connections += 1;
+                    if near.write_all(&first).await.is_err() {
+                        return;
+                    }
                     let _ = tokio::io::copy_bidirectional(&mut stream, &mut near).await;
                 });
-                let mut shared = accepting.lock().unwrap();
-                shared.connections += 1;
-                shared.sessions.push(session);
+                accepting.lock().unwrap().sessions.push(session);
             }
         });
         Self {
@@ -218,7 +285,9 @@ impl TestServer {
         self.shared.lock().unwrap().keyboard_interactive_starts
     }
 
-    /// How many SSH connections were accepted.
+    /// How many SSH connections were made to this host: those whose client said it speaks SSH,
+    /// however far they went after that. A connection to the port that says nothing or anything
+    /// else is none of them, so the count does not depend on what else on the machine connects.
     pub fn connections(&self) -> usize {
         self.shared.lock().unwrap().connections
     }
@@ -226,6 +295,18 @@ impl TestServer {
     /// The host and port each `direct-tcpip` channel asked for, in order.
     pub fn forwarded(&self) -> Vec<(String, u32)> {
         self.shared.lock().unwrap().forwarded.clone()
+    }
+
+    /// The most `direct-tcpip` channels to where nothing listens that waited for their answer at
+    /// once.
+    pub fn most_refusals_waiting(&self) -> usize {
+        self.shared.lock().unwrap().refusals.borrow().most
+    }
+
+    /// Lets the host answer the channels it holds (`Refusal::Held`), and those to come.
+    pub fn refuse(&self) {
+        let refusals = self.shared.lock().unwrap().refusals.clone();
+        refusals.send_modify(|refusals| refusals.let_go = true);
     }
 
     /// Changes the port `direct-tcpip` channels are carried to from now on.
@@ -445,7 +526,7 @@ impl server::Handler for Host {
         reply: server::ChannelOpenHandle,
         _session: &mut Session,
     ) -> Result<(), Self::Error> {
-        let (to, listening, confirms_then_closes, refusal_delay) = {
+        let (to, listening, confirms_then_closes, refusal, refusals) = {
             let mut shared = self.shared.lock().unwrap();
             shared
                 .forwarded
@@ -458,7 +539,8 @@ impl server::Handler for Host {
                     .iter()
                     .any(|host| host == host_to_connect),
                 behaviour.confirms_then_closes,
-                behaviour.refusal_delay,
+                behaviour.refusal,
+                shared.refusals.clone(),
             )
         };
         let Some(to) = to else {
@@ -474,7 +556,22 @@ impl server::Handler for Host {
             let connected = if listening {
                 tokio::net::TcpStream::connect(("127.0.0.1", to)).await.ok()
             } else {
-                tokio::time::sleep(refusal_delay).await;
+                refusals.send_modify(|refusals| {
+                    refusals.waiting += 1;
+                    refusals.most = refusals.most.max(refusals.waiting);
+                });
+                let mut told = refusals.subscribe();
+                match refusal {
+                    Refusal::AtOnce => {}
+                    Refusal::Together(many) => {
+                        let together = told.wait_for(|refusals| refusals.most >= many);
+                        let _ = tokio::time::timeout(crate::test_support::PATIENCE, together).await;
+                    }
+                    Refusal::Held => {
+                        let _ = told.wait_for(|refusals| refusals.let_go).await;
+                    }
+                }
+                refusals.send_modify(|refusals| refusals.waiting -= 1);
                 None
             };
             let Some(mut target) = connected else {
@@ -545,5 +642,35 @@ impl server::Handler for Host {
         session.eof(channel)?;
         session.close(channel)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::remote::ssh::{connect, ConnectError, Secret, Target};
+    use crate::test_support::port_probed;
+
+    #[tokio::test]
+    async fn only_a_connection_that_speaks_ssh_is_one_of_the_host_s() {
+        let server = TestServer::start(Behaviour::default()).await;
+        // The daemon's probe of the port is answered, and a connection that says nothing waits.
+        assert_eq!(port_probed(server.port).await, "HTTP/1.1 404 Not Found");
+        let _silent = TcpStream::connect(("127.0.0.1", server.port))
+            .await
+            .unwrap();
+        assert_eq!(server.connections(), 0);
+        // An SSH client is counted however far it goes: this one refuses the host's key.
+        let refused = connect(&Target {
+            host: "127.0.0.1".into(),
+            port: server.port,
+            user: "owner".into(),
+            secret: Secret::Password("right".into()),
+            pinned: None,
+        })
+        .await;
+        assert!(matches!(refused, Err(ConnectError::HostKeyUnknown { .. })));
+        assert_eq!(server.connections(), 1);
+        assert_eq!(server.authentications(), 0);
     }
 }

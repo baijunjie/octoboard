@@ -1,0 +1,68 @@
+[?25lFAILTURN now
+
+[85C[1K [2mG[m[2A[87D[?25h[?25l
+
+
+
+
+[?5W]7501;state=working:app=antigravity[6A[60C[K
+[34;1m> FAILTURN now[m
+⡿  [90mGenerating[94m...[m[K
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[94m>[m
+[90m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m[2A[2C[?25h[?25l[2A[11C[90m.[94m.[m
+
+[13D[?25h[?25l[2A⢿ 
+
+[?25h[?25l[2A⣻  [90mGenerating..[m
+
+[13D[?25h[?25l
+
+
+
+
+[?5W[0 q[39A[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL write_file {"Path":"/scratch/project/note.txt","Content":"hi"}[m
+[K
+[32m●[m [33;1mEdited[m 1 file [37m(note.txt)[m [37m(ctrl+o to expand)[m
+[K
+  Stub: tool finished.
+[K
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL edit_file {"Path":"/scratch/project/note.txt","Target":"hi","Replacement":"ho"}[m
+[K
+[32m●[m [33;1mEdited[m 1 file [37m(note.txt)[m [37m(ctrl+o to expand)[m
+[K
+  Stub: tool finished.
+[K
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL ask_question {"questions":[{"question":"Which target?","options":["Alpha","Beta"],"is_multi_select":false}]}[m
+[K
+[33;1m?[m Which target?
+[34;1m> Alpha[m[K
+[K
+  Stub: tool finished.
+[K
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> CALL call_mcp_tool {"ServerName":"octoboard","ToolName":"ping","Arguments":{}}[m
+[K
+[32m●[m [33;1mCalled[m 1 MCP tool [37m(octoboard/ping)[m [37m(ctrl+o to expand)[m
+[K
+  Stub: tool finished.
+[K
+[90m────────────────────────────────────────────────────────────[m
+[34;1m> FAILTURN now[m[K
+[K
+[31m⚠ agent executor error: generating and executing: Error 402, Message: Stub: credits depleted., Status:[m
+[31mRESOURCE_EXHAUSTED, Details: [][m[K
+[90mError ID: bce5f08b-695f-4ccd-9481-37685edc6578-29[m
+⣻  [90mGenerating...[m[K
+ [1mHow's the CLI experience so far? Help us improve:[m[K
+ [94m[1] Good  [2] Fine  [3] Bad  [0] Skip[m
+
+[90mesc to cancel[m[87X[87C[2mGemini 3.1 Pro · low[m]7501;state=error:app=antigravity:msg=YWdlbnQgZXhlY3V0b3IgZXJyb3I6IGdlbmVyYXRpbmcgYW5kIGV4ZWN1dGluZzogRXJyb3IgNDAyLCBNZXNzYWdlOiBTdHViOiBjcmVkaXRzIGRlcGxldGVkLiwgU3RhdHVzOiBSRVNPVVJDRV9FWEhBVVNURUQsIERldGFpbHM6IFtd[4A[K
+
+
+
+[90m? for shortcuts[m

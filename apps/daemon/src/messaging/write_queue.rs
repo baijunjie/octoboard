@@ -8,9 +8,10 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use super::outbox::{Drain, FirstTicket, HoldKind, PromptSignal, Ticket};
+use crate::messaging::texts::SenderNote;
 use crate::protocol::{notice_code, AgentId, Event, Notice, SessionStatus};
 use crate::session::dialogs::Sighting;
-use crate::session::LiveSession;
+use crate::session::{LiveSession, ToldLost};
 use crate::state::AppState;
 
 /// Why a held queue's messages were dropped when a planned stop had saved the queues first.
@@ -279,11 +280,11 @@ impl PromptSignal for HookPrompts<'_> {
     }
 
     /// Only for a provider that declares its writes confirmed by its report of the prompt it sent
-    /// (`DeliveryQuirks::confirms_by_reported_prompt`): Claude Code, the one agent seen to take a
-    /// write and not send it. Read now rather than taken from the status the drain was started
-    /// with, which can be stale by the time a message reaches the front: a write that lands
-    /// mid-turn is queued by the agent and sent only when the turn ends, which no short wait would
-    /// see.
+    /// (`DeliveryQuirks::confirms_by_reported_prompt`): one whose agent can take a write and not
+    /// send it, or whose screen can hide where a write landed. Read now rather than taken from
+    /// the status the drain was started with, which can be stale by the time a message reaches
+    /// the front: a write that lands mid-turn is queued by the agent and sent only when the turn
+    /// ends, which no short wait would see.
     fn expects_send(&self) -> bool {
         self.wait().is_some()
             && self
@@ -338,7 +339,7 @@ impl PromptSignal for HookPrompts<'_> {
     }
 
     fn trust_holds_writes(&self) -> bool {
-        self.live.trust.holds_writes()
+        self.live.trust.holds_writes() || self.state.awaits_tool_listing(self.live)
     }
 
     fn mid_turn(&self) -> bool {
@@ -351,20 +352,98 @@ impl PromptSignal for HookPrompts<'_> {
         self.state.note_written_mid_turn(&self.live.id);
     }
 
+    fn write_went_elsewhere(&self) -> bool {
+        self.live.write_went_elsewhere()
+    }
+
+    fn went_elsewhere(&self, ticket: Ticket, text: &str) {
+        let (id, agent) = (&self.live.id, self.live.agent);
+        self.state
+            .broadcast(went_elsewhere_notice(agent, text).about(id));
+        // Under the id the drain wrote it as (`Outbox::drain`): a late report of it withdraws the
+        // notice and tells its sender it ran after all (`AppState::ran_after_all`).
+        let logical_id = format!("{}:{ticket}", self.live.launch_id);
+        self.live.note_told_lost(
+            ToldLost::NotDelivered,
+            Some(logical_id.clone()),
+            text.to_string(),
+        );
+        // Its sender is answered by the error of the same code where it waits on a drain
+        // (`crate::messaging::delivery`); otherwise it was answered already, that the message was
+        // queued or written, and is told now. Reached from within the drain, which holds no handle
+        // of the state to tell the sender from: the session's own is used.
+        if !self.state.outbox.claim_went_elsewhere(ticket, text) {
+            if let Some(state) = self.live.app_state() {
+                state.tell_senders_of(
+                    id,
+                    agent,
+                    SenderNote::NotDelivered,
+                    &[(Some(logical_id), text.to_string())],
+                );
+            }
+        }
+    }
+
     fn writes_stopped(&self) -> bool {
         self.state.handover_barrier_raised()
+    }
+
+    fn given_back_while_written(&self, ticket: Ticket) {
+        // Under the id the drain wrote it as (`Outbox::drain`).
+        self.state
+            .message_returned(&self.live.id, &format!("{}:{ticket}", self.live.launch_id));
     }
 }
 
 impl AppState {
     /// Counts a prompt the agent of `live` reported sending ([`LiveSession::note_prompt_sent`]),
-    /// and withdraws the `message_not_sent` notice of a message it confirms was sent after all.
+    /// and withdraws the `message_not_sent` notice of a message it confirms was sent after all,
+    /// and the notice of a message told as not carried out that it is ([`Self::ran_after_all`]).
     pub fn note_prompt_sent(&self, live: &LiveSession, prompt: Option<&str>) {
+        if let Some(prompt) = prompt {
+            self.withdraw_dropped_message(live, prompt);
+            self.ran_after_all(live, prompt);
+        }
         if live.note_prompt_sent(prompt) {
             self.broadcast(Event::SessionNoticeWithdrawn {
                 session: live.id.clone(),
                 code: notice_code::MESSAGE_NOT_SENT,
+                detail: None,
             });
+        }
+    }
+
+    /// Where `prompt`, a prompt the agent of `live` reports sending, is a message told as not
+    /// carried out a while ago (`message_not_taken`, `message_not_delivered`;
+    /// [`LiveSession::take_told_lost`]), withdraws that message's notice, by its text, and tells the
+    /// session that sent it that it ran after all, so neither the user nor the sender sends it
+    /// again.
+    fn ran_after_all(&self, live: &LiveSession, prompt: &str) {
+        let Some((told, logical_id, text)) = live.take_told_lost(prompt) else {
+            return;
+        };
+        let code = match told {
+            ToldLost::NotTaken => notice_code::MESSAGE_NOT_TAKEN,
+            ToldLost::NotDelivered => notice_code::MESSAGE_NOT_DELIVERED,
+        };
+        tracing::info!(
+            session = %live.id,
+            "the agent reported sending a message told as not carried out; its notice is withdrawn"
+        );
+        self.broadcast(Event::SessionNoticeWithdrawn {
+            session: live.id.clone(),
+            code,
+            detail: Some(text.clone()),
+        });
+        // Reached from the hooks' path, which holds no handle of the state to tell the sender
+        // from: the session's own is used.
+        if let Some(state) = live.app_state() {
+            state.tell_senders_of(
+                &live.id,
+                live.agent,
+                SenderNote::RanAfterAll,
+                &[(logical_id, text)],
+            );
         }
     }
 
@@ -437,6 +516,20 @@ impl AppState {
         }
     }
 
+    /// Queues `task`, the first task of a launch that writes it as a message
+    /// (`crate::adapter::LaunchPlan::first_message`), ahead of everything queued for the session
+    /// while it was being launched, and keeps it in the store until it has been written, as a
+    /// message for an interrupted session is kept: the task can wait for as long as a startup
+    /// screen goes unanswered, and a queue lost meanwhile (a daemon that exits without saving it)
+    /// leaves the row, which the session's next launch queues again.
+    pub(crate) fn queue_first_task(&self, id: &str, task: &str) -> Result<()> {
+        let row = self.store.add_kept_message(id, task)?;
+        if self.outbox.push_kept_first(id, task, row).is_some() {
+            self.note_activity(id);
+        }
+        Ok(())
+    }
+
     /// How many messages are kept in the store for the session and not on the queue, which counts
     /// the ones that are (see [`Self::queued_count`]).
     pub fn kept_unqueued_count(&self, id: &str) -> Result<usize> {
@@ -452,43 +545,8 @@ impl AppState {
     /// it, the agent would have run another command than the one written, or it could not be
     /// written as sent) that it has not been told of yet; whichever caller asks first tells it.
     pub(crate) fn announce_refusals(&self, id: &str, agent: AgentId) {
-        use super::outbox::RefusalKind;
         for (_, refused) in self.outbox.refusals_to_announce(id) {
-            let reason = &refused.reason;
-            let notice = match &refused.kind {
-                RefusalKind::Agent => Notice::new(
-                    notice_code::MESSAGE_REFUSED,
-                    format!(
-                        "{} refused a message {} wrote for this session, so it was not sent: \
-                         {reason}. Later messages are still sent.",
-                        agent.label(),
-                        crate::APP_NAME
-                    ),
-                    &[("agent", agent.label()), ("detail", reason)],
-                ),
-                RefusalKind::Unwritable => Notice::new(
-                    notice_code::MESSAGE_NOT_WRITTEN,
-                    format!(
-                        "A message {} queued for this session could not be written, so it was \
-                         not sent: {reason}. Later messages are still sent.",
-                        crate::APP_NAME
-                    ),
-                    &[("agent", agent.label()), ("detail", reason)],
-                ),
-                RefusalKind::OtherCommand(command, offered) => Notice::new(
-                    notice_code::COMMAND_NOT_RECOGNISED,
-                    format!(
-                        "{} would have run {offered} instead of {command}, so the command was not \
-                         sent.",
-                        agent.label()
-                    ),
-                    &[
-                        ("agent", agent.label()),
-                        ("command", command),
-                        ("offered", offered),
-                    ],
-                ),
-            };
+            let notice = refusal_notice(agent, &refused);
             self.broadcast(notice.about(id));
         }
     }
@@ -598,6 +656,13 @@ impl AppState {
                 .about(id),
             );
         }
+        // Told to the user and its sender by the drain as it met it (`HookPrompts::went_elsewhere`).
+        if matches!(outcome, Drain::WentElsewhere(_)) && still_running {
+            // Nothing holds the queue behind it, and nothing else is coming to write it: each
+            // message after it is written, and checked, as this one was, by a drain of its own,
+            // so the sender of this one is told what became of this one.
+            live.retry_queue_soon();
+        }
         if matches!(outcome, Drain::Discarded(_)) && still_running {
             self.broadcast(
                 Notice::new(
@@ -690,7 +755,8 @@ impl AppState {
     }
 
     pub(crate) fn retry_pending_outbox(self: &Arc<Self>, id: &str) {
-        if self.outbox.len(id) > 0 {
+        // Only for what a drain may take: one held until the next message is written is not.
+        if self.outbox.takeable(id) > 0 {
             if let Ok(record) = self.session_record(id) {
                 self.spawn_flush_outbox(id, self.agent_status(&record));
             }
@@ -700,7 +766,7 @@ impl AppState {
     /// [`Self::retry_pending_outbox`] on the calling thread, for a caller off the runtime that may
     /// block on the write.
     pub(crate) fn flush_pending_outbox(&self, id: &str) {
-        if self.outbox.len(id) > 0 {
+        if self.outbox.takeable(id) > 0 {
             if let Ok(record) = self.session_record(id) {
                 self.flush_outbox(id, self.agent_status(&record));
             }
@@ -855,6 +921,10 @@ impl AppState {
                 WriteHold::Starting
             });
         }
+        // Past its startup screens, but its agent does not offer Octoboard's tools yet.
+        if self.awaits_tool_listing(&live) {
+            return Some(WriteHold::Starting);
+        }
         if let Some(dialog) = live.look_for_dialog().current {
             Some(WriteHold::AgentDialog(dialog))
         } else if live.needs_user_action() {
@@ -928,6 +998,37 @@ impl AppState {
     }
 }
 
+/// The `message_not_delivered` notice for a message `agent` did not report sending whose input
+/// box then read empty ([`Drain::WentElsewhere`]), with the message's `text` as `detail`, for the
+/// user to copy and send again.
+pub(crate) fn went_elsewhere_notice(agent: AgentId, text: &str) -> Notice {
+    Notice::new(
+        notice_code::MESSAGE_NOT_DELIVERED,
+        format!(
+            "{} wrote a message into this session, but {} did not send it to the conversation, \
+             and its input box is empty: the message went elsewhere (into a dialog, say) and may \
+             be lost. It was not delivered and will not be written again; send it again if it is \
+             still needed. It read:\n{text}",
+            crate::APP_NAME,
+            agent.label()
+        ),
+        &[("agent", agent.label()), ("detail", text)],
+    )
+}
+
+/// What the sender of such a message is told by the `message_not_delivered` error
+/// (`crate::messaging::delivery`), in its own words: the session it names is the one written
+/// into, never the sender's own.
+pub(crate) fn went_elsewhere_error_text(agent: AgentId) -> String {
+    format!(
+        "The message was written into the session, but {} did not send it to the conversation, \
+         and its input box then read empty: the message went elsewhere (into a dialog, say) and \
+         may be lost. It was not delivered and will not be written again; send it again if it is \
+         still needed.",
+        agent.label()
+    )
+}
+
 /// The `message_not_sent` notice for a message left unsent in `agent`'s input box: with `retry`, its
 /// submit key is still to be pressed once more where the box holds nothing but the message
 /// (`LiveSession::retry_unsent_submit`); without, it waits there for the user.
@@ -962,10 +1063,98 @@ pub(crate) fn unsent_notice(agent: AgentId, retry: bool) -> Notice {
     }
 }
 
+/// The notice that tells a session of a message of its that failed alone
+/// ([`AppState::announce_refusals`]).
+fn refusal_notice(agent: AgentId, refused: &super::outbox::Refused) -> Notice {
+    use super::outbox::RefusalKind;
+    let reason = &refused.reason;
+    match &refused.kind {
+        RefusalKind::Agent => Notice::new(
+            notice_code::MESSAGE_REFUSED,
+            format!(
+                "{} refused a message {} wrote for this session, so it was not sent: \
+                     {reason}. Later messages are still sent.",
+                agent.label(),
+                crate::APP_NAME
+            ),
+            &[("agent", agent.label()), ("detail", reason)],
+        ),
+        RefusalKind::Unwritable => Notice::new(
+            notice_code::MESSAGE_NOT_WRITTEN,
+            format!(
+                "A message {} queued for this session could not be written, so it was \
+                     not sent: {reason}. Later messages are still sent.",
+                crate::APP_NAME
+            ),
+            &[("agent", agent.label()), ("detail", reason)],
+        ),
+        RefusalKind::OtherCommand(command, offered) => Notice::new(
+            notice_code::COMMAND_NOT_RECOGNISED,
+            format!(
+                "{} would have run {offered} instead of {command}, so the command was not \
+                     sent.",
+                agent.label()
+            ),
+            &[
+                ("agent", agent.label()),
+                ("command", command),
+                ("offered", offered),
+            ],
+        ),
+        RefusalKind::NoSuchCommand(command) => Notice::new(
+            notice_code::COMMAND_NOT_FOUND,
+            format!(
+                "{} has no command {command}, so the command was not sent.",
+                agent.label()
+            ),
+            &[("agent", agent.label()), ("command", command)],
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::messaging::outbox::Drain;
+
+    /// A command the agent would have run as another is told with the command offered, under
+    /// `command_not_recognised`; one the agent has no command for is told so under a code of its
+    /// own, `command_not_found`, with no `offered` param.
+    #[test]
+    fn a_refused_command_is_told_with_the_command_offered_or_as_not_found() {
+        use crate::messaging::outbox::{RefusalKind, Refused};
+        let refused = |kind| Refused {
+            reason: "why".to_string(),
+            kind,
+        };
+        let other = refusal_notice(
+            AgentId::OPENCODE,
+            &refused(RefusalKind::OtherCommand(
+                "/zzz".to_string(),
+                "/zzzcmd".to_string(),
+            )),
+        );
+        assert_eq!(other.code, notice_code::COMMAND_NOT_RECOGNISED);
+        assert_eq!(
+            other.params.get("offered").map(String::as_str),
+            Some("/zzzcmd")
+        );
+        assert!(other
+            .message
+            .contains("would have run /zzzcmd instead of /zzz"));
+        let none = refusal_notice(
+            AgentId::OPENCODE,
+            &refused(RefusalKind::NoSuchCommand("/zzz".to_string())),
+        );
+        assert_eq!(none.code, notice_code::COMMAND_NOT_FOUND);
+        assert_eq!(none.params.get("command").map(String::as_str), Some("/zzz"));
+        assert!(!none.params.contains_key("offered"), "{:?}", none.params);
+        assert!(
+            none.message.contains("has no command /zzz"),
+            "{}",
+            none.message
+        );
+    }
     use crate::protocol::{AgentId, Code, Event, SessionStatus};
     use crate::state::test_support::{insert_record, session_record};
     use crate::test_support::{app_state, fake_live_session, PATIENCE};
@@ -1270,7 +1459,7 @@ mod tests {
         state.note_prompt_sent(&live, Some("go on"));
         let withdrawn: Vec<(String, Code)> = std::iter::from_fn(|| events.try_recv().ok())
             .filter_map(|event| match event {
-                Event::SessionNoticeWithdrawn { session, code } => Some((session, code)),
+                Event::SessionNoticeWithdrawn { session, code, .. } => Some((session, code)),
                 _ => None,
             })
             .collect();
@@ -1651,5 +1840,55 @@ mod tests {
         state.queue_relaunch_instruction("s", "then this");
         assert!(!state.relaunch_failed_after_restart("s"));
         assert_eq!(state.take_queued("s"), ["first", "then this"]);
+    }
+
+    /// Two idle sessions with a process each: `held`, whose queue holds only a message held until
+    /// the next one is written, and `plain`, with a message a drain may take.
+    fn held_and_plain(label: &str) -> (Arc<AppState>, Vec<crate::test_support::StandIn>) {
+        let (state, dir) = app_state(label);
+        let mut live = Vec::new();
+        for id in ["held", "plain"] {
+            insert_record(&state, &dir, id, SessionStatus::Idle);
+            let process = fake_live_session(id, AgentId::CLAUDE, 80, 24, "sleep 30");
+            state.register_live(process.clone());
+            live.push(process);
+        }
+        state.outbox.queue_held("held", "given back");
+        state.queue_message("plain", "go on");
+        (state, live)
+    }
+
+    /// A message held until the next one is written is not one to flush: with nothing else queued
+    /// the flush on the calling thread starts no drain, where a message a drain may take starts
+    /// one.
+    #[test]
+    fn a_held_message_alone_is_not_flushed() {
+        let (state, _live) = held_and_plain("state-held-alone-flush");
+        let before = state.outbox.drains_started();
+        state.flush_pending_outbox("held");
+        assert_eq!(state.outbox.drains_started(), before);
+        assert_eq!(state.outbox.len("held"), 1);
+
+        state.flush_pending_outbox("plain");
+        assert_eq!(state.outbox.drains_started(), before + 1);
+    }
+
+    /// Nor does the retry start a flush for it. The flush runs in a blocking task, which holds the
+    /// paused clock until it ends, so none is still to come once the runtime has settled.
+    #[tokio::test]
+    async fn a_held_message_alone_is_not_retried() {
+        let (state, _live) = held_and_plain("state-held-alone-retry");
+        let before = state.outbox.drains_started();
+        state.retry_pending_outbox("held");
+        crate::test_support::runtime_settled().await;
+        assert_eq!(state.outbox.drains_started(), before);
+        assert_eq!(state.outbox.len("held"), 1);
+
+        state.retry_pending_outbox("plain");
+        let deadline = Instant::now() + PATIENCE;
+        while state.outbox.drains_started() == before {
+            assert!(Instant::now() < deadline, "the retry started no flush");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
     }
 }

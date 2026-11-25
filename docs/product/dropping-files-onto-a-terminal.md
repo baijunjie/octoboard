@@ -1,9 +1,10 @@
 # Dropping files onto a terminal
 
 Files dragged from the system's file manager and dropped onto a terminal paste their paths into it, as a system
-terminal pastes the paths of files dropped onto it, so an agent reads a dropped file with its own tools, and takes a
-dropped image file as an attached image. Where the window runs on the machine its daemon runs on, the files' own paths
-are pasted; elsewhere the window first uploads each file to the daemon's host and pastes the path it was saved at.
+terminal pastes the paths of files dropped onto it, so an agent reads a dropped file with its own tools, and an agent
+that takes pasted images takes a dropped image file as an attached image. Where the window runs on the machine its
+daemon runs on, the files' own paths are pasted; elsewhere the window first uploads each file to the daemon's host and
+pastes the path it was saved at.
 Pasting an image from the clipboard is in `docs/product/pasting-images.md`, pasting text in
 `docs/product/terminal-copy-paste-and-selection.md`.
 
@@ -45,9 +46,11 @@ share no file system with the daemon, so a dropped file is uploaded to the daemo
 
 Each file is sent in the way that lets the agent take it best:
 
-- **A PNG, JPEG, GIF or WebP image of up to 10 MiB** is saved as a pasted image (`save_pasted_image`, see "The request"
-  in `docs/product/pasting-images.md`), so the agent takes its path as an attached image.
-- **Any other file**, an image in another format or over 10 MiB included, is attached: uploaded in parts and saved in
+- **A PNG, JPEG, GIF or WebP image of up to 10 MiB**, for a session whose agent takes pasted images (see "Which pastes
+  paste an image" in `docs/product/pasting-images.md`), is saved as a pasted image (`save_pasted_image`, see "The
+  request" in `docs/product/pasting-images.md`), so the agent takes its path as an attached image.
+- **Any other file**, an image in another format or over 10 MiB included, and any image dropped onto the terminal of a
+  session whose agent takes no pasted images, is attached: uploaded in parts and saved in
   the session's scratch directory (see "Uploading and saving a file" in `docs/product/attaching-files.md`), up to the
   largest file the daemon takes, `max_bytes` of the `snapshot`'s `attachments`, 100 MiB today (see "Limits" in
   `docs/product/attaching-files.md`). It is not converted.
@@ -62,8 +65,9 @@ A file is refused, before anything of it is sent, when it is:
 - a folder: only files can be attached;
 - empty;
 - larger than the daemon's limit for an attachment;
-- not a PNG, JPEG, GIF or WebP image of up to 10 MiB, where the daemon takes no attachments: the reason says that the
-  daemon the session runs on is too old to take anything else.
+- not saved as a pasted image (as "How each file is sent" above sets out), where the daemon takes no attachments: the
+  reason says that the daemon the session runs on is too old to take anything but PNG, JPEG, GIF and WebP images of up
+  to 10 MiB.
 
 A file whose bytes cannot be read on the way, and one the daemon fails to save, are refused as well. A refusal does not
 stop the drop: the drop's other files are still sent, and the paths of those that arrived are pasted together once the

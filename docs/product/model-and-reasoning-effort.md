@@ -124,6 +124,11 @@ lag behind the agent's releases:
 | Claude Code | Its four version-free aliases, best first — Fable, Opus, Sonnet and Haiku — which Claude Code itself resolves to the newest model of each family. A pick therefore never names a version and never goes stale. Nothing is run to list them: what each stands for and whether the account can use it are read from the model catalogue Claude Code keeps on disk for the account. |
 | Codex | Codex's own catalogue, by the name each entry carries, in the order Codex itself ranks them; entries it marks as not for listing are left out. |
 | Grok Build | The models `grok models` lists, in the order Grok itself lists them, by the display names Grok records in the model cache that run refreshes and by their ids where it records none; models Grok marks as hidden are left out. The command runs against a directory of Octoboard's own rather than the account's, so that cache is the one there (see "Where Grok Build's readings run" in `docs/product/account-quota-readings.md`). |
+| Antigravity CLI | The CLI’s catalogue. The picker groups the variants of a base model as its effort choices. |
+| GitHub Copilot CLI | The CLI’s SDK lists the account’s models and their supported efforts. Auto lets Copilot choose the model. |
+| OpenCode | The CLI’s `provider/model` IDs, including available free models. The catalogue declares no effort choices. |
+| Qwen Code | The models configured for the account’s selected authentication method. |
+| Pi | `pi --list-models` lists the account’s `provider/model` choices and available thinking levels. |
 
 What is stored, and passed to the agent, is the identifier behind the entry — Claude Code's alias, or the Codex or Grok
 Build catalogue's own id — not the name shown.
@@ -228,7 +233,9 @@ field's label, named that the models could not be loaded. In the console dialog'
 project-session settings, the mark follows the Model row's name, once; where the table is stacked, with the setting's
 name over each picker, it follows each Model name. Its popover says which of them it was, what to do about it, and any
 raw diagnostic output, as "Names and diagnostic details" in `docs/product/error-alerts.md` describes; it has no **Try
-again**. It opens as any mark does and opens no error alert (see "Failures, warnings and notes marked at their point" in
+again**. A failure an agent's provider words in its own terms with a remedy of its own (a `provider.<agent>.<code>`
+code; see "The error alert" in `docs/product/error-alerts.md`) is shown there by its sentence, then that remedy, then
+its details. It opens as any mark does and opens no error alert (see "Failures, warnings and notes marked at their point" in
 `docs/product/error-alerts.md`). The field offers the stored value alone, without marking it as not in the list, or
 nothing at all when there is none; the effort picker has no list to offer but stays operable, so a stored level can
 still be cleared. A refusal of the model-list request is shown the same way, with its actual reason, including named
@@ -391,11 +398,18 @@ and 4 (see "The default model" above).
 | Claude Code | The model and effort of each reply in the session's main conversation; its own native subagents, which run other models, and Claude Code's own notices are skipped. |
 | Codex | The model and effort of each turn's context record. |
 | Grok Build | The model and effort the session's summary records as configured, not the model a request was served by. |
+| Antigravity CLI | No native model or effort observation from its stored transcript. |
+| GitHub Copilot CLI | Model and effort changes in the main conversation’s event log. |
+| OpenCode | The model and any variant recorded on the assistant request. |
+| Qwen Code | No native model or effort observation from its stored chat. |
+| Pi | The model and thinking level recorded on the active session branch. |
 
 The last record that names a model, or an effort, wins; a record that names neither leaves the last one known in place.
 Codex's turn context is the exception for the effort: it carries the effort its whole configuration resolved to and
 leaves it out when none sets one, so a turn context that names a model and no effort unsets an effort an earlier turn
-named. They are collected alongside the context size and as often (see "When the context size refreshes" in
+named. For an agent whose record is a tree (see "What the history lists" in `docs/product/session-history.md`), only
+the records of the conversation's current branch count: a model or effort named on what the user went back on does
+not. They are collected alongside the context size and as often (see "When the context size refreshes" in
 `docs/product/session-context.md`), kept through archiving and restarting Octoboard, and cleared when the session moves
 to a different native conversation, until the new one shows its own. They are reported on the session as
 `observed_model` and `observed_effort`, separate from the session's launch choices `model` and `effort`. A model-change
@@ -408,7 +422,7 @@ records the new values. Moving or recreating the same records does not make thei
 observation.
 
 **The agent's own default level.** Where the records name the model a session runs but no effort, the level that model
-runs at by itself is worked out per agent:
+runs at by itself can be inferred only when the provider exposes it. The following cases have specific rules.
 
 | Agent | Where the level comes from |
 |---|---|

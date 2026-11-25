@@ -17,8 +17,10 @@ fn is_spinner_glyph(c: char) -> bool {
     is_braille_spinner_glyph(c)
         || matches!(
             c,
-            '\u{25D0}'..='\u{25D3}'
+            '\u{23F2}'
+                | '\u{25D0}'..='\u{25D3}'
                 | '\u{25F0}'..='\u{25F7}'
+                | '\u{270B}'
                 | '\u{2722}'..='\u{2727}'
                 | '\u{2729}'..='\u{273D}'
                 | '\u{00B7}'
@@ -282,22 +284,68 @@ mod tests {
         assert_eq!(parser.leading_glyph(), None);
     }
 
+    /// The titles the parsed screen reports are read by the same rule: the glyph is the leading
+    /// glyph and the stored title is without it.
+    #[test]
+    fn a_raised_hand_and_a_timer_are_read_the_same_off_the_parsed_screen() {
+        for glyph in ['\u{270B}', '\u{23F2}'] {
+            let mut parser = Parser::default();
+            assert_eq!(
+                parser.take(&[Some(format!("{glyph} Waiting"))]),
+                Some(Some("Waiting".to_owned()))
+            );
+            assert_eq!(parser.leading_glyph(), Some(glyph));
+            assert_eq!(parser.take(&[Some(glyph.to_string())]), Some(None));
+            assert_eq!(parser.leading_glyph(), Some(glyph));
+            assert_eq!(
+                parser.take(&[Some(format!("{glyph}Waiting"))]),
+                Some(Some(format!("{glyph}Waiting")))
+            );
+        }
+    }
+
+    /// What a title is stored as, and, where a row says, the glyph the provider is handed (`None`
+    /// for a title with no leading glyph; a row left open is not asserted).
     #[test]
     fn leading_spinner_glyphs_are_not_part_of_the_title() {
+        const OPEN: Option<Option<char>> = None;
         let mut parser = Parser::default();
-        for (sent, kept) in [
-            ("\x1b]2;◐ Fix the build\x07", Some("Fix the build")),
-            ("\x1b]2;◑ Fix the build\x07", Some("Fix the build")),
-            ("\x1b]2;⠙⠹  Build\x07", Some("Build")),
-            ("\x1b]2;✳\x07", None),
-            ("\x1b]2;●Recording\x07", Some("●Recording")),
-            ("\x1b]2;Build ◐ done\x07", Some("Build ◐ done")),
+        for (sent, kept, glyph) in [
+            ("\x1b]2;◐ Fix the build\x07", Some("Fix the build"), OPEN),
+            ("\x1b]2;◑ Fix the build\x07", Some("Fix the build"), OPEN),
+            ("\x1b]2;⠙⠹  Build\x07", Some("Build"), OPEN),
+            ("\x1b]2;✳\x07", None, OPEN),
+            (
+                "\x1b]2;✋ Fix the build\x07",
+                Some("Fix the build"),
+                Some(Some('\u{270B}')),
+            ),
+            (
+                "\x1b]2;⏲ Fix the build\x07",
+                Some("Fix the build"),
+                Some(Some('\u{23F2}')),
+            ),
+            ("\x1b]2;✋\x07", None, Some(Some('\u{270B}'))),
+            ("\x1b]2;⏲\x07", None, Some(Some('\u{23F2}'))),
+            ("\x1b]2;✋Fix\x07", Some("✋Fix"), OPEN),
+            ("\x1b]2;⏲Fix\x07", Some("⏲Fix"), OPEN),
+            (
+                "\x1b]2;Build ✋ done\x07",
+                Some("Build ✋ done"),
+                Some(None),
+            ),
+            ("\x1b]2;Build ⏲ done\x07", Some("Build ⏲ done"), Some(None)),
+            ("\x1b]2;●Recording\x07", Some("●Recording"), OPEN),
+            ("\x1b]2;Build ◐ done\x07", Some("Build ◐ done"), OPEN),
         ] {
             assert_eq!(
                 parser.feed(sent.as_bytes()),
                 Some(kept.map(str::to_owned)),
                 "{sent:?}"
             );
+            if let Some(glyph) = glyph {
+                assert_eq!(parser.leading_glyph(), glyph, "{sent:?}");
+            }
         }
     }
 

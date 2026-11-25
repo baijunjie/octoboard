@@ -1,0 +1,22 @@
+[
+  {
+    "id": "msg_20bda3d7a001Vx9kzYjnPOhEUv",
+    "info": "{\"role\":\"user\",\"time\":{\"created\":1795495181690},\"agent\":\"build\",\"model\":{\"providerID\":\"stub\",\"modelID\":\"m\"},\"summary\":{\"diffs\":[]}}",
+    "part": "{\"type\":\"text\",\"text\":\"one prompt\"}"
+  },
+  {
+    "id": "msg_20bda3f1d00137Kmdns6ocPOgQ",
+    "info": "{\"parentID\":\"msg_20bda3d7a001Vx9kzYjnPOhEUv\",\"role\":\"assistant\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"/private/tmp/octoboard-m34.kHoYvx/work\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":1290,\"input\":1234,\"output\":56,\"reasoning\":0,\"cache\":{\"write\":0,\"read\":0}},\"modelID\":\"m\",\"providerID\":\"stub\",\"time\":{\"created\":1795495182109,\"completed\":1795495182499},\"finish\":\"stop\"}",
+    "part": "{\"type\":\"step-start\"}"
+  },
+  {
+    "id": "msg_20bda3f1d00137Kmdns6ocPOgQ",
+    "info": "{\"parentID\":\"msg_20bda3d7a001Vx9kzYjnPOhEUv\",\"role\":\"assistant\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"/private/tmp/octoboard-m34.kHoYvx/work\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":1290,\"input\":1234,\"output\":56,\"reasoning\":0,\"cache\":{\"write\":0,\"read\":0}},\"modelID\":\"m\",\"providerID\":\"stub\",\"time\":{\"created\":1795495182109,\"completed\":1795495182499},\"finish\":\"stop\"}",
+    "part": "{\"type\":\"text\",\"text\":\"Stand-in reply\",\"time\":{\"start\":1795495182488,\"end\":1795495182492}}"
+  },
+  {
+    "id": "msg_20bda3f1d00137Kmdns6ocPOgQ",
+    "info": "{\"parentID\":\"msg_20bda3d7a001Vx9kzYjnPOhEUv\",\"role\":\"assistant\",\"mode\":\"build\",\"agent\":\"build\",\"path\":{\"cwd\":\"/private/tmp/octoboard-m34.kHoYvx/work\",\"root\":\"/\"},\"cost\":0,\"tokens\":{\"total\":1290,\"input\":1234,\"output\":56,\"reasoning\":0,\"cache\":{\"write\":0,\"read\":0}},\"modelID\":\"m\",\"providerID\":\"stub\",\"time\":{\"created\":1795495182109,\"completed\":1795495182499},\"finish\":\"stop\"}",
+    "part": "{\"reason\":\"stop\",\"type\":\"step-finish\",\"tokens\":{\"total\":1290,\"input\":1234,\"output\":56,\"reasoning\":0,\"cache\":{\"write\":0,\"read\":0}},\"cost\":0}"
+  }
+]

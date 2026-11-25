@@ -1,0 +1,7 @@
+{"format":1,"hook_event_name":"session.created","session_id":"ses_dfb323e84ffe8dqwmMEf992D0E"}
+{"format":1,"hook_event_name":"turn.started","turn_id":"msg_204cdc22f001ae3R5v411AwNgt","prompt":"a SLOW9 BASH one","session_id":"ses_dfb323e84ffe8dqwmMEf992D0E"}
+{"format":1,"hook_event_name":"session.created","session_id":"ses_dfb322ba2ffeYbyNul9GveH875"}
+{"format":1,"hook_event_name":"turn.started","turn_id":"msg_204cdd46b001FC7dtkQrrKLeaF","prompt":"second hello","session_id":"ses_dfb322ba2ffeYbyNul9GveH875"}
+{"format":1,"hook_event_name":"session.idle","turn_id":"msg_204cdd46b001FC7dtkQrrKLeaF","last_assistant_message":"Final answer from stub.","session_id":"ses_dfb322ba2ffeYbyNul9GveH875"}
+{"format":1,"hook_event_name":"turn.started","turn_id":"msg_204ce0d92001XTpkUS8Pe0WtJf","prompt":"third hello","session_id":"ses_dfb323e84ffe8dqwmMEf992D0E"}
+{"format":1,"hook_event_name":"session.idle","turn_id":"msg_204ce0d92001XTpkUS8Pe0WtJf","last_assistant_message":"Final answer from stub.","session_id":"ses_dfb323e84ffe8dqwmMEf992D0E"}

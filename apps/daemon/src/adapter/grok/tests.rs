@@ -6,6 +6,21 @@ use std::path::PathBuf;
 use super::*;
 use crate::adapter::tests::{spec_fixture, SpecFixture};
 
+/// Grok Build's status comes from its hooks and signals, which win over OSC 7501.
+#[test]
+fn it_has_a_status_integration() {
+    assert!(GrokProvider.has_status_integration());
+}
+
+/// Grok Build says its session has started with its `SessionStart` event and no other.
+#[test]
+fn only_session_start_announces_the_session_start() {
+    crate::adapter::tests::only_announces_session_start(
+        crate::protocol::AgentId::GROK,
+        "SessionStart",
+    );
+}
+
 #[test]
 fn native_download_versions_are_read_through_the_launcher_symlink() {
     let scratch = crate::test_support::ScratchDir::new("grok-installed-version");
@@ -170,10 +185,9 @@ fn the_terminal_appearance_sets_grok_theme() {
 /// resume too.
 #[test]
 fn memory_is_turned_off_only_when_the_launch_says_so() {
-    assert!(
-        crate::protocol::AgentId::GROK
-            .descriptor()
-            .native_memory_switch
+    assert_eq!(
+        crate::protocol::AgentId::GROK.descriptor().native_memory,
+        crate::providers::NativeMemory::Switchable
     );
     let mut fixture = spec_fixture();
     with_default_home(&mut fixture);
@@ -248,7 +262,72 @@ fn a_model_and_effort_come_after_the_rules_and_before_the_task() {
     let rules = plan.args.iter().position(|arg| arg == "--rules").unwrap();
     assert_eq!(
         plan.args[rules + 2..],
-        ["--model", "grok-4", "--reasoning-effort", "low", "do it"]
+        [
+            "--model",
+            "grok-4",
+            "--reasoning-effort",
+            "low",
+            "--",
+            "do it"
+        ]
+    );
+}
+
+/// A new session's task is the one argument after a bare `--` that ends the arguments, so a task
+/// that starts with `-` (a list, "--help me with this") is the prompt and not an option. A resume
+/// carries no task and no `--`.
+#[test]
+fn a_new_sessions_task_is_the_one_argument_after_a_bare_double_dash() {
+    for task in ["do it", "- a list", "--help me with this", "-p x"] {
+        let mut fixture = spec_fixture();
+        with_default_home(&mut fixture);
+        fixture.model = Some("grok-4".to_string());
+        let mut spec = fixture.spec();
+        spec.task = Some(task);
+        let plan = plan_isolated(&spec).expect("plan");
+        assert_eq!(plan.args[plan.args.len() - 2..], ["--", task], "{task:?}");
+        for count in ["--", task] {
+            assert_eq!(
+                plan.args.iter().filter(|arg| *arg == count).count(),
+                1,
+                "{task:?}"
+            );
+        }
+
+        spec.resume_agent_session_id = Some("agent-side-id");
+        let resumed = plan_isolated(&spec).expect("plan");
+        assert!(
+            !resumed.args.iter().any(|arg| arg == "--" || arg == task),
+            "{task:?}"
+        );
+    }
+}
+
+/// The prompt a new session records as submitted at launch is the task as the arguments carry
+/// it, which is the prompt Grok's hook then reports: Grok reports it verbatim and the two are
+/// matched as they are, so a recorded text that differed by as much as a leading space would stay
+/// pending for the whole session.
+#[test]
+fn a_new_sessions_recorded_prompt_is_the_one_its_hook_reports() {
+    use crate::hooks::HookInterpreter;
+    let task = "- update deps";
+    let mut fixture = spec_fixture();
+    with_default_home(&mut fixture);
+    let mut spec = fixture.spec();
+    spec.task = Some(task);
+    let plan = plan_isolated(&spec).expect("plan");
+    let passed = plan.args.last().expect("the task").clone();
+    let recorded = crate::session::term::command_line_prompt(
+        plan.first_message.as_deref(),
+        plan.shaped_prompt.as_deref(),
+        spec.task,
+    );
+    assert_eq!(recorded.as_deref(), Some(passed.as_str()));
+    // What Grok's `UserPromptSubmit` carries for the prompt it was started with.
+    let payload = serde_json::json!({ "hookEventName": "UserPromptSubmit", "prompt": passed });
+    assert_eq!(
+        hooks::GrokHooks.submitted_prompt(&payload),
+        recorded.as_deref()
     );
 }
 
@@ -320,7 +399,7 @@ fn permission_modes_apply_on_fresh_launches_and_resumes_without_account_writebac
             let model = plan.args.iter().position(|arg| arg == "--model").unwrap();
             let mut tail = vec!["--model", "grok-4", "--reasoning-effort", "low"];
             if !resume {
-                tail.push("do it");
+                tail.extend(["--", "do it"]);
             }
             assert_eq!(plan.args[model..], tail);
             let farm = PathBuf::from(&plan.env[0].1);

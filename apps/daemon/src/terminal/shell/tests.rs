@@ -652,6 +652,15 @@ fn a_shell_starts_in_the_snapshot_or_else_in_the_daemons_environment_without_age
             ("TERM".to_string(), crate::terminal::pty::TERM.to_string()),
         ])
     );
+
+    // The daemon's own environment, inherited from a session whose launch set a variable: the
+    // shell gets what the user had, not the session's value.
+    let user = HashMap::from([("PATH".to_string(), "/inherited/bin".to_string())]);
+    let session = crate::env_shell::session_environment(
+        &user,
+        &[("AGENT_HOME".to_string(), "/accounts/work".to_string())],
+    );
+    assert_eq!(shell_environment(None, session.into_iter()), inherited_only);
 }
 
 #[tokio::test(flavor = "multi_thread")]

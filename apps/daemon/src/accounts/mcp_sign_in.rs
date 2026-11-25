@@ -33,7 +33,8 @@ use crate::protocol::{
 use crate::state::AppState;
 
 /// How long a sign-in may wait for the user in the browser before the daemon gives up: as long as
-/// an account's own login.
+/// an account's own login whose flow declares no time of its own. What a provider's login flow
+/// declares is that login's alone.
 const SIGN_IN_TIMEOUT: Duration = LOGIN_TIMEOUT;
 
 /// How long a sign-out may take; it only removes a stored token.
@@ -394,13 +395,18 @@ async fn execute(state: &Arc<AppState>, job: Job, cancel: &Notify) -> McpServerA
         .auth
         .args(job.action, &job.server, job.config_dir.as_deref());
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
-    let command = adapter::account_command_of(
+    let command = match adapter::account_command_of(
         &job.binary,
         job.agent,
         &job.shell_env,
         job.config_dir.as_deref(),
         &args,
-    );
+    ) {
+        Ok(command) => command,
+        Err(unstartable) => {
+            return McpServerAuthOutcome::failed(unstartable.into_error().to_string());
+        }
+    };
     let mut process = match Process::spawn(command, job.agent.label(), false) {
         Ok(process) => process,
         Err(err) => {

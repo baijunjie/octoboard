@@ -1,0 +1,65 @@
+{
+  "models": [],
+  "auto": {
+    "defaultTier": "balance",
+    "tiers": [
+      {
+        "id": "balance",
+        "displayName": "Standard",
+        "description": "Prioritizes versatile models for efficient everyday coding.",
+        "type": "auto",
+        "fusionTier": "standard",
+        "status": {
+          "enabled": true,
+          "pickerVisible": true
+        }
+      },
+      {
+        "id": "hydrafusion",
+        "displayName": "High",
+        "description": "Prioritizes capable models for challenging tasks and deeper reasoning.",
+        "type": "fusion",
+        "fusionTier": "high",
+        "status": {
+          "enabled": false,
+          "pickerVisible": true,
+          "reason": "user_not_eligible",
+          "message": "This tier is not available for the user's Copilot plan."
+        }
+      },
+      {
+        "id": "hydrafusion-max",
+        "displayName": "Max",
+        "description": "Prioritizes the most capable models for the most demanding tasks and complex reasoning.",
+        "type": "fusion",
+        "fusionTier": "max",
+        "status": {
+          "enabled": false,
+          "pickerVisible": true,
+          "reason": "user_not_eligible",
+          "message": "This tier is not available for the user's Copilot plan."
+        }
+      },
+      {
+        "id": "fast",
+        "displayName": "Fast",
+        "description": "Optimizes for latency on interactive or integrator-led surfaces.",
+        "type": "auto",
+        "status": {
+          "enabled": true,
+          "pickerVisible": false
+        }
+      }
+    ],
+    "providerId": "copilot"
+  },
+  "imageModels": [
+    {
+      "id": "gpt-image-2.5-flare",
+      "name": "GPT Image 2.5 Flare",
+      "supportedOperations": [],
+      "isDefault": true,
+      "availability": "unavailable"
+    }
+  ]
+}

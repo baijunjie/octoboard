@@ -158,6 +158,46 @@ fn only_a_change_of_sign_in_is_an_event() {
     assert_eq!(advance(&mut Observed::default(), &Outcome::SignedOut), []);
 }
 
+/// A sign-in reading that could not tell says nothing: it is no sign-in, no sign-out and no
+/// recovery, and it leaves what was observed as it was.
+#[test]
+fn a_sign_in_reading_that_could_not_tell_is_no_event_and_changes_nothing() {
+    let mut observed = Observed::default();
+    advance(&mut observed, &Outcome::SignedIn);
+    assert_eq!(advance(&mut observed, &Outcome::Unknown), []);
+    assert_eq!(advance(&mut observed, &Outcome::SignedIn), []);
+    advance(&mut observed, &Outcome::SignedOut);
+    assert_eq!(advance(&mut observed, &Outcome::Unknown), []);
+    assert_eq!(
+        advance(&mut observed, &Outcome::SignedIn),
+        [Event::SignedIn]
+    );
+}
+
+/// Signed out, then a reading that could not tell, then signed out again is one sign-out, not two
+/// and not a recovery in between: the account never came back.
+#[test]
+fn a_sign_in_reading_that_could_not_tell_between_two_sign_outs_is_no_recovery() {
+    let mut observed = Observed::default();
+    advance(&mut observed, &Outcome::SignedIn);
+    assert_eq!(
+        advance(&mut observed, &Outcome::SignedOut),
+        [Event::SignedOut { was: None }]
+    );
+    assert_eq!(advance(&mut observed, &Outcome::Unknown), []);
+    assert_eq!(advance(&mut observed, &Outcome::SignedOut), []);
+    // It is still observed as signed out: signing in again is the one event that follows.
+    assert_eq!(
+        advance(&mut observed, &Outcome::SignedIn),
+        [Event::SignedIn]
+    );
+    // And a failure that ran before the unknown reading is not cleared by it.
+    let mut failing = Observed::default();
+    assert_eq!(advance(&mut failing, &failed("a")), [Event::Failing]);
+    assert_eq!(advance(&mut failing, &Outcome::Unknown), []);
+    assert_eq!(advance(&mut failing, &failed("a")), []);
+}
+
 #[test]
 fn a_failure_is_logged_when_it_starts_or_changes_and_when_it_recovers() {
     let mut observed = Observed::default();

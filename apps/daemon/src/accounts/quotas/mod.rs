@@ -47,6 +47,11 @@
 //! instead, so that the poller's next tick reads it again and kicks it, as it would have after any
 //! other reading.
 //!
+//! A provider that declares no quota window has no probe, and its accounts are read for their
+//! sign-in alone (`sign_in.rs`): the same occasions and the same accounts, the reading published
+//! with no plan and no windows, so the refusals and pickers that follow an account's sign-in state
+//! work for it as for any other.
+//!
 //! A reading of a provider that has them also carries the account's rate limit reset credits. Using
 //! one (`reset_credit.rs`, `use_credit.rs`) is only ever the user's own request
 //! ([`use_reset_credit`]): nothing in the poller, the kicks or the automatic account switch calls
@@ -65,6 +70,7 @@ mod observation;
 mod poll;
 pub(crate) mod probe;
 pub(crate) mod reset_credit;
+pub(crate) mod sign_in;
 mod use_credit;
 
 use std::collections::{HashMap, HashSet};
@@ -81,9 +87,9 @@ use crate::state::AppState;
 use crate::time::now_millis;
 use judgement::{exhausted_in, is_account_state, is_failure};
 pub use judgement::{preferred_signal, AccountSignal, Exhausted};
-#[cfg(test)]
-pub(crate) use poll::finish_probe_for_test;
 use poll::MAX_CONCURRENT_CLI_RUNS;
+#[cfg(test)]
+pub(crate) use poll::{finish_probe_for_test, refresh_for_test};
 pub use poll::{kick_held, refresh, refresh_in_background, refresh_requested, spawn, Scope};
 pub(crate) use poll::{refresh_on_demand, ShellSource};
 pub(crate) use reset_credit::CONSUME_TIMEOUT as RESET_CREDIT_TIMEOUT;
@@ -366,7 +372,12 @@ impl AccountQuotas {
                 return;
             }
             let observed = inner.observed.entry(claim.key.clone()).or_default();
-            diagnostics::advance(observed, &diagnostics::classify(quota))
+            let outcome = if trace.sign_in_unknown {
+                diagnostics::Outcome::Unknown
+            } else {
+                diagnostics::classify(quota)
+            };
+            diagnostics::advance(observed, &outcome)
         };
         diagnostics::log_events(&claim.key, quota, trace, &events);
     }
