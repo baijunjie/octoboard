@@ -101,6 +101,7 @@ const cursor = ref(-1);
 const playing = ref(false);
 const root = ref<HTMLElement | null>(null);
 const { running, reduced } = useVisibleMotion(root);
+const maxTypingUpdates = 32;
 let timer: ReturnType<typeof setInterval> | undefined;
 let step = 0;
 let waited = 0;
@@ -139,8 +140,8 @@ function advance() {
 }
 // A human pace: uneven gaps, longer after a space or a symbol.
 function gap(char: string | undefined) {
-  const base = 1 + Math.floor(Math.random() * 3);
-  return /[\s\-/.:|]/.test(char ?? "") && Math.random() < 0.5 ? base + 2 : base;
+  const base = Math.floor(Math.random() * 2);
+  return /[\s\-/.:|]/.test(char ?? "") && Math.random() < 0.5 ? base + 1 : base;
 }
 function tick() {
   const current = steps[step];
@@ -171,7 +172,8 @@ function tick() {
       delay--;
       return;
     }
-    chars++;
+    // Reveal long commands in small groups to keep their typing time bounded.
+    chars = Math.min(chars + Math.ceil(text.length / maxTypingUpdates), text.length);
     typed.value[current.line] = chars;
     delay = gap(text[chars - 1]);
     if (chars >= text.length) advance();
