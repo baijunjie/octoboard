@@ -64,8 +64,10 @@ impl LineFile {
             return Ok(Change::Unchanged);
         }
         self.pending = Some(signature);
-        // A file no longer than what was read, yet changed, was rewritten.
-        let rewritten = signature.0 <= self.offset;
+        // A file no longer than what was read, yet changed, was rewritten. With no line read yet
+        // there is nothing a rewrite could undo: an empty file that changes, or one whose reads fail
+        // and whose length reads as zero (a directory on Windows), is read again, not restarted.
+        let rewritten = self.offset > 0 && signature.0 <= self.offset;
         if rewritten {
             self.offset = 0;
         }
@@ -313,6 +315,37 @@ mod tests {
         let (lines, read) = lines_from(&path, 0);
         assert_eq!(lines, ["first\n", "last\n"]);
         assert_eq!(read, content.len() as u64);
+    }
+
+    /// A file that changed without growing past what was read from it was rewritten; one with no
+    /// line read from it yet only changed, since there is nothing a rewrite could have undone.
+    #[test]
+    fn a_change_restarts_a_file_only_once_a_line_was_read_from_it() {
+        let path = ScratchFile::new("line-file-rewritten", "record.jsonl");
+        let at = |seconds: u64| SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(seconds);
+        let write = |content: &str, modified: SystemTime| {
+            std::fs::write(&path, content).unwrap();
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_modified(modified)
+                .unwrap();
+        };
+        let mut file = LineFile::default();
+        write("", at(1_000_000));
+        assert!(file.check(&path).unwrap() == Change::Changed);
+        file.read(&path, |_| {}).unwrap();
+        // Still empty, but touched: read again, not restarted.
+        write("", at(2_000_000));
+        assert!(file.check(&path).unwrap() == Change::Changed);
+        file.read(&path, |_| {}).unwrap();
+        write("one\n", at(3_000_000));
+        assert!(file.check(&path).unwrap() == Change::Changed);
+        file.read(&path, |_| {}).unwrap();
+        // As long as what was read, yet changed.
+        write("two\n", at(4_000_000));
+        assert!(file.check(&path).unwrap() == Change::Restarted);
     }
 
     /// A line within the limit, newline included, is read whole.

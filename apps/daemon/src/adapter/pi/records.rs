@@ -559,7 +559,7 @@ mod tests {
                 SessionRecordPresence::Unknown
             );
         }
-        std::fs::remove_file(kept.join("linked")).unwrap();
+        crate::test_support::remove_symlink(kept.join("linked")).unwrap();
         for shell in &shells {
             assert_eq!(
                 resumability(&Locator::with_shell(shell.clone()), &session),

@@ -465,8 +465,9 @@ fn an_interpreter_or_installer_extension_counts_only_on_a_regular_files_own_name
     );
 }
 
-/// The types the host's shell launches are refused like any other: a file of one is kept for the
-/// viewer in a project and unreachable in a temp root, and as a folder name one launches nothing.
+/// The types the host's shell launches are refused like any other, whatever the case of the name: a
+/// file of one is kept for the viewer wherever it lies (in a project, in a temp root closed to
+/// others, elsewhere on the host), never to be opened, and as a folder name one launches nothing.
 #[test]
 fn the_hosts_own_launched_types_are_refused_on_a_files_own_name() {
     let dir = ScratchDir::new("path-links-host-launched");
@@ -494,13 +495,18 @@ fn the_hosts_own_launched_types_are_refused_on_a_files_own_name() {
             Some((PathLinkKind::Directory, false)),
             "{extension}"
         );
+        // The scratch directory is the temp root itself, so nothing above the file is judged.
         let in_temp = resolve(
             file.to_str().unwrap(),
             None,
             &temp_of(&dir),
             &ProjectRoots::default,
         );
-        assert_eq!(in_temp, None, "{extension}");
+        assert_eq!(
+            in_temp.map(|r| (r.kind, r.launchable)),
+            Some((PathLinkKind::File, true)),
+            "{extension}"
+        );
         // Anywhere else on the host it is kept for the viewer like a project's.
         let elsewhere = resolve(
             file.to_str().unwrap(),
