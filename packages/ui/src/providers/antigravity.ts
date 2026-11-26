@@ -690,10 +690,10 @@ function leftoversVariant(params: Readonly<Record<string, string | undefined>>):
 }
 
 /** Antigravity CLI. The mark is the logo its maker's site serves (antigravity.google, `favicon.svg`) without its round
- * background, scaled onto the arch of `d`: a blue arch under blurred colours (`art`), which no single fill carries, so
- * `d` alone is drawn in the text colour. Its colour is the green of
- * that gradient, darkened for the light tracks and lightened for the dark ones (see `.quota-meter--provider` in
- * `quota/QuotaMeter.css`); the gradient's blue would be taken for Codex's. */
+ * background, scaled onto the arch of `d`: a blue arch under blurred yellow, red and green (`art`), which no single fill
+ * carries; `d` in the text colour is its single-colour form. Its colour is the logo's green, darkened for the light
+ * tracks and lightened for the dark ones (see `.quota-meter--provider` in `quota/QuotaMeter.css`); the logo's blue would
+ * be taken for Codex's. */
 export const antigravity = {
   id: "antigravity",
   mark: {

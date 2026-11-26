@@ -284,20 +284,6 @@ pub(crate) fn symlink(target: impl AsRef<Path>, at: impl AsRef<Path>) -> std::io
     }
 }
 
-/// Removes the symbolic link at `at`, leaving what it leads to. Windows removes a link to a
-/// directory as a directory and denies removing it as a file, so there the kind of link decides.
-pub(crate) fn remove_symlink(at: impl AsRef<Path>) -> std::io::Result<()> {
-    let at = at.as_ref();
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::FileTypeExt;
-        if std::fs::symlink_metadata(at)?.file_type().is_symlink_dir() {
-            return std::fs::remove_dir(at);
-        }
-    }
-    std::fs::remove_file(at)
-}
-
 /// Makes the file at `path` one the system would run: execute permission for everyone on Unix.
 /// Windows runs a file by its extension, so there it changes nothing.
 pub(crate) fn make_executable(path: &Path) {

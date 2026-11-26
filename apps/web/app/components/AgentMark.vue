@@ -4,7 +4,7 @@ import { AGENT_MARKS, markArt } from "@octoboard/ui/agent-marks";
 const props = defineProps<{ agent: keyof typeof AGENT_MARKS }>();
 const id = useId();
 // A provider module's own constant SVG, never text from elsewhere.
-const art = computed(() => markArt(AGENT_MARKS[props.agent], `mark${id.replace(/[^a-zA-Z0-9]/g, "")}`));
+const art = computed(() => markArt(AGENT_MARKS[props.agent], `mark-${id}`));
 </script>
 
 <template>

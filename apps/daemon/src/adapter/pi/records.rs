@@ -559,7 +559,7 @@ mod tests {
                 SessionRecordPresence::Unknown
             );
         }
-        crate::test_support::remove_symlink(kept.join("linked")).unwrap();
+        crate::platform::fs::remove_file_or_link(&kept.join("linked")).unwrap();
         for shell in &shells {
             assert_eq!(
                 resumability(&Locator::with_shell(shell.clone()), &session),
