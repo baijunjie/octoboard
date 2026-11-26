@@ -33,6 +33,29 @@ pub fn below(dir: &Path, rest: &Path) -> PathBuf {
     }
 }
 
+/// `path` moved from `from` to `to`, for a `moved` answer: `None` when `path` is neither `from`
+/// nor below it. What `path` spells after `from` is kept as it is, its separators included: the
+/// program that recorded it chose them, and on Windows either one is a separator, so a path
+/// recorded with `/` keeps it. Where `path` does not start with `from` as `from` is spelled (the
+/// same directory spelled another way), the rest goes below `to` as [`below`] puts it.
+pub fn moved_below(path: &Path, from: &Path, to: &Path) -> Option<PathBuf> {
+    let rest = path.strip_prefix(from).ok()?;
+    let spelled_after = path
+        .to_str()
+        .zip(from.to_str())
+        .and_then(|(path, from)| path.strip_prefix(from.trim_end_matches(std::path::is_separator)))
+        .filter(|after| after.chars().next().is_none_or(std::path::is_separator))
+        .filter(|_| !to.to_string_lossy().ends_with(std::path::is_separator));
+    Some(match spelled_after {
+        Some(after) => {
+            let mut moved = to.as_os_str().to_os_string();
+            moved.push(after);
+            moved.into()
+        }
+        None => below(to, rest),
+    })
+}
+
 /// How often a rewrite starts over because the file changed between its read and its replace.
 const ATTEMPTS: usize = 3;
 
@@ -227,11 +250,7 @@ mod tests {
     const LIMIT: usize = 1024 * 1024;
 
     fn under(from: &'static str, to: &'static str) -> impl Fn(&Path) -> Option<PathBuf> {
-        move |path| {
-            path.strip_prefix(from)
-                .ok()
-                .map(|rest| below(Path::new(to), rest))
-        }
+        move |path| moved_below(path, Path::new(from), Path::new(to))
     }
 
     fn rewritten_any(text: &str, moved: &dyn Fn(&Path) -> Option<PathBuf>) -> Option<String> {
@@ -311,6 +330,42 @@ mod tests {
             Path::new(value["p"].as_str().unwrap()),
             Path::new("C:/Users/u/.agent/plugins/cache/tool")
         );
+    }
+
+    /// A moved path keeps what it spelled after the directory that moved, its separators
+    /// included, and names the new directory itself, with no separator at its end, where it
+    /// named the old one; a path that only begins with the same letters has not moved.
+    #[test]
+    fn a_moved_path_keeps_its_spelling_after_the_directory() {
+        let moved = |path: &str, from: &str, to: &str| {
+            moved_below(Path::new(path), Path::new(from), Path::new(to))
+                .map(|moved| moved.into_os_string().into_string().unwrap())
+        };
+        assert_eq!(
+            moved("/old//a/b", "/old", "/new").as_deref(),
+            Some("/new//a/b")
+        );
+        assert_eq!(moved("/old", "/old", "/new").as_deref(), Some("/new"));
+        assert_eq!(moved("/old/a", "/old/", "/new").as_deref(), Some("/new/a"));
+        assert_eq!(moved("/old/a", "/old", "/new/").as_deref(), Some("/new/a"));
+        assert_eq!(moved("/older/a", "/old", "/new"), None);
+        #[cfg(windows)]
+        {
+            // Either separator is the recorded one's to keep.
+            assert_eq!(
+                moved(r"C:\home/plugins/x", r"C:\home", r"D:\other").as_deref(),
+                Some(r"D:\other/plugins/x")
+            );
+            assert_eq!(
+                moved(r"C:\home\plugins\x", r"C:\home", r"D:\other").as_deref(),
+                Some(r"D:\other\plugins\x")
+            );
+            // The same directory spelled another way: the rest is joined below the new one.
+            assert_eq!(
+                moved("C:/home/plugins/x", r"C:\home", r"D:\other").as_deref(),
+                Some(r"D:\other\plugins/x")
+            );
+        }
     }
 
     /// A path that is not Unicode cannot be written into JSON whole, so the string stays.

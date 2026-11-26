@@ -2522,13 +2522,14 @@ mod tests {
         };
         let (status, out, err) = uninstall(dry, &fixture, &host, "", false);
         assert_eq!((status, err.as_str()), (0, ""));
+        let binary = format!("remove {}\n", fixture.install.binary.display());
         for said in [
             "start the daemon for a clean-up run, which runs no sessions, and clear",
             "account \"work\" shares",
             "then stop that daemon again",
             "remove the service",
             "turn lingering off",
-            "bin/octoboardd",
+            &binary,
             "Nothing was changed (--dry-run).",
         ] {
             assert!(out.contains(said), "{said}: {out}");

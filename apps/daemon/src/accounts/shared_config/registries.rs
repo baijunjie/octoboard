@@ -13,7 +13,7 @@ use super::link::Dirs;
 use super::moves::resolve;
 use crate::adapter::files::LARGE_FILE_LIMIT;
 use crate::adapter::provider;
-use crate::hostfs::json_paths::{below, rewrite_paths, try_rewrite_paths, Select};
+use crate::hostfs::json_paths::{below, moved_below, rewrite_paths, try_rewrite_paths, Select};
 use crate::protocol::{AgentId, SharingCause, SharingItemFailure, SharingLeft};
 
 type SourcePathResolver = fn(&Path) -> io::Result<Option<PathBuf>>;
@@ -242,16 +242,13 @@ fn repoint_file(
 }
 
 /// Rewrites, in `registry`, every string that is one of `from` or lies below it to the same path
-/// under `to`, and nothing else of the file (`crate::hostfs::json_paths`): a registry that is not
-/// there, or names nothing below `from`, is left as it is, byte for byte. One that is no regular
-/// file, or too large to read whole, is an error, and so is one that is not JSON while its text
-/// holds one of `from`: it may name the account's directory in a way that cannot be rewritten.
+/// under `to`, keeping what it spells after `from`, and nothing else of the file
+/// (`crate::hostfs::json_paths`): a registry that is not there, or names nothing below `from`, is
+/// left as it is, byte for byte. One that is no regular file, or too large to read whole, is an
+/// error, and so is one that is not JSON while its text holds one of `from`: it may name the
+/// account's directory in a way that cannot be rewritten.
 pub(super) fn repoint(registry: &Path, from: &[PathBuf], to: &Path) -> io::Result<()> {
-    let moved = |path: &Path| {
-        from.iter()
-            .find_map(|prefix| path.strip_prefix(prefix).ok())
-            .map(|rest| below(to, rest))
-    };
+    let moved = |path: &Path| from.iter().find_map(|prefix| moved_below(path, prefix, to));
     let names_from = |text: &str| from.iter().any(|path| holds(text, path));
     rewrite_paths(registry, LARGE_FILE_LIMIT, Select::Any, &moved, &names_from).map(|_| ())
 }

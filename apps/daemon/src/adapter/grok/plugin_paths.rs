@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use super::home::FARM_DIR;
 use crate::adapter::files::LARGE_FILE_LIMIT;
-use crate::hostfs::json_paths::{below, rewrite_paths, Select};
+use crate::hostfs::json_paths::{below, moved_below, rewrite_paths, Select};
 
 /// The entry of a Grok home that holds installed plugins and their registry.
 pub(super) const PLUGINS_DIR: &str = "installed-plugins";
@@ -64,9 +64,16 @@ impl PluginPaths {
     /// is logged and leaves the registry as it was.
     pub fn publish(&self) {
         let own = |path: &Path| {
-            path.strip_prefix(&self.session_plugins)
-                .ok()
-                .map(|rest| below(&self.user_plugins, rest))
+            if !path.starts_with(&self.session_plugins) {
+                return None;
+            }
+            // The home is what differs between the two: replacing it keeps what Grok wrote after
+            // it, its separators included, as Grok writes it whichever home it runs against.
+            moved_below(
+                path,
+                self.session_plugins.parent()?,
+                self.user_plugins.parent()?,
+            )
         };
         self.rewrite(&own, "after the session");
     }
