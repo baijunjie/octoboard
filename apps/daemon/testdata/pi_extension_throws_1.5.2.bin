@@ -1,0 +1,2 @@
+[31mError: Failed to load extension "/private/tmp/pi-m10/throws.js": Failed to load extension: probe: thrown while loading[39m
+[33mHint: Start without extensions using "pi -ne".[39m

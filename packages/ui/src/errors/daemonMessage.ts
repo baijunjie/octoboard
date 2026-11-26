@@ -12,7 +12,7 @@ import { providerLabel } from "../agents/providers";
 import { CODE, codeRecord, messageFacets, messageKey } from "./codes";
 import { sharingFailureCause, sharingFailureItems, sharingItemsText, sharingReasonKey } from "./sharingFailure";
 import { type Console, type Project, type ProviderInfo, type QuotaWindow, type Session, type Settings, type ShellTerminal } from "../protocol";
-import { type MessageParams } from "./codedError";
+import { nestedFailureParams, type MessageParams } from "./codedError";
 import { DEFAULT_ACCOUNT_NAME } from "../accounts/defaultAccount";
 
 /** The params that are record ids, and what each is shown as: the record's current name. */
@@ -85,8 +85,9 @@ export function hasRichMessage(code: string, params: MessageParams): boolean {
   return lacksSummary(code) || isMessageKey(messageKey(richMessageCode(code, params)));
 }
 
-/** Every referenced agent and product uses the same name treatment, including messages whose only
- * parameter is a global product name. */
+/** The product names a message names (an agent's label, a provider's product name, Git, the application, the
+ * daemon's operating system), each one plain text with no chip, including messages whose only parameter is a global
+ * product name. */
 export function referenceNameParams(code: string, params: MessageParams): string[] {
   const key = messageKey(messageCode(code, params));
   if (!isMessageKey(key)) return [];
@@ -102,7 +103,8 @@ export function messageCode(code: string, params: MessageParams): string {
   const variant = codeRecord(code)?.variantOf?.(params, daemonOs());
   const message = variant === undefined ? code : `${code}.${variant}`;
   if (code === CODE.project_directory_shared || (code === CODE.project_directory_trash_failed && (variant === "unanswered" || variant === "unreadable"))) return `${message}.retryTrash`;
-  if (code === CODE.shell_environment_timeout && ["shell", "command", "timeout"].every((name) => !!params[name])) return `${code}.sessionLaunchBlocked`;
+  // A launch no longer waits on the snapshot (it falls back), so what a timeout refuses is the request that needed it.
+  if (code === CODE.shell_environment_timeout && ["shell", "command", "timeout"].every((name) => !!params[name])) return `${code}.refused`;
   return message;
 }
 
@@ -173,17 +175,20 @@ function paramText(records: RecordNames, name: string, value: string, code: stri
  * `reason_code` is the code of the error it failed with, so its `reason` is worded from that code's own
  * `daemon.<code>` message, with the failure's params that arrive beside it and that code's `uiParams`. With
  * `mark`, a param the message sets apart (`codeParams` or `nameParams`) is what `mark` makes of its displayed
- * value instead. */
+ * value instead, and a product name the message names (see `referenceNameParams`) what it makes of it as `plain` text:
+ * isolated as an element, with no chip. */
 export function daemonParams<V = never>(
   language: Language,
   code: string,
   params: MessageParams,
   records: RecordNames,
-  mark?: (value: string, monospace: boolean) => V,
+  mark?: (value: string, monospace: boolean, plain?: boolean) => V,
 ): Record<string, string | number | V> {
-  // A failed launch or move carries its failure's params, which take the UI's own for the failure's code.
+  // A failed launch or move carries its failure's params, which take the UI's own for the failure's code, and the
+  // code's own beside them for a name the failure's lack (a `binary_not_found` nesting a snapshot failure shows its
+  // `pathVar`).
   const nested = codeRecord(code)?.nested !== undefined;
-  const all = nested && params.reason_code ? withUiParams(params.reason_code, params) : withUiParams(code, params);
+  const all = nested && params.reason_code ? withUiParams(code, withUiParams(params.reason_code, params)) : withUiParams(code, params);
   // The provider a refusal names arrives as its wire id, shown by its name.
   if (code === CODE.provider_unsupported && all.agent) all.agent = providerLabel(translatorFor(language), records.providers ?? [], all.agent);
   // The supported agents are the providers the daemon serves.
@@ -225,8 +230,13 @@ export function daemonParams<V = never>(
   }
   const reasonKey = `daemon.trust_reason.${all.reason_code}`;
   if (isMessageKey(reasonKey)) shown.reason = format(language, reasonKey, shown);
-  const failureKey = messageKey(messageCode(all.reason_code ?? "", all));
-  if (nested && all.reason_code !== code && isMessageKey(failureKey)) shown.reason = daemonMessage(language, all.reason_code, all, String(shown.reason ?? shown.detail ?? ""), records);
+  const failure = nestedFailureParams(all.reason_code ?? "", all);
+  const failureKey = messageKey(messageCode(all.reason_code ?? "", failure));
+  if (nested && all.reason_code !== code && isMessageKey(failureKey)) {
+    shown.reason = timedOutSnapshot(all.reason_code, failure)
+      ? timedOutSnapshotReason(language, failure)
+      : daemonMessage(language, all.reason_code, failure, String(shown.reason ?? shown.detail ?? ""), records);
+  }
   if (!mark) return shown;
   const marked: Record<string, string | number | V> = { ...shown };
   const facets = messageFacets(messageCode(code, all));
@@ -237,9 +247,11 @@ export function daemonParams<V = never>(
     const shownName = recordId ? recordName(records, name, all[name], language) : undefined;
     marked[name] = mark(shownName ?? all[name], recordId && shownName === undefined);
   }
+  // A product name the host supplies (an agent's label, Git, the application's own name) is plain text, isolated, with
+  // no chip (the UI standard, "Badge, reference or plain name").
   for (const name of referenceNameParams(code, all)) {
     const value = all[name] ?? globalParam(name);
-    if (value !== undefined) marked[name] = mark(value, false);
+    if (value !== undefined) marked[name] = mark(value, false, true);
   }
   return marked;
 }
@@ -254,6 +266,21 @@ function droppedReason(language: Language, entry: { code: string; params: Messag
   if (generic !== undefined) return generic;
   if (isMessageKey(messageKey(messageCode(entry.code, entry.params)))) return daemonMessage(language, entry.code, entry.params, entry.message, records, true);
   return format(language, entry.code === CODE.unexpected_error ? "error.unexpected.summary" : "error.systemFailure.other", {});
+}
+
+/** Whether the nested failure `code`, with its own `params`, is a timed-out login-shell snapshot with what timed out. The
+ * code is the one being worded: a failure that nests a timeout in turn (a CLI not found on the fallback environment)
+ * carries the timeout's code in its own params, and is worded as itself. */
+function timedOutSnapshot(code: string | undefined, params: MessageParams): boolean {
+  return code === CODE.shell_environment_timeout && ["shell", "command", "timeout"].every((name) => !!params[name]);
+}
+
+/** A timed-out snapshot as the reason of a failure that nests it (a CLI not found on the fallback environment a launch
+ * took instead): what did not finish in time and its likely cause, without what a request refused for want of the
+ * environment cannot do, which the nesting failure says differently. */
+function timedOutSnapshotReason(language: Language, params: MessageParams): string {
+  const command = format(language, "daemon.shell_environment_timeout.command", { command: isolate(`${params.shell} -l -i -c '${params.command}'`), timeout: isolate(params.timeout) });
+  return `${command}${format(language, "common.sentenceSeparator")}${format(language, "daemon.shell_environment_timeout.cause")}`;
 }
 
 /** What the daemon's `error` or `session_notice` says, in `language`: the catalog's text

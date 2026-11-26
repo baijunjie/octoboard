@@ -467,6 +467,13 @@ mod tests {
         std::fs::remove_file(record).expect("the chat was removed");
         assert_eq!(
             crate::records::resumability(&locator, &session),
+            crate::records::Resumability::Unknown,
+        );
+        assert_eq!(
+            crate::records::resumability(
+                &locator.with_witnesses(crate::records::fixtures::witnessed()),
+                &session
+            ),
             crate::records::Resumability::Unresumable,
         );
     }

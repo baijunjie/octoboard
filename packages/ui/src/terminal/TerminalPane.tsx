@@ -17,7 +17,8 @@ import { liveAnnouncerProps, ProgressCircle } from "../primitives";
 import { type Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { hasNoProcess, holdsPendingLink, isLive } from "../sessions/sessionStatus";
-import { useAccountSwitchHeld, useDaemon } from "../store";
+import { dismissStandingNotice, useAccountSwitchHeld, useDaemon } from "../store";
+import { standingNoticeKey } from "../store/standingNotices";
 import type { ViewedFile } from "../viewer/viewedFile";
 import type { QuoteBlock } from "../components/host/quoteTarget";
 import type { TerminalController } from "./TerminalController";
@@ -27,6 +28,8 @@ import { TerminalSurface } from "./TerminalSurface";
 import { TerminalCover } from "./TerminalCover";
 import { dropUploads, useDropProgress } from "./dropUploads";
 import { TerminalNoticeBar, TerminalNoticeSlot } from "./TerminalNoticeBar";
+import { StandingNoticeBanner, useShownStandingNotices, useStandingNoticeText } from "./StandingNoticeBanner";
+import { useAnnouncedOnArrival } from "./useAnnouncedOnArrival";
 import { useAnnouncedOnRise } from "./useAnnouncedOnRise";
 import { useHeldWhileHidden } from "./useHeldWhileHidden";
 import { useAnnouncedWhilePending } from "./useAnnouncedWhilePending";
@@ -126,7 +129,7 @@ export function TerminalPane({
   const t = useT();
   // The archive view over the pane makes it inert as a whole, as a panel over the agent area does.
   const exposed = exposedProp && !behindArchive;
-  const { terminalUrl, terminalReconnectDelay } = useDaemon();
+  const { terminalUrl, terminalReconnectDelay, store } = useDaemon();
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const coverRef = useRef<HTMLDivElement>(null);
@@ -447,6 +450,17 @@ export function TerminalPane({
   // Exposing the area usually moves focus into the pending cover, whose description reads the same copy.
   const notOnCover = () => !coverHasFocus();
   const coverSaid = useHeldWhileHidden(livePending ? pendingSaid.immediate : coverText, !exposed, { stillDue: notOnCover });
+  // The session's standing notices (`Session.standing_notices`), less those dismissed in this window: a banner in the
+  // top slot, each spoken once as it arrives for the session on screen, as the recovered display is, and held while the
+  // pane is out of reach or covered by a process the daemon cannot reach.
+  const standingNotices = useShownStandingNotices(session);
+  const newestNotice = standingNotices[standingNotices.length - 1];
+  const noticeSaid = useAnnouncedOnArrival(
+    session?.id,
+    session ? standingNotices.map((notice) => standingNoticeKey(session.id, notice)) : [],
+    useStandingNoticeText(newestNotice),
+    livePending || !exposed,
+  );
   const pendingDelayedSaid = useHeldWhileHidden(pendingSaid.delayed, !exposed, { stillDue: notOnCover });
 
   return (
@@ -540,6 +554,7 @@ export function TerminalPane({
       <div {...liveAnnouncerProps()}>
         <StatusAnnouncer text={pendingDelayedSaid} />
         <StatusAnnouncer text={recoveredSaid} clearAfterRead />
+        <StatusAnnouncer text={noticeSaid} clearAfterRead />
       </div>
       <TerminalNoticeSlot>
         {noProcessBar && (
@@ -560,6 +575,13 @@ export function TerminalPane({
           `ProgressBar` read as it moves; and the file's name is plain monospace text that fades where it is clipped
           (`FadeOverflow`), not an `InlineReference` chip, which cannot fade or stay on the line. */}
       <TerminalNoticeSlot edge="top">
+        {/* The standing notices' banner, first in the slot: a stop of the F6 cycle (`notices`) while it shows, focus on
+            one of its controls handed back to the terminal when it goes (`held`). */}
+        {session && standingNotices.length > 0 && (
+          <div data-region="notices" {...held} className="contents">
+            <StandingNoticeBanner notices={standingNotices} onDismiss={(notice) => dismissStandingNotice(store, standingNoticeKey(session.id, notice))} />
+          </div>
+        )}
         {uploadBar && session && (
           <div data-region="uploads" {...held} className="contents">
             <TerminalNoticeBar

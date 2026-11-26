@@ -262,6 +262,9 @@ Where an error or a warning is shown follows from how it arises, not from the sc
 
 - **A notice that says a protection is not in force, or names a step the user must take, is acknowledged**
   (`acknowledgedNotice`), never a timed toast; a notice that only informs may be a toast.
+- **A condition of a running session that lasts (a standing notice) is shown in that session's terminal banner, never
+  as a toast or an alert to acknowledge**: the record keeps it, so a window that connects later shows it too; the
+  banner's × hides it in this window only, and it goes when the daemon withdraws it.
 - **A refusal the window could have foreseen is prevented, not alerted**: the confirm or submit is disabled while the
   state holds, the reason standing where the action is (an Alert under the choice, a `FieldError`, or a consequence
   line), and announced as it appears. The error alert is for what could not be known beforehand: a state that changed

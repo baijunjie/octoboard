@@ -166,11 +166,13 @@ it("draws one mark, naming both reasons, where the latest lookup and the last up
   expect(marks[0]!.getAttribute("aria-label")).toBe(`The latest version could not be looked up. Updating ${isolate("Claude Code")} failed.`);
 });
 
-it("draws the agent's name in the mark's popover as a chip, as the alert does, and keeps the remedy line out of it", async () => {
+it("draws the agent's name in the mark's popover as plain text, as the alert does, and keeps the remedy line out of it", async () => {
   const { row } = await mountWith(statusOf({ update: updateOf({ state: "failed", finished_at: 20, error: "agent_cli_update_failed", detail: "EACCES" }) }));
   await act(async () => row()!.querySelector<HTMLElement>("[data-status-mark]")!.click());
   const popover = document.body.querySelector<HTMLElement>("[data-status-mark-popover]")!;
-  expect(popover.querySelector("[data-inline-reference]")?.textContent).toBe("Claude Code");
+  // A product name the host supplies takes no chip.
+  expect(popover.querySelector("[data-inline-reference]")).toBeNull();
+  expect(popover.textContent).toContain("Claude Code");
   expect(popover.textContent).not.toContain("Fix the problem");
 });
 

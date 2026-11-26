@@ -46,6 +46,7 @@ impl AppState {
         self.forget_request_hand(id);
         self.forget_ended_turn(id);
         self.forget_ended_launches(id);
+        self.forget_standing_notices(id);
         self.conversation_feeds.forget(id);
     }
 

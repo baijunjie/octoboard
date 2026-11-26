@@ -8,14 +8,15 @@ import { setKeyboardModality } from "../primitives";
 
 /** The window's regions in visual order, each an element (or several) marked `data-region`. The
  * Remote devices and Scheduled tasks pages, which take the terminal's place while one shows, come after the sidebar. The
- * notice over the top of the terminal that carries the cancelling of dropped files' uploads (`uploads`) comes just
- * before the terminal, and is a stop only while it shows. The
+ * bars over the top of the terminal come just before it, in the order they are drawn, each a stop only while it shows:
+ * the banner of the session's standing notices (`notices`), then the notice that carries the cancelling of dropped
+ * files' uploads (`uploads`). The
  * panels of the right pane, each a stop of its own, come after the terminal: the caller names
  * them in `panels`, in order. The toast stack comes last and is a
  * stop only while a toast is on screen; unlike the others it is not for the caller to say: the stack
  * is in the DOM while it holds a toast, and one that is closing (kept mounted for its exit animation,
  * `partSelector.liveToast` leaves it out) is not a landing place. */
-const BEFORE_PANELS = ["topbar", "rail", "welcome", "sidebar", "devices", TASKS_REGION, "archive", "uploads", "terminal"] as const;
+const BEFORE_PANELS = ["topbar", "rail", "welcome", "sidebar", "devices", TASKS_REGION, "archive", "notices", "uploads", "terminal"] as const;
 const AFTER_PANELS = ["update", "banner", "toast"] as const;
 type FixedRegion = (typeof BEFORE_PANELS)[number] | (typeof AFTER_PANELS)[number];
 type ShownRegion = Exclude<FixedRegion, "toast">;

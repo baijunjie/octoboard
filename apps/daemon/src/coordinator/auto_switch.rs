@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use super::account_switch::{self, NoLongerDue, SwitchOnlyIf};
 use super::launch::LaunchEdit;
@@ -560,13 +560,21 @@ async fn try_switch_captured(
     }
     // The snapshot is taken for the record's sake only where finding it needs one (the default
     // account has no directory of its own); the switch is given it in place of the original, which
-    // is spent. Otherwise the switch takes the original itself.
+    // is spent, failing as it failed so the switch falls back as a launch does. Otherwise the
+    // switch takes the original itself.
     type Snapshot = Box<dyn FnOnce() -> Result<HashMap<String, String>> + Send>;
     let (shell_env, snapshot): (_, Snapshot) = if restart::record_needs_shell_env(&session) {
-        let env = tokio::task::spawn_blocking(snapshot)
-            .await?
-            .context("snapshotting the user's shell environment")?;
-        (Some(env.clone()), Box::new(move || Ok(env)))
+        match tokio::task::spawn_blocking(snapshot).await? {
+            Ok(env) => (Some(env.clone()), Box::new(move || Ok(env))),
+            Err(err) => {
+                let failure = crate::protocol::CodedError::of(&err);
+                let env = crate::env_shell::launch_env_from(Err(err)).vars;
+                (
+                    Some(env),
+                    Box::new(move || Err(anyhow::Error::new(failure))),
+                )
+            }
+        }
     } else {
         (None, Box::new(snapshot))
     };

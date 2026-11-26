@@ -352,28 +352,59 @@ pub(super) fn keep_what_a_failed_restart_carried(
     }
 }
 
-/// Whether the process an account switch (or a restore after one) relaunched is still running after
-/// [`SWITCH_SETTLE`]. One that is has been seen to come up, so its end from then on is the agent's
-/// own and is told to the owner as any is.
-pub(super) async fn came_up_under_claim(state: &Arc<AppState>, id: &str) -> bool {
+/// Whether the process an account switch (or a restore after one), or a change of the model,
+/// relaunched under `claim` is still running after [`SWITCH_SETTLE`]. One that is has been seen to
+/// come up, so its end from then on is the agent's own and is told to the owner as any is. A
+/// process that exited as it started is handed here by its exit watcher
+/// (`super::early_exit::relaunch_if_early`), and relaunched one tier down under `claim` and
+/// watched again, at most once per tier; a relaunch that cannot be made leaves the session
+/// interrupted.
+pub(super) async fn came_up_under_claim(
+    state: &Arc<AppState>,
+    claim: &crate::state::LaunchClaim,
+    id: &str,
+) -> bool {
     let settle = switch_settle();
-    let Some(live) = state.live_session(id) else {
-        return false;
-    };
     #[cfg(test)]
-    let settle = if let Some(settled) = SWITCH_SETTLED.with(|slot| slot.borrow_mut().take()) {
-        tokio::time::timeout(crate::test_support::PATIENCE, settled.notified())
-            .await
-            .expect("the test never released the switch settle");
-        Duration::ZERO
-    } else {
-        settle
-    };
-    let up = came_up(&live, settle).await;
-    if up {
-        live.release_watch();
+    let mut settled = SWITCH_SETTLED.with(|slot| slot.borrow_mut().take());
+    loop {
+        if let Some(relaunch) = state.take_early_exit(id) {
+            let ran_as = relaunch.ran_as.clone();
+            if let Err(err) =
+                super::launch::relaunch_after_early_exit(state, claim, id, relaunch).await
+            {
+                tracing::warn!(session = %id, %err, "relaunching the agent one tier down failed");
+                // The operation reports the failure itself, so the owner is not told here.
+                super::early_exit::relaunch_failed(state, id, ran_as, false).await;
+                return false;
+            }
+            continue;
+        }
+        let Some(live) = state.live_session(id) else {
+            return false;
+        };
+        #[cfg(test)]
+        let settle = if let Some(settled) = settled.take() {
+            tokio::time::timeout(crate::test_support::PATIENCE, settled.notified())
+                .await
+                .expect("the test never released the switch settle");
+            Duration::ZERO
+        } else {
+            settle
+        };
+        if came_up(&live, settle).await {
+            live.release_watch();
+            return true;
+        }
+        if !live.is_followed_under_claim() {
+            return false;
+        }
+        // The exit watcher decides whether the exit was one at start, and hands it here if so.
+        let deadline = std::time::Instant::now() + super::launch::SWITCH_STOP_TIMEOUT;
+        while !live.is_exit_settled() && std::time::Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
     }
-    up
 }
 
 #[cfg(test)]

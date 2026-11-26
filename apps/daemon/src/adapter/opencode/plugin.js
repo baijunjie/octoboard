@@ -294,7 +294,21 @@ function approveServerPermission(server, directory, id) {
   approval.end(body);
 }
 
+// OpenCode's entry point, total: whatever fails while the plugin sets itself up turns Octoboard's
+// plugin off, with no hook of its own, and leaves OpenCode running. OpenCode goes on past a plugin
+// that throws as it loads too, logging the error to its log file and showing nothing (1.19.6,
+// `testdata/opencode-captures.md`, "A plugin that throws while loading"); this keeps the outcome
+// the same whatever a release does with such a plugin, and the second generation's bridge, which
+// calls it, gets the same. The daemon then tells the session that no events arrive.
 export const OctoboardPlugin = async (context, v2 = false) => {
+  try {
+    return await setUp(context, v2);
+  } catch {
+    return {};
+  }
+};
+
+const setUp = async (context, v2) => {
   const data = readData();
   if (!data) return {};
   const serverAuto = v2 !== true && process.env.OCTOBOARD_OPENCODE_SERVER === "auto";

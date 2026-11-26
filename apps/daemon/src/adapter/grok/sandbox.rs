@@ -1,5 +1,5 @@
-//! Grok's sandbox check: finding the sandbox profile a launch would run under, so the launch can be
-//! refused up front.
+//! Grok's sandbox check: finding the sandbox profile a launch would run under, so the per-session
+//! home is not built for it and the launch starts bare against the account's own home instead.
 
 use std::path::Path;
 
@@ -18,8 +18,8 @@ pub(super) struct SandboxSetting {
     pub(super) profile: String,
 }
 
-/// Refuses a launch that would run under Grok's sandbox; see the `grok` module comment for why the
-/// farm cannot support one.
+/// Fails the enhanced launch of one that would run under Grok's sandbox, which then starts bare;
+/// see the `grok` module comment for why the farm cannot support one.
 pub(super) fn require_unsandboxed(
     spec: &LaunchSpec<'_>,
     source_home: &Path,
@@ -31,10 +31,8 @@ pub(super) fn require_unsandboxed(
     Err(CodedError::raised(
         Code::of_provider(grok::SANDBOX_UNSUPPORTED),
         format!(
-            "Octoboard's per-session Grok home is incompatible with Grok's sandbox (profile `{}`, \
-             set by {}): to launch this session through Octoboard, turn the sandbox off where it \
-             is set, or ask whoever manages that setting to. A conversation started under the \
-             sandbox keeps it, so continue that one in Grok itself",
+            "Grok's sandbox (profile `{}`, set by {}) is incompatible with the home Octoboard \
+             gives each session",
             setting.profile, setting.source
         ),
         &[("source", &setting.source), ("profile", &setting.profile)],
@@ -43,9 +41,9 @@ pub(super) fn require_unsandboxed(
 
 /// The sandbox profile Grok would apply to this launch, `None` when it would run unsandboxed or the
 /// profile cannot be read reliably. A non-`off` `requirements.toml` pin (the system directory's, on
-/// a host where Grok has one; the home's is excluded from the farm) refuses, and an `off` pin stops
-/// the search. On a resume, either the profile saved with the session or `GROK_SANDBOX` in the
-/// launch environment being non-`off` refuses, because Grok restores a saved profile and refuses a
+/// a host where Grok has one; the home's is excluded from the farm) is the profile, and an `off`
+/// pin stops the search. On a resume, either the profile saved with the session or `GROK_SANDBOX`
+/// in the launch environment being non-`off` is the profile, because Grok restores a saved profile and refuses a
 /// resume whose requested one differs. Otherwise, and for a resume with no saved profile found,
 /// `GROK_SANDBOX` beats the user's `config.toml`, which beats the system `managed_config.toml`.
 /// `GROK_SANDBOX` is read from the launch environment, not the daemon's own.

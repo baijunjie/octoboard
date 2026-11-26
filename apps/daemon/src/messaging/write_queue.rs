@@ -294,6 +294,8 @@ impl PromptSignal for HookPrompts<'_> {
                 .capabilities
                 .delivery
                 .confirms_by_reported_prompt
+            // Nothing reports a prompt sent while the launch's hooks are absent.
+            && !self.live.hooks_absent()
             && self
                 .state
                 .session_record(&self.live.id)
@@ -631,9 +633,7 @@ impl AppState {
                 );
             }
         }
-        let still_running = self
-            .live_session(id)
-            .is_some_and(|current| Arc::ptr_eq(&current, &live));
+        let still_running = self.is_current(&live);
         self.announce_refusals(id, live.agent);
         if matches!(outcome, Drain::Unsent(_)) && still_running {
             // A later message must not repeat the already written payload. A prompt reported after

@@ -74,6 +74,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 
 use crate::agents::models::{ModelCatalogue, NoCatalogue};
 use crate::hooks::{HookInterpreter, NoHooks};
@@ -198,6 +199,10 @@ pub struct LaunchSpec<'a> {
     /// The application setting `memory_enabled` at this launch: whether the session is offered
     /// the memory tools and told of its memory, and its agent's own memory is turned off.
     pub memory_enabled: bool,
+    /// The records directories the session's earlier launches selected instead of the account's
+    /// (`protocol::Session::record_roots`), in the order first seen: where a provider whose
+    /// records move with the environment finds the conversation a resume names.
+    pub record_roots: &'a [PathBuf],
 }
 
 /// Whether a launch for a provider described by `descriptor` turns the agent's own memory across
@@ -343,6 +348,83 @@ pub fn pinned_config_dir_export(
         var.to_string(),
         value.to_string_lossy().into_owned(),
     )))
+}
+
+/// How much of Octoboard a launch adds to its agent's CLI, ordered from the floor up: a launch is
+/// planned at the highest tier it may use that can be prepared, and walks only downwards
+/// (`docs/plans/terminal-first-degradation.md`, D1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LaunchTier {
+    /// The CLI as a person would start it for this session ([`AgentProvider::bare_plan`]): no
+    /// hooks, no MCP server, no role, no settings of Octoboard's. Generic code answers its
+    /// per-launch questions as for a provider with no integration (`crate::session::integration`).
+    Bare,
+    /// A plan a provider gives after an early exit, leaving out what it knows a release may not
+    /// take.
+    Reduced,
+    /// The provider's own plan ([`AgentProvider::plan`]).
+    Enhanced,
+}
+
+impl LaunchTier {
+    /// Whether a launch at this tier carries Octoboard's additions, so that the provider is asked
+    /// its per-launch answers.
+    pub fn integrated(self) -> bool {
+        self != Self::Bare
+    }
+}
+
+/// When the first hook of a launch is due ([`AgentProvider::first_hook_due`]): what tells a launch
+/// whose hooks are not coming from one whose hooks have yet to have a reason to run
+/// (`docs/plans/terminal-first-degradation.md`, D8). A fact of its own beside the trust screen's
+/// start signal, which says what ends the startup, not when hooks begin.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FirstHook {
+    /// No hook is expected: a provider without hooks, or a launch whose plan left them out.
+    #[default]
+    Never,
+    /// A hook comes as the agent starts, before anything is written into it.
+    AtStart,
+    /// The first hook comes with the agent's first turn: once a prompt has gone in or the
+    /// terminal has shown a turn running.
+    WithFirstTurn,
+}
+
+/// The launch of a provider's CLI with nothing of Octoboard's in it ([`AgentProvider::bare_plan`]):
+/// the conversation to resume, the model and the task, in the CLI's own spelling, and nothing
+/// else. The account is not its business: generic code exports the pinned directory through the
+/// layout. It carries no approval mode: the CLI's own configuration decides what the session may
+/// do.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct BarePlan {
+    pub args: Vec<String>,
+    /// See [`LaunchPlan::shaped_prompt`].
+    pub shaped_prompt: Option<String>,
+    /// See [`LaunchPlan::first_message`].
+    pub first_message: Option<String>,
+}
+
+impl BarePlan {
+    /// This plan as a launch's plan, with nothing beside what it names.
+    pub fn into_launch_plan(self) -> LaunchPlan {
+        LaunchPlan {
+            args: self.args,
+            shaped_prompt: self.shaped_prompt,
+            first_message: self.first_message,
+            ..LaunchPlan::default()
+        }
+    }
+}
+
+/// How a launch's CLI exited as it started, before it showed any sign of an interactive program
+/// (`docs/plans/terminal-first-degradation.md`, D6): what it wrote, as plain text within a bound,
+/// and its exit status where the terminal backend tells it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EarlyExit {
+    pub output: String,
+    pub status: Option<i32>,
 }
 
 #[derive(Default)]
@@ -577,6 +659,15 @@ pub trait AgentProvider: Send + Sync {
         Vec::new()
     }
 
+    /// When the first hook of this launch, as planned, is due: as the agent starts, with its first
+    /// turn, or never (a provider without hooks, or a plan that left them out). Asked once per
+    /// launch, after `plan`, and kept in the terminal's meta. A launch whose hook was due and did
+    /// not come within the trust module's `HOOK_FALLBACK` is then read as a launch without hooks
+    /// (`crate::session::hook_absence`). `Never` by default, which changes nothing for the launch.
+    fn first_hook_due(&self, _spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> FirstHook {
+        FirstHook::Never
+    }
+
     /// What the provider's OSC 7501 reports say beside its status integration
     /// ([`Self::has_status_integration`]): that a `blocked` report is its wait on the user, that
     /// `idle` straight after `working` is a cancelled turn (`crate::session::program_status`).
@@ -652,7 +743,46 @@ pub trait AgentProvider: Send + Sync {
         None
     }
 
+    /// What stops every launch of this session, a plain terminal's included: what the provider's
+    /// CLI cannot do for this session whatever Octoboard adds (an account directory for an agent
+    /// that has the default account only). Asked before [`Self::plan`], for every tier. A refusal
+    /// here needs "a plain terminal would fail the same way" to be true; anything else belongs in
+    /// `plan`, whose error degrades. Nothing is refused by default.
+    fn launch_refusal(&self, _spec: &LaunchSpec<'_>) -> Result<()> {
+        Ok(())
+    }
+
+    /// What every launch of this session is checked for before it is planned, at every tier: the
+    /// refusal of [`Self::launch_refusal`], or else what the same reading found that the user has
+    /// to be told whichever tier the launch starts at, a bare one's included (a resume the CLI
+    /// could not be asked about, say). A provider whose check finds something to tell overrides
+    /// this rather than `launch_refusal`. By default `launch_refusal`, with nothing to tell.
+    fn check_launch(&self, spec: &LaunchSpec<'_>) -> Result<Vec<Notice>> {
+        self.launch_refusal(spec).map(|()| Vec::new())
+    }
+
+    /// The enhanced launch: the CLI with Octoboard's additions. An error never refuses the launch;
+    /// it means the enhanced launch is unavailable, and the launch falls to [`Self::bare_plan`]
+    /// with a notice nesting the error (`crate::session::term::plan_launch`). What stops every
+    /// launch is [`Self::launch_refusal`]'s.
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan>;
+
+    /// The CLI as a person would start it for this session: the conversation `spec` resumes (a new
+    /// conversation is the CLI's own, given no id), the model, and the task, in the CLI's own
+    /// spelling and nothing else. It reads nothing it could fail on and writes nothing, and names
+    /// only arguments every measured version takes, so it cannot fail. Required: a default could
+    /// only start the CLI without the conversation a resume names, which would silently open a new
+    /// one.
+    fn bare_plan(&self, spec: &LaunchSpec<'_>) -> BarePlan;
+
+    /// The launch after the enhanced one exited as it started (`exit`): a plan that leaves out
+    /// what the provider knows a release of its CLI may not take, exactly what a measured refusal
+    /// line in `exit` names where it has one, else everything it marked as version-sensitive. The
+    /// plan carries its own notice of what it leaves out. `None` for a provider with nothing to
+    /// leave out, whose launch then goes to [`Self::bare_plan`].
+    fn reduced_plan(&self, _spec: &LaunchSpec<'_>, _exit: &EarlyExit) -> Option<LaunchPlan> {
+        None
+    }
 
     /// A version that exercises the provider's launch features in tests with no installed CLI.
     #[cfg(test)]
@@ -731,13 +861,15 @@ pub trait AgentProvider: Send + Sync {
 
     /// The program that starts the provider's CLI in place of the resolved `binary`, when `binary`
     /// is a launcher the CLI should not be started through. `None` starts `binary` itself; an
-    /// error is a launcher whose native program cannot be found.
+    /// error is a launcher whose native program cannot be found, which a launch takes as a reason
+    /// to start `binary` bare.
     fn native_binary(&self, _binary: &ResolvedBinary) -> Result<Option<ResolvedBinary>> {
         Ok(None)
     }
 
     /// The command for an interactive terminal whose arguments cannot pass through the ordinary
-    /// launcher. Install detection and background queries still use the ordinary launcher.
+    /// launcher. Install detection and background queries still use the ordinary launcher. An
+    /// error is taken by a launch as a reason to start the ordinary launcher bare.
     fn terminal_binary(
         &self,
         binary: ResolvedBinary,
@@ -819,6 +951,41 @@ pub fn version_for_account(agent: AgentId, binary: &str, home: &Path) -> Option<
     provider
         .account_version(binary, home)
         .or_else(|| provider.installed_version(binary))
+}
+
+/// The version of `agent`'s CLI that `program` (the program the CLI runs as: the native program in
+/// place of a launcher, else the binary) runs for the account at `config_dir` (the default account
+/// when `None`), as a launch reads it ([`version_for_account`], else what the program prints where
+/// the platform asks it). `None` where it cannot be told.
+pub fn version_of_program(
+    agent: AgentId,
+    program: &ResolvedBinary,
+    config_dir: Option<&Path>,
+    shell_env: &HashMap<String, String>,
+) -> Option<AgentVersion> {
+    version_for_account(
+        agent,
+        &program.program.to_string_lossy(),
+        &account_dir(agent, config_dir, shell_env),
+    )
+    .or_else(|| version_from_output(&crate::platform::shell::probe_version(program, shell_env)?))
+}
+
+/// The version of `agent`'s CLI a launch on the account at `config_dir` would start now, resolved
+/// on `shell_env` as the launch resolves it ([`version_of_program`]); `None` where the CLI does not
+/// resolve or its version cannot be told.
+#[cfg_attr(test, allow(dead_code))]
+pub fn installed_version_for(
+    agent: AgentId,
+    config_dir: Option<&Path>,
+    shell_env: &HashMap<String, String>,
+) -> Option<AgentVersion> {
+    let ordinary = crate::env_shell::resolve_binary(agent.descriptor().binary, shell_env).ok()?;
+    let program = match provider(agent).native_binary(&ordinary) {
+        Ok(Some(native)) => native,
+        _ => ordinary,
+    };
+    version_of_program(agent, &program, config_dir, shell_env)
 }
 
 /// What starts `agent`'s CLI: the binary its name resolves to on `shell_env`'s `PATH`, or the
@@ -1194,6 +1361,7 @@ pub mod tests {
                 native_memory_off: false,
                 memory: &[],
                 memory_enabled: false,
+                record_roots: &[],
             }
         }
     }
@@ -1355,6 +1523,115 @@ pub mod tests {
         }
     }
 
+    /// Every provider's bare plan is built over a hostile fixture without failing or touching
+    /// anything: no scratch directory, a home whose files cannot be read, no version, a pinned
+    /// directory that has gone. It names the conversation a resume continues, gives a new
+    /// conversation's task (on the command line or as the first message), names no id for a new
+    /// conversation, and carries nothing of Octoboard's: no session id, launch id, MCP token,
+    /// helper program, hook script or key file.
+    #[test]
+    fn every_providers_bare_plan_is_built_over_a_hostile_fixture() {
+        for agent in crate::protocol::AgentId::ALL {
+            let mut fixture = spec_fixture();
+            let root = fixture.scratch.to_path_buf();
+            let no_scratch = root.join("no-scratch");
+            let (hook, key) = (no_scratch.join("hook"), no_scratch.join("key"));
+            // A home that is a file: nothing under it can be read.
+            let home = root.join("home-is-a-file");
+            std::fs::write(&home, "not a directory").expect("home file");
+            fixture.shell_env = HashMap::from([
+                ("HOME".to_string(), home.to_string_lossy().into_owned()),
+                (
+                    "USERPROFILE".to_string(),
+                    home.to_string_lossy().into_owned(),
+                ),
+            ]);
+            fixture.config_dir = Some(root.join("gone"));
+            fixture.agent_version = None;
+            fixture.model = Some("model-a".to_string());
+            let provider = super::provider(agent);
+            let octoboards = [
+                fixture.session_id.clone(),
+                fixture.mcp_token.clone(),
+                fixture.self_exe.clone(),
+                "launch-1".to_string(),
+                fixture.new_agent_session_id.clone(),
+            ];
+            let carries_nothing_of_octoboards = |plan: &super::BarePlan| {
+                for arg in &plan.args {
+                    for ours in &octoboards {
+                        assert!(!arg.contains(ours.as_str()), "{agent:?}: {arg}");
+                    }
+                    assert!(!arg.contains("no-scratch"), "{agent:?}: {arg}");
+                }
+            };
+
+            let mut spec = fixture.spec();
+            (spec.scratch, spec.hook_script, spec.key_file) = (&no_scratch, &hook, &key);
+            spec.resume_agent_session_id = Some("conversation-1");
+            let resumed = provider.bare_plan(&spec);
+            assert!(
+                resumed
+                    .args
+                    .iter()
+                    .any(|arg| arg.contains("conversation-1")),
+                "{agent:?}: {:?}",
+                resumed.args
+            );
+            carries_nothing_of_octoboards(&resumed);
+
+            let mut spec = fixture.spec();
+            (spec.scratch, spec.hook_script, spec.key_file) = (&no_scratch, &hook, &key);
+            spec.task = Some("write the tests");
+            let fresh = provider.bare_plan(&spec);
+            let task_given = fresh.args.iter().any(|arg| arg.contains("write the tests"))
+                || fresh.first_message.as_deref() == Some("write the tests");
+            assert!(task_given, "{agent:?}: {fresh:?}");
+            carries_nothing_of_octoboards(&fresh);
+
+            assert!(!no_scratch.exists(), "{agent:?} wrote a scratch directory");
+            assert!(
+                !root.join("gone").exists(),
+                "{agent:?} made the pinned directory"
+            );
+        }
+    }
+
+    /// The launch tiers are ordered Enhanced above Reduced above Bare, and only the bare one lacks
+    /// Octoboard's additions.
+    #[test]
+    fn the_launch_tiers_are_ordered_and_only_the_bare_one_is_not_integrated() {
+        use super::LaunchTier::{Bare, Enhanced, Reduced};
+        assert!(Enhanced > Reduced && Reduced > Bare);
+        assert!(Enhanced.integrated());
+        assert!(Reduced.integrated());
+        assert!(!Bare.integrated());
+    }
+
+    /// A launch expects no hook unless its provider says it does.
+    #[test]
+    fn a_launch_expects_no_hook_by_default() {
+        assert_eq!(super::FirstHook::default(), super::FirstHook::Never);
+    }
+
+    /// A bare plan becomes a launch plan carrying its arguments, shaped prompt and first message and
+    /// nothing else: no environment, hooks, MCP server or notice.
+    #[test]
+    fn a_bare_plan_becomes_a_launch_plan_with_only_what_it_names() {
+        let plan = super::BarePlan {
+            args: vec!["--resume".to_string(), "c-1".to_string()],
+            shaped_prompt: Some(" update".to_string()),
+            first_message: Some("hello".to_string()),
+        }
+        .into_launch_plan();
+        assert_eq!(plan.args, ["--resume", "c-1"]);
+        assert_eq!(plan.shaped_prompt.as_deref(), Some(" update"));
+        assert_eq!(plan.first_message.as_deref(), Some("hello"));
+        assert!(plan.env.is_empty());
+        assert!(plan.notice.is_none());
+        assert!(plan.private_server.is_none());
+    }
+
     /// Every registered provider's behavior is registered under the descriptor of its own agent.
     #[test]
     fn every_registered_provider_answers_with_its_own_descriptor() {
@@ -1460,8 +1737,32 @@ pub mod tests {
         let fixture = spec_fixture();
         let plan = super::LaunchPlan::default();
         for (agent, provider) in super::PROVIDERS.iter() {
+            // The plan the provider makes of the fixture, at the version its launch features are
+            // exercised at: a provider may read from its plan whether the launch carries what its
+            // integration rests on. The fixture's home is an empty scratch directory, and the
+            // agent's own configuration-directory variable, as its layout names it, the default
+            // directory inside that home, so that no agent configuration of this machine's own is
+            // read.
+            let mut versioned = spec_fixture();
+            versioned.agent_version = provider.launch_fixture_version();
+            let home = versioned.scratch.join("home");
+            std::fs::create_dir_all(&home).expect("home");
+            versioned
+                .shell_env
+                .insert("HOME".to_string(), home.to_string_lossy().into_owned());
+            let layout = agent.descriptor().layout;
+            if let Some((variable, value)) =
+                layout.config_dir_export(&home.join(layout.default_dir))
+            {
+                versioned
+                    .shell_env
+                    .insert(variable.to_string(), value.to_string_lossy().into_owned());
+            }
+            let planned = provider
+                .plan(&versioned.spec())
+                .unwrap_or_else(|err| panic!("{agent:?}: {err:#}"));
             assert_eq!(
-                provider.launch_has_status_integration(&fixture.spec(), &plan),
+                provider.launch_has_status_integration(&versioned.spec(), &planned),
                 provider.has_status_integration(),
                 "{agent:?}"
             );
@@ -1730,13 +2031,14 @@ pub mod tests {
         assert_eq!(coded.params["path"], missing.to_string_lossy());
     }
 
-    /// The helper exports what the launch plans that still write the block out export: wherever a
-    /// pinned account's plan sets the configuration-directory variable, it is the helper's value, and
-    /// the helper exports nothing of the variable for the default account.
+    /// The helper exports what the launch plans export: for every provider the helper exports the
+    /// configuration-directory variable of a pinned account for, the plan sets that variable to
+    /// the helper's value or leaves it to the launch, which exports the helper's value
+    /// (`session::term::plan_launch`), never to anything else; and the helper exports nothing of
+    /// the variable for the default account.
     #[test]
     fn the_export_helper_agrees_with_the_plans_that_write_the_block_out() {
         use crate::protocol::AgentId;
-        let mut agreeing = 0;
         for agent in AgentId::ALL {
             let var = agent.descriptor().layout.config_dir_var;
             let provider = super::provider(agent);
@@ -1764,19 +2066,14 @@ pub mod tests {
             let exported = super::pinned_config_dir_export(&fixture.spec(), agent)
                 .ok()
                 .flatten();
+            let Some(exported) = exported else {
+                continue;
+            };
             let planned = of_plan(&fixture.spec());
-            if !planned.is_empty() {
-                assert_eq!(
-                    planned,
-                    exported.into_iter().collect::<Vec<_>>(),
-                    "{agent:?}"
-                );
-                agreeing += 1;
-            }
+            assert!(
+                planned.is_empty() || planned == [exported.clone()],
+                "{agent:?}: {planned:?} against {exported:?}"
+            );
         }
-        assert!(
-            agreeing > 0,
-            "no plan sets the variable of a pinned account"
-        );
     }
 }

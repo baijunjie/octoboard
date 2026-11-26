@@ -190,3 +190,25 @@ pub(crate) fn unreported(dir: &Path) -> Vec<Unreported> {
     }
     all
 }
+
+/// The version [`witnessed`] says every agent has installed.
+pub(crate) const WITNESSED_VERSION: crate::adapter::AgentVersion = (1, 0, 0);
+
+/// Witnesses under which every agent's installed version was seen writing records the reader
+/// recognises, so a record missing is proof: for the tests of what a proven absence does.
+pub(crate) fn witnessed() -> &'static crate::records::Witnesses {
+    static ALL: std::sync::LazyLock<crate::records::Witnesses> = std::sync::LazyLock::new(|| {
+        let witnesses = crate::records::Witnesses::default();
+        witness_every_agent(&witnesses);
+        witnesses
+    });
+    &ALL
+}
+
+/// Says every agent's installed version, [`WITNESSED_VERSION`], was seen writing records, in
+/// `witnesses` (an `AppState`'s, for the coordinator's tests of what a proven absence does).
+pub(crate) fn witness_every_agent(witnesses: &crate::records::Witnesses) {
+    for agent in AgentId::ALL {
+        witnesses.witness_installed(agent, WITNESSED_VERSION);
+    }
+}

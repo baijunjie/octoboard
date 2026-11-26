@@ -50,12 +50,15 @@ use serde_json::{json, Map, Value};
 
 use super::files::{canonical_project, read_bounded_text, read_regular_text, SMALL_FILE_LIMIT};
 use super::user_json::{self, Takes};
-use super::{AgentProvider, CliPackaging, LaunchPlan, LaunchSpec, MCP_TOOL_TIMEOUT_SECS};
+use super::{
+    AgentProvider, CliPackaging, FirstHook, LaunchPlan, LaunchSpec, MCP_TOOL_TIMEOUT_SECS,
+};
 use crate::hostfs::replace::{replace_beside, Permissions};
-use crate::protocol::{Code, CodedError, Notice, ProviderOperation};
+use crate::protocol::{error_code, Code, CodedError, Notice, ProviderOperation};
 use crate::providers::{AgentId, ProviderDescriptor};
 use crate::session::screen::ScreenReader;
 use crate::session_tools;
+use records::ResumeAnswer;
 use version::Generation;
 
 /// The variable that carries a whole configuration as inline JSON, merged over every file's.
@@ -113,6 +116,27 @@ const VALUE_FILE_LIMIT: usize = 64 * 1024;
 
 pub struct OpenCodeProvider;
 
+/// What `answer` makes of a launch of `spec` that resumes a conversation: refused where OpenCode 2
+/// said it has no such conversation, since it would start a new one under that id; otherwise it
+/// goes ahead, and an unconfirmed answer is told with a standing `conversation_record_not_found`,
+/// as the launch's resume check tells a record not found.
+fn resume_check(spec: &LaunchSpec<'_>, answer: ResumeAnswer) -> Result<Option<Notice>> {
+    match answer {
+        ResumeAnswer::Present => Ok(None),
+        ResumeAnswer::Absent => Err(CodedError::raised(
+            error_code::CONVERSATION_UNRESUMABLE,
+            "OpenCode no longer has this conversation",
+            &[
+                ("agent", AgentId::OPENCODE.descriptor().label),
+                ("session", spec.session_id),
+            ],
+        )),
+        ResumeAnswer::Unconfirmed => Ok(Some(
+            crate::records::resumability::record_not_found_notice(AgentId::OPENCODE),
+        )),
+    }
+}
+
 impl AgentProvider for OpenCodeProvider {
     #[cfg(test)]
     fn launch_fixture_version(&self) -> Option<super::AgentVersion> {
@@ -140,7 +164,17 @@ impl AgentProvider for OpenCodeProvider {
                 crate::APP_NAME
             ),
             &[("version", &version)],
-        )]
+        )
+        // It holds for the whole launch.
+        .standing()]
+    }
+
+    /// Its plugin forwards OpenCode's events, and the first comes with the first prompt submitted:
+    /// `session.created` and `turn.started` for a new conversation, `turn.started` for a resumed
+    /// one; nothing as it starts (1.19.6, `testdata/opencode-captures.md`, "Hook payloads").
+    /// Every plan carries the plugin.
+    fn first_hook_due(&self, _spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> FirstHook {
+        FirstHook::WithFirstTurn
     }
 
     fn hooks(&self) -> &'static dyn crate::hooks::HookInterpreter {
@@ -251,17 +285,70 @@ impl AgentProvider for OpenCodeProvider {
             .then(|| title.to_owned())
     }
 
-    fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
-        // OpenCode has the default account only: no variable moves its data directory alone, so a
-        // launch given an account's directory would run as the default account under another
-        // name. Refused before anything is written.
+    /// OpenCode has the default account only: no variable moves its data directory alone, so a
+    /// launch given an account's directory would run as the default account under another name,
+    /// in a plain terminal as much as through Octoboard.
+    ///
+    /// A resume of the second generation is refused on OpenCode's own answer that it has no such
+    /// conversation: the one refusal here that rests on proof rather than on what a plain terminal
+    /// would hit, since OpenCode 2 given `--session` with an id it does not have starts a new
+    /// conversation under it. Any other outcome goes ahead and is told
+    /// (`conversation_record_not_found`) whatever tier the launch starts at, a pending migration
+    /// included, before which no command of OpenCode's is run. The first generation answers a
+    /// resume of a conversation it no longer has itself, `Error: Session not found: <id>` and an
+    /// exit at once (1.19.6), as in a plain terminal.
+    fn check_launch(&self, spec: &LaunchSpec<'_>) -> Result<Vec<Notice>> {
         if spec.config_dir.is_some() {
             return Err(CodedError::provider_unsupported(
                 AgentId::OPENCODE,
                 ProviderOperation::OwnedAccounts,
             ));
         }
-        let generation = version::at_launch(spec)?;
+        let Some(id) = spec.resume_agent_session_id else {
+            return Ok(Vec::new());
+        };
+        if version::at_launch(spec) != Generation::V2 {
+            return Ok(Vec::new());
+        }
+        let answer = if version::migration_pending(spec.shell_env) {
+            ResumeAnswer::Unconfirmed
+        } else {
+            records::resume_answer(spec, id)
+        };
+        Ok(resume_check(spec, answer)?.into_iter().collect())
+    }
+
+    /// `--session <id>` for a resume, which every generation takes, and `--model` for a launch of
+    /// the first generation, as the plan passes it ([`version::generation_of`]): the second takes
+    /// its model from the inline configuration, which a bare launch does not carry. A new
+    /// conversation's task is the session's first message, as in the plan.
+    fn bare_plan(&self, spec: &LaunchSpec<'_>) -> super::BarePlan {
+        let mut args = Vec::new();
+        if let Some(id) = spec.resume_agent_session_id {
+            args.push("--session".to_string());
+            args.push(id.to_string());
+        }
+        let first_generation = version::generation_of(spec.agent_version) == Generation::V1;
+        if let Some(model) = spec.model.filter(|_| first_generation) {
+            args.push("--model".to_string());
+            args.push(model.to_string());
+        }
+        super::BarePlan {
+            args,
+            shaped_prompt: None,
+            first_message: spec
+                .task
+                .filter(|_| spec.resume_agent_session_id.is_none())
+                .map(str::to_owned),
+        }
+    }
+
+    fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
+        // An account directory of its own, and a resume OpenCode 2 said it cannot make, were
+        // refused before planning (`Self::check_launch`). A pending migration leaves the launch
+        // bare: OpenCode migrates as it starts.
+        let generation = version::at_launch(spec);
+        version::refuse_pending_migration(spec, generation)?;
         let private = generation == Generation::V2
             || !spec.shell_env.contains_key("OPENCODE_SERVER_PASSWORD");
         let mut args = Vec::new();
@@ -269,9 +356,6 @@ impl AgentProvider for OpenCodeProvider {
             args.push("--standalone".to_owned());
         }
         if let Some(id) = spec.resume_agent_session_id {
-            if generation == Generation::V2 {
-                records::check_resume(spec, id)?;
-            }
             args.push("--session".to_string());
             args.push(id.to_string());
         }

@@ -37,6 +37,7 @@ use super::path_links::PathLink;
 use super::processes::{ProcessCount, ProcessTree, UnstoppedProcess};
 use super::providers::ProviderInfo;
 use super::quotas::{AccountQuota, ResetCreditOutcome};
+use super::records::StandingNotice;
 use super::records::{
     AgentAvailability, Console, DirEntry, GitStatus, Host, Page, Project, PullOutcome, Session,
     SessionKind, SessionStatus, ShellTerminal,
@@ -363,14 +364,21 @@ pub enum Event {
     },
     /// Something about a session the user has to be told, which no status field carries: an
     /// injected capability that will not apply, a setting of theirs Octoboard had to work around.
-    /// Broadcast once, when it is found; nothing stores it. `code` and `params` name the notice for
-    /// a client to word in its own language; `message` is the English text for a client that does
-    /// not know the code.
+    /// Broadcast once, when it is found. `code` and `params` name the notice for a client to word
+    /// in its own language; `message` is the English text for a client that does not know the
+    /// code. A plain notice is stored nowhere. A `standing` one (absent when false) describes a
+    /// condition of the session's launch that lasts: the daemon keeps it on the session's record
+    /// (`Session::standing_notices`) until it is withdrawn with `session_notice_withdrawn` or the
+    /// process ends, and a client that knows the flag shows it from the record rather than from
+    /// this event.
     SessionNotice {
         session: String,
         code: Code,
         params: Params,
         message: String,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        #[cfg_attr(test, ts(optional = nullable))]
+        standing: bool,
     },
     /// The `session_notice` with `code` about `session` that was broadcast last no longer holds: a
     /// `message_not_sent` whose message the agent has since reported sending. A client still
@@ -1013,6 +1021,10 @@ pub struct Notice {
     pub code: Code,
     pub message: String,
     pub params: Params,
+    /// Whether it describes a condition of the launch that lasts, and is then kept on the
+    /// session's record while the condition holds (`crate::state::AppState::raise_standing_notice`)
+    /// rather than only broadcast.
+    pub standing: bool,
 }
 
 impl Notice {
@@ -1021,7 +1033,20 @@ impl Notice {
             code,
             message: message.into(),
             params: params(pairs),
+            standing: false,
         }
+    }
+
+    /// This notice as a standing one: kept on the session's record for as long as its condition
+    /// holds.
+    pub fn standing(mut self) -> Self {
+        self.standing = true;
+        self
+    }
+
+    /// The `detail` param that tells this notice from others of its code, where it has one.
+    pub fn detail(&self) -> Option<&str> {
+        self.params.get("detail").map(String::as_str)
     }
 
     /// The `session_notice` event telling the user about this, for `session`.
@@ -1031,6 +1056,17 @@ impl Notice {
             code: self.code,
             params: self.params,
             message: self.message,
+            standing: self.standing,
+        }
+    }
+
+    /// This notice as a session's record keeps it while it stands, raised at `at`.
+    pub fn kept_at(&self, at: i64) -> StandingNotice {
+        StandingNotice {
+            code: self.code.as_str().to_string(),
+            params: self.params.clone(),
+            message: self.message.clone(),
+            at,
         }
     }
 }
@@ -1117,6 +1153,56 @@ mod tests {
             requested_at: 7,
         })
         .unwrap()
+    }
+
+    /// A notice is marked `standing` on the wire only when it stands, so a client that does not
+    /// know the flag reads a plain one as before; the record keeps a standing one with its code
+    /// as text, its params, its message and the time it was raised, and a withdrawal names the
+    /// detail only where it has one.
+    #[test]
+    fn a_standing_notice_is_marked_on_the_wire_only_when_it_stands() {
+        use crate::protocol::{notice_code, Notice};
+        let notice = || {
+            Notice::new(
+                notice_code::HOOKS_NOT_RECEIVED,
+                "No hooks came.",
+                &[("agent", "claude"), ("detail", "x")],
+            )
+        };
+        assert!(!notice().standing && notice().standing().standing);
+        let plain = serde_json::to_value(notice().about("s")).unwrap();
+        assert!(!plain.as_object().unwrap().contains_key("standing"));
+        let standing = serde_json::to_value(notice().standing().about("s")).unwrap();
+        assert_eq!(standing["type"], "session_notice");
+        assert_eq!(standing["standing"], true);
+        assert_eq!(standing["code"], "hooks_not_received");
+
+        assert_eq!(notice().detail(), Some("x"));
+        assert_eq!(
+            Notice::new(notice_code::HOOKS_NOT_RECEIVED, "m", &[]).detail(),
+            None
+        );
+        let kept = serde_json::to_value(notice().standing().kept_at(9)).unwrap();
+        assert_eq!(
+            kept,
+            serde_json::json!({
+                "code": "hooks_not_received",
+                "params": { "agent": "claude", "detail": "x" },
+                "message": "No hooks came.",
+                "at": 9,
+            })
+        );
+
+        let withdrawn = |detail: Option<&str>| {
+            serde_json::to_value(Event::SessionNoticeWithdrawn {
+                session: "s".to_owned(),
+                code: notice_code::HOOKS_NOT_RECEIVED,
+                detail: detail.map(str::to_owned),
+            })
+            .unwrap()
+        };
+        assert_eq!(withdrawn(Some("x"))["detail"], "x");
+        assert!(!withdrawn(None).as_object().unwrap().contains_key("detail"));
     }
 
     /// The five scheduled task actions are written as the names of the tools that ask them, which

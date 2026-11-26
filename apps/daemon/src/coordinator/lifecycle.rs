@@ -359,7 +359,9 @@ pub(super) fn inspect_session_records(
     locator: records::Locator<'_>,
 ) -> Result<crate::protocol::SessionRecordPresence> {
     use crate::protocol::SessionRecordPresence::{Absent, Present, Unknown};
-    let mut locator = locator.with_store(&state.store);
+    let mut locator = locator
+        .with_store(&state.store)
+        .with_witnesses(&state.record_witnesses);
     let accounts = state.store.list_accounts()?;
     let mut presence = Absent;
     for id in ids {
@@ -516,7 +518,9 @@ async fn trash_agent_records_with(
     }
     let state = Arc::clone(state);
     let moved = tokio::task::spawn_blocking(move || {
-        let mut locator = locator.with_store(&state.store);
+        let mut locator = locator
+            .with_store(&state.store)
+            .with_witnesses(&state.record_witnesses);
         let deleted = match consent {
             RecordsConsent::Ticked | RecordsConsent::UntickedBulk => deleted,
             RecordsConsent::Unticked => borne_out_as_unused(&state, deleted, &mut locator),

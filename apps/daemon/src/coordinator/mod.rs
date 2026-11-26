@@ -59,6 +59,7 @@ mod checked_write_tests;
 pub mod console_workdir;
 pub mod consoles;
 pub mod conversation_feed;
+pub(crate) mod early_exit;
 pub mod exit_watch;
 pub mod handoff;
 pub mod handover_check;

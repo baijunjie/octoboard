@@ -280,9 +280,17 @@ pub fn error_parts(err: &anyhow::Error) -> (Code, Params, String) {
 
 /// The params of a message that nests the failure `err`, and that failure's message as the reason:
 /// the failure's own params, then `own` and the failure as `reason` and `reason_code`, each
-/// replacing a param of the same name, so a client words the cause itself.
+/// replacing a param of the same name, so a client words the cause itself. A failure that itself
+/// nests one (a `binary_not_found` on a launch's fallback environment, nesting why the login
+/// shell's could not be read) keeps it as `inner_reason` and `inner_reason_code`, which the
+/// failure's own `reason` and `reason_code` would otherwise replace.
 pub fn nested_params(err: &anyhow::Error, own: &[(&str, &str)]) -> (Params, String) {
     let (reason_code, mut nested, reason) = error_parts(err);
+    if let Some(inner_code) = nested.remove("reason_code") {
+        let inner_reason = nested.remove("reason").unwrap_or_default();
+        nested.insert("inner_reason".to_string(), inner_reason);
+        nested.insert("inner_reason_code".to_string(), inner_code);
+    }
     nested.extend(params(own));
     nested.insert("reason".to_string(), reason.clone());
     nested.insert("reason_code".to_string(), reason_code.as_str().to_string());
@@ -300,6 +308,38 @@ impl std::error::Error for CodedError {}
 #[cfg(test)]
 mod tests {
     use crate::protocol::{notice_code, AgentId, CodedError, Event, Notice, ProviderOperation};
+
+    /// A failure nested in another keeps the failure it nests itself as `inner_reason` and
+    /// `inner_reason_code`, beside its own params, while its own message and code become the
+    /// outer message's `reason` and `reason_code`.
+    #[test]
+    fn a_failure_that_nests_one_keeps_it_when_nested_again() {
+        let snapshot = CodedError::raised(
+            crate::protocol::error_code::SHELL_ENVIRONMENT_TIMEOUT,
+            "the shell took too long",
+            &[("timeout", "10s")],
+        );
+        let not_found = CodedError::nesting(
+            crate::protocol::error_code::BINARY_NOT_FOUND,
+            &snapshot,
+            &[("binary", "codex"), ("cause", "daemon")],
+            |reason| format!("`codex` was not found: {reason}"),
+        );
+        let (params, reason) = super::nested_params(&not_found, &[("title", "Hub")]);
+        assert_eq!(reason, "`codex` was not found: the shell took too long");
+        assert_eq!(params["reason"], reason);
+        assert_eq!(params["reason_code"], "binary_not_found");
+        assert_eq!(params["inner_reason"], "the shell took too long");
+        assert_eq!(params["inner_reason_code"], "shell_environment_timeout");
+        assert_eq!(params["binary"], "codex");
+        assert_eq!(params["cause"], "daemon");
+        assert_eq!(params["timeout"], "10s");
+        assert_eq!(params["title"], "Hub");
+
+        // A failure that nests nothing carries no inner reason.
+        let (params, _) = super::nested_params(&snapshot, &[]);
+        assert!(!params.contains_key("inner_reason_code"));
+    }
 
     /// A provider that does not offer an operation is refused with the agent's wire id and the
     /// operation's name, and one that does is let through.

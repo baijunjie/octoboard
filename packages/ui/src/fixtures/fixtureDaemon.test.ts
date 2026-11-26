@@ -2729,11 +2729,14 @@ describe("the fixture daemon's accounts that are not logged in", () => {
     }),
   });
 
-  it("refuses a session on and a switch to an account whose last reading says it is not logged in, naming the account", async () => {
+  it("refuses a switch to an account whose last reading says it is not logged in, naming the account, and opens the user's own session on it with a standing notice that says so", async () => {
     for (const account of ["a-out", "a-new"]) {
       const name = account === "a-out" ? "Work" : "Client";
-      await expect(daemon().request({ type: "open_session", console_id: "c", project_id: "p", account })).rejects.toMatchObject({ code: "account_not_signed_in", params: { agent: "Claude Code", account: name } });
       await expect(daemon().request({ type: "switch_session_account", session: "s", account })).rejects.toMatchObject({ code: "account_not_signed_in", params: { account: name } });
+      const opened = await daemon().request({ type: "open_session", console_id: "c", project_id: "p", account });
+      expect(opened).toMatchObject({ type: "session_opened", session: { account_id: account } });
+      const notices = opened?.type === "session_opened" ? opened.session.standing_notices : undefined;
+      expect(notices).toEqual([expect.objectContaining({ code: "account_sign_in_unconfirmed", params: expect.objectContaining({ agent: "Claude Code", agent_id: "claude", account: name }) })]);
     }
   });
 
@@ -2742,7 +2745,9 @@ describe("the fixture daemon's accounts that are not logged in", () => {
   });
 
   it("lets a reading that failed for another reason through", async () => {
-    await expect(daemon().request({ type: "open_session", console_id: "c", project_id: "p", account: "a-slow" })).resolves.toMatchObject({ type: "session_opened" });
+    const opened = await daemon().request({ type: "open_session", console_id: "c", project_id: "p", account: "a-slow" });
+    expect(opened).toMatchObject({ type: "session_opened" });
+    expect(opened?.type === "session_opened" && opened.session).not.toHaveProperty("standing_notices");
     await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-slow" })).resolves.toEqual({ type: "ack", id: null });
   });
 });

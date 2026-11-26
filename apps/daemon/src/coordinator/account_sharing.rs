@@ -250,8 +250,9 @@ fn same_directory(a: &Account, b: &Account) -> bool {
 /// the account's idle sessions (one that turned working refuses the change with `refused`, before
 /// anything is stopped or recorded) and ends their processes; then, unless the daemon is stopping
 /// by now, it records the choice as incomplete, waits for the short CLI reads running under the
-/// account's directory to end, processes every entry, telling the progress as each is reached,
-/// and records the outcome, the daemon's stop waiting for all of it; and last, whatever the outcome, it resumes the sessions it ended, onto the directory as it stands.
+/// account's directory to end, processes every entry, telling the progress as each is reached, and
+/// records the outcome, the daemon's stop waiting for all of it; and last, whatever the outcome, it
+/// resumes the sessions it ended, onto the directory as it stands.
 async fn change(
     state: &Arc<AppState>,
     locked: &mut Locked,

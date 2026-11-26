@@ -27,8 +27,26 @@ describe("the OpenCode presentation module", () => {
     }
   });
 
-  it("gives its refusal a remedy", () => {
+  it("words its pending migration as the cause of a bare launch, with a remedy that brings the additions back", () => {
     expect(opencode.codes["provider.opencode.migration_required"].recovery).toBe("provider.opencode.migration_required.remedy");
+    const en = opencode.messages.en;
+    expect(en["provider.opencode.migration_required"]).toBe("{agent} has yet to migrate its own configuration to its new version.");
+    expect(en["provider.opencode.migration_required"]).not.toMatch(/session/);
+    for (const [language, messages] of Object.entries(opencode.messages)) {
+      expect(messages["provider.opencode.migration_required.remedy"], language).toContain("{appName}");
+    }
+  });
+
+  // No version is refused: a minor not measured only raises a standing notice, which words the version it names.
+  it("declares no refusal of a version, and words the notice of an unmeasured one with the version the daemon names, without a remedy, in every language", () => {
+    expect(Object.keys(opencode.codes)).not.toContain("provider.opencode.unsupported_version");
+    expect(opencode.codes["provider.opencode.version_unmeasured"]).toEqual({ origin: "daemon", codeParams: ["version"], uiParams: { agent: "OpenCode" } });
+    expect(Object.keys(opencode.messages.en)).not.toContain("provider.opencode.version_unmeasured.remedy");
+    expect(Object.keys(opencode.messages.en)).not.toContain("provider.opencode.unsupported_version");
+    for (const [language, messages] of Object.entries(opencode.messages)) {
+      const text = messages["provider.opencode.version_unmeasured"];
+      for (const name of ["agent", "version", "appName"]) expect(text, `${language} {${name}}`).toContain(`{${name}}`);
+    }
   });
 
   it("words the same messages in every language, none of them empty", () => {

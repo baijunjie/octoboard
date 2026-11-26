@@ -106,7 +106,8 @@ const HOOK_EVENTS: &[&str] = &[
 ];
 
 /// The first Claude Code that takes a `"type": "http"` hook handler, which posts the event's JSON
-/// to a URL from inside the agent's own process. Older ones only run commands.
+/// to a URL from inside the agent's own process: its changelog's 2.1.63 entry reads "Added HTTP
+/// hooks". Older ones only run commands. A version that cannot be read counts as taking them.
 const HTTP_HOOKS_SINCE: AgentVersion = (2, 1, 63);
 
 /// The registered events Claude Code skips an HTTP handler for (it runs only commands on
@@ -120,10 +121,11 @@ const COMMAND_ONLY_EVENTS: &[&str] = &["SessionStart"];
 /// The tools the cross-project guard looks at: the ones that write a file.
 const GUARD_MATCHER: &str = "Edit|Write|MultiEdit|NotebookEdit";
 
-/// The status line is injected only for a Claude Code known to be at least this version, well
-/// inside the releases that run a `statusLine` command; one whose input carries no context window
-/// still passes the user's own status line through and reports nothing.
-const STATUS_LINE_SINCE: AgentVersion = (2, 0, 0);
+/// The first Claude Code that runs a `statusLine` command: its changelog's 1.0.71 entry reads
+/// "Customizable status line". The status line is injected from it, and where the version cannot
+/// be read; one whose input carries no context window still passes the user's own status line
+/// through and reports nothing.
+const STATUS_LINE_SINCE: AgentVersion = (1, 0, 71);
 
 /// The file in the session's scratch directory that holds the `--settings` JSON, owner-only.
 const SETTINGS_FILE: &str = "claude-settings.json";
@@ -141,7 +143,7 @@ pub struct ClaudeProvider;
 impl ClaudeProvider {
     /// The `--settings` JSON, which `plan` writes to an owner-only file. A Claude Code that takes
     /// HTTP hooks posts each event to the daemon itself, so a hook costs no process at all, except
-    /// for [`COMMAND_ONLY_EVENTS`]; with an older or unknown version, or when a settings file's
+    /// for [`COMMAND_ONLY_EVENTS`]; with an older version, or when a settings file's
     /// `allowedHttpHookUrls` leaves the daemon's URL out (Claude Code then skips every HTTP hook
     /// silently), each event runs a command instead.
     /// `async` keeps a slow command off the turn's critical path (a 30 s hook took a turn from
@@ -162,7 +164,7 @@ impl ClaudeProvider {
             spec.daemon_port,
             spec.daemon_key,
         );
-        let http = spec.agent_version.is_some_and(|v| v >= HTTP_HOOKS_SINCE) && {
+        let http = spec.agent_version.is_none_or(|v| v >= HTTP_HOOKS_SINCE) && {
             let project = canonical_project(spec.cwd);
             http_hooks_allowed(&url, &settings_files(spec, pinned, &project), &project)
         };
@@ -225,7 +227,7 @@ impl ClaudeProvider {
         if spec.settings.choice("approval_mode") == Some("bypass") {
             settings["skipDangerousModePermissionPrompt"] = json!(true);
         }
-        if spec.agent_version.is_some_and(|v| v >= STATUS_LINE_SINCE) {
+        if spec.agent_version.is_none_or(|v| v >= STATUS_LINE_SINCE) {
             settings["statusLine"] = Self::status_line(spec, pinned);
         }
         settings.to_string()
@@ -558,7 +560,9 @@ impl AgentProvider for ClaudeProvider {
             args.push(model.to_string());
         }
         // Claude Code quietly lowers `max` and `xhigh` to `high` on a model that does not support
-        // them.
+        // them. No floor, by decision: a release without the flag refuses it before it draws
+        // anything (`error: unknown option '<option>'`, status 1, measured on 2.1.332), and with
+        // no `reduced_plan` that early exit relaunches bare, without the effort.
         if let Some(effort) = spec.effort {
             args.push("--effort".to_string());
             args.push(effort.to_string());
@@ -566,22 +570,9 @@ impl AgentProvider for ClaudeProvider {
         // The prompt, a new session's task or a resume's instruction, comes last, after a bare
         // `--`: Claude Code refuses a prompt that starts with `-` anywhere else ("unknown
         // option"), and the `--` also closes the list-valued flags before it (`--mcp-config`
-        // reads a prompt left after it as another config path).
-        //
-        // The text is passed as it was written, invisible characters included: Claude Code
-        // removes those it takes for invisible itself and keeps the ones a script's spelling
-        // needs (2.1.330, measured), and the prompt it then reports is matched with them ignored
-        // (`screen::ClaudeScreen::same_as_submitted`). Nothing is passed of a prompt that is
-        // blank without them.
-        let prompt = spec
-            .task
-            .filter(|prompt| !crate::session::term::is_blank_once_stripped(prompt))
-            .map(prompt_argument);
-        if let Some(prompt) = &prompt {
-            args.push("--".to_string());
-            args.push(prompt.clone());
-        }
-        let shaped_prompt = prompt.filter(|prompt| Some(prompt.as_str()) != spec.task);
+        // reads a prompt left after it as another config path) ([`task_args`]).
+        let (task, shaped_prompt) = task_args(spec);
+        args.extend(task);
 
         let mut env = source_servers.env;
         if let Some(dir) = pinned {
@@ -620,6 +611,37 @@ impl AgentProvider for ClaudeProvider {
         })
     }
 
+    /// `--resume <id>` for a resume, `--model`, and the task after a bare `--` as the plan gives
+    /// it ([`prompt_argument`]); a new conversation is Claude Code's own, given no id.
+    fn bare_plan(&self, spec: &LaunchSpec<'_>) -> super::BarePlan {
+        let mut args = Vec::new();
+        if let Some(id) = spec.resume_agent_session_id {
+            args.push("--resume".to_string());
+            args.push(id.to_string());
+        }
+        if let Some(model) = spec.model {
+            args.push("--model".to_string());
+            args.push(model.to_string());
+        }
+        let (task, shaped_prompt) = task_args(spec);
+        args.extend(task);
+        super::BarePlan {
+            args,
+            shaped_prompt,
+            first_message: None,
+        }
+    }
+
+    /// Every enhanced plan registers `SessionStart` as a command hook, which Claude Code runs as it
+    /// starts a session, a resume with no prompt included, once any trust screen is answered (see
+    /// `docs/agent-cli-reference.md`, "`SessionStart` and `Setup` run no HTTP handler"). A launch
+    /// whose hooks are switched off by the user's or a managed configuration, or a release that no
+    /// longer runs them, is then read as one without hooks once the bound runs out, and releases
+    /// what it holds at its input box.
+    fn first_hook_due(&self, _spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> super::FirstHook {
+        super::FirstHook::AtStart
+    }
+
     /// Stops the background session that holds a conversation being resumed (see
     /// `background_sessions`).
     fn before_launch(
@@ -633,7 +655,7 @@ impl AgentProvider for ClaudeProvider {
         };
         if spec
             .agent_version
-            .is_some_and(|v| v >= background_sessions::BACKGROUND_SESSIONS_SINCE)
+            .is_none_or(|v| v >= background_sessions::BACKGROUND_SESSIONS_SINCE)
         {
             background_sessions::stop_holders(binary, environment, conversation);
         }
@@ -642,6 +664,28 @@ impl AgentProvider for ClaudeProvider {
 
 /// The environment entry that turns Claude Code's auto memory off for one launch.
 const AUTO_MEMORY_OFF: (&str, &str) = ("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "1");
+
+/// The arguments that give Claude Code the task of `spec`, a new session's task or a resume's
+/// instruction, last on the command line: a bare `--`, then the prompt ([`prompt_argument`]); and
+/// that prompt where it is not the task as written ([`LaunchPlan::shaped_prompt`]). The plan and the
+/// bare plan alike.
+///
+/// The text is passed as it was written, invisible characters included: Claude Code removes those
+/// it takes for invisible itself and keeps the ones a script's spelling needs (2.1.330, measured),
+/// and the prompt it then reports is matched with them ignored
+/// (`screen::ClaudeScreen::same_as_submitted`). Nothing is passed of a prompt that is blank
+/// without them.
+fn task_args(spec: &LaunchSpec<'_>) -> (Vec<String>, Option<String>) {
+    let Some(prompt) = spec
+        .task
+        .filter(|prompt| !crate::session::term::is_blank_once_stripped(prompt))
+        .map(prompt_argument)
+    else {
+        return (Vec::new(), None);
+    };
+    let shaped = (Some(prompt.as_str()) != spec.task).then(|| prompt.clone());
+    (vec!["--".to_string(), prompt], shaped)
+}
 
 /// `text` as the prompt argument after the bare `--`: as it is, except that one word shaped like
 /// a command's name (ASCII letters, digits, `-` and `_`) gets a leading space. Claude Code still
@@ -666,6 +710,92 @@ mod tests {
     use super::*;
     use crate::adapter::tests::spec_fixture;
     use crate::providers::{ProviderSettings, SettingValue};
+
+    /// Claude Code's bare launch: `--resume`, `--model` and the task after `--`, a word shaped like a
+    /// subcommand given its leading space as in the plan; a new conversation is given no id.
+    #[test]
+    fn its_bare_plan_names_the_conversation_the_model_and_the_task_only() {
+        let mut fixture = crate::adapter::tests::spec_fixture();
+        fixture.model = Some("model-a".to_string());
+        let bare = |resume: Option<&str>, task: Option<&str>| {
+            let mut spec = fixture.spec();
+            spec.resume_agent_session_id = resume;
+            spec.task = task;
+            ClaudeProvider.bare_plan(&spec)
+        };
+        assert_eq!(
+            bare(Some("c-1"), None).args,
+            ["--resume", "c-1", "--model", "model-a"]
+        );
+        assert_eq!(
+            bare(None, Some("do it")).args,
+            ["--model", "model-a", "--", "do it"]
+        );
+        let shaped = bare(None, Some("update"));
+        assert_eq!(shaped.args.last().map(String::as_str), Some(" update"));
+        assert_eq!(shaped.shaped_prompt.as_deref(), Some(" update"));
+    }
+
+    /// An enhanced launch's first hook, `SessionStart`, comes as Claude Code starts, so a launch
+    /// whose hooks never come is found without them after the bound, idle or not.
+    #[test]
+    fn its_first_hook_is_due_as_it_starts() {
+        let fixture = spec_fixture();
+        let spec = fixture.spec();
+        let plan = ClaudeProvider.plan(&spec).expect("plan");
+        assert_eq!(
+            ClaudeProvider.first_hook_due(&spec, &plan),
+            crate::adapter::FirstHook::AtStart
+        );
+    }
+
+    /// The early exits of Claude Code 2.1.332, as it wrote them on a terminal: its refusal of an
+    /// option it does not know, and a near miss, a settings file not found. Neither gives a reduced
+    /// plan, so the relaunch after either is bare.
+    #[test]
+    fn an_early_exit_gives_no_reduced_plan() {
+        for capture in [
+            "claude_early_exit_unknown_option_2.1.332.bin",
+            "claude_early_exit_settings_not_found_2.1.332.bin",
+        ] {
+            let bytes = std::fs::read(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("testdata")
+                    .join(capture),
+            )
+            .unwrap();
+            let exit = crate::adapter::EarlyExit {
+                output: String::from_utf8_lossy(&bytes).into_owned(),
+                status: Some(1),
+            };
+            let mut fixture = spec_fixture();
+            fixture.effort = Some("high".to_string());
+            assert!(
+                ClaudeProvider
+                    .reduced_plan(&fixture.spec(), &exit)
+                    .is_none(),
+                "{capture}"
+            );
+        }
+    }
+
+    /// `--effort` has no floor: a chosen effort is passed to an old release, and to one whose
+    /// version is not known, as to a current one.
+    #[test]
+    fn the_effort_is_passed_whatever_the_version() {
+        for version in [None, Some((1, 0, 0)), Some((2, 1, 332))] {
+            let mut fixture = spec_fixture();
+            fixture.agent_version = version;
+            fixture.effort = Some("high".to_string());
+            let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
+            assert!(
+                plan.args
+                    .windows(2)
+                    .any(|pair| pair == ["--effort", "high"]),
+                "{version:?}"
+            );
+        }
+    }
 
     /// Claude Code's status comes from its hooks and signals, which win over OSC 7501.
     #[test]
@@ -1124,9 +1254,9 @@ mod tests {
         assert_eq!(version_of(&plain), None);
     }
 
-    /// A Claude Code that takes HTTP hooks gets the daemon's hook route, with no process behind any
-    /// event but the ones it runs only commands for; one older than that, or of a version nobody
-    /// could tell, keeps the command for every event.
+    /// A Claude Code that takes HTTP hooks, or of a version nobody could tell, gets the daemon's
+    /// hook route, with no process behind any event but the ones it runs only commands for; one
+    /// older than the release that added them keeps the command for every event.
     #[test]
     fn http_hooks_are_injected_from_the_version_that_takes_them() {
         let mut fixture = spec_fixture();
@@ -1136,7 +1266,7 @@ mod tests {
             (Some((3, 0, 0)), true),
             (Some((2, 1, 62)), false),
             (Some((1, 9, 99)), false),
-            (None, false),
+            (None, true),
         ] {
             fixture.agent_version = version;
             let hooks = injected_hooks(&fixture);
@@ -1252,8 +1382,9 @@ mod tests {
         settings_of(&ClaudeProvider.plan(&fixture.spec()).expect("plan"))
     }
 
-    /// The status line is injected only for a Claude Code known to run one, and names the
-    /// directories its settings are read from: the pinned one when there is one.
+    /// The status line is injected for a Claude Code from the release that added it, and for one
+    /// whose version cannot be read, and names the directories its settings are read from: the
+    /// pinned one when there is one.
     #[test]
     fn the_status_line_is_injected_from_the_version_that_runs_one() {
         let mut fixture = spec_fixture();
@@ -1262,10 +1393,11 @@ mod tests {
             .shell_env
             .insert("HOME".to_string(), home.to_string_lossy().into_owned());
         for (version, injected) in [
+            (Some((1, 0, 71)), true),
             (Some((2, 0, 0)), true),
             (Some((2, 1, 306)), true),
-            (Some((1, 0, 99)), false),
-            (None, false),
+            (Some((1, 0, 70)), false),
+            (None, true),
         ] {
             fixture.agent_version = version;
             assert_eq!(
@@ -1946,17 +2078,17 @@ command = "x"
                 fixture.agent_version = ClaudeProvider.installed_version(&binary.to_string_lossy());
                 let readable = matches!(case, "regular" | "linked");
                 assert_eq!(fixture.agent_version, readable.then_some((2, 1, 100)));
+                // The launch is planned either way, and a version that cannot be read counts as
+                // taking HTTP hooks, as a readable one past their floor does.
                 let hooks = injected_hooks(&fixture);
-                assert_eq!(
-                    hooks["Stop"][0]["hooks"][0]["type"],
-                    if readable { "http" } else { "command" }
-                );
+                assert_eq!(hooks["Stop"][0]["hooks"][0]["type"], "http", "{case}");
             },
         );
     }
 
-    /// The CLI is asked about background sessions only on a resume of a Claude Code that has the
-    /// subcommands: a fresh launch, an older one and one of unknown version run no CLI at all.
+    /// The CLI is asked about background sessions only on a resume, of a Claude Code that has the
+    /// subcommands or whose version cannot be read: a fresh launch and an older one run no CLI at
+    /// all.
     #[test]
     fn before_launch_stops_the_background_session_holding_a_resumed_conversation_only_where_it_can_be(
     ) {
@@ -1970,7 +2102,7 @@ command = "x"
             (Some(HELD_CONVERSATION), Some(since), true),
             (Some(HELD_CONVERSATION), Some((since.0 + 1, 0, 0)), true),
             (Some(HELD_CONVERSATION), Some(just_below), false),
-            (Some(HELD_CONVERSATION), None, false),
+            (Some(HELD_CONVERSATION), None, true),
             (None, Some(since), false),
             (None, None, false),
         ] {

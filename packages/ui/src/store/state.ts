@@ -170,6 +170,10 @@ export interface State {
   /** This window asked the daemon to restart (`restart_daemon`, see `setRestartAwaited`) and no daemon has greeted it
    * since: the next `hello` ends it. Client state, which the daemon knows nothing of. */
   restartAwaited: boolean;
+  /** The standing notices (`Session.standing_notices`) the user dismissed in this window, by `standingNoticeKey`. Client
+   * state, which the daemon knows nothing of and nothing persists: another window still shows them, and a notice raised
+   * again (a later launch, a new reading) has another key and shows again. A key goes with its session. */
+  dismissedStandingNotices: ReadonlySet<string>;
 }
 
 const initialState: State = {
@@ -210,6 +214,7 @@ const initialState: State = {
   shellTerminals: new Map(),
   queuedAccountSwitches: new Set(),
   restartAwaited: false,
+  dismissedStandingNotices: new Set(),
 };
 
 /** A store holding the empty state with `initial` laid over it. */

@@ -155,9 +155,54 @@ impl AgentProvider for TestProvider {
         summary["name"].as_str().map(str::to_owned)
     }
 
-    /// A pinned account's directory is exported as the layout's variable, as every provider whose
-    /// CLI reads one does; the default account leaves the snapshot's own value standing.
+    /// Nothing, unless this thread has the provider refuse every launch
+    /// (`crate::test_support::test_provider::declaring_launch_refusal`).
+    fn launch_refusal(&self, _spec: &LaunchSpec<'_>) -> Result<()> {
+        if crate::test_support::test_provider::declares_launch_refusal() {
+            return Err(crate::protocol::CodedError::provider_unsupported(
+                AgentId::TEST,
+                crate::protocol::ProviderOperation::OwnedAccounts,
+            ));
+        }
+        Ok(())
+    }
+
+    /// [`Self::launch_refusal`], with what this thread has the check find to tell
+    /// (`crate::test_support::test_provider::declaring_checked_notices`).
+    fn check_launch(&self, spec: &LaunchSpec<'_>) -> Result<Vec<crate::protocol::Notice>> {
+        self.launch_refusal(spec)?;
+        Ok(crate::test_support::test_provider::declared_checked_notices())
+    }
+
+    /// `bare`, then `--resume <id>` for a resume, `--model <model>` and the task as the last
+    /// argument, so a test reads back what the bare launch was given.
+    fn bare_plan(&self, spec: &LaunchSpec<'_>) -> super::BarePlan {
+        let mut args = vec!["bare".to_string()];
+        if let Some(id) = spec.resume_agent_session_id {
+            args.extend(["--resume".to_string(), id.to_string()]);
+        }
+        if let Some(model) = spec.model {
+            args.extend(["--model".to_string(), model.to_string()]);
+        }
+        args.extend(spec.task.map(str::to_string));
+        super::BarePlan {
+            args,
+            ..super::BarePlan::default()
+        }
+    }
+
+    /// No arguments, and the account's directory through the layout: a pinned account's directory
+    /// is exported as the layout's variable, as every provider whose CLI reads one does, and the
+    /// default account leaves the snapshot's own value standing. A coded error instead where this
+    /// thread has the plan fail (`crate::test_support::test_provider::declaring_failing_plan`).
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
+        if crate::test_support::test_provider::declares_failing_plan() {
+            return Err(crate::protocol::CodedError::raised(
+                crate::test_support::test_provider::FAILING_PLAN_CODE,
+                "the test plan failed",
+                &[("path", "/nowhere")],
+            ));
+        }
         let env = spec
             .config_dir
             .and_then(|dir| self.descriptor().layout.config_dir_export(dir))
@@ -180,10 +225,30 @@ impl AgentProvider for TestProvider {
         })
     }
 
+    /// None, unless this thread has the provider give one
+    /// (`crate::test_support::test_provider::declaring_reduced_plan`): `reduced` and what the CLI
+    /// wrote as it exited, so a test reads back that the plan was handed the early exit.
+    fn reduced_plan(&self, _spec: &LaunchSpec<'_>, exit: &super::EarlyExit) -> Option<LaunchPlan> {
+        crate::test_support::test_provider::declares_reduced_plan().then(|| LaunchPlan {
+            args: vec!["reduced".to_string(), exit.output.clone()],
+            ..LaunchPlan::default()
+        })
+    }
+
     /// None, unless this thread has the provider's agent run an extension that opens the session's
     /// channel (`crate::test_support::test_provider::declaring_extension_channel`).
     fn extension_channel(&self, _spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> bool {
         crate::test_support::test_provider::declares_extension_channel()
+    }
+
+    /// Never, unless this thread has its launches expect a hook
+    /// (`crate::test_support::test_provider::declaring_first_hook`).
+    fn first_hook_due(
+        &self,
+        _spec: &LaunchSpec<'_>,
+        _plan: &LaunchPlan,
+    ) -> crate::adapter::FirstHook {
+        crate::test_support::test_provider::declared_first_hook().unwrap_or_default()
     }
 }
 

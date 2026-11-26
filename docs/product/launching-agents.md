@@ -3,11 +3,19 @@
 Every session is a native agent CLI process. Octoboard starts the selected agent’s binary, resolved from the user’s `PATH`. The eight agents and their order are listed in `docs/product/supported-agents.md`.
 What each agent's launch does differently is in `docs/product/per-agent-launch-specifics.md`.
 
+A session always starts and runs as its agent's CLI would in a plain terminal. What Octoboard adds to a launch — its
+hooks, its MCP server, the role description, the approval mode and the rest of "What is injected on every launch"
+below — is an addition the session can run without: where Octoboard cannot add it, the session starts without it and
+its terminal says so (see `docs/product/launching-without-octoboards-additions.md`). No agent version is refused for being
+unmeasured or old.
+
 ## What Octoboard never modifies
 
 Antigravity CLI model listing uses a private directory. Starting a session can create Antigravity CLI’s standard
-`antigravity-cli` and `config/projects` directories under `~/.gemini`. Octoboard starts no migration of that directory.
-See "Antigravity CLI" in `docs/product/per-agent-launch-specifics.md` for how to prepare an earlier layout.
+`antigravity-cli` and `config/projects` directories under `~/.gemini`. Octoboard itself migrates nothing there; a
+session started without Octoboard's additions runs Antigravity CLI on that directory as a plain terminal would, and
+Antigravity CLI then migrates an earlier layout itself. See "Antigravity CLI" in
+`docs/product/per-agent-launch-specifics.md` for what that means and how to prepare an earlier layout.
 
 Octoboard leaves the user's own system — the agents' configuration and everything else outside Octoboard's own
 directories — as it finds it, apart from what this section lists. What Octoboard does inside a project the user added
@@ -254,7 +262,8 @@ the launch environment described below:
   `docs/product/hub-orchestration.md`).
 
 The arguments and files through which each agent is given these are in "How each agent is given the injection" in
-`docs/product/per-agent-launch-specifics.md`.
+`docs/product/per-agent-launch-specifics.md`. A launch that could not be given them, or whose agent refused them as it
+started, runs without them: see `docs/product/launching-without-octoboards-additions.md`.
 
 The injected status hooks are built to be invisible. They never steer the agent, print nothing (with the one exception below),
 never fail the turn, and carry a short timeout (3 seconds; a command hook gets 15 on Windows, where an agent's first
@@ -263,7 +272,7 @@ The hooks, like the session's other helpers, call the process holder that runs t
 with a key of the launch's own, and the holder answers a report at once even while no daemon is connected (see
 "Session helpers and the holder" in `docs/product/process-holders.md`). A
 Claude Code that can post hooks itself (2.1.63 or later) is given that address instead of a command, so its
-hooks start no process; an older one, or one whose version Octoboard cannot tell from where it is installed, gets the
+hooks start no process, as is one whose version Octoboard cannot tell from where it is installed; an older one gets the
 command. So does one whose settings restrict the addresses hooks may post to (`allowedHttpHookUrls`, in the user's, the
 project's or the managed settings, read where "The default model" in `docs/product/model-and-reasoning-effort.md` says)
 to a list that leaves out that loopback address, since Claude Code would skip such hooks silently; a
@@ -414,8 +423,9 @@ resumed. When a change reaches a console session is in "The console session's in
 A Claude Code session is also launched with a status line command of Octoboard's, given as a launch setting like the
 hooks, so no configuration file is written. Claude Code passes a status line its session's figures, the model's
 context window among them, which its own records never hold; the command reports that window to Octoboard (see
-"Claude Code's context window" in `docs/product/session-context.md`). It is given only to a Claude Code known to be
-2.0.0 or later; one older, or one whose version Octoboard cannot tell from where it is installed, gets none. A status
+"Claude Code's context window" in `docs/product/session-context.md`). It is given to a Claude Code of 1.0.71 or
+later, the release that added the status line, and to one whose version Octoboard cannot tell from where it is
+installed; an older one gets none. A status
 line set by managed (policy) settings outranks Octoboard's, which then never runs.
 
 A status line from the launch outranks the user's and the project's own, so the command runs theirs in its place, and
@@ -496,18 +506,32 @@ holds up nothing the user sees. What a *starting* session allows, and what happe
 any reason named below, is in "Starting the session" in `docs/product/opening-sessions.md` and in
 `docs/product/session-statuses.md`.
 
-**Capturing it is bounded at ten seconds, and a capture that does not complete refuses the launch.** Octoboard
-refuses rather than starting an agent with a half-built environment, because a session missing the user's `PATH` or
-their keys fails later in ways that do not point back here. Three outcomes are refused, and the message names which
-one it was:
+**Capturing it is bounded at ten seconds, and a launch whose capture does not complete runs on a fallback
+environment.** A capture does not complete in three ways, and the failure names which one it was:
 
 - the capture ran out of time — a shell startup file is blocked on something, or a background process it started is
   still holding the shell's output open;
 - the shell exited with an error, in which case its own diagnostic output is included;
 - the shell exited cleanly without having produced a complete environment dump.
 
-The same capture is what gives a git clone the user's `git` and git credentials, so a clone is refused the same
-way (see "Associating a project" in `docs/product/projects.md`).
+The launch is not refused for it, whatever starts it — an opening, a resume, an account switch or a change of model
+that relaunches the session: it runs on the last capture Octoboard holds, however old, or,
+with none, on the daemon's own environment as it stands outside any session it was started in. Its terminal's banner
+then carries the standing notice `shell_environment_unavailable` (see `docs/product/standing-session-notices.md`), whose
+`cause` says which it ran on (`earlier_capture` or `daemon`) and whose `detail` is the capture's failure; it says that
+tools the user's shell setup provides may be missing, and that the terminal works as usual. The checks a launch or an
+opening makes beforehand — where the default account's directory is, whether a conversation to resume has a record —
+read the same environment the launch then runs on, as do the checks before an account switch or a resume. The agent's binary is still required: where it is not found on the
+fallback environment's `PATH`, the launch is refused with `binary_not_found` nesting the capture's failure and its
+`cause`, so the alert says that the CLI was not found in the fallback environment because the login shell's could not be
+read, and why; a daemon the desktop application started may not have an agent's CLI on its own `PATH`. Its remedy is to
+fix what keeps the login shell's environment from being read, or to install the CLI where the fallback environment's
+`PATH` finds it.
+
+Everything else that needs the capture still refuses without it (`shell_environment_timeout` for a capture that ran out
+of time): a git clone, which takes the user's `git` and git credentials from it (see "Associating a project" in
+`docs/product/projects.md`), an agent CLI update, the listing of an account's MCP servers and opening a session in its
+agent's application.
 
 **A capture leaves nothing it started running.** Whatever its outcome — success, any of the refusals above, a timeout
 included — once a capture ends, everything still in its shell's process group is first sent a hangup, so it can clean
@@ -591,10 +615,16 @@ Besides the terminal type, the variables set over the snapshot are:
   git hooks" and "What attribution needs" in `docs/product/branch-responsible-session.md`), and run the revert gate (see
   `docs/product/revert-gate.md`). The key itself is never in the environment, which an agent may write into files of its
   own, and no name among them holds `KEY`, `SECRET` or `TOKEN`, which an agent's filter of secrets strips. A console
-  session gets none of them.
+  session gets none of them. A project session that cannot be given them still launches, and its terminal's banner
+  carries the standing notice `session_git_hooks_unavailable`: the branches it creates are not attributed to it and
+  the revert gate does not check its git, while git itself works as usual. Its `cause` says why: `git_too_old` (the
+  installed `git`, whose `version` it names, is older than the dispatchers need, and the notice says to update it),
+  `user_configuration` (a `GIT_CONFIG_PARAMETERS` the user's shell exports that git rejects) or `other` (no `git`
+  found, a directory that cannot be written, a probe that failed). These variables are set for every launch, one
+  without Octoboard's additions included.
 
-The agent binary is resolved from that same snapshot's `PATH`, which is that login + interactive shell's `PATH`, not the
-one a terminal happens to have. So when the shell lists an old install of an agent before a newer one, the old one is
+The agent binary is resolved from that same snapshot's `PATH`, which is that login + interactive shell's `PATH` (or the
+fallback environment's, above), not the one a terminal happens to have. So when the shell lists an old install of an agent before a newer one, the old one is
 launched, and an agent too old for the hooks Octoboard injects — a Codex older than the async hooks Octoboard injects,
 say — cannot report the session's status.
 

@@ -139,7 +139,7 @@ pub(super) fn notice(switch: &Switch) -> Notice {
     let consequence = "so this session's status follows what its terminal reports. Edits to \
                        another project's files are not blocked, and its prompts can be answered \
                        only in its terminal";
-    match switch {
+    let notice = match switch {
         Switch::Variable(variable) => Notice::new(
             Code::of_provider(HOOKS_OFF),
             format!(
@@ -160,7 +160,9 @@ pub(super) fn notice(switch: &Switch) -> Notice {
                 &[("switch", DISABLE_ALL_HOOKS), ("path", &path)],
             )
         }
-    }
+    };
+    // Standing: the hooks stay off for the whole launch.
+    notice.standing()
 }
 
 #[cfg(test)]
@@ -365,6 +367,7 @@ mod tests {
     fn the_notice_names_the_switch_and_the_file_of_a_setting() {
         let notice = notice(&Switch::Variable("QWEN_CODE_SAFE_MODE"));
         assert_eq!(notice.code, Code::of_provider(HOOKS_OFF));
+        assert!(notice.standing, "the hooks stay off for the whole launch");
         assert_eq!(
             notice.params.get("switch").map(String::as_str),
             Some("QWEN_CODE_SAFE_MODE")
@@ -386,6 +389,7 @@ mod tests {
         let file = Path::new("/proj/.qwen/settings.json");
         let notice = super::notice(&Switch::Setting(file.to_path_buf()));
         assert_eq!(notice.code, Code::of_provider(HOOKS_OFF_BY_SETTING));
+        assert!(notice.standing);
         assert_eq!(
             notice.params.get("switch").map(String::as_str),
             Some("disableAllHooks")

@@ -1703,18 +1703,25 @@ async fn a_failure_before_the_process_was_ended_tells_nobody() {
     let mut events = fixture.state.subscribe();
     let session = fixture.worker();
 
+    // The conversation's record is gone: refused before anything is ended. (A login shell that
+    // cannot be read refuses nothing: the switch launches on a fallback environment.)
+    std::fs::remove_file(fixture.dir.join("default-claude").join(CONVERSATION)).unwrap();
+    let env = fixture.env();
     let err = switch_to(
         &fixture.state,
         &session,
         Some("claude-a".to_string()),
-        // The login shell cannot be read: before anything is ended.
-        || anyhow::bail!("no shell"),
+        move || Ok(env),
         fixture.launch_failing(usize::MAX),
     )
     .await
     .expect_err("returned to be logged");
 
-    assert!(format!("{err:#}").contains("no shell"), "{err:#}");
+    assert_eq!(
+        crate::test_support::code_of(&err),
+        error_code::CONVERSATION_NOT_FOUND,
+        "{err:#}"
+    );
     assert!(notices(
         &mut events,
         notice_code::ACCOUNT_SWITCH_AUTOMATICALLY_FAILED

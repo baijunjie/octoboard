@@ -411,6 +411,7 @@ impl Launches {
                 session: process,
                 agent_session_id: None,
                 notices: Vec::new(),
+                notices_at: 0,
                 first_message: None,
                 record_root: None,
             })
@@ -2917,6 +2918,7 @@ async fn a_message_sent_to_a_session_being_restarted_is_held_for_its_resumed_pro
                     session: process,
                     agent_session_id: None,
                     notices: Vec::new(),
+                    notices_at: 0,
                     first_message: None,
                     record_root: None,
                 })

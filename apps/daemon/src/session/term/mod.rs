@@ -2,6 +2,12 @@
 
 mod image_path;
 mod invisible;
+mod tiers;
+
+use tiers::recorded_conversation;
+#[cfg(test)]
+pub(crate) use tiers::retried_plain;
+pub(crate) use tiers::{plan_launch, PlannedLaunch};
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -10,9 +16,10 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use uuid::Uuid;
 
-use crate::adapter::{self, LaunchSpec};
+use crate::adapter::{self, AgentVersion, EarlyExit, LaunchSpec, LaunchTier};
 use crate::env_shell;
 use crate::paths;
+use crate::platform::shell::ResolvedBinary;
 use crate::platform::term::{self as host_term, Input, PartialWrite};
 use crate::protocol::{error_code, AgentId, CodedError, Notice, SessionKind, TerminalAppearance};
 use crate::providers::ProviderSettings;
@@ -26,10 +33,15 @@ pub struct Launch {
     /// The agent's own session id when the adapter could pre-allocate it. Codex cannot, and learns
     /// it from its first hook payload instead.
     pub agent_session_id: Option<String>,
-    /// What the user has to be told about this launch, in the order to tell it: the plan's notice
-    /// (`adapter::LaunchPlan::notice`), then the provider's further ones
-    /// (`adapter::AgentProvider::further_launch_notices`).
+    /// What the user has to be told about this launch, in the order to tell it: those its caller
+    /// handed it (`LaunchRequest::notices`), those the provider's check of every launch found
+    /// (`adapter::AgentProvider::check_launch`), the plan's notice (`adapter::LaunchPlan::notice`),
+    /// then the provider's further ones (`adapter::AgentProvider::further_launch_notices`). Each
+    /// is raised as it says: a standing one is kept on the session's record.
     pub notices: Vec<Notice>,
+    /// When the launch's standing notices were raised, as its terminal's meta keeps them for a
+    /// daemon that adopts it.
+    pub notices_at: i64,
     /// The first task, to be queued as the session's first message; see
     /// `adapter::LaunchPlan::first_message`.
     pub first_message: Option<String>,
@@ -37,6 +49,23 @@ pub struct Launch {
     /// session to keep (`protocol::Session::record_roots`); `None` for none.
     pub record_root: Option<PathBuf>,
 }
+
+impl Launch {
+    /// The tier the launch was started at.
+    pub fn tier(&self) -> LaunchTier {
+        self.session.integration().tier
+    }
+
+    /// The version of the agent's CLI the launch started, where it could be told.
+    pub fn agent_version(&self) -> Option<AgentVersion> {
+        self.session.integration().agent_version
+    }
+}
+
+/// What starts an agent process for a launch request: [`launch`] outside the tests, which cannot
+/// start an agent. A launch one tier down after an early exit is started through one of these
+/// (`crate::coordinator::launch::relaunch_after_early_exit`).
+pub type Relauncher = Arc<dyn Fn(LaunchRequest) -> Result<Launch> + Send + Sync + 'static>;
 
 /// One agent process to start. Owned rather than borrowed: launching snapshots the user's shell
 /// environment and forks, so it runs on a blocking thread and the values have to travel to it.
@@ -81,8 +110,9 @@ pub struct LaunchRequest {
     /// A shell environment already snapshotted for this launch, used as it is instead of taking
     /// another. Only a caller that has already resolved something from one passes it — a switch
     /// to the default account, which resolved that account's directory from it to copy the
-    /// conversation there and must launch against the same value.
-    pub preresolved_shell_env: Option<HashMap<String, String>>,
+    /// conversation there and must launch against the same value. It carries the fallback it
+    /// took where the login shell's environment could not be read, which the launch tells.
+    pub preresolved_shell_env: Option<env_shell::LaunchEnv>,
     /// The daemon's own port, which the launch's helpers call when the program runs in this
     /// process; a program run by a holder is given the holder's instead (see `backend::Helpers`).
     pub daemon_port: u16,
@@ -100,6 +130,114 @@ pub struct LaunchRequest {
     /// What every process of this launch carries, whatever the agent and the session's kind; see
     /// `crate::processes::ledger`.
     pub process_tag: crate::processes::ledger::ProcessTag,
+    /// What the caller already knows the user has to be told about this launch, from a reading
+    /// made before it: told with the launch's own notices and, where standing, kept with them in
+    /// the terminal's meta.
+    pub notices: Vec<Notice>,
+    /// The highest tier the launch may use ([`plan_launch`]): the enhanced one unless an earlier
+    /// launch of the same request showed a higher one does not stay up.
+    pub highest_tier: LaunchTier,
+    /// How the launch of the tier above exited as it started, when this launch follows one
+    /// (`docs/plans/terminal-first-degradation.md`, D6): a reduced plan is given it.
+    pub early_exit: Option<EarlyExit>,
+    /// The lower tiers that stayed up after an early exit (`session::relaunch::LowerTiers`): a
+    /// launch of a program and version found there starts at that tier.
+    pub lower_tiers: Arc<session::relaunch::LowerTiers>,
+    /// See `LaunchSpec::record_roots`.
+    pub record_roots: Vec<PathBuf>,
+}
+
+/// What a launch prepared for its helpers before it is planned ([`prepare_helpers`]).
+struct HelperFiles {
+    /// The session's scratch directory, cleared and made anew.
+    scratch: PathBuf,
+    /// The key file, where it was written: what the git hook dispatchers carry, whatever the tier.
+    written_key_file: Option<PathBuf>,
+    /// Where the key file is, written or not.
+    key_file: PathBuf,
+    /// The hook script, or where it would be.
+    hook_script: PathBuf,
+    /// The program the launch starts: the one that carries the enhanced arguments, or the ordinary
+    /// launcher where that one could not be found.
+    program: ResolvedBinary,
+    /// The first failure among them, which is the reason the launch is bare
+    /// ([`plan_launch`]'s `prepared`).
+    prepared: Result<()>,
+}
+
+/// Prepares what the launch of session `session_id` (its launch `launch_id`) gives its helpers:
+/// its scratch directory cleared and made anew, the key file `helpers` carry written there (the
+/// helpers are given this file rather than the key: arguments can be listed by every user of the
+/// machine, and the file is the owner's alone from its first byte), the hook script where the
+/// provider has one (`hook_script`), and the program to start, `launcher`, else the `ordinary`
+/// one. Nothing here refuses the launch: each failure leaves the enhanced tier unavailable, and
+/// the first is kept as the reason.
+fn prepare_helpers(
+    session_id: &str,
+    launch_id: &str,
+    hook_script: bool,
+    helpers: &Helpers,
+    launcher: Result<ResolvedBinary>,
+    ordinary: &ResolvedBinary,
+) -> HelperFiles {
+    let mut prepared: Result<()> = Ok(());
+    let mut fail = |err: anyhow::Error| {
+        if prepared.is_ok() {
+            prepared = Err(err);
+        }
+    };
+    let scratch = paths::session_scratch(session_id);
+    let scratch_made = (|| -> Result<()> {
+        if let Err(err) = std::fs::remove_dir_all(&scratch) {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                return Err(err).with_context(|| format!("clearing {}", scratch.display()));
+            }
+        }
+        std::fs::create_dir_all(&scratch).with_context(|| format!("creating {}", scratch.display()))
+    })();
+    let written_key_file = match scratch_made.and_then(|()| {
+        crate::key_file::write(&scratch, &helpers.key).context("writing the session's key file")
+    }) {
+        Ok(key_file) => Some(key_file),
+        Err(err) => {
+            fail(err);
+            None
+        }
+    };
+    let key_file = crate::key_file::path(&scratch);
+    let hook_script = match &written_key_file {
+        Some(key_file) if hook_script => match adapter::write_hook_script(
+            &scratch,
+            &helpers.exe,
+            session_id,
+            launch_id,
+            helpers.port,
+            key_file,
+            None,
+        ) {
+            Ok(script) => script,
+            Err(err) => {
+                fail(err.context("writing the session's hook script"));
+                adapter::hook_script_path(&scratch)
+            }
+        },
+        _ => adapter::hook_script_path(&scratch),
+    };
+    let program = match launcher {
+        Ok(program) => program,
+        Err(err) => {
+            fail(err);
+            ordinary.clone()
+        }
+    };
+    HelperFiles {
+        scratch,
+        written_key_file,
+        key_file,
+        hook_script,
+        program,
+        prepared,
+    }
 }
 
 /// The environment an agent's process is launched with: the shell snapshot, then what the
@@ -155,6 +293,11 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         mcp_token,
         guard,
         process_tag,
+        notices: caller_notices,
+        highest_tier,
+        early_exit,
+        lower_tiers,
+        record_roots,
     } = request;
     let session_id = session_id.as_str();
     let cwd = cwd.as_path();
@@ -172,23 +315,36 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         ));
     }
 
-    let shell_env = match preresolved_shell_env {
-        Some(shell_env) => shell_env,
-        None => {
-            env_shell::launch_snapshot().context("snapshotting the user's shell environment")?
-        }
-    };
+    // Never refused for want of a snapshot: a fallback environment is told with the launch.
+    let env_shell::LaunchEnv {
+        vars: shell_env,
+        fallback: shell_fallback,
+    } = preresolved_shell_env.unwrap_or_else(env_shell::launch_env);
 
-    let scratch = paths::session_scratch(session_id);
-    if let Err(err) = std::fs::remove_dir_all(&scratch) {
-        if err.kind() != std::io::ErrorKind::NotFound {
-            return Err(err).with_context(|| format!("clearing {}", scratch.display()));
-        }
-    }
-    std::fs::create_dir_all(&scratch).with_context(|| format!("creating {}", scratch.display()))?;
-
+    // What a plain terminal would also fail on: the CLI is not on `PATH`. On a fallback
+    // environment the refusal says why the CLI may not have been found.
+    let ordinary =
+        env_shell::resolve_binary(agent.descriptor().binary, &shell_env).map_err(|err| {
+            match &shell_fallback {
+                Some(fallback) => fallback.explain_not_found(err),
+                None => err,
+            }
+        })?;
     let adapter = adapter::provider(agent);
     let capabilities = adapter.descriptor().capabilities;
+    // The program the enhanced arguments are given to: the native program in place of a launcher
+    // the CLI should not be started through, or a command whose arguments pass where the ordinary
+    // launcher's cannot. Either failing is a reason for the bare tier, which starts the ordinary
+    // launcher; the version is read from the program the CLI runs as.
+    let native = adapter.native_binary(&ordinary);
+    let version_program = match &native {
+        Ok(Some(native)) => native.clone(),
+        _ => ordinary.clone(),
+    };
+    let launcher = native
+        .map(|native| native.unwrap_or_else(|| ordinary.clone()))
+        .and_then(|binary| adapter.terminal_binary(binary, &shell_env));
+
     // Asked for before anything names it: the holder that is to run the program issues the key its
     // helpers carry. Dropped unused if the launch fails before the program starts, which revokes
     // the key.
@@ -202,28 +358,27 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
             exe: &self_exe,
         },
     )?;
-    // The helpers are given this file rather than the key: arguments can be listed by every user
-    // of the machine, and the file is the owner's alone from its first byte.
-    let key_file =
-        crate::key_file::write(&scratch, &helpers.key).context("writing the session's key file")?;
-    let hook_script = if capabilities.hook_script {
-        adapter::write_hook_script(
-            &scratch,
-            &helpers.exe,
-            session_id,
-            process_tag.launch_id(),
-            helpers.port,
-            &key_file,
-            None,
-        )
-        .context("writing the session's hook script")?
-    } else {
-        adapter::hook_script_path(&scratch)
-    };
+    // What the launch prepares for its helpers belongs to the enhanced tier: a failure here
+    // starts the agent bare.
+    let HelperFiles {
+        scratch,
+        written_key_file,
+        key_file,
+        hook_script,
+        program,
+        prepared,
+    } = prepare_helpers(
+        session_id,
+        process_tag.launch_id(),
+        capabilities.hook_script,
+        &helpers,
+        launcher,
+        &ordinary,
+    );
 
     // The guard fails open: a list or script that cannot be written launches the session without
     // it, since the git layer of the same setting catches what the edit layer would have.
-    let guard_files = guard.and_then(|list| {
+    let guard_files = guard.filter(|_| written_key_file.is_some()).and_then(|list| {
         let written = crate::cross_project_guard::write(&scratch, &list.with_launch(cwd, &shell_env))
             .and_then(|file| {
                 let script = adapter::write_guard_script(&scratch, &install_exe, &file)
@@ -240,11 +395,11 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     });
 
     let new_agent_session_id = Uuid::new_v4().to_string();
-    // Resolved ahead of the plan because the agent's version, read from where the binary is
-    // installed, decides how some adapters inject; a failure is raised only after the plan, so a
-    // plan's own error (a missing pinned directory, say) is the one the user is told about.
-    let binary = adapter::resolve_binary(agent, &shell_env);
-    let spec = LaunchSpec {
+    // Read ahead of the plan because the agent's version, read from where the binary is
+    // installed, decides how some adapters inject.
+    let agent_version =
+        adapter::version_of_program(agent, &version_program, config_dir.as_deref(), &shell_env);
+    let mut spec = LaunchSpec {
         session_id,
         kind,
         owner,
@@ -268,18 +423,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         effort: effort.as_deref(),
         terminal_appearance,
         // The version the session's account runs, which for some agents is the account's own.
-        agent_version: binary.as_ref().ok().and_then(|binary| {
-            adapter::version_for_account(
-                agent,
-                &binary.program.to_string_lossy(),
-                &adapter::account_dir(agent, config_dir.as_deref(), &shell_env),
-            )
-            .or_else(|| {
-                adapter::version_from_output(&crate::platform::shell::probe_version(
-                    binary, &shell_env,
-                )?)
-            })
-        }),
+        agent_version,
         self_exe: &helpers.exe,
         daemon_port: helpers.port,
         daemon_key: &helpers.key,
@@ -294,34 +438,77 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         native_memory_off: adapter::turns_native_memory_off(adapter.descriptor(), memory_enabled),
         memory: &memory,
         memory_enabled,
+        record_roots: &record_roots,
     };
-    let plan = adapter.plan(&spec)?;
-    // Asked once, of the launch as planned, and kept with the terminal for a daemon that adopts it.
-    let status_from_reports = !adapter.launch_has_status_integration(&spec, &plan);
-    let cancel_drops = adapter.launch_cancel_drops_held_messages(&spec, &plan);
-    let further_notices = adapter.further_launch_notices(&spec, &plan);
-    let tool_listing_wait = adapter.awaits_tool_listing(&spec, &plan);
-    let declares_channel = adapter.extension_channel(&spec, &plan);
-    // A stash key is used only where the provider says this launch was measured to take it.
-    let native_stash = adapter.screen().native_stash(&spec, &plan);
-
-    let binary = adapter.terminal_binary(binary?, &shell_env)?;
+    let script_launcher = crate::platform::shell::is_script_launcher(&program);
+    // A lower tier that stayed up for this program and version a moment ago is where the launch
+    // starts, with the early exit it followed.
+    let remembered_as = session::relaunch::LowerTierKey {
+        agent,
+        program: program.program.clone(),
+        version: agent_version,
+    };
+    let (highest_tier, early_exit) = match lower_tiers.recalled(&remembered_as) {
+        Some(recalled) if recalled.tier < highest_tier => {
+            tracing::info!(
+                session = %session_id,
+                tier = ?recalled.tier,
+                "starting the agent at the tier that stayed up after it last exited as it started"
+            );
+            (recalled.tier, early_exit.or(Some(recalled.exit)))
+        }
+        _ => (highest_tier, early_exit),
+    };
+    let PlannedLaunch {
+        tier,
+        plan,
+        notice: tier_notice,
+        checked: checked_notices,
+    } = plan_launch(
+        agent,
+        adapter,
+        &mut spec,
+        highest_tier,
+        early_exit.as_ref(),
+        prepared,
+        script_launcher,
+    )?;
+    // Asked once, of the launch as planned, and kept with the terminal for a daemon that adopts
+    // it; a bare launch takes those of a provider with no integration without asking.
+    let crate::session::integration::LaunchAnswers {
+        integration,
+        native_stash,
+        tool_listing_wait,
+        extension_channel: declares_channel,
+        further_notices,
+    } = crate::session::integration::LaunchAnswers::of(adapter, tier, &spec, &plan);
+    let binary = program;
 
     {
         let mut planned = shell_env.clone();
         planned.extend(plan.env.iter().cloned());
         adapter.before_launch(&spec, &binary, &planned);
     }
-    let hooks_env = if kind == SessionKind::Project {
-        session_git_hooks::session_env(
+    // Set through the environment, which cannot make a CLI exit, so whatever the tier.
+    // A project session that cannot be given its git hook dispatchers starts without them, and
+    // its user is told why.
+    let (hooks_env, hooks_notice) = match &written_key_file {
+        Some(key_file) if kind == SessionKind::Project => match session_git_hooks::session_env(
             &shell_env,
             &install_exe,
             session_id,
             helpers.port,
-            &key_file,
-        )
-    } else {
-        Vec::new()
+            key_file,
+        ) {
+            Ok(env) => (env, None),
+            Err(why) => (Vec::new(), Some(why.notice())),
+        },
+        // The key file the dispatchers' report needs could not be written.
+        None if kind == SessionKind::Project => (
+            Vec::new(),
+            Some(session_git_hooks::Unavailable::Other.notice()),
+        ),
+        _ => (Vec::new(), None),
     };
     let mut tag_env = HashMap::new();
     process_tag.containment().prepare(&mut tag_env);
@@ -404,6 +591,36 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         plan.shaped_prompt.as_deref(),
         task.as_deref(),
     );
+    // Before the spawn, so the meta keeps it and a daemon that adopts the launch restores it.
+    let id_unknown = crate::session::hook_absence::unreported_id_notice(
+        agent,
+        &integration,
+        recorded_conversation(
+            resume_agent_session_id.clone(),
+            capabilities.preallocates_session_id,
+            tier,
+            new_agent_session_id.clone(),
+        )
+        .is_some(),
+    );
+    // Stamped once, so the meta and the record give a notice the same time and a daemon that
+    // adopts the launch restores the very notice a client may have dismissed.
+    let notices: Vec<Notice> = caller_notices
+        .into_iter()
+        .chain(checked_notices)
+        .chain(shell_fallback.as_ref().map(env_shell::Fallback::notice))
+        .chain(hooks_notice)
+        .chain(tier_notice)
+        .chain(plan.notice)
+        .chain(further_notices)
+        .chain(id_unknown)
+        .collect();
+    let notices_at = crate::time::now_millis();
+    let standing_notices: Vec<_> = notices
+        .iter()
+        .filter(|notice| notice.standing)
+        .map(|notice| notice.kept_at(notices_at))
+        .collect();
     let meta = serde_json::json!({
         "kind": "session",
         "session_id": session_id,
@@ -419,9 +636,16 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         // The channel helper reaches whichever daemon runs, so one that adopts the launch makes
         // the channel again.
         "channel": has_channel,
-        "status_from_reports": status_from_reports,
-        "cancel_drops": cancel_drops,
+        "status_from_reports": integration.status_from_reports,
+        "cancel_drops": integration.cancel_drops,
+        // What a daemon that adopts the launch reads it as: a bare launch has no integration.
+        "tier": integration.tier,
+        "agent_version": integration.agent_version,
+        // When a hook was due, which a daemon that adopts the launch watches for again.
+        "first_hook": integration.first_hook,
         "config_dir": config_dir.as_ref().map(|dir| dir.to_string_lossy()),
+        // What a daemon that adopts the launch keeps on the session's record again.
+        "standing_notices": standing_notices,
     });
     let spawned = backend::start(Launching {
         command: cmd,
@@ -437,11 +661,12 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     })
     .with_context(|| format!("spawning `{}`", binary.program.display()))?;
 
-    let agent_session_id = match resume_agent_session_id {
-        Some(id) => Some(id),
-        None if capabilities.preallocates_session_id => Some(new_agent_session_id),
-        None => None,
-    };
+    let agent_session_id = recorded_conversation(
+        resume_agent_session_id,
+        capabilities.preallocates_session_id,
+        tier,
+        new_agent_session_id,
+    );
 
     let live = Arc::new(LiveSession::new(NewSession {
         id: session_id.to_string(),
@@ -455,10 +680,15 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         carried_trust: plan.carried_trust,
         before_scratch_removal: before_scratch_removal(transport, plan.after_exit),
         display,
-        status_from_reports: Some(status_from_reports),
-        cancel_drops: Some(cancel_drops),
+        integration,
         config_dir,
     }));
+    if live.integration().runs_no_hook() {
+        // Given no hooks, or planned to run none, its agent runs no start hook: its input box
+        // stands in for it.
+        live.trust.note_start_hook_absent();
+    }
+    live.startup.note_remembered_as(remembered_as);
     live.enable_native_stash(native_stash);
     if let Some(bound) = tool_listing_wait {
         live.await_tool_listing(bound);
@@ -470,11 +700,11 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     }
     session::spawn_reader_thread(live.clone(), pty::READ_BUF);
 
-    let notices = plan.notice.into_iter().chain(further_notices).collect();
     Ok(Launch {
         session: live,
         agent_session_id,
         notices,
+        notices_at,
         first_message: plan.first_message,
         record_root,
     })

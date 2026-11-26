@@ -55,10 +55,14 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   over it as it passes over a used-up account; and when the chosen account is one all the same, the field says under its
   pickers that its sharing is being changed, to choose another account or wait, and the dialog cannot be submitted until
   then. An account that is not logged in (see "An account that is not logged in" in `docs/product/account-quotas.md`) is
-  listed but cannot be picked either, and since that lasts until the user logs in, a short note under its name reads
-  "Not logged in", with the full reason as its description for assistive technology; the field passes over it as it
-  passes over a used-up account, and when the chosen account is one all the same, the field says under its pickers that
-  the account is not logged in, so a session cannot use it, and to choose another account or log in to it. A turned-off
+  listed and can be picked, since the reading may be wrong and the user is at the session's terminal to log in: a short
+  note under its name reads "Not logged in", and its description says it was last read as logged out and that a session
+  may ask to log in. The field still passes over it as it passes over a used-up account; when the chosen account is one
+  all the same — the user picked it, every account of the agent is one, or a reading arrives while the dialog is open —
+  nothing is marked invalid and the dialog can be submitted, and a warning under the pickers says that the account was
+  last read as logged out, that the session opens all the same and its agent may ask to log in, and to log in in the
+  terminal if it does, or to choose another account. The session then opens and says so in its terminal (see "When the
+  agent or the account cannot open a session" below). A turned-off
   account (see "Turning an account off" in `docs/product/agent-accounts.md`) is not listed, and the field passes over it
   as it passes over a used-up account. When the agent has no usable account, the field passes over an account that is
   not logged in, turned off or having its sharing changed to the first account of the agent that only its used-up quota
@@ -144,17 +148,17 @@ Octoboard presses that confirmation for the user once they have given permission
 its directory lies under, whichever agent asked — or asks them first; a console session's is pressed without asking.
 See `docs/product/folder-trust.md`.
 
-If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH`, the user's
-shell environment could not be captured (see "The launch environment" in `docs/product/launching-agents.md`), or, for
-Grok Build only, the account the session would hold pins a directory that is not an initialized Grok home (see "Agent
-config directories" in `docs/product/consoles.md`) or the launch would run under Grok's own sandbox (see "Grok's own
-sandbox" in `docs/product/per-agent-launch-specifics.md`) — the *starting* session is removed again and no session is
-left behind. For a session opened from the dialog, or with defaults (see "Opening a session with defaults" below), the
+If the launch itself is refused — the directory cannot be reached, the agent binary is not on the user's `PATH` (on a
+fallback environment where the user's shell environment could not be captured, with why; see "The launch environment"
+in `docs/product/launching-agents.md`), or another of the refusals in "What refuses a launch" in
+`docs/product/launching-without-octoboards-additions.md` — the *starting* session is removed again and no session is left behind. What only
+keeps Octoboard's additions from the launch refuses nothing: the session starts without them and says so in its
+terminal (see the same doc). For a session opened from the dialog, or with defaults (see "Opening a session with defaults" below), the
 failure is reported in an error alert titled "Could not start the session", whose first line names the session, and
 which gives the reason, worded from the failure's own code in the UI's language, with any raw text the cause carried
-under **Error details** (see "The error alert" in `docs/product/error-alerts.md`); for a shell environment capture that
-ran out of time, the explanation is laid out beneath that line — the command that did not finish and its time limit, the
-likely cause, and what to fix. Should the session's record itself fail to be removed, it is left *interrupted* instead,
+under **Error details** (see "The error alert" in `docs/product/error-alerts.md`); for an agent binary not found on a
+fallback environment, the capture's own failure is laid out beneath that line, a capture that ran out of time with the
+command that did not finish and its time limit and the likely cause, followed by what to fix. Should the session's record itself fail to be removed, it is left *interrupted* instead,
 and the error alert is shown all the same. For the `open_session` tool and an approved session request the failure is
 reported through that call instead (see "When an approval cannot be carried out" in `docs/product/session-requests.md`
 for the latter). A missing config directory does not fail a brand new session for the other two agents: it has no
@@ -221,10 +225,23 @@ request is refused that way before the user is asked, and again on approval shou
 then (see `docs/product/session-requests.md`). Only a session being opened is checked: a session already on the account
 keeps running, and resuming, reopening or restarting it is never refused for this.
 
-**The daemon refuses to open a session on an account that is not logged in** (see "An account that is not logged in"
-in `docs/product/account-quotas.md`). Whatever opens it — the same openings as for a turned-off account above — a new
-session whose account, once resolved, is found not logged in by the reading the daemon holds at that moment is refused
-with `account_not_signed_in`, and nothing is recorded; the user's own request is refused too. Where the quota is
+**The user's own session opens on an account read as not logged in, and is told so.** A new session the user opens
+from a window — the `open_session` request a window sends, from the dialog or a session opened with defaults, with
+`resume_agent_session_id` too — whose account, once resolved, is found not logged in by the reading the daemon holds at
+that moment (see "An account that is not logged in" in `docs/product/account-quotas.md`) is not refused: a quota
+reading can be wrong, and the user is at the terminal to log in if the agent asks. The session opens on that account
+with the standing notice `account_sign_in_unconfirmed` in its terminal's banner (see
+`docs/product/standing-session-notices.md`), carrying `agent`, `agent_id`, `account` and `config_dir` as the refusal
+below does; it says the account was last read as logged out, so the session may not be logged in, and to log in in the
+terminal if the agent asks. It is withdrawn from every running session on that account, its directory compared as the
+same directory under any spelling, as soon as a later reading of the account finds it logged in. A reading that failed
+for another reason raises nothing.
+
+**The daemon refuses to open a session for anyone else on an account that is not logged in**, since nobody may be at
+that terminal to log in. Whatever opens it — a console or project session's `open_session` tool, a handoff's receiving
+session, an approved session request — a new session whose account, once resolved, is found not logged in by the
+reading the daemon holds at that moment is refused with `account_not_signed_in`, and nothing is recorded; the user's own
+handoff is refused too. Where the quota is
 checked as well (a handoff's receiving session, below), it is checked after the quota. The refusal carries `agent`,
 `agent_id` (the agent's id), `account` (the account's name) and `config_dir` (the account's configuration directory,
 the default account's as the daemon resolves it; absent while that is not known). In the window it is shown in an error alert, in the UI's language, saying the account is not logged in, so a session cannot be opened on it; the next step is to

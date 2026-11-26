@@ -26,6 +26,7 @@ import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
 import { useLaunchChoice } from "./useLaunchChoice";
 import { useResumeTarget, type ResumeTarget } from "./useResumeTarget";
 import { openSessionRequest } from "./openSessionRequest";
+import { signedOutWarning } from "./accountRefusalMessage";
 import { OptionSelect } from "../components/form/OptionSelect";
 import { TextInput } from "../components/form/TextInput";
 import { alertFailure } from "../components/alerts/raiseError";
@@ -93,8 +94,11 @@ const NO_OWNER = "none";
  * resumed the same way with its name fixed; both show their agent and account, fixed, with no launch
  * settings since the session keeps its own. A running session of the project is gone to. An agent's
  * own record opens a new session (`resume_agent_session_id`) on the agent and account that hold it,
- * shown fixed beside the name and the launch settings. A session outside the project or no
- * conversation at all is said under the ID field; the submit button waits in each case.
+ * shown fixed beside the name and the launch settings. A session outside the project is said
+ * under the ID field and the submit button waits. An ID found nowhere is no refusal: a warning
+ * under the ID field says so, and the name, the agent and account pickers and the launch settings
+ * follow, so the session opens on the agent the user picks, whose own resume says whether it has
+ * the conversation (the daemon tells the session, `conversation_record_not_found`).
  */
 export function SessionDialog({
   console: parentConsole,
@@ -142,10 +146,16 @@ export function SessionDialog({
   const resume = useResumeTarget(project, resumeId, resuming);
   const { target } = resume;
   const record = target?.kind === "record" ? target : undefined;
+  // An ID no account holds still opens a session, on the agent and account the user picks, which the
+  // agent's own resume then settles.
+  const nowhere = resuming && resume.notFound;
+  const opensNew = !resuming || record !== undefined || nowhere;
 
-  const { choice, blocked, unavailable, overrides, agentOptions, setPickedAgent, account: accountField, launch } = useLaunchChoice(parentConsole, project, undefined, record);
+  // The user's own open, which the daemon lets onto an account last read as logged out, telling the session.
+  const { choice, blocked, unavailable, signInWarning, overrides, agentOptions, setPickedAgent, account: accountField, launch } = useLaunchChoice(parentConsole, project, undefined, record, undefined, undefined, { allowSignedOut: true });
   // A used-up account or one changing its sharing only matters for a session about to be opened on it, not for resuming one that has its own.
-  const accountUnavailable = !resuming || record ? unavailable : undefined;
+  const accountUnavailable = opensNew ? unavailable : undefined;
+  const accountWarning = opensNew && signInWarning !== undefined ? signedOutWarning(signInWarning) : undefined;
 
   // The select is shown from the moment there is a console session to offer and stays mounted
   // for the rest of the dialog's life, even if the list later empties, leaving "none" alone: it is
@@ -242,18 +252,29 @@ export function SessionDialog({
       description={t("dialog.session.defaultNameHint")}
     />
   );
+  // The agent and account the session opens on, as the user picks them.
+  const agentAccountField = (
+    <AgentAccountField
+      label={t("dialog.session.agent")}
+      options={agentOptions}
+      value={choice.agent}
+      onChange={setPickedAgent}
+      account={accountField}
+      errorMessage={accountUnavailable}
+      warning={accountWarning}
+    />
+  );
+  const launchSettings = (
+    <LaunchSettingsFields
+      {...launch}
+      note={t(project ? "dialog.session.launchInheritanceNote" : "dialog.consoleSession.launchInheritanceNote")}
+    />
+  );
   // What a new conversation asks for: the New tab's panel and, where there are no tabs, the whole form.
   const sharedFields = (
     <>
       {nameField}
-      <AgentAccountField
-        label={t("dialog.session.agent")}
-        options={agentOptions}
-        value={choice.agent}
-        onChange={setPickedAgent}
-        account={accountField}
-        errorMessage={accountUnavailable}
-      />
+      {agentAccountField}
       {fixedOwner && (
         <div data-marquee-scope className="flex items-center gap-2 text-sm">
           <BindingBadge owner={fixedOwner} decorative />
@@ -273,10 +294,7 @@ export function SessionDialog({
           ]}
         />
       )}
-      <LaunchSettingsFields
-        {...launch}
-        note={t(project ? "dialog.session.launchInheritanceNote" : "dialog.consoleSession.launchInheritanceNote")}
-      />
+      {launchSettings}
     </>
   );
 
@@ -288,7 +306,7 @@ export function SessionDialog({
       submitLabel={t(target ? SUBMIT_LABEL[target.kind] : "dialog.session.open")}
       busy={busy}
       returnFocusRef={returnFocusRef}
-      submitDisabled={accountUnavailable !== undefined || (resuming && resume.idProblem === undefined && target === undefined)}
+      submitDisabled={accountUnavailable !== undefined || (resuming && resume.idProblem === undefined && target === undefined && !nowhere)}
       onSubmit={submit}
     >
       <p className="text-sm">
@@ -320,7 +338,9 @@ export function SessionDialog({
               onNameChange={(value) => target && target.kind !== "record" && setHeldName({ session: target.session.id, value })}
               recordName={nameField}
               launch={launch}
+              nowhere={<>{nameField}{agentAccountField}{launchSettings}</>}
               accountError={accountUnavailable}
+              accountWarning={accountWarning}
             />
           </TabPanel>
         </Tabs>

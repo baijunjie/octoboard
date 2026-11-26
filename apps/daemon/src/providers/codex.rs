@@ -17,8 +17,9 @@ pub const LOGIN_BUSY: ProviderCode = ProviderCode::error("provider.codex.login_b
 /// rollout back. The session is left as it was. `params` names `detail`.
 pub const UNARCHIVE_FAILED: ProviderCode = ProviderCode::error("provider.codex.unarchive_failed");
 
-/// Launching Codex was refused because its binary is an npm shim whose package ships no native
-/// program to start in its place. No `params`.
+/// Codex's binary is an npm shim whose package ships no native program to start in its place, so
+/// the program that carries Octoboard's additions is not there. Raised as the reason the launch
+/// started Codex bare, through its shim (`launch_enhancements_unavailable`). No `params`.
 pub const NATIVE_PROGRAM_MISSING: ProviderCode =
     ProviderCode::error("provider.codex.native_program_missing");
 
@@ -28,6 +29,19 @@ pub const NATIVE_PROGRAM_MISSING: ProviderCode =
 /// task; they go in once Codex takes them, and the notice is withdrawn then, or when the server
 /// ends. No `params`.
 pub const MESSAGES_HELD: ProviderCode = ProviderCode::notice("provider.codex.messages_held");
+
+/// Codex exited as it started with Octoboard's additions and was started again without its hooks
+/// and its private app server: the version-sensitive part of the launch, left out where the exit
+/// named no setting Codex refused. Standing for the launch. No `params`.
+pub const HOOKS_LEFT_OUT: ProviderCode = ProviderCode::notice("provider.codex.hooks_left_out");
+/// Codex exited as it started, refusing the value Octoboard set for one configuration key, and was
+/// started again without that key's override. Standing for the launch. `params` names `key`.
+pub const SETTING_LEFT_OUT: ProviderCode = ProviderCode::notice("provider.codex.setting_left_out");
+/// Codex exited as it started, refusing one of the permission keys Octoboard sets for the
+/// session's permission approval, and was started again without any of the three, so Codex's own
+/// configuration decides what it may do. Standing for the launch. `params` names `key`.
+pub const PERMISSIONS_LEFT_OUT: ProviderCode =
+    ProviderCode::notice("provider.codex.permissions_left_out");
 
 /// Relocation cannot read the target account's configuration. Params: path, stage, cause, detail.
 pub const RELOCATION_CONFIG_UNREADABLE: ProviderCode =
@@ -222,6 +236,9 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         UNARCHIVE_FAILED,
         NATIVE_PROGRAM_MISSING,
         MESSAGES_HELD,
+        HOOKS_LEFT_OUT,
+        SETTING_LEFT_OUT,
+        PERMISSIONS_LEFT_OUT,
     ],
 };
 
@@ -279,9 +296,12 @@ mod tests {
                 LOGIN_BUSY.kind,
                 UNARCHIVE_FAILED.kind,
                 NATIVE_PROGRAM_MISSING.kind,
-                MESSAGES_HELD.kind
+                MESSAGES_HELD.kind,
+                HOOKS_LEFT_OUT.kind,
+                SETTING_LEFT_OUT.kind,
+                PERMISSIONS_LEFT_OUT.kind
             ],
-            [Error, Error, Error, Error, Error, Notice]
+            [Error, Error, Error, Error, Error, Notice, Notice, Notice, Notice]
         );
         assert_eq!(
             DESCRIPTOR.codes,
@@ -291,7 +311,10 @@ mod tests {
                 LOGIN_BUSY,
                 UNARCHIVE_FAILED,
                 NATIVE_PROGRAM_MISSING,
-                MESSAGES_HELD
+                MESSAGES_HELD,
+                HOOKS_LEFT_OUT,
+                SETTING_LEFT_OUT,
+                PERMISSIONS_LEFT_OUT
             ]
         );
     }

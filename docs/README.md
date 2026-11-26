@@ -102,6 +102,8 @@ Where to start, by question:
   memory left behind by removed projects, and the memory dialog and Settings section.
 - [Launching agents](product/launching-agents.md) — what every agent launch injects, what is never modified, and the
   launch environment.
+- [Launching without Octoboard's additions](product/launching-without-octoboards-additions.md) — the launch levels,
+  what still refuses a launch, the early-exit relaunch, and hooks that never arrive.
 - [Per-agent launch specifics](product/per-agent-launch-specifics.md) — what individual agents do
   differently at launch.
 - [Compatibility between agents](product/compatibility-between-agents.md) — what a launch is given while a
@@ -221,6 +223,8 @@ Where to start, by question:
 - [Issue reports](product/issue-reports.md) — what Report issue prefills into a new Issue and what is removed from
   it first.
 - [Toasts](product/toasts.md) — the notices that need no answer.
+- [Standing session notices](product/standing-session-notices.md) — the banner over a session's terminal for
+  conditions that last, and the codes it shows.
 - [Empty states](product/empty-states.md) — how a view with nothing to show says so.
 - [Labels and tooltips](product/labels-and-tooltips.md) — tooltips, help tips and handling of names that do not fit.
 - [Controls unavailable for a reason](product/controls-unavailable-for-a-reason.md) — a button, switch or checkbox

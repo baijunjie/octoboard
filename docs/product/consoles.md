@@ -220,7 +220,7 @@ with nothing saved:
   directory, and leaving an account's directory as it is is never refused.
 
 Existence is **not** checked: a directory that does not exist yet is accepted, and is created on first launch — by
-Claude Code itself, and by Octoboard for Codex, which refuses a missing one (Grok Build excepted, see below). What is
+Claude Code itself, and by Octoboard for Codex, which refuses a missing one (for Grok Build, see below). What is
 stored, and shown for the account, is its expanded absolute path.
 
 **A session keeps the account and the directory it last recorded until it is switched to another account.** A session
@@ -241,10 +241,10 @@ one opened and never typed into, unless it was opened to resume a conversation (
 `docs/product/resuming-a-conversation-by-its-session-id.md`) — launches into the missing directory instead, and the
 directory is created as above; a Codex session whose directory Octoboard cannot create is refused on this same path.
 This narrower refusal holds where the agent requires an existing account directory, and the message names the agent and the directory and says to recreate
-it or to point the account at a different one. Grok Build is refused on this same path whenever its pinned directory is
-not an initialized Grok home — one Grok has actually been run against — whether or not there is a conversation to
-resume, since an empty directory would keep neither its login nor its conversation; see "A Grok Build config directory"
-in `docs/product/per-agent-launch-specifics.md`.
+it or to point the account at a different one. A Grok Build session whose pinned directory is not an initialized Grok
+home — one Grok has actually been run against — is not refused at launch: it starts without Octoboard's additions,
+against that directory, as a plain terminal would, while a switch onto such an account is refused; see "A Grok Build
+config directory" in `docs/product/per-agent-launch-specifics.md`.
 
 ## Editing a console
 

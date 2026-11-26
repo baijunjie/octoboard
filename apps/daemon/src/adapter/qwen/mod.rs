@@ -8,11 +8,19 @@
 //!   directory, named by `QWEN_CODE_SYSTEM_SETTINGS_PATH` ([`settings`]). Qwen Code adds the hook
 //!   lists of its settings layers together, so the user's own hooks keep running, and the content
 //!   of the system settings file this one stands in for is carried into it. A system settings
-//!   file that is there and cannot be used refuses the launch, and the system defaults file,
-//!   which Qwen Code looks for beside the system settings file, is named for it.
+//!   file that is there and cannot be used makes the enhanced launch unavailable, and the session
+//!   starts bare, where Qwen Code reads that file itself; the system defaults file, which Qwen
+//!   Code looks for beside the system settings file, is named for it.
 //! - **The Octoboard MCP server** is a file given to `--mcp-config`, whose servers are added to the
 //!   user's own.
 //! - **The role text** is `--append-system-prompt`, which a resume replaces with what it passes.
+//!
+//! An option a release no longer takes makes Qwen Code print `Unknown arguments: …` and its whole
+//! usage text, and exit before it draws anything (0.28.3). The refusal line comes first, within
+//! the head the daemon keeps of an early exit, so which option it was could be read; Qwen Code
+//! still gives no reduced plan, by choice: no release is known to drop one of the launch's
+//! options, so there is no refusal of a real release to shape a launch with less around, and an
+//! early exit goes straight to the bare launch.
 //!
 //! The hooks give a session its status, and Qwen Code's own OSC 7501 reports say beside them when
 //! it waits on the user and when a turn was cancelled ([`AgentProvider::reported_signals`]). Where
@@ -172,6 +180,10 @@ impl AgentProvider for QwenProvider {
         }
     }
 
+    /// On Windows, the npm shim's `cli-entry.js` run by Node. A `node.exe` found neither beside the
+    /// shim nor on the shell's `PATH` is an error, which starts the session bare through the shim
+    /// itself (`crate::session::term::plan_launch`): the shim finds Node its own way, as it does in
+    /// a plain terminal, and only the multiline role text it could not carry is lost.
     fn terminal_binary(
         &self,
         binary: ResolvedBinary,
@@ -201,6 +213,25 @@ impl AgentProvider for QwenProvider {
         };
         node.leading_args.push(entry.into_os_string());
         Ok(node)
+    }
+
+    /// `--resume <id>` for a resume, `--model`, and a new conversation's task joined to
+    /// `--prompt-interactive`.
+    fn bare_plan(&self, spec: &LaunchSpec<'_>) -> super::BarePlan {
+        let mut args = Vec::new();
+        if let Some(id) = spec.resume_agent_session_id {
+            args.push("--resume".to_string());
+            args.push(id.to_string());
+        }
+        if let Some(model) = spec.model {
+            args.push("--model".to_string());
+            args.push(model.to_string());
+        }
+        args.extend(task_arg(spec));
+        super::BarePlan {
+            args,
+            ..super::BarePlan::default()
+        }
     }
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
@@ -258,15 +289,7 @@ impl AgentProvider for QwenProvider {
             args.push(model.to_string());
         }
         // It has no reasoning-effort flag, so an effort is not passed.
-        // A positional prompt is one-shot; `--prompt-interactive` (`-i`) runs it and stays
-        // interactive. The task goes in the same argument as the flag: given as the next one, a
-        // task that starts with a dash (a list, "--help me with X") is read as options, and Qwen
-        // Code prints its usage and exits.
-        if spec.resume_agent_session_id.is_none() {
-            if let Some(task) = spec.task {
-                args.push(format!("{PROMPT_FLAG}={task}"));
-            }
-        }
+        args.extend(task_arg(spec));
 
         let settings_file = settings::write(spec)?;
         let mut env = vec![
@@ -311,6 +334,17 @@ impl AgentProvider for QwenProvider {
         })
     }
 
+    /// No hook is registered for the start (`SessionStart` runs before the folder-trust dialog is
+    /// answered, see [`settings::HOOK_EVENTS`]), so the first comes with the first turn's
+    /// `UserPromptSubmit`; a launch found with its hooks switched off has none to come.
+    fn first_hook_due(&self, _spec: &LaunchSpec<'_>, plan: &LaunchPlan) -> super::FirstHook {
+        if hooks_switched_off(plan) {
+            super::FirstHook::Never
+        } else {
+            super::FirstHook::WithFirstTurn
+        }
+    }
+
     fn prompt_text(&self, line: &str) -> Option<String> {
         records::prompt_text(line)
     }
@@ -339,11 +373,43 @@ fn hooks_switched_off(plan: &LaunchPlan) -> bool {
     plan.notice.as_ref().is_some_and(hooks_off::is_notice)
 }
 
+/// A new conversation's task, the plan and the bare plan alike. A positional prompt is one-shot;
+/// `--prompt-interactive` (`-i`) runs it and stays interactive. The task goes in the same argument
+/// as the flag: given as the next one, a task that starts with a dash (a list, "--help me with
+/// X") is read as options, and Qwen Code prints its usage and exits. A resume is given no task.
+fn task_arg(spec: &LaunchSpec<'_>) -> Option<String> {
+    spec.task
+        .filter(|_| spec.resume_agent_session_id.is_none())
+        .map(|task| format!("{PROMPT_FLAG}={task}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::adapter::tests::{spec_fixture, SpecFixture};
     use crate::protocol::{error_code, CodedError};
+
+    /// Qwen Code's bare launch: `--resume`, `--model` and a new conversation's task joined to
+    /// `--prompt-interactive=`, without the MCP configuration, role or settings files.
+    #[test]
+    fn its_bare_plan_names_the_conversation_the_model_and_the_task_only() {
+        let mut fixture = crate::adapter::tests::spec_fixture();
+        fixture.model = Some("model-a".to_string());
+        let bare = |resume: Option<&str>, task: Option<&str>| {
+            let mut spec = fixture.spec();
+            spec.resume_agent_session_id = resume;
+            spec.task = task;
+            QwenProvider.bare_plan(&spec)
+        };
+        assert_eq!(
+            bare(Some("c-1"), Some("ignored")).args,
+            ["--resume", "c-1", "--model", "model-a"]
+        );
+        assert_eq!(
+            bare(None, Some("-do it")).args,
+            ["--model", "model-a", "--prompt-interactive=-do it"]
+        );
+    }
 
     const NEW: &str = "new-agent-session";
     const RESUMED: &str = "resumed-session";
@@ -902,17 +968,26 @@ mod tests {
         );
     }
 
-    /// A system settings file that cannot be used refuses the whole launch, with the provider's
-    /// code, instead of starting a session without the layer.
+    /// A system settings file that cannot be used makes the enhanced launch unavailable, with the
+    /// provider's code naming the file, which the session's bare launch nests in its notice; the
+    /// bare launch sets no settings variable, so Qwen Code reads that file itself.
     #[test]
-    fn a_system_settings_file_that_cannot_be_used_refuses_the_launch() {
+    fn a_system_settings_file_that_cannot_be_used_leaves_the_launch_bare() {
         let fixture = isolated();
         std::fs::write(fixture.scratch.join("system-settings.json"), "{ not json").expect("file");
         for resume in [false, true] {
             let mut spec = fixture.spec();
             spec.resume_agent_session_id = resume.then_some(RESUMED);
-            let err = QwenProvider.plan(&spec).err().expect("refused");
+            let err = QwenProvider.plan(&spec).err().expect("no enhanced plan");
             let coded = err.downcast_ref::<CodedError>().expect("coded");
+            assert!(
+                QwenProvider
+                    .bare_plan(&spec)
+                    .into_launch_plan()
+                    .env
+                    .is_empty(),
+                "resume={resume}"
+            );
             assert_eq!(
                 coded.code,
                 crate::protocol::Code::of_provider(
@@ -931,5 +1006,105 @@ mod tests {
                 )
             );
         }
+    }
+
+    /// Its first hook comes with the first turn, since none is registered for the start; a launch
+    /// found with its hooks switched off, by a variable or by the setting, has none to come.
+    #[test]
+    fn its_first_hook_comes_with_the_first_turn_unless_its_hooks_are_off() {
+        let due = |fixture: &SpecFixture| {
+            let spec = fixture.spec();
+            let plan = QwenProvider.plan(&spec).expect("plan");
+            QwenProvider.first_hook_due(&spec, &plan)
+        };
+        assert_eq!(due(&isolated()), crate::adapter::FirstHook::WithFirstTurn);
+        assert!(!settings::HOOK_EVENTS.contains(&"SessionStart"));
+
+        for variable in ["QWEN_CODE_SAFE_MODE", "QWEN_CODE_SIMPLE"] {
+            let mut fixture = isolated();
+            fixture
+                .shell_env
+                .insert(variable.to_string(), "1".to_string());
+            assert_eq!(
+                due(&fixture),
+                crate::adapter::FirstHook::Never,
+                "{variable}"
+            );
+        }
+
+        let mut by_setting = isolated();
+        let account = by_setting.scratch.join("account");
+        std::fs::create_dir_all(&account).expect("account");
+        std::fs::write(
+            account.join("settings.json"),
+            r#"{"disableAllHooks": true}"#,
+        )
+        .expect("settings");
+        by_setting.config_dir = Some(account);
+        assert_eq!(due(&by_setting), crate::adapter::FirstHook::Never);
+    }
+
+    /// What Qwen Code 0.28.3 wrote as it exited at start (`testdata/qwen-captures.md`): an
+    /// unknown option and a value an option does not take, each a refusal line before the whole
+    /// usage text, and the near-miss, a resume of a record that is not there. The early exit the
+    /// daemon hands over keeps the refusal line, at its head; none gives a reduced plan all the
+    /// same, by choice, so each early exit goes to the bare launch.
+    #[test]
+    fn an_early_exit_goes_to_the_bare_launch() {
+        let captures: [(&[u8], Option<&str>); 3] = [
+            (
+                include_bytes!("../../../testdata/qwen_early_exit_unknown_option_0.28.3.bin"),
+                Some("Unknown arguments: octoboard-unknown-flag"),
+            ),
+            (
+                include_bytes!("../../../testdata/qwen_early_exit_invalid_value_0.28.3.bin"),
+                Some("Argument: approval-mode, Given: \"bogus\""),
+            ),
+            (
+                include_bytes!("../../../testdata/qwen_early_exit_resume_not_found_0.28.3.bin"),
+                None,
+            ),
+        ];
+        let fixture = isolated();
+        let spec = fixture.spec();
+        for (bytes, refusal) in captures {
+            let whole = String::from_utf8_lossy(bytes);
+            let exit = crate::coordinator::early_exit::exit_of_output(bytes);
+            if let Some(refusal) = refusal {
+                // The refusal is at the head, before the usage text, and kept there.
+                let usage = whole.find("Usage: qwen [options]").expect("the usage text");
+                assert!(whole[..usage].contains(refusal), "{refusal}");
+                assert!(exit.output.contains(refusal), "{refusal}");
+            } else {
+                assert!(whole.starts_with("No saved session found with ID"));
+                assert!(!whole.contains("Usage:"));
+            }
+            assert!(QwenProvider.reduced_plan(&spec, &exit).is_none());
+        }
+    }
+
+    /// On Windows, a `node.exe` found neither beside the npm shim nor on the shell's `PATH` is an
+    /// error, which starts the session bare through the shim rather than refusing it.
+    #[cfg(windows)]
+    #[test]
+    fn a_shim_whose_node_is_not_found_is_an_error_to_launch_bare() {
+        let scratch = crate::test_support::ScratchDir::new("qwen-npm-no-node");
+        let launcher = scratch.join("qwen.cmd");
+        let package = scratch.join("node_modules").join(NPM_PACKAGE);
+        std::fs::create_dir_all(&package).unwrap();
+        for path in [
+            &launcher,
+            &package.join("cli-entry.js"),
+            &package.join("package.json"),
+        ] {
+            std::fs::write(path, "").unwrap();
+        }
+        let shell_env = HashMap::from([(
+            "PATH".to_string(),
+            scratch.join("empty").to_string_lossy().into_owned(),
+        )]);
+        assert!(QwenProvider
+            .terminal_binary(ResolvedBinary::new(launcher), &shell_env)
+            .is_err());
     }
 }

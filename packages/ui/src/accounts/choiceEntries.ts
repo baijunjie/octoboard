@@ -29,7 +29,8 @@ export interface ChoiceEntry {
    * session on the account until it ends, so the entry may be shown, but not chosen. */
   changingSharing: boolean;
   /** The last reading found the account not logged in; the daemon refuses a session on it
-   * (`account_not_signed_in`), so the entry may be shown, but not chosen. A reading that failed for another reason
+   * (`account_not_signed_in`), so the entry may be shown, but not chosen, except for a session the user opens, which
+   * the daemon opens and tells of the reading (`account_sign_in_unconfirmed`). A reading that failed for another reason
    * does not count. */
   signedOut: boolean;
   /** The user turned the account off for new sessions; the daemon refuses one on it (`account_disabled`). Pickers
@@ -68,6 +69,13 @@ export function quotaSignedOut(quota: AccountQuota | undefined): boolean {
  * so unlike a sharing change it is said. */
 export function accountSignedOutUnavailable(t: Translate): { detail: string; reason: Reason } {
   return { detail: t("accountChoice.signedOut.detail"), reason: { state: t("accountChoice.signedOut.reason") } };
+}
+
+/** What an account that is not logged in shows in a list in place of its usage where it may be chosen all the same (a
+ * session the user opens, which the daemon opens and tells of the reading): the same short reason as
+ * `accountSignedOutUnavailable`, with a description that says a session may ask to log in. */
+export function accountSignedOutPickable(t: Translate): { detail: string; reason: Reason } {
+  return { detail: t("accountChoice.signedOut.pickableDetail"), reason: accountSignedOutUnavailable(t).reason };
 }
 
 /** What an account the user turned off shows in a list in place of its usage: why it cannot be chosen in short as the

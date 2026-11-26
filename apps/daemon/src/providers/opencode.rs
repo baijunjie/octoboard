@@ -1,6 +1,6 @@
 //! OpenCode's descriptor, with its on-disk layout. Its versions were measured on 1.19.6, 2.3.2,
-//! 2.4.0 and 2.4.1 (`docs/agent-cli-reference.md`, section "OpenCode"). No version is refused; one of a minor not
-//! measured raises a notice.
+//! 2.4.0 and 2.4.1 (`docs/agent-cli-reference.md`, section "OpenCode"). No version is refused;
+//! one of a minor not measured raises a notice.
 
 use super::layout::{AgentLayout, ConfigDirVarNames};
 use super::{
@@ -9,8 +9,15 @@ use super::{
     SettingChoice, SettingDescriptor, SettingKind, SwitchDefault,
 };
 
+/// A launch of an OpenCode whose major and minor no measured version shares
+/// ([`MEASURED_VERSIONS`]): the launch goes ahead, and the standing notice says some of
+/// Octoboard's features may be unavailable for the session while its terminal works as usual.
 pub const VERSION_UNMEASURED: ProviderCode =
     ProviderCode::notice("provider.opencode.version_unmeasured");
+/// Why an enhanced launch of OpenCode 2 could not be prepared: OpenCode has yet to migrate its own
+/// configuration or credentials from the first generation, and Octoboard runs none of its
+/// commands before it does. Shown as the reason of `launch_enhancements_unavailable`; the launch
+/// is bare and OpenCode migrates as it starts.
 pub const MIGRATION_REQUIRED: ProviderCode =
     ProviderCode::error("provider.opencode.migration_required");
 

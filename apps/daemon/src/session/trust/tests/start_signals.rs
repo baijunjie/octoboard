@@ -60,6 +60,54 @@ fn a_rendered_title_agent_without_a_confirmation_releases_at_its_input_box() {
     assert!(!watch.waiting());
 }
 
+/// An agent whose start signal is its terminal title, whose launch runs no hook of Octoboard's
+/// (bare, or planned without hooks) and whose title never comes, as under a configuration that
+/// draws none: its input box drawn with no trust screen up stands in for the start hook it will
+/// not run and ends the hold, which the title alone would never end.
+#[test]
+fn a_title_agent_that_runs_no_hook_releases_at_its_input_box_without_its_title() {
+    static TITLE: Screen = made_up(StartSignal::TerminalTitle, None);
+    let _declared = declaring_trust_screen(&TITLE);
+    let watch = TrustState::new(AgentId::TEST, None);
+    watch.note_start_hook_absent();
+    assert!(
+        watch.holds_writes(),
+        "held while the watch looks for the screen"
+    );
+    assert!(!watch.stand_in_for_start("Starting up...", false));
+    assert!(watch.holds_writes());
+    assert!(!watch.stand_in_for_start(
+        "Trust this folder?\n1. Yes, trust it\n2. No, exit\nINPUT> ",
+        true
+    ));
+    assert!(
+        watch.holds_writes(),
+        "a trust screen still up keeps the hold"
+    );
+    assert!(watch.stand_in_for_start("INPUT> ", true));
+    assert!(!watch.holds_writes());
+}
+
+/// Which launches run no hook of Octoboard's: a bare one, and an integrated one that expects none.
+#[test]
+fn a_launch_runs_no_hook_bare_or_planned_without_hooks() {
+    use crate::adapter::{FirstHook, LaunchTier};
+    use crate::session::integration::Integration;
+    let of = |tier, first_hook| {
+        Integration {
+            tier,
+            first_hook,
+            ..Integration::unasked()
+        }
+        .runs_no_hook()
+    };
+    assert!(of(LaunchTier::Bare, FirstHook::AtStart));
+    assert!(of(LaunchTier::Reduced, FirstHook::Never));
+    assert!(of(LaunchTier::Enhanced, FirstHook::Never));
+    assert!(!of(LaunchTier::Reduced, FirstHook::WithFirstTurn));
+    assert!(!of(LaunchTier::Enhanced, FirstHook::AtStart));
+}
+
 /// A session of the test-only provider, declaring `screen`, with its watch looking for the screen
 /// and a message held for it.
 struct Starting {

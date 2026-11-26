@@ -160,6 +160,12 @@ impl Cache {
         stored.failure = None;
     }
 
+    /// The last capture, however old: what a launch falls back on when its snapshot failed.
+    pub fn last_capture(&self) -> Option<Env> {
+        let stored = self.stored.lock().expect("shell env cache lock poisoned");
+        stored.capture.as_ref().map(|capture| capture.env.clone())
+    }
+
     /// A fresh snapshot, waited for whatever the cache holds, and stored. Takes its turn on the
     /// same lock as every other snapshot, so it never runs alongside one a launch or a sweep
     /// started. A capture stored after the call began is served instead of taking another, so
@@ -419,6 +425,15 @@ mod tests {
         );
         cache.stored.lock().unwrap().failure.as_mut().unwrap().at_ms = i64::MAX;
         assert!(cache.scheduled(works).is_ok());
+    }
+
+    #[test]
+    fn the_last_capture_is_served_however_old() {
+        let cache = Cache::new();
+        assert!(cache.last_capture().is_none());
+        cache.stored.lock().unwrap().capture =
+            Some(aged(env_with_path("/old"), SCHEDULED_MAX_AGE * 2));
+        assert_eq!(cache.last_capture().unwrap()["PATH"], "/old");
     }
 
     #[test]

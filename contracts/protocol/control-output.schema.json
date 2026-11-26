@@ -4788,6 +4788,9 @@
             "message": {
               "type": "string"
             },
+            "standing": {
+              "type": "boolean"
+            },
             "type": {
               "type": "string",
               "const": "session_notice"
@@ -4800,7 +4803,7 @@
             "params",
             "message"
           ],
-          "description": "Something about a session the user has to be told, which no status field carries: an\ninjected capability that will not apply, a setting of theirs Octoboard had to work around.\nBroadcast once, when it is found; nothing stores it. `code` and `params` name the notice for\na client to word in its own language; `message` is the English text for a client that does\nnot know the code."
+          "description": "Something about a session the user has to be told, which no status field carries: an\ninjected capability that will not apply, a setting of theirs Octoboard had to work around.\nBroadcast once, when it is found. `code` and `params` name the notice for a client to word\nin its own language; `message` is the English text for a client that does not know the\ncode. A plain notice is stored nowhere. A `standing` one (absent when false) describes a\ncondition of the session's launch that lasts: the daemon keeps it on the session's record\n(`Session::standing_notices`) until it is withdrawn with `session_notice_withdrawn` or the\nprocess ends, and a client that knows the flag shows it from the record rather than from\nthis event."
         },
         {
           "type": "object",
@@ -10853,6 +10856,13 @@
           "description": "What the session's agent is asking the user, while the session is shown waiting on them\nand the daemon has recognised the prompt from the agent's hooks and its screen together;\nanswered with `answer_interaction`. Absent otherwise, the prompt then answered in the\nterminal. Never stored: it is filled in on the record a client receives\n(`AppState::wire_session`).",
           "$ref": "#/$defs/PendingInteraction"
         },
+        "standing_notices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StandingNotice"
+          },
+          "description": "The standing notices of the session's running launch, in the order they were raised:\nthe conditions of that launch the user is told of for as long as they hold. Never stored:\nit is filled in on the record a client receives (`AppState::wire_session`), and absent\nwhen there are none, which it always is for a session with no process."
+        },
         "has_conversation": {
           "type": "boolean",
           "description": "Whether this session has a conversation on the agent's side: a turn taken, or one resumed\nat open. Until it has, the agent has stored no conversation to resume: `claude --resume`\non such an id fails outright with \"No conversation found\", and a session the user opened\nand never typed into is the common case of that. A resume therefore starts a fresh\nconversation rather than failing."
@@ -11931,6 +11941,36 @@
         }
       ],
       "description": "One side of a change as `read_project_change` or `read_project_comparison_change` read it."
+    },
+    "StandingNotice": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "message": {
+          "type": "string",
+          "description": "The English text, for a client that does not know the code."
+        },
+        "at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "When it was raised, in milliseconds since the epoch: what tells a notice raised again,\nby a later launch say, from the one a client dismissed."
+        }
+      },
+      "required": [
+        "code",
+        "params",
+        "message",
+        "at"
+      ],
+      "description": "A `session_notice` that stands: a condition of the session's running launch the user is told\nof for as long as it holds (an enhancement of Octoboard's the launch runs without, say). Kept\nby the daemon in memory, never stored, and given on the record a client receives\n(`Session::standing_notices`). It goes when it is withdrawn (`session_notice_withdrawn`, by\n`code` and the `detail` param) or when the launch's process ends."
     },
     "StatSentiment": {
       "type": "string",

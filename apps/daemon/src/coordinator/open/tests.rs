@@ -26,6 +26,7 @@ fn launch_after(
             session: live,
             agent_session_id: None,
             notices: Vec::new(),
+            notices_at: 0,
             first_message: None,
             record_root: None,
         })
@@ -129,7 +130,9 @@ async fn a_launch_that_fails_deletes_the_session_and_says_why() {
 async fn a_session_opened_by_a_caller_that_waits_reports_a_failed_launch_as_its_error() {
     let (state, _dir) = state_for_opening("coordinator-open-waits");
     let mut events = state.subscribe();
-    let starting = begin_open(&state, open_request()).await.expect("recorded");
+    let starting = begin_open(&state, open_request(), AccountGate::NewSession)
+        .await
+        .expect("recorded");
     let id = starting.session.id.clone();
     let err = finish_open(&state, starting, |_| Err(anyhow::anyhow!("no binary")))
         .await
@@ -234,6 +237,46 @@ async fn a_conversation_to_resume_reaches_the_launch_after_the_reply() {
     })
     .await;
     assert_eq!(resumed.flatten().as_deref(), Some(ID));
+}
+
+/// A conversation to resume whose record the account does not hold is no refusal: the session
+/// opens on the agent's own resume option, and the launch is handed
+/// `conversation_record_not_found` to tell the user with.
+#[tokio::test]
+async fn a_conversation_to_resume_found_nowhere_opens_and_says_so() {
+    const ID: &str = "11111111-2222-3333-4444-555555555555";
+    let (state, _dir) = console_with_project_and_accounts("coordinator-resume-id-not-found");
+    let (asked_tx, asked) = std::sync::mpsc::channel();
+    let opened = open_started(
+        &state,
+        OpenRequest {
+            project_id: Some("project-1".to_string()),
+            account: Some(Some("claude-a".to_string())),
+            resume_agent_session_id: Some(ID.to_string()),
+            ..open_request()
+        },
+        move |request| {
+            asked_tx
+                .send((request.resume_agent_session_id, request.notices))
+                .unwrap();
+            Err(anyhow::anyhow!("no agent in the tests"))
+        },
+    )
+    .await
+    .expect("opened, not refused");
+    assert_eq!(opened.agent_session_id.as_deref(), Some(ID));
+
+    let mut handed = None;
+    wait_until(|| {
+        handed = asked.try_recv().ok();
+        handed.is_some()
+    })
+    .await;
+    let (resumed, notices) = handed.unwrap();
+    assert_eq!(resumed.as_deref(), Some(ID));
+    assert_eq!(notices.len(), 1);
+    assert_eq!(notices[0].code, notice_code::CONVERSATION_RECORD_NOT_FOUND);
+    assert!(notices[0].standing);
 }
 
 /// What a launch was asked to start with, and what was queued and expected of it by then.
@@ -476,6 +519,7 @@ async fn a_session_opened_with_a_task_shows_as_prompting_until_it_is_launched() 
                     session: live_rx.recv().expect("a process"),
                     agent_session_id: None,
                     notices: Vec::new(),
+                    notices_at: 0,
                     first_message: None,
                     record_root: None,
                 })
@@ -522,7 +566,7 @@ async fn a_refused_launch_claim_leaves_no_session_row() {
     let (state, _dir) = state_for_opening("coordinator-open-claim-refused");
     state.stop_all_sessions().await;
 
-    let err = match begin_open(&state, open_request()).await {
+    let err = match begin_open(&state, open_request(), AccountGate::NewSession).await {
         Ok(_) => panic!("opened while shutting down"),
         Err(err) => err,
     };
@@ -539,7 +583,7 @@ async fn a_clean_up_run_refuses_an_open_before_any_row_or_publish() {
     state.set_clean_up_run();
     let mut events = state.subscribe();
 
-    let err = match begin_open(&state, open_request()).await {
+    let err = match begin_open(&state, open_request(), AccountGate::NewSession).await {
         Ok(_) => panic!("opened in a clean-up run"),
         Err(err) => err,
     };
@@ -631,4 +675,194 @@ async fn a_started_session_whose_first_task_waits_as_a_message_reads_as_idle() {
 
         assert_eq!(settled.status, expected, "{name}");
     }
+}
+
+/// Puts in a Claude Code account `id`, pinned to `/tmp/<id>`, whose held reading found it not
+/// signed in.
+fn insert_signed_out_account(state: &Arc<AppState>, id: &str) {
+    use crate::protocol::{quota_unavailable_code, Account, AccountQuota, QuotaUnavailable};
+    state
+        .store
+        .insert_account(&Account {
+            id: id.to_string(),
+            agent: AgentId::CLAUDE,
+            name: id.to_string(),
+            config_dir: format!("/tmp/{id}"),
+            share_default_config: false,
+            share_default_config_incomplete: false,
+            disabled: false,
+            versions: Default::default(),
+        })
+        .unwrap();
+    state.account_quotas.hold_in_dir_for_test(
+        &AccountQuota {
+            reset_credits: None,
+            agent: AgentId::CLAUDE,
+            account: Some(id.to_string()),
+            fetched_at: 1,
+            plan: None,
+            email: None,
+            windows: Vec::new(),
+            unavailable: Some(QuotaUnavailable::new(
+                quota_unavailable_code::NOT_SIGNED_IN,
+                "not signed in",
+                &[],
+            )),
+        },
+        &format!("/tmp/{id}"),
+    );
+}
+
+/// A reading of the Claude Code account `id` under `/tmp/<id>`, as a finished probe records it:
+/// signed in, or with `unavailable` as its reason.
+fn read_account(
+    state: &Arc<AppState>,
+    id: &str,
+    unavailable: Option<crate::protocol::QuotaUnavailable>,
+) {
+    let quota = crate::protocol::AccountQuota {
+        reset_credits: None,
+        agent: AgentId::CLAUDE,
+        account: Some(id.to_string()),
+        fetched_at: 2,
+        plan: None,
+        email: None,
+        windows: Vec::new(),
+        unavailable,
+    };
+    let _ =
+        crate::accounts::quotas::finish_probe_for_test(state, quota, Some(&format!("/tmp/{id}")));
+}
+
+/// The user's own open of a session on an account last read as logged out goes ahead: the launch
+/// is handed `account_sign_in_unconfirmed` as a standing notice, which the session's record then
+/// holds, naming the account and its directory. A later reading that still finds it logged out
+/// keeps the notice; one that finds it signed in withdraws it.
+#[tokio::test]
+async fn the_users_own_open_on_a_signed_out_account_opens_and_says_so_until_a_reading_finds_it_signed_in(
+) {
+    let (state, _dir) = state_for_opening("coordinator-open-signed-out-own");
+    insert_signed_out_account(&state, "out");
+    let stand_in = crate::test_support::idle_stand_in("signed-out");
+    let live = (*stand_in).clone();
+    let handed = Arc::new(std::sync::Mutex::new(Vec::<Notice>::new()));
+    let opened = open_started(
+        &state,
+        OpenRequest {
+            account: Some(Some("out".to_string())),
+            session_id: Some("signed-out".to_string()),
+            ..open_request()
+        },
+        {
+            let handed = handed.clone();
+            move |request| {
+                *handed.lock().unwrap() = request.notices.clone();
+                Ok(term::Launch {
+                    session: live,
+                    agent_session_id: None,
+                    notices: request.notices,
+                    notices_at: 7,
+                    first_message: None,
+                    record_root: None,
+                })
+            }
+        },
+    )
+    .await
+    .expect("opened");
+    wait_until(|| !state.is_launching(&opened.id)).await;
+
+    let handed = handed.lock().unwrap().clone();
+    assert_eq!(handed.len(), 1);
+    assert!(handed[0].standing);
+    assert_eq!(handed[0].code, notice_code::ACCOUNT_SIGN_IN_UNCONFIRMED);
+    let kept = || {
+        state
+            .wire_session(state.session_record(&opened.id).unwrap())
+            .standing_notices
+    };
+    let notices = kept();
+    assert_eq!(notices.len(), 1);
+    assert_eq!(
+        notices[0].code,
+        notice_code::ACCOUNT_SIGN_IN_UNCONFIRMED.as_str()
+    );
+    assert_eq!(notices[0].params["account"], "out");
+    assert_eq!(notices[0].params["agent_id"], AgentId::CLAUDE.wire_name());
+    assert_eq!(notices[0].params["config_dir"], "/tmp/out");
+
+    read_account(
+        &state,
+        "out",
+        Some(crate::protocol::QuotaUnavailable::new(
+            crate::protocol::quota_unavailable_code::NOT_SIGNED_IN,
+            "not signed in",
+            &[],
+        )),
+    );
+    assert_eq!(kept().len(), 1, "still read as logged out");
+
+    let mut events = state.subscribe();
+    read_account(&state, "out", None);
+    assert!(kept().is_empty(), "a reading found it signed in");
+    let mut withdrawn = false;
+    while let Ok(event) = events.try_recv() {
+        if let Event::SessionNoticeWithdrawn { session, code, .. } = event {
+            withdrawn |= session == opened.id && code == notice_code::ACCOUNT_SIGN_IN_UNCONFIRMED;
+        }
+    }
+    assert!(withdrawn, "clients are told");
+    drop(stand_in);
+}
+
+/// A session opened for anyone but the user at a window (an agent's tool, an approved request) is
+/// still refused an account last read as logged out, and nothing is recorded; the user's own open
+/// on a signed-in account is handed no notice.
+#[tokio::test]
+async fn an_open_for_someone_else_is_refused_a_signed_out_account_and_a_signed_in_one_says_nothing()
+{
+    let (state, _dir) = state_for_opening("coordinator-open-signed-out-other");
+    insert_signed_out_account(&state, "out");
+    let err = open_session_with(
+        &state,
+        OpenRequest {
+            account: Some(Some("out".to_string())),
+            ..open_request()
+        },
+        |_| panic!("nothing is launched"),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(code_of(&err), error_code::ACCOUNT_NOT_SIGNED_IN);
+    assert!(state.store.list_sessions().unwrap().is_empty());
+
+    let stand_in = crate::test_support::idle_stand_in("signed-in");
+    let live = (*stand_in).clone();
+    let handed = Arc::new(std::sync::Mutex::new(None));
+    let opened = open_started(
+        &state,
+        OpenRequest {
+            session_id: Some("signed-in".to_string()),
+            ..open_request()
+        },
+        {
+            let handed = handed.clone();
+            move |request| {
+                *handed.lock().unwrap() = Some(request.notices.len());
+                Ok(term::Launch {
+                    session: live,
+                    agent_session_id: None,
+                    notices: Vec::new(),
+                    notices_at: 0,
+                    first_message: None,
+                    record_root: None,
+                })
+            }
+        },
+    )
+    .await
+    .expect("opened");
+    wait_until(|| !state.is_launching(&opened.id)).await;
+    assert_eq!(*handed.lock().unwrap(), Some(0));
+    drop(stand_in);
 }

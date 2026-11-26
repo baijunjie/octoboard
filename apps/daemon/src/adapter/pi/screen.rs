@@ -120,6 +120,12 @@ impl ScreenReader for PiScreen {
         rest
     }
 
+    /// Pi's input box is read wherever it sits at its prompt (`input_box_rows`), at every thinking
+    /// level: the screen it is read off keeps the faint rules of the level `off`.
+    fn reads_input_box(&self) -> bool {
+        true
+    }
+
     fn input_box_rows(&self, screen: &str) -> Option<Vec<String>> {
         input_box_rows(screen)
     }
@@ -292,6 +298,14 @@ mod tests {
     use crate::protocol::AgentId;
     use crate::session::trust::{reading_of, Reading, TrustState};
     use crate::terminal::snapshot::TerminalSnapshot;
+
+    /// The reader declares that it reads its input box wherever the agent is at its prompt, so a turn
+    /// opened off the title closes only while the box is drawn (`crate::session::title_status`);
+    /// the tests of `input_box_rows` hold it to every prompt state captured.
+    #[test]
+    fn the_input_box_is_read_wherever_the_agent_is_at_its_prompt() {
+        assert!(PiScreen.reads_input_box());
+    }
 
     // What Pi 1.5.2 printed in a folder holding `.pi/settings.json` that it had not been told to
     // trust, on a 100x30 PTY (`testdata/pi-captures.md`): the confirmation as first drawn, the

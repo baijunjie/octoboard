@@ -35,7 +35,7 @@ mod tests;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use tokio::sync::MutexGuard;
 
 use crate::hostfs::dir_key;
@@ -52,6 +52,8 @@ pub(crate) use cli_reads::{is_held, reading_account, waiting};
 pub(crate) use items::{
     config_dir, config_file, history_dir, history_lines, thread_database, SharedItem,
 };
+#[cfg(test)]
+pub(crate) use keep::KEPT_AFTER_EXIT;
 pub(crate) use keep::{
     after_exit as keep_registries_after_exit, at_start as keep_registries_at_start,
     at_stop as keep_registries_at_stop,
@@ -176,15 +178,14 @@ pub(crate) fn in_use(account: &Account, running: &[Running]) -> Uses {
 }
 
 /// The directory the agent's default account resolves to, as the default account's own sessions
-/// see it: what availability found at start-up, else the launch environment's.
+/// see it: what availability found at start-up, else the launch environment's, which never fails
+/// for want of a snapshot (a launch asks this before it starts).
 pub(crate) async fn default_dir(state: &Arc<AppState>, agent: AgentId) -> Result<PathBuf> {
     if let Some(dir) = state.agent_availability_of(agent).default_account_dir {
         return Ok(PathBuf::from(dir));
     }
-    let shell_env = tokio::task::spawn_blocking(crate::env_shell::launch_snapshot)
-        .await?
-        .context("snapshotting the user's shell environment")?;
-    Ok(crate::adapter::default_account_dir(agent, &shell_env))
+    let shell_env = tokio::task::spawn_blocking(crate::env_shell::launch_env).await?;
+    Ok(crate::adapter::default_account_dir(agent, &shell_env.vars))
 }
 
 pub(crate) fn not_shareable(account: Option<&Account>) -> anyhow::Error {

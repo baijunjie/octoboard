@@ -124,9 +124,11 @@ it.each([
     expect(reference?.getAttribute("dir")).toBe("ltr");
     expect(reference?.querySelector("code")?.textContent).toBe(params.binary);
   } else if ("agent" in params) {
-    expect(reference?.textContent).toBe(params.agent);
-    expect(reference?.getAttribute("dir")).toBe("auto");
-    expect(reference?.querySelector("code")).toBeNull();
+    // The agent, a product name, is plain text isolated as an element, with no chip.
+    expect(reference).toBeNull();
+    const agent = description.querySelector("bdi")!;
+    expect(agent.textContent).toBe(params.agent);
+    expect(agent.getAttribute("dir")).toBe("auto");
   } else expect(reference).toBeNull();
   if (reference) expect(reference.getAttribute("data-size")).toBe("xs");
   const detail = "detail" in params ? params.detail : undefined;

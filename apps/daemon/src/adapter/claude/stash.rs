@@ -1,6 +1,8 @@
-//! Claude Code's gate for its native draft stash: Ctrl-S stashes the draft only on a measured
-//! version, and only while the keybindings file of the configuration directory the launch
-//! actually uses leaves that key bound to `chat:stash`.
+//! Claude Code's gate for its native draft stash: Ctrl-S stashes the draft only while the
+//! keybindings file of the configuration directory the launch actually uses leaves that key bound
+//! to `chat:stash`. No version is required: Claude Code's changelog names no release that added
+//! the stash (2.1.19 already fixes it), and a release without one draws no stash indicator, which
+//! the stash's own handling stops on.
 
 use std::io::ErrorKind;
 
@@ -11,15 +13,9 @@ use crate::protocol::AgentId;
 use crate::providers::claude::CLAUDE_KEY_BINDINGS;
 use crate::providers::layout::layout;
 
-/// The first version measured to stash with Ctrl-S.
-const MINIMUM: adapter::AgentVersion = (2, 1, 274);
-
 /// Whether this launch may use the stash. Reading the plan's environment matters for pinned
 /// accounts, whose configuration directory the plan sets.
 pub(super) fn supported(spec: &LaunchSpec<'_>, plan: &LaunchPlan) -> bool {
-    if !spec.agent_version.is_some_and(|version| version >= MINIMUM) {
-        return false;
-    }
     let layout = layout(AgentId::CLAUDE);
     let directory = plan
         .env
@@ -139,14 +135,18 @@ mod tests {
     use super::*;
     use crate::adapter::tests::spec_fixture;
 
-    /// A version before the first measured one, or one that cannot be told, keeps the draft guard.
+    /// No version is required: an old release, a current one and one whose version cannot be
+    /// told all stash where the binding is the default one.
     #[test]
-    fn an_unmeasured_version_does_not_stash() {
+    fn the_stash_has_no_version_floor() {
         let mut fixture = spec_fixture();
-        for version in [None, Some((2, 1, 273))] {
+        let directory = fixture.scratch.join("config");
+        std::fs::create_dir_all(&directory).unwrap();
+        fixture.config_dir = Some(directory);
+        for version in [None, Some((1, 0, 0)), Some((2, 1, 273)), Some((2, 1, 332))] {
             fixture.agent_version = version;
             assert!(
-                !supported(&fixture.spec(), &LaunchPlan::default()),
+                supported(&fixture.spec(), &LaunchPlan::default()),
                 "{version:?}"
             );
         }

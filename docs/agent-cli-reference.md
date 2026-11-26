@@ -436,6 +436,31 @@ lowers the level to `high`** rather than refusing it. The level a reply ran at i
 assistant line carries it as a top-level `effort`, also when nothing sets one — every such line of 155 transcripts
 written by 2.1.286 to 2.1.304, on a `settings.json` with no `effortLevel`.
 
+### An option it does not know
+
+Measured on 2026-11-26 on a pseudoterminal in an empty directory, with `CLAUDE_CONFIG_DIR` an empty directory and no
+prompt, so nothing reached the network (captures in `apps/daemon/testdata/claude-early-exit-captures.md`):
+
+- **Claude Code exits on an option it does not know, before it draws anything** (2.1.332): `claude --session-id <uuid>
+  --octoboard-unknown-option --effort high` printed `error: unknown option '--octoboard-unknown-option'` and the
+  cursor-show sequence, nothing else, and exited with status 1 about 0.07 s after the start, writing nothing into the
+  configuration directory. The refusal names the first option it does not know, before any option after it is read.
+  A missing `--settings` file is refused as fast with a different line (`Error: Settings file not found: <path>`,
+  status 1), the near miss kept beside it.
+- **`--version` is answered before any other option is checked**: `--octoboard-unknown-option --version`, `--effort
+  bogus --version` and `--effort high --version` each printed `2.1.332 (Claude Code)` with status 0. So a version probe
+  says nothing about which options a release takes; `--effort high --octoboard-unknown-option` does (a release that
+  knows `--effort` names only the second option).
+- **`--effort` on the releases installed here**: 2.1.329, 2.1.330, 2.1.331 and 2.1.332 each took it (the probe above
+  named only `--octoboard-unknown-option`). The release that introduced it was not measured: that needs older
+  releases run, which was not done. By decision `--effort` has no floor: it is passed whenever an effort is chosen,
+  and a release without it exits as above, which Octoboard reads as an exit at start and relaunches bare
+  (`docs/plans/terminal-first-degradation.md`, D6). Claude Code gets no reduced launch.
+- **The first hook comes as it starts**: an enhanced launch registers `SessionStart` as a command hook, which fires
+  0.3–1.9 s after a launch or a `--resume` with no prompt, and not while the trust screen is up (see "`SessionStart`
+  and `Setup` run no HTTP handler"). Octoboard therefore expects a hook at the start of every enhanced launch
+  (`FirstHook::AtStart`).
+
 ### Discovering models
 
 Measured on Claude Code 2.1.296, the account catalogue read off disk on 2.1.317: there is **no `models` subcommand**,
@@ -644,6 +669,25 @@ and exits 1.
   stopped); it does not accept the full conversation id, and an unknown id exits 1 ("No session matching …"). After
   the stop, the flagged resume succeeds.
 
+### Version floors
+
+A capability is switched on from a version only where Claude Code's changelog (`CHANGELOG.md` of the npm package and
+of `anthropics/claude-code`, read up to 2.1.332) says that release introduced it; a version that cannot be read, or one
+newer than any read, counts as having it.
+
+- **HTTP hooks: 2.1.63** ("Added HTTP hooks, which can POST JSON to a URL and receive JSON instead of running a shell
+  command"). An older release gets the command handler for every event (`HTTP_HOOKS_SINCE`).
+- **The status line: 1.0.71** ("Customizable status line"). An older release gets no `statusLine`
+  (`STATUS_LINE_SINCE`); the earlier floor of 2.0.0 had no such entry behind it.
+- **Stopping a background session before a resume: 2.1.169.** 2.1.145 "Added `claude agents --json`", and 2.1.169
+  added its `id` field, the short id `claude stop` takes (`claude stop` is named in 2.1.160's entries already). Before
+  2.1.50 `agents` was no subcommand, and an unknown word may start a session in place of failing, so an older release
+  is not asked (`BACKGROUND_SESSIONS_SINCE`). The earlier floor of 2.1.329 was only the release measured.
+- **The draft stash: no floor.** No entry introduces Ctrl-S's prompt stash (2.1.19 already fixes "prompt stash (Ctrl+S)
+  and restore"), so the earlier floor of 2.1.274, the oldest release measured, is gone; the stash still needs the
+  default binding in the launch's keybindings file, and a release that draws no indicator Octoboard reads stops it for
+  the process (`docs/product/draft-preservation.md`).
+
 ### Keys that interrupt a turn
 
 Measured on 2.1.310, in a PTY with a real account. One Esc stops a turn, about 160 ms after it while the model writes;
@@ -716,8 +760,12 @@ Turn-scoped events add `turn_id`, the per-turn key. The compaction events are th
   alternative source: it records only *named* threads, and is written late. **With `source: "startup"` it does not
   fire until the first prompt is submitted**, and then arrives together with that prompt's `UserPromptSubmit`, in
   either order — measured 40 s after the process started, both within the same second, and the order varied run to
-  run. A mapping that gives it a status therefore races the turn the prompt opens. When the other four sources arrive
-  is unmeasured.
+  run. A mapping that gives it a status therefore races the turn the prompt opens. On 0.167.1 (2026-11-26, a scratch
+  `CODEX_HOME`, a model provider on a closed local port, every hook logged) a fresh session idle for 12 s ran no hook,
+  and its first Enter brought `SessionStart` (`startup`) and `UserPromptSubmit` in the same 10 ms; a resume of that
+  conversation idle for 12 s ran none either, so `resume` too waits for a prompt. Through a private app server with a
+  `--remote` terminal a fresh session idle for 12 s ran none (its prompt was not taken in that probe, so the turn half is
+  unmeasured there). When `clear`, `compact` and `fork` arrive is unmeasured.
 - `Stop` — `turn_id`, `last_assistant_message`, `stop_hook_active`.
 - `Interrupt` — fires on Esc or Ctrl+C during an in-flight turn (Ctrl+C confirmed by hand). It carries the base
   payload plus the cancelled turn's own `turn_id` and is mutually exclusive with `Stop`. Esc pressed while the session
@@ -1055,6 +1103,42 @@ calls `spawn_agent`, `send_message`, `wait_agent`, `followup_task`. Some of thos
 type written between the call and its output: `wait_agent` with a `CollabAgentToolCall`, `sleep` with an `Extension`
 of `kind` `clock.sleep`, and `request_user_input_async` with an `AgentMessage` that repeats its questions.
 
+### What Codex does with an option or a setting it does not take
+
+Measured on 0.167.1 (2026-11-26, macOS arm64, a 120x40 pseudoterminal, a scratch `CODEX_HOME` and working directory,
+the terminal's queries answered, no key typed, no prompt sent; the captures are in `apps/daemon/testdata/`, described
+in `codex-exit-captures.md`):
+
+- **An option it does not take** is refused at argument parsing, before anything is drawn, with exit status 2:
+  `error: unexpected argument '--definitely-not-an-option' found`, a tip (`to pass … use '-- …'`, or `a similar
+  argument exists: '--dangerously-bypass-hook-trust'` for a near spelling), the usage and `For more information, try
+  '--help'.`.
+- **A value of a setting it does not know** is refused while the configuration loads, before anything is drawn, with
+  exit status 1: `Error: unknown variant `bogus`, expected one of …` on one line and `in `<key>`` on the next, the key
+  as its whole path (`mcp_servers.octoboard.default_tools_approval_mode`). Seen for `approval_policy`,
+  `approvals_reviewer`, `mcp_servers.<name>.default_tools_approval_mode` and `tui.resume_cwd`. Without a terminal the
+  first line reads `Error loading config.toml: unknown variant …`.
+- **An unknown built-in permission profile** (`default_permissions=":bogus"`) is refused only after the terminal took
+  bracketed paste and the alternate screen, still before it drew anything: `Error loading configuration:
+  default_permissions refers to unknown built-in profile `:bogus``, exit status 1. It is an exit at start like the
+  others, and its line names the key: the reduced launch leaves out the permission preset and keeps the hooks.
+- **A key it does not know at all** is passed over without a word and the launch draws its screen: an unknown top-level
+  key, a hook event (`hooks.BogusEvent`), an unknown field in a hook entry or an MCP server table, unknown `tui.`,
+  `notice.` and `features.` keys, a misspelt `default_permissions`, and an unknown terminal title item.
+- **The near-miss**: a `CODEX_HOME` that does not exist ends the launch at start with exit status 1 and `Error finding
+  codex home: CODEX_HOME points to "…", but that path does not exist`, naming no option or setting.
+
+So a release without one of the options Octoboard passes (`--dangerously-bypass-hook-trust`, `--remote`) ends at start,
+and one without one of its keys starts without it. The releases kept locally (0.166.0, 0.167.0 and 0.167.1) all list
+`--dangerously-bypass-hook-trust` in their help; no release before them was run, so which one introduced it is not
+known and the option has no floor. What a reduced launch leaves out after each kind of exit is in "When Codex exits as
+it starts" in `docs/product/per-agent-launch-specifics.md`.
+
+**Codex reports its status through OSC 7501 by itself** (0.167.1, as on 0.166.0 under Windows): with no support query
+answered it wrote `ESC]7501;state=idle:app=codex ESC\` once its composer was up and `state=working` when a turn started
+in a plain launch, and the `idle` report through a private server too (`done` was seen on 0.166.0). A launch without
+Octoboard's hooks takes its status from these reports.
+
 ## Grok Build
 
 **Permission modes** (1.0.77). The [official permission modes](https://docs.x.ai/build/features/permissions) are Ask,
@@ -1374,6 +1458,40 @@ did not connect to a running one; the quota reading runs `grok agent --no-leader
 `[cli] use_leader = true` in the scratch home's `requirements.toml` did not turn leader mode on at all, so it could not
 be tested.
 
+### What Grok does with an option it does not take
+
+Measured on 2026-11-26 on 1.0.92 (`b06756fd6256`), and for the unknown option on 1.0.89 (`28be5bb1bf65`) too, in a
+120×40 PTY from an empty working directory with an empty `HOME` and `GROK_HOME`, no key typed and no prompt sent; the
+captures and their description are in `apps/daemon/testdata/grok-early-exit-captures.md`. Grok parses its command line
+before it draws anything, and **exits with status 2 within a fifth of a second on an option it does not know**, writing
+`error: unexpected argument '<option>' found`, a tip, the usage line and a pointer to `--help`, in colour. It never
+goes on past an unknown option, so every refusal of one is an exit as it starts. The tip can name another option (`grok
+--no-leaderx` gets `a similar argument exists: '--no-leader'`), so only the `error:` line says which was refused. A
+known option given a value it does not take is refused as fast with another line, `error: invalid value '<value>' for
+'<option> <VALUE>'` and the possible values (for `--permission-mode` on 1.0.92: `default`, `acceptEdits`, `auto`,
+`dontAsk`, `bypassPermissions`, `plan`). An unreadable `config.toml` ends it with status 1 in 0.3 s, `Error: Failed to
+load config: <path> cannot be read or parsed: …`, an early exit that refuses no option. A resume of an id the home does
+not hold is no early exit: it printed `Session "<id>" not found locally, restoring conversation from remote...` and was
+still running 8 s later, signed out.
+
+On both versions `--no-leader --version` printed the version and exited 0, as on 1.0.41, 1.0.67 and 1.0.70 (above), so
+no measured release lacks `--no-leader` and none is known to have introduced it: it gets no version floor. Octoboard
+passes it on every launch, and after a launch that exited at start on a refusal line naming exactly `--no-leader` it
+plans the same launch without it (`adapter/grok/refusal.rs`, `reduced_plan`), telling the user with the standing
+`provider.grok.leader_not_overridden`; any other early exit, a refusal of another option included, goes to the bare
+launch. 1.0.92 checked neither the shape of `--session-id`'s value (`not-a-uuid`) nor `--reasoning-effort`'s value
+(`octoboard`) while parsing: `--version` after either still printed the version.
+
+Grok's draft stash likewise gets no floor: it was measured on 1.0.70 ("Claude Code and Grok Build can stash their own
+editor state" below), and no release is known to lack it, so every launch may use it, the swap stopping where Ctrl-S
+draws no `Stashed` in the composer's top border.
+
+**When the first hook comes.** `SessionStart` arrives as Grok starts, 0.5–1.0 s after the launch for a fresh
+conversation and a resume alike, before anything is written into it ("Hooks that never come, and screens after an
+error" above, 1.0.67), and every enhanced and reduced launch carries Octoboard's hooks, so a Grok launch's first hook is
+due at its start (`FirstHook::AtStart`). It comes only once the folder-trust confirmation is accepted, so a person who
+leaves that confirmation up past the hook bound sees the session read as one without hooks until it is answered.
+
 ### Grok scans Claude Code's configuration by default
 
 The `[compat.claude]` table of Grok's `config.toml` has five boolean cells, `skills`, `rules` (which covers
@@ -1656,9 +1774,10 @@ recorded no prompt or secret read. The fixture verified the reader independently
   with no server of the file and said so only in its log (`Failed to load MCP config: … failed to parse JSON config`).
   `hooks.json`: a byte order mark was read; a comment of either kind, a trailing comma or a `#` comment made the
   session load no hook of the file (`failed to parse hooks.json`, `loaded 0 named hooks`) and run on. Octoboard reads
-  each file with exactly those options and refuses a launch on a file the session would not read
-  (`provider.antigravity.user_config_unusable`), since the session would otherwise run without the user's servers or
-  hooks and say nothing.
+  each file with exactly those options, and a file the session would not read fails the plan
+  (`provider.antigravity.user_config_unusable`), since a launch of Octoboard's would otherwise run without the user's
+  servers or hooks and say nothing: the session starts bare, the CLI reading the file itself, and the code is told as
+  the reason (`launch_enhancements_unavailable`, "Degradations" below).
 - A settings key given with `--settings` stands in place of the user's own of that name, and inside `permissions`
   each list does: with `permissions.allow` given, a command the user's own `allow` list covered asked for
   permission again, while a command of their `deny` list was still refused (`Permission denied for command(…).
@@ -1697,24 +1816,27 @@ recorded no prompt or secret read. The fixture verified the reader independently
   destinations existed (one holding a file, one empty), were not moved, not merged and not linked (`Migration: failed
   to rename … file exists`), and stayed directories of `antigravity-cli/`; `rules/` and `plugins/`, which had no
   destination, were moved. The marker was written all the same (`Migration complete`), and a second run did nothing.
-  So a run of the CLI always ends the state Octoboard refuses, but for a user who has both an earlier layout's
+  So a run of the CLI always ends the state a launch of Octoboard's cannot be planned in, but for a user who has both an earlier layout's
   `mcp_config.json` or `hooks.json` and a newer one in `config/` (which the Antigravity app also writes), that run,
   Octoboard's own listing of the models included, loses the newer file.
 - What Octoboard does with it: a launch whose home has no marker the CLI would find (a link that leads nowhere is
   none) and still holds one of the six entries in `antigravity-cli/`, as anything but the link the migration leaves
-  (one that leads to the entry of that name in `config/`), is refused
-  before the launch's directory is made and before the flag is probed, with a remedy to run `agy` once
+  (one that leads to the entry of that name in `config/`), fails its plan
+  before the launch's directory is made and before the flag is probed
   (`provider.antigravity.earlier_layout_not_migrated`): behind the launch's own marker the session would run without
   the user's earlier rules, hooks and servers and say nothing, and a hook among them may be one that denies. The
-  migration's own links refuse nothing; a link of the user's to anywhere else is an entry not yet moved.
+  session starts bare against the home, where the CLI migrates as a plain terminal run does, so the next launch is
+  Octoboard's again. The migration's own links fail nothing; a link of the user's to anywhere else is an entry not yet
+  moved.
 - Where that home also has `hooks.json` or `mcp_config.json` in both places, the one in `config/` a file that holds
-  something, the refusal is another, checked first (`provider.antigravity.earlier_layout_file_in_both_places`, naming
-  both files): the run the first refusal asks for would replace the file in `config/` with the earlier one, so the
-  user is told to keep the one they want and move or remove the other before making it. An empty file in `config/`,
+  something, the failure is another, checked first (`provider.antigravity.earlier_layout_file_in_both_places`, naming
+  both files): a run of the CLI replaces the file in `config/` with the earlier one, keeping no copy. The session
+  still starts bare, and its CLI's run makes that replacement as a plain terminal run would; the user is told
+  afterwards, through the code, which names both files (decided with the user, 2026-11-26: launch, then tell). An empty file in `config/`,
   which a run of the CLI leaves in a home that had none, is not that case. Directories in both places are not: the
   CLI leaves both as they are.
-- The listing of the models asks the same two questions before it runs `agy models`, and where a launch would be
-  refused it runs nothing and gives the refusal as the reason it has no list. So nothing Octoboard runs by itself
+- The listing of the models asks the same two questions before it runs `agy models`, and where a launch's plan would
+  fail it runs nothing and gives that failure as the reason it has no list. So nothing Octoboard runs by itself
   starts the migration in the user's home: of its runs of `agy` against that home, the version probe (`agy
   --version`) and the probe of the directory flag (`agy --gemini_dir=<launch directory> mcp list`) do not migrate,
   `agy models` is run only in a home that has its marker or nothing to move, and a session runs behind the marker of
@@ -1758,7 +1880,8 @@ recorded no prompt or secret read. The fixture verified the reader independently
   know is passed over and the rest is read. Octoboard's launch does what the CLI does with such a file: it starts the
   session on the defaults, repeating none of the file's allow rules in the launch's settings, and tells the user the
   file is not read (`provider.antigravity.settings_not_read`). Only a settings file that cannot be read at all (a
-  directory in its place, no permission), for which the CLI was not measured, still refuses the launch.
+  directory in its place, no permission), for which the CLI was not measured, still fails the plan (the session starts
+  bare).
 - **The CLI rejects the whole settings file for any key it knows whose value it does not take, and it knows 39**
   (2026-11-23; every JSON field name in the executable asked through `--settings`): `agentMode`,
   `allowNonWorkspaceAccess`, `altScreenMode`, `artifactReviewPolicy`, `clearScrollbackOnResize`, `colorScheme`,
@@ -1842,7 +1965,7 @@ recorded no prompt or secret read. The fixture verified the reader independently
   writes nothing and exits 0 neither allows nor denies: the call still drew its permission prompt (measured
   2026-11-24 against the stand-in, through a `hooks.json` shaped as a launch writes it).
 - **What a launch registers** (`apps/daemon/src/adapter/antigravity/home.rs`): Octoboard's hook as a plain handler
-  for `SessionStart` and `Stop`, and as a `*` entry for `PreToolUse` and `PostToolUse`, each event's command told its
+  for `SessionStart`, `PreInvocation` and `Stop`, and as a `*` entry for `PreToolUse` and `PostToolUse`, each event's command told its
   name; the cross-project guard, where the launch has one, as an entry of its own after it in `PreToolUse`'s list,
   for `write_file|edit_file`. Octoboard's hook writes nothing on stdout. Those are the events the provider reads (the
   conversation's id and the turn's reply, the background work, the pending interactions), which a test holds the
@@ -2110,8 +2233,8 @@ the version `agy --version` printed.
   (`find -newer` a file made before the run); in its own directory it left what a first start leaves
   (`antigravity-cli/` with its database, log and cache, `config/config.json`, `mcp_config.json`, `projects/`).
   Octoboard lists the models this way: the directory is made under its own run directory, private to the user,
-  given its marker, and removed after the run however it ended. The earlier-layout refusals are still asked first,
-  so a home a launch would be refused for lists nothing and says why.
+  given its marker, and removed after the run however it ended. The earlier-layout checks are still asked first, so a
+  home whose launch would start bare lists nothing and says why.
 - **Trust given by the launch's settings.** With `trustedWorkspaces` naming the working directory in the file
   given with `--settings`, a launch in a home that had never trusted the folder showed no trust screen, ran a turn,
   and left the home with no `settings.json` at all: nothing was recorded.
@@ -2340,6 +2463,43 @@ Measured on 1.5.14 on 2026-11-22 with the user's own sign-in, a personal Google 
   the log, which holds no quota figure; and the files under the directory. The status line can show quota too (a
   custom `statusLine` command is given a JSON payload with quota buckets, by the release notes), but only inside a
   running TUI; not measured.
+
+### Degradations (terminal first)
+
+What a launch does when Octoboard's additions cannot be given (`docs/plans/terminal-first-degradation.md`, milestone
+10), with the runs that establish it (1.5.14, macOS, 2026-11-26; captures in `apps/daemon/testdata/`, described in
+`antigravity-captures.md`, "A launch that exits as it starts").
+
+- **The plan fails, the session starts bare.** The directory flag not taken (the probe stays a probe, kept per binary
+  and version), a file of the user's that cannot be used, a configuration in an earlier layout, a file in both layouts
+  and a settings file that cannot be read at all fail `plan`; the session starts with the bare plan (`--conversation
+  <id>` for a resume, `--model`, the task as the first message) against the user's own home, and
+  `launch_enhancements_unavailable` gives the provider's code as its reason. Only an account with a directory of its
+  own is refused (`launch_refusal`), since the CLI has one keychain login, which a plain terminal shares. No version is
+  a condition of anything: 1.5.14 appears only in the wording of the directory flag's code.
+- **An option the CLI does not take** ends an interactive launch at once, before it draws anything, with status 2,
+  `flags provided but not defined: -<flag>` and the usage text (`agy --bogus-option`, 0.7 s). The early exit goes to
+  the bare plan: the reduced plan has no option to leave out, since the one option a release could drop that the bare
+  plan lacks, `--gemini_dir`, is probed before the plan.
+- **A setting `--settings` refuses** ends an interactive launch the same way, with status 1, as fast (0.15 s) and
+  before it draws anything: `Error: --settings: unknown setting "<key>"` for a key it does not know, `Error:
+  --settings: invalid value for setting "<key>": …` for a value it does not take, the key quoted as a JSON text. Only
+  top-level keys are checked: an unknown key inside `permissions` was taken and the launch went on. So the reduced
+  plan (`AntigravityProvider::reduced_plan`) reads either line in the early exit and plans again without the key it
+  names, where that key is one of the launch's own (`permissions`, `showFeedbackSurvey`, `title`, and
+  `trustedWorkspaces` for a console session); the user's own setting of that name then stands. The launch tells the
+  user which key with the standing `provider.antigravity.launch_setting_not_taken` (`setting`). A key the launch did
+  not give, or any other output, gives no reduced plan, and the launch goes bare. The near-miss: a `--settings` file
+  that is not there ends the launch as fast with status 1 too, naming no setting (`Error: reading --settings file:
+  open <path>: no such file or directory`).
+- **The first hook comes with the first turn** (`first_hook_due`: `WithFirstTurn`, for the enhanced and the reduced
+  plan alike): nothing fires at launch, `SessionStart` comes as a new conversation's first turn starts, `PreInvocation`
+  at each model request of any turn, `Stop` as any turn ends by itself, a tool call's events in between. A new conversation's id is learned only from those hooks, so a
+  launch whose hooks are absent has none (`conversation_id_unknown`, generic). A resumed conversation fires no
+  `SessionStart`, so the launch registers `PreInvocation` too (by decision): it fires at each model request, the first
+  one of a resumed conversation's first turn included, before any tool call and whether or not the turn is cancelled,
+  so a first turn of a resume no longer reads as hooks absent for want of a `SessionStart`. The cost is one more hook
+  run per model request; nothing reads `invocationNum` yet.
 
 ### Not measured
 
@@ -3011,7 +3171,10 @@ the GitHub CLI's token, a scratch `COPILOT_HOME` and `COPILOT_CACHE_HOME`, no pr
 adds `stashed ·` to the footer, right before the model's name (`… tab next tab   stashed · Copilot Fusion`), kept at
 80 columns where the footer's other items are cut short; Ctrl-S at the empty composer puts the draft back and the item
 goes. `copilot help config` names no setting that rebinds the key; the composer's `editorMode` `vim` was not measured.
-Octoboard uses the stash from 1.0.114 on, reading the footer's `stashed` item under the composer.
+Octoboard uses the stash from 1.0.60 on, the release whose changelog entry reads "Repurpose ctrl+s to stash and pop
+the current prompt (Claude Code parity); the slash-command picker is still available by typing /" (before it, Ctrl-S
+opened that picker), and where the version cannot be read, reading the footer's `stashed` item under the composer. The
+earlier floor of 1.0.114 was only the first release measured.
 
 **Image messages** (2026-11-23, at an idle composer; against the stand-in). A bracketed paste of an image file's path
 alone is attached: the composer shows `[image: <file name>]` in its place, a second image's placeholder right after
@@ -3110,6 +3273,25 @@ platform package's program. A copy of the unpacked package under a higher versio
 (`pkg/darwin-arm64/1.0.200/`) did not change what ran (`status.get` answered 1.0.114). Octoboard reads the version
 from the platform package beside the launcher, else from `@github/copilot`, never by running the CLI.
 
+**Exits at start** (2026-11-26, 1.0.114, macOS, a pseudo-terminal of 40 by 120 in an empty working directory, an empty
+scratch `COPILOT_HOME`, no sign-in, no prompt sent; captures in `apps/daemon/testdata/copilot-captures.md`, "Exits at
+start").
+
+- **An option it does not know ends it before it draws anything.** `copilot --octoboard-unknown-option` (and the same
+  with `=1`) wrote `error: unexpected argument '--octoboard-unknown-option' found`, `Usage: copilot [OPTIONS]
+  [COMMAND]` and `For more information, try '--help'.`, then the sequences it writes on any exit: the alternate screen
+  switched on and straight off in one write, mouse reporting, bracketed paste and focus reporting off, the cursor shown.
+  It set no title, made no status report and ran no hook, and exited with status 1 within 0.6 s. The message names the
+  option but says nothing of when it was added, so Octoboard gives Copilot no reduced launch: an enhanced launch that
+  exits this way is started again bare (`docs/plans/terminal-first-degradation.md`, D6, D7).
+- **The near miss**, a fast exit that refuses no option: `--resume=<a uuid of no session>` drew a `Resuming session`
+  spinner for about 7 s (the cursor hidden, each frame redrawn in place, no alternate screen), then wrote `Error: No
+  session, task, or name matched '<id>'.` with the ways to resume or start a session, the same leaving sequences, and
+  status 1. The bare launch passes the same `--resume=`, so it exits the same way and the session ends with that
+  message on screen.
+- **When the first hook is due**: with the first prompt (see "Hooks" above), so Octoboard expects Copilot's first hook
+  with the session's first turn (`FirstHook::WithFirstTurn`), for a new conversation and a resume alike.
+
 **Not measured**: which login a home signed in to two GitHub accounts uses, whether configuration directories
 with different logins stay isolated, and carrying a conversation between those logins. These need a second GitHub
 account with Copilot. Also unmeasured: what
@@ -3207,6 +3389,32 @@ during workspace initialization and fell back to a standalone terminal.
   status 1 at once.
 - It sets `AGENT=1`, `OPENCODE=1` and `OPENCODE_PID=<its pid>` on its own process as it starts, so every program it
   runs inherits them.
+- **An option it does not know** (measured 2026-11-26 on 1.19.6, in a scratch home in a PTY; the bytes are
+  `apps/daemon/testdata/opencode_unknown_option_120x40_1.19.6.bin`). `opencode --octoboard-unknown-option` exits with
+  status 1 after 0.21 s, before drawing anything, having printed its logo and usage. The output is byte for byte what
+  `opencode --help` prints, which exits 0 (the near miss beside it): no line names the option or says it was refused.
+  Without a terminal the usage goes to standard error, with the same status. An option missing only its value
+  (`--session` alone) is taken, and the TUI starts. So an enhanced launch a release refuses an option of exits as it
+  starts and is started again bare; OpenCode gives no reduced plan, since its output names nothing to leave out.
+- **A plugin that throws while loading** (the same day, on 1.19.6; OpenCode's logs are
+  `apps/daemon/testdata/opencode_plugin_throws_*_1.19.6.txt`). A plugin whose exported function throws is logged
+  (`level=ERROR … message="failed to load plugin" path=… error=…`) and skipped; one whose module throws as it is
+  imported is skipped and not logged. Either way the TUI starts and draws as usual, shows nothing about it, and the
+  other plugins load and see events. Octoboard's plugin entry points (`plugin.js`, `plugin-v2.js`, `tui.mjs`,
+  `tui-v2.js`) are total, so a changed plugin interface turns them off the same way on any release; the session then
+  gets no events, and the launch is read as one without hooks once its first turn has come without one (its first
+  hook is due with the first prompt, since the plugin forwards nothing as OpenCode starts). Not measured on 2.x: the
+  2.x binaries are not installed on the measuring machine.
+- **The generation floor.** The major version picks the launch, server and record generation, a floor at 2.0.0
+  (`version.rs`, `SECOND_GENERATION`): 1.19.6, the last release of the `opencode-ai` package, offers
+  `/update to upgrade to OpenCode 2.0` on its start screen, OpenCode 2 is published from 2.0.0 on as `@opencode/cli`
+  (the registry lists 2.0.0), and every 2.x release run (2.3.2, 2.4.0, 2.4.1) has the second generation's formats.
+  A version that cannot be read is launched as the second generation. The bare launch passes `--model` only for the
+  first generation, whose TUI takes it (1.19.6); the second takes its model from the inline configuration, which a
+  bare launch does not carry.
+- **When the private server does not start.** The launch goes on with the terminal alone, on the plan's own arguments
+  (`--standalone` on 2.x), and messages go through the terminal (`session/term`'s fallback for a private server that
+  fails to start).
 
 ### Configuration, and how Octoboard injects
 
@@ -3910,7 +4118,14 @@ layouts and uses the package of the detected install for its registry check and 
   start. The CLI can migrate legacy terminal settings into `cli.json`. Octoboard checks for pending migrations
   before launching 2.x or starting a 2.x background command. The credential check reads the completed migration
   marker, without opening a writable SQLite connection or reading a credential. If a migration is pending, the
-  user starts their OpenCode 2 directly and closes it before retrying.
+  launch is bare (`provider.opencode.migration_required` as the reason of `launch_enhancements_unavailable`):
+  OpenCode runs as in a plain terminal and migrates as it starts, and the next launch has Octoboard's additions.
+- **Resume check.** Before a second-generation resume Octoboard asks `api --standalone GET /api/session/<id>`. Only
+  OpenCode's own answer that the session is not there (`SessionNotFoundError` or `Session not found` in its output)
+  refuses the launch (`conversation_unresumable`), since `--session` with an id 2.x does not have starts a new
+  session under it. No database where it is looked for, a pending migration (before which no OpenCode command is
+  run), a timeout, busy readers or an unreadable answer resume anyway with the standing
+  `conversation_record_not_found` on a launch with Octoboard's additions.
 
 In the macOS development-daemon smoke run on 2.4.1, a stand-in turn reported 110 context tokens. Both entries were
 readable from the archive. Resume kept the Octoboard and native conversation IDs and accepted another message.
@@ -4019,9 +4234,10 @@ opened `/etc/qwen-code/settings.json` and completed its turn, traced with `strac
   and `/* */` comments and a byte order mark are allowed, and Qwen Code keeps the comments of a file it rewrites. A
   file that is not a JSON object after that, or cannot be read, is recorded as a settings error and reported, not
   passed over. Octoboard reads the files the same way, and **a system settings file that is there and cannot be used
-  refuses the launch** (`provider.qwen.system_settings_unusable`): written without it, the launch's file would drop
-  whatever an administrator set there (`permissions.deny`, the MCP servers allowed, the sandbox) and nothing would
-  say so.
+  makes the enhanced launch unavailable** (`provider.qwen.system_settings_unusable`): written without it, the
+  launch's file would drop whatever an administrator set there (`permissions.deny`, the MCP servers allowed, the
+  sandbox) and nothing would say so. The session starts bare instead, with no settings variable of Octoboard's, so
+  Qwen Code reads and reports the file itself (see "When a launch cannot take Octoboard's additions").
 - The system defaults file, the lowest layer, is `system-defaults.json` **beside the system settings file**, unless
   `QWEN_CODE_SYSTEM_DEFAULTS_PATH` names another (read from the code). Naming a system settings file elsewhere moves
   where it is looked for, so a launch also sets that variable to the file Qwen Code would have read.
@@ -4610,6 +4826,35 @@ model was reached):
   `qwen-subscription` and its session is signed in). What `/usage` shows a subscriber, and where it gets it, was not
   found in the code by searching and not run: it needs a subscription.
 
+### When a launch cannot take Octoboard's additions
+
+Measured on **0.28.3** on macOS on 2026-11-26, in a 120x40 PTY with a scratch `HOME` and working directory,
+`QWEN_CODE_NO_RELAUNCH=1` and no account set up, starting `qwen` with one option and nothing else; nothing was sent
+to a model. The captures are `apps/daemon/testdata/qwen_early_exit_*_0.28.3.bin` (`qwen-captures.md`).
+
+- **An option it does not know ends it before it draws anything**: `--octoboard-unknown-flag` printed
+  `Unknown arguments: octoboard-unknown-flag, octoboardUnknownFlag` (the option's kebab and camel forms), then the
+  whole usage text, and exited with status 1 after 0.7 s. A value an option does not take does the same:
+  `--approval-mode bogus` printed `Invalid values:` and `  Argument: approval-mode, Given: "bogus", Choices: …`,
+  then the usage text, status 1 after 0.8 s. So a release that drops one of the launch's options (`--session-id`,
+  `--mcp-config`, `--append-system-prompt`, `--approval-mode`) is an early exit, and the daemon starts the session
+  again one tier down.
+- **The refusal line is first and the usage text after it is long**: 17 197 bytes in all at 120 columns. The line is
+  within the first 2 KiB the daemon keeps of an early exit (beside its last 4 KiB), so it could be read; Qwen Code
+  gives no reduced plan all the same, by choice, since no release is known to drop one of the launch's options: an
+  early exit goes straight to the bare launch (`--resume`, `--model`, `--prompt-interactive=<task>`), which tells
+  the user with `launch_retried_plain`.
+- The near-miss, a fast exit that is no option refusal: `--resume` with a UUID no record has printed one line,
+  ``No saved session found with ID <id>. Run `qwen --resume` without an ID to choose from existing sessions.``, and
+  exited with status 1 after 1.3 s, with no usage text.
+- **The bare launch** names no settings file, MCP configuration, role text or approval mode: a system settings file
+  Octoboard could not carry is then read by Qwen Code itself, as in a plain terminal. On Windows, a `node.exe` found
+  neither beside the npm shim nor on the shell's `PATH` starts the session bare through the shim (read from the
+  launch code; the shim finds Node its own way, and only the multiline role text it cannot carry is lost).
+- **When its first hook is due** (`AgentProvider::first_hook_due`): with its first turn. No hook is registered for
+  the start, `SessionStart` running before the folder-trust dialog is answered ("Hook events" above), so the first
+  is the first turn's `UserPromptSubmit`. A launch found with its hooks switched off expects none.
+
 ### Not measured
 
 Qwen subscription sign-in and quota need a Qwen subscription or Coding Plan account. The
@@ -4733,7 +4978,14 @@ start-up banner. An ES module with a default export loads from a `.js` file. Oct
 "Prompts, the cross-project guard, images and slash commands" describes. A factory
 that throws while Pi loads the extension ends Pi (`Failed to load extension`), and the action methods (`getAllTools`,
 `getActiveTools`) throw until the extension is bound, so the extension catches everything and reads nothing of Pi's
-while loading. Pi runs the factory again for the session `/new` opens, after `session_shutdown` for the one before
+while loading. Measured again on 1.5.2 on 2026-11-26 (`apps/daemon/testdata/pi_extension_throws_1.5.2.bin`): a default
+export that throws makes Pi print `Error: Failed to load extension "<path>": Failed to load extension: <message>` and
+`Hint: Start without extensions using "pi -ne".` and exit with status 1 within 0.3 seconds, before it switches to the
+alternate screen or draws anything; a path that does not exist ends it the same way (`Extension path does not exist`).
+So the extension's entry point is total: whatever it cannot set up, a Pi release with another extension interface
+included, leaves Octoboard's additions off and Pi running, and every handler it subscribes answers nothing where it
+would throw. With no `session_start` forwarded, the daemon reads the launch as one without hooks once the bound runs
+out (`hooks_not_received`); Octoboard expects that first hook as Pi starts (`AgentProvider::first_hook_due`). Pi runs the factory again for the session `/new` opens, after `session_shutdown` for the one before
 (measured); the bundled `extensions.md` says the same of `/resume`, `/fork`, `/clone` and `/reload` (Pi "emits
 `session_shutdown` for the old extension instance, reloads and rebinds extensions for the new session, then emits
 `session_start`"), read from the doc and not measured. So what the extension keeps in memory lasts one session, and
@@ -4830,6 +5082,13 @@ nothing a `session_shutdown` handler ended has to be started again by the same i
   task that is a subcommand's name needs no shaping.
 - `PI_CODING_AGENT_DIR` names the configuration directory itself (default `~/.pi/agent`): `auth.json`,
   `models.json`, `settings.json`, `mcp.json`, `trust.json`, `sessions/`.
+- An option Pi does not take ends it as it starts (1.5.2, 2026-11-26, in a 100x30 PTY with a scratch home,
+  `apps/daemon/testdata/pi_unknown_option_1.5.2.bin`): `pi --no-such-option`, with or without a value after it,
+  printed `Error: Unknown option: --no-such-option` and exited with status 1 within 0.2 seconds, before switching to
+  the alternate screen or drawing anything. A launch whose options a later release drops is therefore an early exit,
+  started again bare; Pi has no reduced tier, as the bare launch drops only what the extension and the role file
+  add. The near-miss beside it, `pi_session_not_found_1.5.2.bin`, is a resume of an id nothing matches: `No session
+  found matching '<id>'`, status 1, also before anything is drawn.
 
 **Instruction files and compatibility.** Stand-in requests from Pi 1.5.2 included `CLAUDE.md` when it was the
 directory's only context file and `AGENTS.md` when both were present. With project resources trusted, a skill from
@@ -4998,6 +5257,30 @@ configured records directories can be searched completely, the missing file mean
 Pi also advertises `PI_CODING_AGENT_SESSION_DIR` and `--session-dir` for nonstandard record locations. Octoboard
 also searches the directory named by the environment variable, where Pi puts its JSONL files directly.
 Relative directories are resolved from the launch's working directory.
+
+### A record kept in an earlier records directory
+
+Measured on Pi 1.5.2 on macOS on 2026-11-26, in a 100x30 PTY with a scratch `HOME` and `PI_CODING_AGENT_DIR` and
+no credential, nothing prompted: a record `<timestamp>_<id>.jsonl` of the working directory written into a scratch
+directory `kept`, and each launch ended after six seconds.
+
+| Launch | Result |
+|---|---|
+| `pi --session <id>`, `PI_CODING_AGENT_SESSION_DIR` unset | `No session found matching '<id>'`, exit 1 |
+| `PI_CODING_AGENT_SESSION_DIR=kept pi --session <id>` | the conversation opened |
+| `pi --session-dir kept --session <id>` | the conversation opened |
+| `PI_CODING_AGENT_SESSION_DIR=other pi --session-dir kept --session <id>` | the conversation opened |
+| `pi --session-dir other --session <id>`, the record not in `other` | `No session found matching '<id>'`, exit 1 |
+| `pi --session kept/<timestamp>_<id>.jsonl` | the conversation opened |
+
+So `--session <id>` looks for a record only in the directory the environment selects (the account's `sessions/`
+where none is set), `--session-dir` makes it look in the directory named instead, whatever the variable says, and a
+directory that does not hold the record finds nothing. Opening appended a `thinking_level_change` entry to the kept
+file, so the resumed conversation goes on in it. A session whose earlier launch kept its records in such a directory
+(`Session::record_roots`) is therefore resumed, by the enhanced and the bare plan alike, with `--session-dir <dir>`
+before `--session <id>`, `<dir>` being the first kept directory that holds the record among its own entries; where
+none does, the option is left out and Pi looks where a plain terminal's run would. Finding it is a listing of each
+kept directory, and one that cannot be listed is passed over.
 
 ### Sharing configuration and MCP inventory
 
@@ -7324,7 +7607,8 @@ TUI waking up; an interrupted thread can also retain queued messages without sta
 queueing nor a missing immediate turn justifies sending the message again.
 
 A private app server supports the launch overrides and independent delivery together; Octoboard runs one for each Codex
-0.166.0 or later session. Start the same binary as `codex -c <overrides> app-server --listen unix://<private-socket>`,
+session launched with its additions, whatever the version: 0.166.0 is the first release measured with it, and no release
+is known to have introduced it. Start the same binary as `codex -c <overrides> app-server --listen unix://<private-socket>`,
 then its TUI with `codex --remote unix://<private-socket>` and the original launch flags and `-c` overrides. The Unix
 socket carries WebSocket frames with handshake URI `ws://localhost/rpc`. An explicit `--remote` takes precedence over
 the `-c` rule, so the same launch overrides can be supplied to both processes. The TUI needs its own copy for local

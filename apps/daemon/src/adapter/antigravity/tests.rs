@@ -462,11 +462,11 @@ fn an_unusable_user_file_refuses_before_the_probe() {
     assert_eq!(runs_of(&runs), 0, "the probe ran");
 }
 
-/// What the launch's directory found to tell the user is the plan's notice: the settings file the
-/// CLI does not read, with which the launch still starts, its settings holding Octoboard's rule
-/// alone. A launch with nothing to tell has none, and no further notice either.
+/// The settings file the CLI does not read, with which the launch still starts, its settings
+/// holding Octoboard's rule alone, is a further notice of the launch, so that the plan's own is
+/// left for what a reduced plan leaves out. A launch with nothing to tell has no notice at all.
 #[test]
-fn the_plan_carries_the_notice_of_a_settings_file_the_cli_does_not_read() {
+fn a_settings_file_the_cli_does_not_read_is_a_further_notice() {
     let fixture = isolated();
     let plan = AntigravityProvider.plan(&fixture.spec()).expect("plan");
     assert!(plan.notice.is_none());
@@ -484,7 +484,11 @@ fn the_plan_carries_the_notice_of_a_settings_file_the_cli_does_not_read() {
     )
     .expect("settings");
     let plan = AntigravityProvider.plan(&fixture.spec()).expect("plan");
-    let notice = plan.notice.as_ref().expect("a notice");
+    assert!(plan.notice.is_none());
+    let notices = AntigravityProvider.further_launch_notices(&fixture.spec(), &plan);
+    let [notice] = notices.as_slice() else {
+        panic!("one notice: {notices:?}");
+    };
     assert_eq!(
         notice.code,
         Code::of_provider(crate::providers::antigravity::SETTINGS_NOT_READ)
@@ -573,8 +577,8 @@ fn every_launch_waits_for_the_tool_listing_up_to_the_bound() {
     assert!(TOOL_LISTING_WAIT <= std::time::Duration::from_secs(30));
 }
 
-/// An account with a directory of its own is refused before the probe: the CLI has the default
-/// account only.
+/// An account with a directory of its own is refused by the launch refusal, which runs no probe:
+/// the CLI has the default account only, whatever is added to it.
 #[test]
 fn an_account_with_a_directory_of_its_own_refuses_before_the_probe() {
     let mut fixture = isolated();
@@ -583,9 +587,8 @@ fn an_account_with_a_directory_of_its_own_refuses_before_the_probe() {
     std::fs::create_dir_all(&account).expect("account directory");
     fixture.config_dir = Some(account);
     let err = AntigravityProvider
-        .plan(&fixture.spec())
-        .err()
-        .expect("refused");
+        .launch_refusal(&fixture.spec())
+        .expect_err("refused");
     let coded = err.downcast_ref::<CodedError>().expect("coded");
     assert_eq!(
         coded.code,
@@ -662,21 +665,24 @@ fn the_users_allow_rules_come_first_and_octoboards_rule_once_after_them() {
 
     // The same from the settings alone.
     assert_eq!(
-        serde_json::from_str::<Value>(&AntigravityProvider::launch_settings(
-            &[json!("a")],
-            json!("t"),
-            None,
-        ))
+        serde_json::from_str::<Value>(
+            &AntigravityProvider::launch_settings(&[json!("a")], json!("t"), None, None,)
+                .expect("settings")
+        )
         .expect("JSON"),
         json!({ "permissions": { "allow": ["a", ours] }, "showFeedbackSurvey": false, "title": "t" })
     );
     // The title command goes in under its key.
     assert_eq!(
-        serde_json::from_str::<Value>(&AntigravityProvider::launch_settings(
-            &[],
-            json!({ "type": "command", "command": "x" }),
-            None,
-        ))
+        serde_json::from_str::<Value>(
+            &AntigravityProvider::launch_settings(
+                &[],
+                json!({ "type": "command", "command": "x" }),
+                None,
+                None,
+            )
+            .expect("settings")
+        )
         .expect("JSON")["title"],
         json!({ "type": "command", "command": "x" })
     );
@@ -811,4 +817,190 @@ fn each_platform_reads_the_updaters_manifest_of_its_own() {
     assert_eq!(manifest.urls.len(), 6);
     assert_eq!(manifest.url_for("freebsd", "x86_64"), None);
     assert_eq!(manifest.url_for("linux", "riscv64"), None);
+}
+
+/// Antigravity CLI's bare launch: `--conversation` and `--model`, no launch directory or settings,
+/// and a new conversation's task as the first message.
+#[test]
+fn its_bare_plan_names_the_conversation_the_model_and_the_task_only() {
+    let mut fixture = crate::adapter::tests::spec_fixture();
+    fixture.model = Some("model-a".to_string());
+    let bare = |resume: Option<&str>, task: Option<&str>| {
+        let mut spec = fixture.spec();
+        spec.resume_agent_session_id = resume;
+        spec.task = task;
+        AntigravityProvider.bare_plan(&spec)
+    };
+    assert_eq!(
+        bare(Some("c-1"), None).args,
+        ["--conversation", "c-1", "--model", "model-a"]
+    );
+    let fresh = bare(None, Some("do it"));
+    assert_eq!(fresh.args, ["--model", "model-a"]);
+    assert_eq!(fresh.first_message.as_deref(), Some("do it"));
+}
+
+/// A home whose earlier layout the CLI has not migrated no longer refuses the launch: the CLI
+/// starts bare, free to migrate as it would in a plain terminal, and the user is told why.
+#[test]
+fn an_earlier_layout_not_yet_migrated_starts_bare() {
+    let fixture = isolated();
+    let data = user_gemini(&fixture).join("antigravity-cli");
+    std::fs::create_dir_all(data.join("skills")).expect("an earlier layout's directory");
+    let mut spec = fixture.spec();
+    let launch = crate::session::term::plan_launch(
+        AgentId::ANTIGRAVITY,
+        &AntigravityProvider,
+        &mut spec,
+        crate::adapter::LaunchTier::Enhanced,
+        None,
+        Ok(()),
+        false,
+    )
+    .expect("not refused");
+    assert_eq!(launch.tier, crate::adapter::LaunchTier::Bare);
+    assert_eq!(
+        launch.notice.expect("told").params["reason_code"],
+        Code::of_provider(crate::providers::antigravity::EARLIER_LAYOUT_NOT_MIGRATED).as_str()
+    );
+    assert!(!std::path::Path::new(&launch_dir(&fixture)).exists());
+}
+
+/// What a launch that exited as it started is handed (`EarlyExit`): its terminal output as plain
+/// text, as the daemon reads it from the end of the output, and no status, which the terminal
+/// backend does not tell.
+fn early_exit(capture: &[u8]) -> crate::adapter::EarlyExit {
+    crate::adapter::EarlyExit {
+        output: crate::terminal::plain_text::strip_escapes(&String::from_utf8_lossy(capture))
+            .trim()
+            .to_string(),
+        status: None,
+    }
+}
+
+// Antigravity CLI 1.5.14, `testdata/antigravity-captures.md`, "A launch that exits as it starts".
+const EXIT_UNKNOWN_SETTING: &[u8] =
+    include_bytes!("../../../testdata/antigravity_exit_settings_unknown_key.bin");
+const EXIT_INVALID_VALUE: &[u8] =
+    include_bytes!("../../../testdata/antigravity_exit_settings_invalid_value.bin");
+const EXIT_SETTINGS_FILE_MISSING: &[u8] =
+    include_bytes!("../../../testdata/antigravity_exit_settings_file_missing.bin");
+const EXIT_UNKNOWN_OPTION: &[u8] =
+    include_bytes!("../../../testdata/antigravity_exit_unknown_option.bin");
+
+/// The refusal of `--settings` is read from what the launch wrote, by the key it names; a missing
+/// settings file and an option the CLI does not take, which end a launch as fast, name none.
+#[test]
+fn the_refusal_of_a_setting_is_read_from_the_launchs_output() {
+    use super::home::{settings_refused, SettingsRefused};
+    assert_eq!(
+        settings_refused(&early_exit(EXIT_UNKNOWN_SETTING).output),
+        Some(SettingsRefused::UnknownKey("bogusKey".to_string()))
+    );
+    assert_eq!(
+        settings_refused(&early_exit(EXIT_INVALID_VALUE).output),
+        Some(SettingsRefused::InvalidValue(
+            "showFeedbackSurvey".to_string()
+        ))
+    );
+    for near_miss in [EXIT_SETTINGS_FILE_MISSING, EXIT_UNKNOWN_OPTION] {
+        assert_eq!(settings_refused(&early_exit(near_miss).output), None);
+    }
+}
+
+/// The codes of the launch's further notices.
+fn further_codes(fixture: &SpecFixture, plan: &LaunchPlan) -> Vec<Code> {
+    AntigravityProvider
+        .further_launch_notices(&fixture.spec(), plan)
+        .into_iter()
+        .map(|notice| notice.code)
+        .collect()
+}
+
+/// After a launch that refused one of Octoboard's settings, the reduced plan is the enhanced one
+/// without that setting, and its own notice tells the user which setting the session runs
+/// without, for as long as the launch runs. The enhanced plan tells nothing of the kind.
+#[test]
+fn a_refused_setting_is_left_out_of_the_reduced_plan_and_told() {
+    use crate::providers::antigravity::LAUNCH_SETTING_NOT_TAKEN;
+
+    let fixture = isolated();
+    let enhanced = AntigravityProvider.plan(&fixture.spec()).expect("plan");
+    let enhanced_settings = settings_of(&enhanced);
+    assert!(enhanced.notice.is_none());
+    assert!(
+        !further_codes(&fixture, &enhanced).contains(&Code::of_provider(LAUNCH_SETTING_NOT_TAKEN))
+    );
+
+    let reduced = AntigravityProvider
+        .reduced_plan(&fixture.spec(), &early_exit(EXIT_INVALID_VALUE))
+        .expect("a reduced plan");
+    let mut expected = enhanced_settings.clone();
+    expected
+        .as_object_mut()
+        .expect("an object")
+        .remove("showFeedbackSurvey");
+    assert_eq!(settings_of(&reduced), expected);
+    assert_eq!(reduced.args, enhanced.args);
+    assert_eq!(reduced.env, enhanced.env);
+
+    assert!(further_codes(&fixture, &reduced).is_empty());
+    let notice = reduced.notice.as_ref().expect("the user is told");
+    assert_eq!(notice.code, Code::of_provider(LAUNCH_SETTING_NOT_TAKEN));
+    assert_eq!(notice.params["setting"], "showFeedbackSurvey");
+    assert!(notice.standing);
+}
+
+/// The line names the key it refused whatever the key: one Octoboard does not give (the capture's
+/// own) gives no reduced plan, while the same line naming one it gives (the title command, as a
+/// release that dropped the key would write it) leaves that one out, the others kept.
+#[test]
+fn only_a_setting_octoboard_gives_is_left_out() {
+    let fixture = isolated();
+    assert!(AntigravityProvider
+        .reduced_plan(&fixture.spec(), &early_exit(EXIT_UNKNOWN_SETTING))
+        .is_none());
+
+    let renamed =
+        String::from_utf8_lossy(EXIT_UNKNOWN_SETTING).replace("\"bogusKey\"", "\"title\"");
+    let reduced = AntigravityProvider
+        .reduced_plan(&fixture.spec(), &early_exit(renamed.as_bytes()))
+        .expect("a reduced plan");
+    let settings = settings_of(&reduced);
+    assert!(settings.get("title").is_none(), "{settings}");
+    assert_eq!(settings["showFeedbackSurvey"], json!(false));
+    assert!(settings["permissions"]["allow"].is_array());
+}
+
+/// An early exit that names no setting (a settings file not read, an option the CLI does not
+/// take, nothing written) gives no reduced plan: the launch goes bare.
+#[test]
+fn an_exit_that_names_no_setting_gives_no_reduced_plan() {
+    let fixture = isolated();
+    for near_miss in [
+        EXIT_SETTINGS_FILE_MISSING,
+        EXIT_UNKNOWN_OPTION,
+        b"".as_slice(),
+    ] {
+        assert!(AntigravityProvider
+            .reduced_plan(&fixture.spec(), &early_exit(near_miss))
+            .is_none());
+    }
+}
+
+/// Nothing fires as the CLI starts; its first hook comes with its first turn, for the enhanced
+/// plan and the reduced one alike, which both carry Octoboard's hooks.
+#[test]
+fn the_first_hook_comes_with_the_first_turn() {
+    let fixture = isolated();
+    let enhanced = AntigravityProvider.plan(&fixture.spec()).expect("plan");
+    let reduced = AntigravityProvider
+        .reduced_plan(&fixture.spec(), &early_exit(EXIT_INVALID_VALUE))
+        .expect("a reduced plan");
+    for plan in [&enhanced, &reduced] {
+        assert_eq!(
+            AntigravityProvider.first_hook_due(&fixture.spec(), plan),
+            crate::adapter::FirstHook::WithFirstTurn
+        );
+    }
 }

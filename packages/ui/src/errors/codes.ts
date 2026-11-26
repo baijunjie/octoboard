@@ -1,6 +1,6 @@
 import { EXAMPLE_CONVERSATION_ID } from "../agents/conversationId";
 import { CodedError, type MessageParams } from "./codedError";
-import { accountTrashFailedCause, invalidFileMaskCause, invalidSearchPatternCause, pathLinkRefusedCause, projectTrashFailedCause, sessionDidNotStopCause } from "./causes";
+import { accountTrashFailedCause, invalidFileMaskCause, invalidSearchPatternCause, pathLinkRefusedCause, projectTrashFailedCause, sessionDidNotStopCause, sessionGitHooksUnavailableCause, shellEnvironmentUnavailableCause } from "./causes";
 import { PROVIDER_CODES } from "../agents/providers";
 import type { ErrorRecovery } from "./errorRecovery";
 import type { PlatformHost } from "../i18n/platformTerms";
@@ -144,7 +144,12 @@ const CORE_CODES = {
   all_projects_already_added: { origin: "daemon", recovery: "existingProject" },
   // A missing `git` is worded on its own: Git is a tool the application needs, not an agent CLI the user chose, and the
   // download page is the way to it.
-  binary_not_found: { origin: "daemon", recovery: "tool", codeParams: ["binary", "pathVar"], uiParams: { pathVar: "PATH", git: "Git" }, variants: { git: { codeParams: ["pathVar"] } }, variantOf: (params) => params.binary === "git" ? "git" : undefined },
+  // On the fallback environment of a launch whose login-shell snapshot failed, the snapshot's failure is nested as its
+  // reason, worded by the cause of the fallback, and remedied from that cause (`shellFallback` in `errorRecovery.ts`);
+  // `failure` keeps the remedy its own, as a plain one has no `reason_code`.
+  // Worded as the failure another code nests (a failed launch), its `reason_code` is its own and the snapshot failure is
+  // its `inner_reason_code` (`nestedFailureParams`).
+  binary_not_found: { origin: "daemon", recovery: "tool", nested: "failure", codeParams: ["binary", "pathVar"], uiParams: { pathVar: "PATH", git: "Git" }, variants: { git: { codeParams: ["pathVar"] }, fallback: { codeParams: ["binary", "pathVar"] }, earlier_capture: { codeParams: ["binary", "pathVar"] }, daemon: { codeParams: ["binary", "pathVar"] } }, variantOf: (params) => (params.reason_code === "binary_not_found" ? params.inner_reason_code : params.reason_code) ? shellEnvironmentUnavailableCause(params.cause) ?? "fallback" : params.binary === "git" ? "git" : undefined },
   clean_filtered: { origin: "daemon", recovery: "scope", codeParams: ["path", "filter"] },
   command_not_found: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, codeParams: ["command"] },
   command_not_recognised: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, codeParams: ["command", "offered"] },
@@ -258,6 +263,17 @@ const CORE_CODES = {
   // Worded from its `cause` and where the query fails (`offset`, shown as the 1-based `position`), never from the regex
   // crate's English `detail`; a cause that names a place arriving without one is the code's own sentence.
   invalid_search_pattern: { origin: "daemon", recovery: "none", variants: { unclosed_group: {}, unopened_group: {}, unclosed_class: {}, invalid_repetition: {}, invalid_escape: {}, unsupported: {}, line_break: {}, other: {} }, variantOf: (params) => { const cause = invalidSearchPatternCause(params.cause); return cause === "line_break" || params.offset !== undefined ? cause : undefined; } },
+  // The notices of a launch that runs without Octoboard's additions (a terminal-first degradation): each is read in a
+  // banner and, in a window that predates it, as a toast, so a step to take is in the sentence and none has a remedy of
+  // its own.
+  launch_enhancements_unavailable: { origin: "daemon", nested: "failureAndRemedy" },
+  launch_retried_plain: { origin: "daemon" },
+  hooks_not_received: { origin: "daemon" },
+  conversation_id_unknown: { origin: "daemon" },
+  conversation_record_not_found: { origin: "daemon" },
+  account_sign_in_unconfirmed: { origin: "daemon", defaultAccountParams: ["account"], nameParams: ["account"] },
+  shell_environment_unavailable: { origin: "daemon", variants: { earlier_capture: {}, daemon: {} }, variantOf: (params) => shellEnvironmentUnavailableCause(params.cause) },
+  session_git_hooks_unavailable: { origin: "daemon", variants: { git_too_old: {}, user_configuration: {} }, variantOf: (params) => { const cause = sessionGitHooksUnavailableCause(params.cause); return cause === "other" ? undefined : cause; } },
   launch_failed: { origin: "daemon", unexpected: "shown as the failure its `reason_code` names", nested: "failureAndRemedy", failureNotice: true, alertTitle: true, nameParams: ["title"], variants: { title: { nameParams: ["title"] } } },
   limit_exceeded: { origin: "daemon", recovery: "limit" },
   login_already_running: { origin: "daemon", recovery: "none" },

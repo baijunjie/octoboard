@@ -441,10 +441,11 @@ it.each([0, FIRST_WRITE_DELAY_MS])("offers the stored model alone and the reason
   press(mark);
   const sentence = document.querySelector("[data-status-mark-popover] p")!;
   expect(sentence.textContent).toBe("claude took too long to list its models.");
-  const agent = sentence.querySelector("[data-inline-reference]")!;
+  // The agent, a product name, is plain text isolated as an element, with no chip.
+  expect(sentence.querySelector("[data-inline-reference]")).toBeNull();
+  const agent = sentence.querySelector("bdi")!;
   expect(agent.textContent).toBe("claude");
   expect(agent.getAttribute("dir")).toBe("auto");
-  expect(agent.querySelector("code")).toBeNull();
   expect(agent.textContent).not.toMatch(/[\u2066-\u2069]/);
   expect(status).toBe(`${isolate("claude")} took too long to list its models.`);
   act(() => void document.querySelector("[data-status-mark-popover]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));

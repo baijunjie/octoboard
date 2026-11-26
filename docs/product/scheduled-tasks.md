@@ -75,7 +75,8 @@ failed run (below) and is never an error alert in a window.
   runs — whether the task names it or inherits it — gives way, while **Automatically select an account** is on, to the
   account a new session that names none would get (see "Automatically select an account" in
   `docs/product/opening-sessions.md`). With the switch off, or when that account is not usable either, the run fails
-  with the account's refusal rather than starting a session that cannot work.
+  with the account's refusal rather than starting a session that cannot work. Unlike a session the user opens from the
+  session dialog, a run is refused an account read as not logged in, since nobody is at its terminal to log in.
 - **A task stored with a prompt that saving now refuses** — nothing but whitespace once its control and invisible
   characters are ignored, saved before that was checked — starts no session: the run fails for the missing prompt, as
   saving such a prompt is refused (see "Saving a task" below).

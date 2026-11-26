@@ -3,7 +3,7 @@ import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
 import type { Translate } from "../i18n/catalog";
 import { currentLanguage, t } from "../i18n/language";
-import type { Event, ClientRequestBody } from "../protocol";
+import type { Event, ClientRequestBody, Session, StandingNotice } from "../protocol";
 import { createContentSearchListeners, createImportProgressListeners, createMemoryListeners, type Daemon, type MemoryChangeEvent, type WindowNotification } from "../store";
 import { broadcastNotification, errorNotification } from "../store/notifications";
 import type { Fixture, NotificationFixture } from "./fixture";
@@ -89,7 +89,15 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
     notificationsRaised = true;
     // Settled even when a fixture throws, so the page reports that error and not a missing subscriber.
     try {
-      for (const fixture of scenario.notifications ?? []) emitNotification(scenarioNotification(fixture));
+      for (const fixture of scenario.notifications ?? []) {
+        // A standing notice is kept on its session's record, as the daemon keeps it, and raises nothing in the window.
+        if (fixture.kind === "broadcast" && fixture.event.type === "session_notice" && fixture.event.standing) {
+          const { session, code, params, message } = fixture.event;
+          store.setState((current) => ({ sessions: withStandingNotice(current.sessions, session, { code, params, message, at: Date.now() }) }));
+          continue;
+        }
+        emitNotification(scenarioNotification(fixture));
+      }
     } finally {
       markNotificationsRaised();
     }
@@ -169,4 +177,15 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
     },
     terminalReconnectDelay: scenario.terminalRetriesImmediate ? () => 0 : undefined,
   };
+}
+
+/** `sessions` with `notice` kept on the record of `session` as the daemon keeps a standing notice: in the order raised,
+ * replacing one of the same code and `detail` param in its place. A session the state does not hold is left alone. */
+function withStandingNotice(sessions: Map<string, Session>, session: string, notice: StandingNotice): Map<string, Session> {
+  const record = sessions.get(session);
+  if (!record) return sessions;
+  const kept = record.standing_notices ?? [];
+  const same = (other: StandingNotice) => other.code === notice.code && other.params.detail === notice.params.detail;
+  const standing_notices = kept.some(same) ? kept.map((other) => (same(other) ? notice : other)) : [...kept, notice];
+  return new Map(sessions).set(session, { ...record, standing_notices });
 }

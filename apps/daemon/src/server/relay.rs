@@ -378,7 +378,8 @@ mod tests {
             "session-1",
             issued.port,
             &key_file,
-        );
+        )
+        .expect("the installed git is given the variables");
         assert!(env.contains(&("OCTOBOARD_DAEMON_PORT".to_string(), port)));
         assert!(env.contains(&(
             "OCTOBOARD_DAEMON_CREDENTIAL_PATH".to_string(),

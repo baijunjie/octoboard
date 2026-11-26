@@ -1,4 +1,8 @@
-//! The private Codex app server's launch plan, and the releases it is enabled for.
+//! The private Codex app server's launch plan. Every launch with Octoboard's additions runs one,
+//! whatever the version: no release is known to have introduced the server or the remote terminal
+//! (0.166.0 is only the first one measured), and a server that does not come up falls back to the
+//! ordinary launch (`crate::session::term::launch`), as a terminal that refuses `--remote` falls
+//! to a reduced launch without it ([`super::reduced`]).
 //!
 //! The server takes every `-c` override of the launch. The terminal attached to it with `--remote`
 //! takes them too, since rendering and startup notices are the client's, except on a resume: a
@@ -12,19 +16,14 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use super::transport::CodexTransport;
-use crate::adapter::{AdoptedLaunch, AgentVersion};
+use crate::adapter::AdoptedLaunch;
 use crate::platform::shell::ResolvedBinary;
 use crate::session::term::{MessageTransport, PrivateServer, StartedServer};
 use crate::terminal::server_host::{FoundServer, ServerHost};
 
-/// The first release whose private server and remote terminal were measured to work as this
-/// launch needs, on macOS and Windows. Later releases are taken to keep working; whatever fails at
-/// the start falls back to the ordinary launch (`crate::session::term::launch`).
-const FIRST_SUPPORTED: AgentVersion = (0, 166, 0);
-
 /// The configuration keys a remote resume refuses on the terminal's command line ("Permission
 /// overrides are not supported when resuming a remote task").
-const PERMISSION_KEYS: [&str; 4] = [
+pub(super) const PERMISSION_KEYS: [&str; 4] = [
     "default_permissions",
     "approval_policy",
     "approvals_reviewer",
@@ -150,11 +149,6 @@ pub(super) fn adopt(launch: AdoptedLaunch<'_>) -> Option<Arc<dyn MessageTranspor
     }
 }
 
-/// Whether a launch of Codex `version` runs with a private server.
-pub(super) fn private_server_supported(version: Option<AgentVersion>) -> bool {
-    version.is_some_and(|version| version >= FIRST_SUPPORTED)
-}
-
 /// The `-c` overrides among `args`, each with its `-c`, read in pairs as Codex reads them.
 fn overrides(args: &[String]) -> Vec<String> {
     let mut kept = Vec::new();
@@ -171,6 +165,12 @@ fn overrides(args: &[String]) -> Vec<String> {
 
 /// `args` without the `-c` overrides of a key in [`PERMISSION_KEYS`].
 fn without_permission_overrides(args: &[String]) -> Vec<String> {
+    without_overrides_of(args, &PERMISSION_KEYS)
+}
+
+/// `args` without the `-c` overrides of a key in `keys`, read in pairs as Codex reads them; every
+/// other argument kept in its place.
+pub(super) fn without_overrides_of(args: &[String], keys: &[&str]) -> Vec<String> {
     let mut kept = Vec::with_capacity(args.len());
     let mut items = args.iter();
     while let Some(arg) = items.next() {
@@ -180,7 +180,7 @@ fn without_permission_overrides(args: &[String]) -> Vec<String> {
                 break;
             };
             let key = value.split('=').next().unwrap_or_default().trim();
-            if !PERMISSION_KEYS.contains(&key) {
+            if !keys.contains(&key) {
                 kept.extend([arg.clone(), value.clone()]);
             }
         } else {
@@ -196,21 +196,6 @@ mod tests {
 
     fn strings(items: &[&str]) -> Vec<String> {
         items.iter().map(|item| item.to_string()).collect()
-    }
-
-    #[test]
-    fn the_private_server_is_enabled_from_the_first_measured_release_on() {
-        for (version, expected) in [
-            (None, false),
-            (Some((0, 163, 0)), false),
-            (Some((0, 165, 9)), false),
-            (Some((0, 166, 0)), true),
-            (Some((0, 166, 1)), true),
-            (Some((0, 167, 0)), true),
-            (Some((1, 0, 0)), true),
-        ] {
-            assert_eq!(private_server_supported(version), expected, "{version:?}");
-        }
     }
 
     #[test]

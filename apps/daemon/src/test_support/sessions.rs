@@ -43,6 +43,7 @@ pub(crate) fn bare_session(id: &str, kind: SessionKind) -> Session {
         screen_inexact: false,
         holder_link: None,
         interaction: None,
+        standing_notices: Vec::new(),
         default_effort: None,
         role: Role::Coordinator,
         context: None,

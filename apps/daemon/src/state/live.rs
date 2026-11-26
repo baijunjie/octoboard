@@ -76,6 +76,17 @@ impl AppState {
             .cloned()
     }
 
+    /// Whether `live` is its session's registered process: the live map holds this very process
+    /// for its id, not another launch of the session, nor none.
+    pub fn is_current(&self, live: &Arc<LiveSession>) -> bool {
+        self.live
+            .read()
+            .expect("live sessions lock poisoned")
+            .sessions
+            .get(&live.id)
+            .is_some_and(|current| Arc::ptr_eq(current, live))
+    }
+
     /// The sessions running or holding a claim, each once, as a change of sharing sees them.
     pub fn running_sessions(&self) -> Result<Vec<Running>> {
         let live = self.live.read().expect("live sessions lock poisoned");
@@ -344,6 +355,9 @@ impl AppState {
     pub(crate) fn after_live_removed(self: &Arc<Self>, id: &str, was_current: bool) {
         if was_current {
             self.publish_account_sharing();
+            // They belong to the launch that ended; a later launch raises its own. Not for a
+            // process another launch already replaced, whose notices are the newer launch's.
+            self.forget_standing_notices(id);
         }
         // A session deleted while its process ran has had its ended launches forgotten already,
         // before this one was added to them.
@@ -351,6 +365,42 @@ impl AppState {
             self.forget_ended_launches(id);
         }
         self.forget_session_bookkeeping(id);
+    }
+
+    /// A hook or a helper call of launch `launch` of session `id` (or of whichever launch is under
+    /// way, for `None`) reached the daemon: the launch's program started
+    /// (`crate::session::startup`). Nothing for a launch that is not the session's process.
+    pub fn note_launch_shown(&self, id: &str, launch: Option<&str>) {
+        if let Some(live) = self
+            .live_session(id)
+            .filter(|live| launch.is_none_or(|launch| live.launch_id == launch))
+        {
+            live.startup.note_shown();
+        }
+    }
+
+    /// Hands the early exit of session `id` to the operation that holds its claim and follows its
+    /// launch (`LiveSession::is_followed_under_claim`), which relaunches one tier down.
+    pub(crate) fn hand_early_exit(
+        &self,
+        id: &str,
+        relaunch: crate::session::relaunch::EarlyExitRelaunch,
+    ) {
+        self.early_exits
+            .lock()
+            .expect("early exits lock poisoned")
+            .insert(id.to_string(), relaunch);
+    }
+
+    /// Takes the early exit handed for session `id` ([`Self::hand_early_exit`]), if there is one.
+    pub(crate) fn take_early_exit(
+        &self,
+        id: &str,
+    ) -> Option<crate::session::relaunch::EarlyExitRelaunch> {
+        self.early_exits
+            .lock()
+            .expect("early exits lock poisoned")
+            .remove(id)
     }
 
     /// Whether a change of sharing has claimed `id` to restart it.

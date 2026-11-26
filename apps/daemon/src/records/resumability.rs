@@ -5,7 +5,7 @@ use std::path::Path;
 
 use crate::adapter::provider;
 use crate::hostfs::lexically_normalise;
-use crate::protocol::{Account, Session};
+use crate::protocol::{notice_code, Account, AgentId, Notice, Session};
 use crate::providers::layout::layout;
 use crate::records::locate::{
     account_roots, index_records_at, plausible_id, walk_records, Hints, Locator, Step,
@@ -32,9 +32,11 @@ pub(crate) fn record_needs_shell_env(session: &Session) -> bool {
 }
 
 /// Whether all known account locations can prove the absence of the native records deleting this
-/// session would remove ([`removable_record_paths`]). Missing ids, unreadable or linked directories
-/// and a provider whose store recognises no record (`RecordStore::recognises_records`) cannot
-/// establish absence.
+/// session would remove ([`removable_record_paths`]). Missing ids, unreadable or linked directories,
+/// a provider whose store recognises no record (`RecordStore::recognises_records`) and a version
+/// installed for the session's account whose records were never seen recognised
+/// (`crate::records::witness`) cannot establish absence. Rows are answered by the agent's own
+/// listing, which needs no witness.
 pub fn presence(
     hints: &Hints,
     locator: &mut Locator,
@@ -70,7 +72,7 @@ pub fn presence(
             _ => complete = false,
         }
     }
-    if complete {
+    if complete && locator.witnessed(session) {
         Absent
     } else {
         Unknown
@@ -81,14 +83,15 @@ pub fn presence(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Resumability {
     Resumable,
-    /// Proven gone: the record does not exist in the account that holds it. Only this answer may
-    /// be acted on destructively.
+    /// Proven gone: the record does not exist in the account that holds it, and the CLI version
+    /// installed for that account was seen writing records the search recognises
+    /// (`crate::records::witness`). Only this answer may be acted on destructively.
     Unresumable,
     /// Not provable either way: a location that cannot be resolved or read (a pinned account
     /// directory included), a linked records directory, or a record missing whose absence proves
     /// nothing (`RecordStore::absence_is_conclusive`): one the agent restores itself, as Grok does
-    /// a session folder from its remote registry, or one of a provider whose store recognises no
-    /// record.
+    /// a session folder from its remote registry, one of a provider whose store recognises no
+    /// record, or one of a CLI version whose records were never seen recognised.
     Unknown,
 }
 
@@ -100,6 +103,23 @@ pub struct Judgement {
     /// the agent archives records (`AgentLayout::archived_records_dir`), which a resume does not
     /// read, and the records directory does not show it present.
     pub needs_unarchive: bool,
+    /// The record was looked for everywhere it could be and not found, but that proves nothing:
+    /// the CLI version installed for the account was never seen writing records the search
+    /// recognises. The verdict is then `Unknown`, and a resume goes ahead and tells the user
+    /// (`conversation_record_not_found`). Never set where a location could not be searched whole
+    /// or the store's absence is not conclusive, which stay silent.
+    pub record_not_found: bool,
+}
+
+impl Judgement {
+    /// The judgement of a session whose conversation needs nothing looked for.
+    pub(crate) fn resumable() -> Self {
+        Self {
+            resumability: Resumability::Resumable,
+            needs_unarchive: false,
+            record_not_found: false,
+        }
+    }
 }
 
 /// Where a session's record sits in its own account.
@@ -137,25 +157,56 @@ pub fn judge(locator: &Locator, session: &Session) -> Judgement {
     if store.rows().is_some() {
         return Judgement {
             resumability: resumability_of_rows(locator, session),
-            needs_unarchive: false,
+            ..Judgement::resumable()
         };
     }
-    let (resumability, needs_unarchive) = match locate_own_record(locator, session) {
-        Err(answer) => (answer, false),
-        Ok(Located::Present) => (Resumability::Resumable, false),
-        Ok(Located::Archived) => (Resumability::Resumable, true),
-        Ok(Located::Missing) if !(store.recognises_records() && store.absence_is_conclusive()) => {
-            (Resumability::Unknown, false)
-        }
-        Ok(Located::Missing) => (Resumability::Unresumable, false),
-        Ok(Located::Uncertain) => (
-            Resumability::Unknown,
-            store.archived_behind_links(locator, session),
-        ),
+    let unknown = Judgement {
+        resumability: Resumability::Unknown,
+        ..Judgement::resumable()
     };
-    Judgement {
-        resumability,
-        needs_unarchive,
+    match locate_own_record(locator, session) {
+        Err(resumability) => Judgement {
+            resumability,
+            ..Judgement::resumable()
+        },
+        Ok((Located::Present, _)) => Judgement::resumable(),
+        Ok((Located::Archived, _)) => Judgement {
+            needs_unarchive: true,
+            ..Judgement::resumable()
+        },
+        Ok((Located::Missing, _))
+            if !(store.recognises_records() && store.absence_is_conclusive()) =>
+        {
+            unknown
+        }
+        // A record not found is proof only where the reader was seen to recognise the records
+        // the installed version writes; a release that renamed them leaves no witness.
+        Ok((Located::Missing, _)) if !locator.witnessed(session) => Judgement {
+            record_not_found: true,
+            ..unknown
+        },
+        Ok((Located::Missing, _)) => Judgement {
+            resumability: Resumability::Unresumable,
+            ..Judgement::resumable()
+        },
+        Ok((Located::Uncertain, _)) => Judgement {
+            needs_unarchive: store.archived_behind_links(locator, session),
+            ..unknown
+        },
+    }
+}
+
+/// The record of `session` in the directory a resume reads, as [`judge`] looks for it, when it is
+/// there: what a running session's record is looked for with before it witnesses its version
+/// (`crate::records::witness::Watch`). `None` for a provider whose records are rows, which need
+/// no witness, and wherever [`judge`] would not answer `Resumable` without an unarchive.
+pub(crate) fn found_record(locator: &Locator, session: &Session) -> Option<std::path::PathBuf> {
+    if provider(session.agent).records().rows().is_some() {
+        return None;
+    }
+    match locate_own_record(locator, session) {
+        Ok((Located::Present, found)) => found,
+        _ => None,
     }
 }
 
@@ -176,8 +227,12 @@ fn resumability_of_rows(locator: &Locator, session: &Session) -> Resumability {
     }
 }
 
-/// `Err` carries the answer when the record need not, or cannot, be looked for.
-fn locate_own_record(locator: &Locator, session: &Session) -> Result<Located, Resumability> {
+/// `Err` carries the answer when the record need not, or cannot, be looked for; with `Present`
+/// comes the record found.
+fn locate_own_record(
+    locator: &Locator,
+    session: &Session,
+) -> Result<(Located, Option<std::path::PathBuf>), Resumability> {
     if !session.has_conversation {
         return Err(Resumability::Resumable);
     }
@@ -193,8 +248,8 @@ fn locate_own_record(locator: &Locator, session: &Session) -> Result<Located, Re
     let mut uncertain = !known;
     for (dir, depth) in &alternates {
         let index = index_records_at(agent, dir, *depth);
-        if index.records.contains_key(&agent_id.to_ascii_lowercase()) {
-            return Ok(Located::Present);
+        if let Some(paths) = index.records.get(&agent_id.to_ascii_lowercase()) {
+            return Ok((Located::Present, crate::records::locate::newest(paths)));
         }
         uncertain |= !index.complete;
     }
@@ -239,20 +294,23 @@ fn locate_own_record(locator: &Locator, session: &Session) -> Result<Located, Re
     // archived. A directory that cannot be searched does not stop the next from being.
     let mut archived = false;
     for (at, dir) in dirs.iter().enumerate() {
-        match scan_for_record(&root.join(dir), depth, &is_record) {
-            Located::Present if at == 0 => return Ok(Located::Present),
-            Located::Present => archived = true,
-            Located::Uncertain => uncertain = true,
+        match find_record(&root.join(dir), depth, &is_record) {
+            (Located::Present, found) if at == 0 => return Ok((Located::Present, found)),
+            (Located::Present, _) => archived = true,
+            (Located::Uncertain, _) => uncertain = true,
             _ => {}
         }
     }
-    Ok(if archived {
-        Located::Archived
-    } else if uncertain {
-        Located::Uncertain
-    } else {
-        Located::Missing
-    })
+    Ok((
+        if archived {
+            Located::Archived
+        } else if uncertain {
+            Located::Uncertain
+        } else {
+            Located::Missing
+        },
+        None,
+    ))
 }
 
 /// Looks for an entry `is_record` accepts in `dir`, at most `depth` levels down, without following
@@ -263,20 +321,49 @@ pub(crate) fn scan_for_record(
     depth: usize,
     is_record: &dyn Fn(&str, std::fs::FileType) -> bool,
 ) -> Located {
-    let walked = walk_records(dir, depth, &mut |_, name, kind, _| {
+    find_record(dir, depth, is_record).0
+}
+
+/// [`scan_for_record`], with the entry found when it is `Present`.
+fn find_record(
+    dir: &Path,
+    depth: usize,
+    is_record: &dyn Fn(&str, std::fs::FileType) -> bool,
+) -> (Located, Option<std::path::PathBuf>) {
+    let mut found = None;
+    let walked = walk_records(dir, depth, &mut |path, name, kind, _| {
         if is_record(name, kind) {
+            found = Some(path.to_path_buf());
             Step::Stop
         } else {
             Step::Descend
         }
     });
     if walked.stopped {
-        Located::Present
+        (Located::Present, found)
     } else if walked.complete {
-        Located::Missing
+        (Located::Missing, None)
     } else {
-        Located::Uncertain
+        (Located::Uncertain, None)
     }
+}
+
+/// The standing notice of a resume that went ahead although the conversation's record was not
+/// found (`conversation_record_not_found`): by the launch's own look for it
+/// (`crate::coordinator::resume`), or by a provider's check that could not ask the agent
+/// (`crate::adapter::AgentProvider::check_launch`).
+pub(crate) fn record_not_found_notice(agent: AgentId) -> Notice {
+    Notice::new(
+        notice_code::CONVERSATION_RECORD_NOT_FOUND,
+        format!(
+            "Octoboard could not find this conversation's record, so it asked {} to resume the \
+             conversation anyway. What {} finds is shown in the terminal.",
+            agent.label(),
+            agent.label()
+        ),
+        &[("agent", agent.label())],
+    )
+    .standing()
 }
 
 #[cfg(test)]
@@ -310,17 +397,32 @@ mod tests {
             };
             let mut native = session(agent, CLAUDE_ID, Some(&account));
             assert_eq!(
-                presence(&hints, &mut Locator::with_shell(shell()), &[], &native),
+                presence(
+                    &hints,
+                    &mut Locator::with_shell(shell()).with_witnesses(witnessed()),
+                    &[],
+                    &native
+                ),
                 expected
             );
             native.agent_session_id = None;
             assert_eq!(
-                presence(&hints, &mut Locator::with_shell(shell()), &[], &native),
+                presence(
+                    &hints,
+                    &mut Locator::with_shell(shell()).with_witnesses(witnessed()),
+                    &[],
+                    &native
+                ),
                 Unknown
             );
             native.agent_session_id = Some("invalid".to_owned());
             assert_eq!(
-                presence(&hints, &mut Locator::with_shell(shell()), &[], &native),
+                presence(
+                    &hints,
+                    &mut Locator::with_shell(shell()).with_witnesses(witnessed()),
+                    &[],
+                    &native
+                ),
                 Unknown
             );
         }
@@ -328,13 +430,23 @@ mod tests {
         let orphan = account.join("projects/work").join(CLAUDE_ID);
         std::fs::create_dir_all(orphan.join("subagents")).unwrap();
         assert_eq!(
-            presence(&hints, &mut Locator::with_shell(shell()), &[], &claude),
+            presence(
+                &hints,
+                &mut Locator::with_shell(shell()).with_witnesses(witnessed()),
+                &[],
+                &claude
+            ),
             Present
         );
         let grok = session(AgentId::GROK, CLAUDE_ID, Some(&account));
         std::fs::create_dir_all(account.join("sessions/work").join(CLAUDE_ID)).unwrap();
         assert_eq!(
-            presence(&hints, &mut Locator::with_shell(shell()), &[], &grok),
+            presence(
+                &hints,
+                &mut Locator::with_shell(shell()).with_witnesses(witnessed()),
+                &[],
+                &grok
+            ),
             Present
         );
 
@@ -342,7 +454,12 @@ mod tests {
         crate::test_support::symlink(dir.join("elsewhere"), account.join("projects/linked"))
             .unwrap();
         assert_eq!(
-            presence(&hints, &mut Locator::with_shell(shell()), &[], &claude),
+            presence(
+                &hints,
+                &mut Locator::with_shell(shell()).with_witnesses(witnessed()),
+                &[],
+                &claude
+            ),
             Unknown
         );
         touch(
@@ -351,7 +468,12 @@ mod tests {
                 .join(format!("{CLAUDE_ID}.jsonl")),
         );
         assert_eq!(
-            presence(&hints, &mut Locator::with_shell(shell()), &[], &claude),
+            presence(
+                &hints,
+                &mut Locator::with_shell(shell()).with_witnesses(witnessed()),
+                &[],
+                &claude
+            ),
             Present
         );
         std::fs::remove_file(
@@ -364,7 +486,12 @@ mod tests {
         std::fs::remove_dir_all(account.join("projects")).unwrap();
         touch(&account.join("projects"));
         assert_eq!(
-            presence(&hints, &mut Locator::with_shell(shell()), &[], &claude),
+            presence(
+                &hints,
+                &mut Locator::with_shell(shell()).with_witnesses(witnessed()),
+                &[],
+                &claude
+            ),
             Unknown
         );
     }
@@ -382,7 +509,7 @@ mod tests {
         let account = dir.join("account");
         let own = session(AgentId::TEST, ROW_ID, Some(&account));
         let hints = Hints::default();
-        let locator = || Locator::with_shell(HashMap::new());
+        let locator = || Locator::with_shell(HashMap::new()).with_witnesses(witnessed());
 
         // No database to list: nothing is proven.
         assert_eq!(resumability(&locator(), &own), Resumability::Unknown);
@@ -392,13 +519,7 @@ mod tests {
         );
 
         row_database(&account, &[(ROW_ID, ROW_TURNS)]);
-        assert_eq!(
-            judge(&locator(), &own),
-            Judgement {
-                resumability: Resumability::Resumable,
-                needs_unarchive: false
-            }
-        );
+        assert_eq!(judge(&locator(), &own), Judgement::resumable());
         assert_eq!(presence(&hints, &mut locator(), &[], &own), Present);
 
         row_database(&account, &[("row_other", ROW_TURNS)]);
@@ -432,11 +553,16 @@ mod tests {
             )])
         };
         let own = session(AgentId::TEST, CLAUDE_ID, Some(&account));
-        let judged = || resumability(&Locator::with_shell(shell()), &own);
+        let judged = || {
+            resumability(
+                &Locator::with_shell(shell()).with_witnesses(witnessed()),
+                &own,
+            )
+        };
         let present = || {
             presence(
                 &Hints::default(),
-                &mut Locator::with_shell(shell()),
+                &mut Locator::with_shell(shell()).with_witnesses(witnessed()),
                 &[],
                 &own,
             )
@@ -476,7 +602,10 @@ mod tests {
             dir.join("home").to_string_lossy().into_owned(),
         )]);
         let own = session(AgentId::TEST, CLAUDE_ID, Some(&account));
-        let judgement = judge(&Locator::with_shell(shell.clone()), &own);
+        let judgement = judge(
+            &Locator::with_shell(shell.clone()).with_witnesses(witnessed()),
+            &own,
+        );
         assert_eq!(judgement.resumability, Resumability::Unknown);
         assert!(!judgement.needs_unarchive);
         // Nor can it bring an archived record back.
@@ -486,17 +615,25 @@ mod tests {
             .is_err());
         let hints = Hints::default();
         assert_eq!(
-            presence(&hints, &mut Locator::with_shell(shell.clone()), &[], &own),
+            presence(
+                &hints,
+                &mut Locator::with_shell(shell.clone()).with_witnesses(witnessed()),
+                &[],
+                &own
+            ),
             SessionRecordPresence::Unknown
         );
-        assert!(
-            removable_record_paths(&hints, &mut Locator::with_shell(shell.clone()), &[], &own)
-                .is_empty()
-        );
+        assert!(removable_record_paths(
+            &hints,
+            &mut Locator::with_shell(shell.clone()).with_witnesses(witnessed()),
+            &[],
+            &own
+        )
+        .is_empty());
         let history = |session: &Session| {
             crate::records::history::of_session(
                 &hints,
-                &mut Locator::with_shell(shell.clone()),
+                &mut Locator::with_shell(shell.clone()).with_witnesses(witnessed()),
                 &[],
                 session,
             )
@@ -506,7 +643,10 @@ mod tests {
         fresh.has_conversation = false;
         assert_eq!(history(&fresh), Some(Vec::new()));
         assert_eq!(
-            resumability(&Locator::with_shell(shell), &fresh),
+            resumability(
+                &Locator::with_shell(shell).with_witnesses(witnessed()),
+                &fresh
+            ),
             Resumability::Resumable
         );
     }
@@ -526,7 +666,7 @@ mod tests {
             "HOME".to_owned(),
             dir.join("home").to_string_lossy().into_owned(),
         )]);
-        let locator = Locator::with_shell(shell);
+        let locator = Locator::with_shell(shell).with_witnesses(witnessed());
         let own = session(AgentId::TEST, CLAUDE_ID, Some(&account));
         let judgement = judge(&locator, &own);
         assert_eq!(judgement.resumability, Resumability::Unknown);
@@ -540,11 +680,11 @@ mod tests {
     }
 
     fn judged(session: &Session) -> Resumability {
-        resumability(&Locator::default(), session)
+        resumability(&Locator::default().with_witnesses(witnessed()), session)
     }
 
     fn needs_unarchive(session: &Session) -> bool {
-        judge(&Locator::default(), session).needs_unarchive
+        judge(&Locator::default().with_witnesses(witnessed()), session).needs_unarchive
     }
 
     #[test]
@@ -623,7 +763,7 @@ mod tests {
             "CLAUDE_CONFIG_DIR".to_owned(),
             dir.join("default").to_string_lossy().into_owned(),
         )]);
-        let locator = Locator::with_shell(shell);
+        let locator = Locator::with_shell(shell).with_witnesses(witnessed());
         std::fs::create_dir_all(dir.join("default/projects")).unwrap();
         assert_eq!(resumability(&locator, &default), Resumability::Unresumable);
         touch(

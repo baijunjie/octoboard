@@ -60,7 +60,10 @@ function presetLaunchSettings(preset: LaunchPreset | undefined): Partial<Record<
  * Agents whose accounts are all turned off and accounts that are turned off are not listed. An account whose
  * sharing change runs or that is not logged in is listed disabled with why; one whose quota is used up is listed
  * with why, and disabled only with `refuseUsedUp` (a handoff, which moves a conversation onto the account; a new
- * session may be opened on a used-up account all the same). The choice opens on another account of the agent when
+ * session may be opened on a used-up account all the same). With `allowSignedOut` (a session the user opens, which the
+ * daemon opens on such an account and tells of the reading) one that is not logged in is listed with why and may be
+ * chosen: `signInWarning` then says what choosing it means, for a `ChoiceWarning` under the field, in place of a
+ * refusal. The initial choice still moves off it, as the daemon's automatic choices do. The choice opens on another account of the agent when
  * the one it would inherit is unavailable, a used-up one included, and `unavailable`, when even the account the
  * choice ends on cannot be used (every account of the agent is, or it is the agent's only one), says why, for the
  * dialog to refuse its submit with.
@@ -78,7 +81,7 @@ function presetLaunchSettings(preset: LaunchPreset | undefined): Partial<Record<
  * longer among that agent's accounts, and nothing has been picked since: the dialog then shows the
  * pickers empty rather than a fallback the user never chose.
  */
-export function useLaunchChoice(parentConsole: Console, project: Project | undefined, exclude?: Agent, forced?: AccountChoice, preset?: LaunchPreset, projectSession?: boolean, refuseUsedUp = false) {
+export function useLaunchChoice(parentConsole: Console, project: Project | undefined, exclude?: Agent, forced?: AccountChoice, preset?: LaunchPreset, projectSession?: boolean, { refuseUsedUp = false, allowSignedOut = false }: { refuseUsedUp?: boolean; allowSignedOut?: boolean } = {}) {
   const t = useT();
   const isProjectSession = projectSession ?? (project !== undefined);
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
@@ -153,13 +156,16 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
      * `refuseUsedUp`) or its sharing change runs: the error text of the account field. */
     unavailable: disabled && chosenEntry
       ? accountRefusalMessage("accountChoice.disabled.description", chosenEntry.name)
-      : signedOut && chosenEntry
+      : signedOut && chosenEntry && !allowSignedOut
         ? accountRefusalMessage("accountChoice.signedOut.description", chosenEntry.name, { providers, agent: choice.agent, dir: accountConfigDir(accounts, agentAvailability, providers, choice.agent, choice.account) })
         : exhaustedBy && chosenEntry?.quota
           ? quotaUsedUpMessage(t, quotaNaming(chosenEntry.quota, providers), chosenEntry.name, exhaustedBy, now)
           : changingSharing && chosenEntry
             ? t("accountChoice.sharingChange.description", { name: isolate(chosenEntry.name) })
             : undefined,
+    /** With `allowSignedOut`, the name of the chosen account when it was last read as not logged in and nothing else
+     * keeps it from running a session: the session opens all the same, and the field warns of it. */
+    signInWarning: allowSignedOut && signedOut && !disabled && !changingSharing && chosenEntry ? chosenEntry.name : undefined,
     overrides,
     agentOptions: agentIconPickerOptions(t, agentAvailability, addedAgents, providers, choice.agent).filter((option) => option.value !== exclude && groups.some((group) => group.agent === option.value && group.entries.some((entry) => !entry.disabled))),
     setPickedAgent,
@@ -167,7 +173,7 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
      * has its default account. */
     account: {
       label: t("dialog.agentSettings.account", { agent: isolate(providerLabel(t, providers, choice.agent)) }),
-      options: accountEntries.map((entry) => accountOption(t, providers, entry, now, blocked, refuseUsedUp)),
+      options: accountEntries.map((entry) => accountOption(t, providers, entry, now, blocked, refuseUsedUp, allowSignedOut)),
       value: choiceKey(choice),
       onChange: (key: string) => {
         const entry = findEntry(groups, key);

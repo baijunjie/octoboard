@@ -70,21 +70,28 @@ fn a_supported_release_runs_a_private_server_with_the_launchs_overrides() {
         ["--cd", spec.cwd.to_str().unwrap()]
     );
     assert_eq!(private.task, None);
-    for version in [None, Some((0, 163, 0)), Some((0, 165, 0))] {
+}
+
+/// No release is known to have introduced the private server, so every enhanced launch runs one:
+/// a version older than any measured, one newer, and one that cannot be read alike.
+#[test]
+fn every_version_runs_a_private_server_an_unreadable_one_included() {
+    for version in [None, Some((0, 100, 0)), Some((0, 165, 0)), Some((99, 0, 0))] {
+        let mut fixture = spec_fixture();
         fixture.agent_version = version;
         assert!(
             CodexProvider
                 .plan(&fixture.spec())
                 .unwrap()
                 .private_server
-                .is_none(),
+                .is_some(),
             "{version:?}"
         );
     }
 }
 
-/// The version decides whether a launch runs a private server, and is read without running Codex:
-/// from a standalone release's `codex-package.json`, or the package of a package install.
+/// The version is read without running Codex: from a standalone release's `codex-package.json`,
+/// or the package of a package install.
 #[test]
 fn installs_report_the_version_from_the_package_beside_the_program() {
     let fixture = crate::test_support::ScratchDir::new("codex-installed-version");
@@ -362,7 +369,6 @@ fn hook_groups(args: &[String], event: &str) -> Vec<toml::Value> {
 #[test]
 fn the_cross_project_guard_is_a_synchronous_apply_patch_group_beside_the_status_hook() {
     let mut fixture = spec_fixture();
-    // A release that runs a private server, whose plan a resume trusts hooks by.
     fixture.agent_version = Some((0, 166, 0));
     let list = fixture.scratch.join("cross-project-guard.json");
     let script = fixture.scratch.join("guard-hook");
@@ -1191,15 +1197,30 @@ fn a_pinned_codex_home_that_has_gone_refuses_resuming_a_conversation() {
 }
 
 /// A fresh session, and one that never had a turn, launch into a vanished pinned directory
-/// rather than being refused, and the directory is created for them: Codex itself exits on a
-/// `CODEX_HOME` that does not exist.
+/// rather than being refused, and the directory is created for them by the launch refusal, which
+/// every tier asks: Codex itself exits on a `CODEX_HOME` that does not exist. One that cannot be
+/// created refuses.
 #[test]
 fn a_pinned_codex_home_that_has_gone_is_created_with_no_conversation_to_resume() {
     let mut fixture = spec_fixture();
     let dir = fixture.scratch.join("missing").join("nested");
     fixture.config_dir = Some(dir.clone());
-    CodexProvider.plan(&fixture.spec()).expect("not refused");
+    CodexProvider
+        .launch_refusal(&fixture.spec())
+        .expect("not refused");
     assert!(dir.is_dir());
+    CodexProvider.plan(&fixture.spec()).expect("planned");
+
+    let blocker = fixture.scratch.join("a-file");
+    std::fs::write(&blocker, "").expect("file");
+    fixture.config_dir = Some(blocker.join("home"));
+    let err = CodexProvider
+        .launch_refusal(&fixture.spec())
+        .expect_err("refused");
+    assert_eq!(
+        CodedError::of(&err).code,
+        crate::protocol::error_code::CONFIG_DIR_UNREACHABLE
+    );
 }
 
 #[test]
@@ -1286,4 +1307,253 @@ fn only_a_non_default_account_keeps_mcp_tokens_in_its_own_home() {
             "{resume:?}"
         );
     }
+}
+
+/// Codex's bare launch: `resume <id>`, the model as a configuration override, and a new
+/// conversation's task after `--`; no hooks, server, instructions or update check.
+#[test]
+fn its_bare_plan_names_the_conversation_the_model_and_the_task_only() {
+    let mut fixture = crate::adapter::tests::spec_fixture();
+    fixture.model = Some("model-a".to_string());
+    let bare = |resume: Option<&str>, task: Option<&str>| {
+        let mut spec = fixture.spec();
+        spec.resume_agent_session_id = resume;
+        spec.task = task;
+        CodexProvider.bare_plan(&spec)
+    };
+    assert_eq!(
+        bare(Some("c-1"), Some("ignored")).args,
+        ["resume", "c-1", "-c", "model=\"model-a\""]
+    );
+    assert_eq!(
+        bare(None, Some("-do it")).args,
+        ["-c", "model=\"model-a\"", "--", "-do it"]
+    );
+}
+
+/// An early exit as the daemon hands it over: what Codex wrote, made plain text.
+fn early_exit(raw: &[u8]) -> crate::adapter::EarlyExit {
+    crate::adapter::EarlyExit {
+        output: crate::terminal::plain_text::strip_escapes(&String::from_utf8_lossy(raw))
+            .trim()
+            .to_string(),
+        status: None,
+    }
+}
+
+/// Codex 0.167.1 refusing an option it does not take (`testdata/codex-exit-captures.md`).
+fn unknown_option() -> crate::adapter::EarlyExit {
+    early_exit(include_bytes!(
+        "../../../testdata/codex_exit_unknown_option.bin"
+    ))
+}
+
+/// Codex 0.167.1 refusing the value of `approvals_reviewer`.
+fn unknown_reviewer() -> crate::adapter::EarlyExit {
+    early_exit(include_bytes!(
+        "../../../testdata/codex_exit_unknown_variant.bin"
+    ))
+}
+
+/// Codex 0.167.1 refusing the value of Octoboard's MCP server's `default_tools_approval_mode`.
+fn unknown_tools_approval() -> crate::adapter::EarlyExit {
+    early_exit(include_bytes!(
+        "../../../testdata/codex_exit_unknown_variant_mcp.bin"
+    ))
+}
+
+/// Codex 0.167.1 refusing a `default_permissions` that names a profile it does not know, after it
+/// set the terminal up, as the daemon hands the exit over (`coordinator::early_exit`).
+fn unknown_profile() -> crate::adapter::EarlyExit {
+    crate::coordinator::early_exit::exit_of_output(include_bytes!(
+        "../../../testdata/codex_exit_unknown_profile.bin"
+    ))
+}
+
+/// The near-miss: Codex 0.167.1 exiting at start on a `CODEX_HOME` that does not exist.
+fn home_missing() -> crate::adapter::EarlyExit {
+    early_exit(include_bytes!(
+        "../../../testdata/codex_exit_home_missing.bin"
+    ))
+}
+
+/// A refusal of a setting's value leaves out that key's override, the permission keys as one
+/// preset (a profile `default_permissions` names that Codex does not know among them); an exit
+/// that names no setting, an option refused and the near-miss alike, leaves out the hooks and the
+/// private server.
+#[test]
+fn what_a_reduced_launch_leaves_out_is_read_from_the_captured_exit() {
+    assert_eq!(LeftOut::after(&unknown_option()), LeftOut::Hooks);
+    assert_eq!(
+        LeftOut::after(&unknown_reviewer()),
+        LeftOut::Permissions("approvals_reviewer".to_string())
+    );
+    assert_eq!(
+        LeftOut::after(&unknown_tools_approval()),
+        LeftOut::Setting("mcp_servers.octoboard.default_tools_approval_mode".to_string())
+    );
+    assert_eq!(
+        LeftOut::after(&unknown_profile()),
+        LeftOut::Permissions("default_permissions".to_string())
+    );
+    assert_eq!(LeftOut::after(&home_missing()), LeftOut::Hooks);
+}
+
+/// The values of the overrides in `args` whose key is `key`.
+fn overrides_of(args: &[String], key: &str) -> Vec<String> {
+    overrides(args)
+        .into_iter()
+        .filter(|value| value.split('=').next().map(str::trim) == Some(key))
+        .collect()
+}
+
+/// After an exit that names no setting, the launch goes without the hook-trust bypass, every
+/// hook and the private server, keeps every other addition and the task, has no status
+/// integration and expects no hook, and tells the user with a standing notice; on a resume too.
+#[test]
+fn a_reduced_launch_after_an_unnamed_refusal_leaves_out_the_hooks_and_the_private_server() {
+    for resume in [None, Some("thread-to-resume")] {
+        let mut fixture = spec_fixture();
+        fixture.model = Some("gpt-5".to_string());
+        let list = fixture.scratch.join("cross-project-guard.json");
+        let script = fixture.scratch.join("guard-hook");
+        let mut spec = fixture.spec();
+        spec.guard = Some(crate::adapter::GuardHook {
+            exe: "/opt/octoboard/install/octoboardd",
+            list: &list,
+            script: &script,
+        });
+        spec.resume_agent_session_id = resume;
+        spec.task = Some("do it");
+        let enhanced = CodexProvider.plan(&spec).expect("plan");
+        let reduced = CodexProvider
+            .reduced_plan(&spec, &unknown_option())
+            .expect("a reduced plan");
+
+        assert!(!reduced.args.iter().any(|arg| arg == HOOK_TRUST_BYPASS));
+        assert!(!reduced.args.iter().any(|arg| arg.starts_with("hooks.")));
+        assert!(reduced.private_server.is_none(), "{resume:?}");
+        let hookless: Vec<String> = overrides(&enhanced.args)
+            .into_iter()
+            .filter(|value| !value.starts_with("hooks."))
+            .collect();
+        assert_eq!(overrides(&reduced.args), hookless, "{resume:?}");
+        assert_eq!(
+            reduced.args[..resume.map_or(0, |_| 2)],
+            enhanced.args[..resume.map_or(0, |_| 2)]
+        );
+        if resume.is_none() {
+            assert_eq!(reduced.args[reduced.args.len() - 2..], ["--", "do it"]);
+        }
+
+        assert!(!CodexProvider.launch_has_status_integration(&spec, &reduced));
+        assert_eq!(
+            CodexProvider.first_hook_due(&spec, &reduced),
+            crate::adapter::FirstHook::Never
+        );
+        let notice = reduced.notice.expect("the user is told");
+        assert_eq!(
+            notice.code,
+            crate::protocol::Code::of_provider(codex::HOOKS_LEFT_OUT)
+        );
+        assert!(notice.standing);
+        assert!(notice.params.is_empty());
+    }
+}
+
+/// An enhanced launch carries the hooks, takes its status from them and expects its first hook
+/// with its first turn, a new conversation and a resume alike: Codex 0.167.1 runs none before.
+#[test]
+fn an_enhanced_launch_expects_its_first_hook_with_its_first_turn() {
+    for resume in [None, Some("thread-to-resume")] {
+        let fixture = spec_fixture();
+        let mut spec = fixture.spec();
+        spec.resume_agent_session_id = resume;
+        let plan = CodexProvider.plan(&spec).expect("plan");
+        assert!(CodexProvider.launch_has_status_integration(&spec, &plan));
+        assert_eq!(
+            CodexProvider.first_hook_due(&spec, &plan),
+            crate::adapter::FirstHook::WithFirstTurn,
+            "{resume:?}"
+        );
+    }
+}
+
+/// A refused permission key leaves out the whole preset, on the command line, in the private
+/// server's arguments and as the permissions a resume applies, and approvals are read from the
+/// user's own configuration again; the hooks stay. Without a preset there is nothing to leave
+/// out, and the launch goes bare.
+#[test]
+fn a_refused_permission_key_leaves_out_the_whole_preset_and_keeps_the_hooks() {
+    let mut fixture = spec_fixture();
+    // A Codex home with no configuration, so that approvals are read as the user's own: asked.
+    let home = fixture.scratch.join("codex-home");
+    std::fs::create_dir_all(&home).expect("codex home");
+    fixture.shell_env.insert(
+        "CODEX_HOME".to_string(),
+        home.to_string_lossy().into_owned(),
+    );
+    let settings = permission_settings("auto_review");
+    for resume in [None, Some("thread-to-resume")] {
+        let mut spec = fixture.spec();
+        spec.settings = &settings;
+        spec.resume_agent_session_id = resume;
+        assert!(CodexProvider.plan(&spec).unwrap().resolves_approvals_itself);
+        let reduced = CodexProvider
+            .reduced_plan(&spec, &unknown_reviewer())
+            .expect("a reduced plan");
+        let private = private_plan(&reduced);
+        for key in [
+            "default_permissions",
+            "approval_policy",
+            "approvals_reviewer",
+        ] {
+            assert!(overrides_of(&reduced.args, key).is_empty(), "{key}");
+            assert!(overrides_of(&private.args, key).is_empty(), "{key}");
+            assert!(overrides_of(&private.tui_args, key).is_empty(), "{key}");
+        }
+        assert_eq!(private.resume_permissions, None);
+        assert!(!reduced.resolves_approvals_itself);
+        assert!(reduced.args.iter().any(|arg| arg == HOOK_TRUST_BYPASS));
+        assert_eq!(hook_groups(&reduced.args, "Stop").len(), 1);
+        assert!(CodexProvider.launch_has_status_integration(&spec, &reduced));
+        let notice = reduced.notice.expect("the user is told");
+        assert_eq!(
+            notice.code,
+            crate::protocol::Code::of_provider(codex::PERMISSIONS_LEFT_OUT)
+        );
+        assert!(notice.standing);
+        assert_eq!(notice.params["key"], "approvals_reviewer");
+    }
+    assert!(CodexProvider
+        .reduced_plan(&fixture.spec(), &unknown_reviewer())
+        .is_none());
+}
+
+/// A refused value of another key Octoboard sets leaves out that one override and nothing else.
+#[test]
+fn a_refused_setting_leaves_out_that_override_alone() {
+    let fixture = spec_fixture();
+    let spec = fixture.spec();
+    let key = "mcp_servers.octoboard.default_tools_approval_mode";
+    let enhanced = CodexProvider.plan(&spec).expect("plan");
+    assert_eq!(overrides_of(&enhanced.args, key).len(), 1);
+    let reduced = CodexProvider
+        .reduced_plan(&spec, &unknown_tools_approval())
+        .expect("a reduced plan");
+    let expected: Vec<String> = overrides(&enhanced.args)
+        .into_iter()
+        .filter(|value| !value.starts_with(&format!("{key}=")))
+        .collect();
+    assert_eq!(overrides(&reduced.args), expected);
+    assert!(reduced.args.iter().any(|arg| arg == HOOK_TRUST_BYPASS));
+    assert!(reduced.private_server.is_some());
+    assert!(overrides_of(&private_plan(&reduced).args, key).is_empty());
+    let notice = reduced.notice.expect("the user is told");
+    assert_eq!(
+        notice.code,
+        crate::protocol::Code::of_provider(codex::SETTING_LEFT_OUT)
+    );
+    assert!(notice.standing);
+    assert_eq!(notice.params["key"], key);
 }

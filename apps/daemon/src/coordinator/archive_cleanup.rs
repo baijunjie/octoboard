@@ -113,7 +113,9 @@ async fn scan(state: &Arc<AppState>, locator: LocatorSource, trash: TrashRecord)
     let deleting = {
         let (state, locator) = (state.clone(), locator.clone());
         tokio::task::spawn_blocking(move || {
-            let locator = locator().with_store(&state.store);
+            let locator = locator()
+                .with_store(&state.store)
+                .with_witnesses(&state.record_witnesses);
             delete_unresumable_groups(&state, &locator)
         })
     };
@@ -308,10 +310,20 @@ fn delete_judged(state: &Arc<AppState>, judged: &[&Session]) -> Result<Judged> {
 mod tests {
     use super::*;
     use crate::protocol::{AgentId, Event, Role, SessionKind};
-    use crate::test_support::{
-        console_with_project_and_accounts, project_session, session_ids, PATIENCE,
-    };
+    use crate::test_support::{project_session, session_ids, PATIENCE};
     use std::collections::HashMap;
+
+    /// The shared console with a project and accounts, under which every agent's installed version
+    /// was seen writing records, so a record missing is proof
+    /// (`crate::records::witness`); [`the_cleanup_deletes_nothing_without_a_witness`] is the other
+    /// side.
+    fn console_with_project_and_accounts(
+        name: &str,
+    ) -> (Arc<AppState>, crate::test_support::ScratchDir) {
+        let (state, dir) = crate::test_support::console_with_project_and_accounts(name);
+        crate::records::fixtures::witness_every_agent(&state.record_witnesses);
+        (state, dir)
+    }
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -451,6 +463,30 @@ mod tests {
         }
         deleted.sort();
         deleted
+    }
+
+    /// A record missing under a CLI version never seen writing records proves nothing: without a
+    /// witness the cleanup deletes nothing, and once the installed version is witnessed the same
+    /// session goes.
+    #[tokio::test]
+    async fn the_cleanup_deletes_nothing_without_a_witness() {
+        let (state, dir) =
+            crate::test_support::console_with_project_and_accounts("archive-cleanup-unwitnessed");
+        let account = Account::new(&dir, &[]);
+        state
+            .store
+            .insert_session(&account.session("gone", None))
+            .unwrap();
+        let (trashed, trash) = recording_trash();
+        state
+            .record_witnesses
+            .install(AgentId::CLAUDE, crate::records::fixtures::WITNESSED_VERSION);
+        scan(&state, account.locator(), trash.clone()).await;
+        assert_eq!(session_ids(&state), ["gone"]);
+        crate::records::fixtures::witness_every_agent(&state.record_witnesses);
+        scan(&state, account.locator(), trash).await;
+        assert!(session_ids(&state).is_empty());
+        assert!(trashed.lock().unwrap().is_empty());
     }
 
     /// Only an archived session proven unresumable is deleted: pinned, locked and resumable ones
@@ -775,6 +811,7 @@ mod tests {
     #[tokio::test]
     async fn the_cleanup_does_not_alert_about_a_branch_it_leaves() {
         let (state, dir) = crate::test_support::app_state("archive-cleanup-branches");
+        crate::records::fixtures::witness_every_agent(&state.record_witnesses);
         state
             .store
             .insert_console(&crate::test_support::console(&dir))

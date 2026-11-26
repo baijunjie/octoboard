@@ -49,7 +49,9 @@ Removing a project or deleting a console also deletes its archived sessions alon
 Octoboard deletes on its own the archived sessions whose conversation their agent no longer has, since such a session
 could only be refused if reopened. Only a session judged unresumable is deleted — never one whose conversation is
 resumable or unknown (see "When a conversation can no longer be resumed" in
-`docs/product/archiving-and-resuming-sessions.md`).
+`docs/product/archiving-and-resuming-sessions.md`). So a record merely not found deletes nothing: where the version of
+the agent's CLI installed for the account has not been seen writing records Octoboard recognises in this run of the
+daemon, as after an update that moved them, or soon after the daemon starts, the session is kept.
 
 - **When**: when the daemon starts, which covers any time it was not running, and then whenever a day of wall-clock time
   has passed since the last check, time the machine spent asleep included. The check for whether a day has passed runs
@@ -207,7 +209,7 @@ when the option is ticked; the option cannot be changed meanwhile.
   | Antigravity CLI | the conversation database and its SQLite sidecars, transcript directory, presence lock and title annotation. Shared indexes and prompt recall are kept |
   | GitHub Copilot CLI | the session directory and its operation lock. Copilot maintains its own index |
   | Qwen Code | the chat and its title and runtime sidecars. Account-wide counters and project cursors are kept |
-  | Pi | the matching session JSONL, including a record in the configured alternate sessions directory |
+  | Pi | the matching session JSONL, including a record in the configured alternate sessions directory or in a records directory an earlier launch of the session used |
 
 - **They are looked for wherever this machine's accounts of that agent could hold them**: the account the session last
   ran under and every account of that agent known to Octoboard, since a session switched to another account leaves its

@@ -156,6 +156,33 @@ impl RecordStore for PiRecords {
     }
 }
 
+/// The records directory among `kept`, the ones the session's earlier launches selected through
+/// `PI_CODING_AGENT_SESSION_DIR` (`LaunchSpec::record_roots`), that holds the record of
+/// conversation `id` among its own entries, where Pi puts a record in such a directory; the first
+/// in their order. `None` where none does, or none can be listed: a resume then goes by the
+/// directory the current environment selects, as a plain terminal would. Measured on 1.5.2:
+/// `--session <id>` looks for the record only in the directory the environment selects, and
+/// `--session-dir <dir>` makes it look in `<dir>`, whatever the environment selects
+/// (`docs/agent-cli-reference.md`, "Pi", "A record kept in an earlier records directory").
+pub(super) fn kept_record_dir<'a>(kept: &'a [PathBuf], id: &str) -> Option<&'a Path> {
+    kept.iter()
+        .filter(|dir| dir.is_absolute())
+        .find(|dir| {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return false;
+            };
+            entries.flatten().any(|entry| {
+                entry.file_type().is_ok_and(|kind| kind.is_file())
+                    && entry
+                        .file_name()
+                        .to_str()
+                        .and_then(record_id)
+                        .is_some_and(|found| found.eq_ignore_ascii_case(id))
+            })
+        })
+        .map(PathBuf::as_path)
+}
+
 fn record_id(name: &str) -> Option<&str> {
     let (timestamp, id) = name.strip_suffix(".jsonl")?.rsplit_once('_')?;
     if !timestamp.ends_with(['Z', 'z']) || !crate::records::locate::plausible_id(id) {
@@ -317,6 +344,52 @@ mod tests {
 
     const RECORD: &str = include_str!("../../../testdata/pi_branched_records.jsonl");
 
+    /// The kept directory holding a conversation's record among its own entries is found, the
+    /// first in order where two do; a directory that holds it deeper, under a link or not at all,
+    /// a relative one and one that is gone are passed over.
+    #[test]
+    fn the_kept_directory_holding_the_record_is_the_one_found() {
+        const ID: &str = "7e57ab1e-1111-4222-8333-944455556666";
+        let dir = ScratchDir::new("pi-kept-record-dir");
+        let name = format!("2026-11-26T05-00-00-000Z_{ID}.jsonl");
+        let [gone, empty, deeper, holds, also] =
+            ["gone", "empty", "deeper", "holds", "also"].map(|sub| dir.join(sub));
+        for made in [&empty, &holds, &also] {
+            std::fs::create_dir_all(made).unwrap();
+        }
+        std::fs::create_dir_all(deeper.join("nested")).unwrap();
+        std::fs::write(deeper.join("nested").join(&name), "").unwrap();
+        std::fs::write(holds.join(&name), "").unwrap();
+        std::fs::write(also.join(&name), "").unwrap();
+        std::fs::write(empty.join("2026-11-26T05-00-00-000Z_not-an-id.jsonl"), "").unwrap();
+
+        let kept = [
+            PathBuf::from("relative"),
+            gone,
+            empty.clone(),
+            deeper,
+            holds.clone(),
+            also,
+        ];
+        assert_eq!(kept_record_dir(&kept, ID), Some(holds.as_path()));
+        assert_eq!(
+            kept_record_dir(&kept, &ID.to_ascii_uppercase()),
+            Some(holds.as_path())
+        );
+        assert_eq!(
+            kept_record_dir(&kept, "0badc0de-0000-4000-8000-000000000000"),
+            None
+        );
+        assert_eq!(kept_record_dir(&[], ID), None);
+
+        if crate::platform::fs::file_links_available() {
+            let linked = dir.join("linked");
+            std::fs::create_dir_all(&linked).unwrap();
+            crate::test_support::symlink(holds.join(&name), linked.join(&name)).unwrap();
+            assert_eq!(kept_record_dir(&[linked, empty], ID), None);
+        }
+    }
+
     #[test]
     fn the_pi_file_is_what_can_be_carried_removed_and_resumed() {
         use crate::records::carried::{companions, locate_record};
@@ -349,7 +422,15 @@ mod tests {
         );
 
         std::fs::remove_file(path).unwrap();
-        assert_eq!(resumability(&locator, &session), Resumability::Unresumable);
+        // Proven gone only once the installed version was seen writing records.
+        assert_eq!(resumability(&locator, &session), Resumability::Unknown);
+        assert_eq!(
+            resumability(
+                &locator.with_witnesses(crate::records::fixtures::witnessed()),
+                &session
+            ),
+            Resumability::Unresumable
+        );
     }
 
     #[test]
@@ -403,8 +484,12 @@ mod tests {
         );
 
         std::fs::remove_file(record).unwrap();
+        assert_eq!(resumability(&locator(), &session), Resumability::Unknown);
         assert_eq!(
-            resumability(&locator(), &session),
+            resumability(
+                &locator().with_witnesses(crate::records::fixtures::witnessed()),
+                &session
+            ),
             Resumability::Unresumable
         );
     }
@@ -476,7 +561,12 @@ mod tests {
         }
         std::fs::remove_file(kept.join("linked")).unwrap();
         for shell in &shells {
-            let mut locator = Locator::with_shell(shell.clone());
+            assert_eq!(
+                resumability(&Locator::with_shell(shell.clone()), &session),
+                Resumability::Unknown
+            );
+            let mut locator = Locator::with_shell(shell.clone())
+                .with_witnesses(crate::records::fixtures::witnessed());
             assert_eq!(resumability(&locator, &session), Resumability::Unresumable);
             assert_eq!(
                 presence(&hints, &mut locator, &[], &session),

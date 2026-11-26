@@ -2289,6 +2289,7 @@ export type Event = {
     [key in string]: string
   },
   message: string,
+  standing?: boolean,
 }
 | {
   "type": "session_notice_withdrawn",
@@ -7247,6 +7248,13 @@ export type Session = {
    */
   interaction?: PendingInteraction,
   /**
+   * The standing notices of the session's running launch, in the order they were raised:
+   * the conditions of that launch the user is told of for as long as they hold. Never stored:
+   * it is filled in on the record a client receives (`AppState::wire_session`), and absent
+   * when there are none, which it always is for a session with no process.
+   */
+  standing_notices?: Array<StandingNotice>,
+  /**
    * Whether this session has a conversation on the agent's side: a turn taken, or one resumed
    * at open. Until it has, the agent has stored no conversation to resume: `claude --resume`
    * on such an id fails outright with "No conversation found", and a session the user opened
@@ -7877,6 +7885,29 @@ export type SideVersion = {
 }
 | {
   "state": "absent"
+};
+
+/**
+ * A `session_notice` that stands: a condition of the session's running launch the user is told
+ * of for as long as it holds (an enhancement of Octoboard's the launch runs without, say). Kept
+ * by the daemon in memory, never stored, and given on the record a client receives
+ * (`Session::standing_notices`). It goes when it is withdrawn (`session_notice_withdrawn`, by
+ * `code` and the `detail` param) or when the launch's process ends.
+ */
+export type StandingNotice = {
+  code: string,
+  params: {
+    [key in string]: string
+  },
+  /**
+   * The English text, for a client that does not know the code.
+   */
+  message: string,
+  /**
+   * When it was raised, in milliseconds since the epoch: what tells a notice raised again,
+   * by a later launch say, from the one a client dismissed.
+   */
+  at: number,
 };
 
 /**

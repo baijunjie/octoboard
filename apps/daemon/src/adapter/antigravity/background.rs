@@ -39,9 +39,11 @@
 //! (`Stop`'s `executionNum` was 0 for every turn, and a call's `stepIdx` counts the conversation's
 //! steps, not its turns). So where the next turn answers the same text, a command declined before
 //! it is still kept, and if that turn leaves a command running, its `Stop` lists the declined one
-//! too, until the `Stop` with `fullyIdle: true` that comes once the running one has ended. Only
-//! `PreInvocation` (`invocationNum` 0 at each turn's first model request) would tell the turns
-//! apart, at the cost of one more hook run on every model request, which is not registered.
+//! too, until the `Stop` with `fullyIdle: true` that comes once the running one has ended.
+//! `PreInvocation`, which the launch registers so that a resumed conversation's first turn sends a
+//! hook (`super::hooks::PRE_INVOCATION`), would tell the turns apart (`invocationNum` 0 at each
+//! turn's first model request); it is not read for that here, and changes the work only as any
+//! event of the session's own conversation does, through the message it names.
 
 use serde_json::Value;
 
@@ -283,7 +285,8 @@ mod tests {
     const SUBAGENT: &str = include_str!("../../../testdata/antigravity_hooks_subagent.jsonl");
 
     /// The hooks of a `schedule` timer (`DurationSeconds` 4, `Prompt` `check the build`; 1.5.14,
-    /// the stand-in), through the hooks as the launch registers them: `SessionStart`, the call's
+    /// the stand-in), through the hooks as the launch registered them before it took
+    /// `PreInvocation`, which changes nothing here: `SessionStart`, the call's
     /// `PreToolUse`, `Stop` with `fullyIdle: false`; 4 s later its `PostToolUse`, then the `Stop`
     /// of the CLI's own turn on it, `fullyIdle: true`.
     const TIMER: &str = include_str!("../../../testdata/antigravity_hooks_schedule_timer.jsonl");
@@ -516,6 +519,28 @@ mod tests {
         next_turn["lastUserInput"] = Value::from("another message");
         let declined = replayed(&[start, pre_tool, next_turn]);
         assert!(declined[2].is_empty(), "{:?}", declined[2]);
+    }
+
+    /// `PreInvocation`, registered so that a resumed conversation's first turn sends a hook, lists
+    /// and takes off nothing itself: of the session's own conversation it begins the turn on the
+    /// message it names, as any of its events does, so a command declined in the turn before is
+    /// not listed by the next turn's `Stop`.
+    #[test]
+    fn a_model_request_changes_the_work_only_through_its_message() {
+        let payloads = events(COMMAND);
+        let [start, invocation, pre_tool, stop_running] =
+            [0, 1, 2, 6].map(|at| payloads[at].clone());
+        assert_eq!(event_of(&invocation), "PreInvocation");
+        let replayed_turn = replayed(&[start.clone(), invocation.clone(), pre_tool.clone()]);
+        assert!(replayed_turn[1].is_empty(), "{:?}", replayed_turn[1]);
+
+        let mut next_invocation = invocation;
+        next_invocation["lastUserInput"] = Value::from("another message");
+        let mut next_stop = stop_running;
+        next_stop["lastUserInput"] = Value::from("another message");
+        let next = replayed(&[start, pre_tool, next_invocation, next_stop]);
+        assert!(next[2].is_empty(), "{:?}", next[2]);
+        assert!(next[3].is_empty(), "{:?}", next[3]);
     }
 
     /// A subagent is listed from its first event under its own conversation's id, described by

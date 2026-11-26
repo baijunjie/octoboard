@@ -247,10 +247,12 @@ impl LiveSession {
         if moves.is_empty() {
             return;
         }
+        // A program that reports its status is past its start (`super::startup`).
+        self.startup.note_shown();
         // Every agent's reports say whether a turn runs, as its title did before it took to
         // reporting (`title_activity`), whether or not they give the session its status.
         self.note_reported_activity(&moves);
-        if !self.status_from_reports {
+        if !self.status_from_reports() {
             // The hooks give the status; the reports give what the provider declares they say.
             self.note_declared_signals(&moves);
             return;
@@ -290,7 +292,7 @@ impl LiveSession {
             return;
         };
         self.note_reported_activity(std::slice::from_ref(&root));
-        if !self.status_from_reports {
+        if !self.status_from_reports() {
             // A wait the program reported is one it is still in: the hand it raised was kept in
             // memory by the daemon before.
             self.note_declared_signals(std::slice::from_ref(&root));
@@ -315,11 +317,70 @@ impl LiveSession {
         }
     }
 
+    /// The launch's hooks have just been found absent, so the program's reports give the session
+    /// its status from now on: the root status record as it stands is applied as the move it was,
+    /// since the moves before were read only for what the provider declares they say beside its
+    /// hooks. Nothing where the program has reported nothing.
+    pub(crate) fn take_status_from_reports_now(&self) {
+        let root = self.pty.program_status_root();
+        if root.state.is_none() {
+            return;
+        }
+        self.status_reports.moves().pending.push_back(root);
+        self.apply_program_status();
+    }
+
+    /// A fresh running title, where the title gives the session its status
+    /// (`super::title_status`): the move to `working` goes in behind the reports' own, applied as
+    /// one of theirs, so it opens a turn where none is open, with no prompt attributed to it, and
+    /// moves the session to `Working`. Nothing where the last move taken, applied or pending, is
+    /// already `working`. It is not noted in the title activity, so the program still counts as
+    /// having made no report.
+    pub(super) fn open_turn_off_title(&self) {
+        {
+            let mut moves = self.status_reports.moves();
+            let last = moves
+                .pending
+                .back()
+                .map_or(moves.applied, |pending| pending.state);
+            if last == Some(ReportedState::Working) {
+                return;
+            }
+            moves.pending.push_back(Some(ReportedState::Working).into());
+        }
+        self.apply_program_status();
+    }
+
+    /// Closes the turn the title opened (`super::title_status`), while every move taken so far has
+    /// been applied and the session still reads `Working`, in one step under the moves' lock, so a
+    /// running title taken meanwhile goes in after the close and opens a turn of its own. Closed
+    /// as [`AppState::end_turn_off_title`] closes one: no report, no turn message waited for, not
+    /// paused, and an end of the agent's own that still comes is its real end. The root is taken
+    /// as back at the prompt, so a report the program makes later is applied from there. Says
+    /// whether it closed.
+    pub(super) fn close_turn_off_title(&self, state: &AppState) -> anyhow::Result<bool> {
+        let mut moves = self.status_reports.moves();
+        if !moves.settled() {
+            return Ok(false);
+        }
+        let moved = state.apply_reported_status_if(
+            &self.id,
+            SessionStatus::Working,
+            SessionStatus::Idle,
+        )?;
+        if moved {
+            state.end_turn_off_title(&self.id);
+            moves.applied = Some(ReportedState::Idle);
+            self.turn_messages.turn_boundary();
+        }
+        Ok(moved)
+    }
+
     /// The launch gave the agent a prompt on its command line, whose turn the reports have yet to
     /// show starting. Nothing where the reports do not give this session its status.
     pub(crate) fn await_launch_turn(&self) {
         self.awaits_launch_turn.store(
-            self.status_from_reports,
+            self.status_from_reports(),
             std::sync::atomic::Ordering::Release,
         );
     }
@@ -336,17 +397,17 @@ impl LiveSession {
         let now = std::time::Instant::now();
         for root in moves {
             observer.activity.note_report(root.state, now);
+            // A turn reported running: a hook that comes with the first turn is due.
+            if root.state == Some(ReportedState::Working) {
+                self.hooks.note_due();
+            }
         }
     }
 
     /// Starts a task applying the pending moves, unless one runs or the session is not yet bound
     /// to the daemon's state (`Self::observe_titles` calls this again once it is).
     pub(super) fn apply_program_status(&self) {
-        let (state, runtime) = {
-            let observer = self.title.lock().expect("title observer lock poisoned");
-            (observer.state.upgrade(), observer.runtime.clone())
-        };
-        let (Some(state), Some(runtime)) = (state, runtime) else {
+        let Some((state, runtime)) = self.state_and_runtime() else {
             return;
         };
         {
@@ -363,7 +424,7 @@ impl LiveSession {
         let (id, launch_id) = (self.id.clone(), self.launch_id.clone());
         let auth_settle = auth_settle();
         let launch_idle_settle = launch_idle_settle();
-        let done_gap = self.done_gap.map(done_gap_window);
+        let done_gap = self.done_gap().map(done_gap_window);
         let message_bound = turn_message::bound();
         runtime.spawn_blocking(move || loop {
             let reports = applying.reports.clone();
@@ -626,9 +687,10 @@ fn apply_within(
             .is_none_or(|live| live.turn_messages.report_msg_stands());
         let supplied = live.as_ref().and_then(|live| {
             if ended && state.turn_is_open(id) {
-                live.turn_messages.take(message_bound, || {
-                    live.has_exited() || state.is_shutting_down()
-                })
+                live.turn_messages
+                    .take(message_bound, live.hooks_absent(), || {
+                        live.has_exited() || state.is_shutting_down()
+                    })
             } else {
                 live.turn_messages.turn_boundary();
                 None

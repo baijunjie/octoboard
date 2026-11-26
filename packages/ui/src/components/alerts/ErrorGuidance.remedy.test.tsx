@@ -37,14 +37,13 @@ it("fills a provider remedy with the params of the error's code, a code param dr
   for (const ui of [<RecoveryGuidance recovery={FIX_REMEDY} error={fixFailure()} />, <ErrorGuidance error={fixFailure()} />]) {
     const container = mount(ui);
     expect(plain(container)).toBe(FILLED);
-    // The path is a code param (code), the provider and the application are names, the module's command a literal; the
-    // UI's `version` and the daemon's unlisted `note` stay plain text.
+    // The path is a code param (code) and the module's command a literal; the provider and the application, product
+    // names, are plain text isolated as elements, as the UI's `version` and the daemon's unlisted `note` are plain text.
     expect(references(container)).toEqual([
       ["/tmp/test-agent.toml", true],
-      ["Test Agent", false],
       [REMEDY_REFERENCES.command, true],
-      [APP_NAME, false],
     ]);
+    expect([...container.querySelectorAll("bdi")].map((name) => name.textContent)).toEqual(expect.arrayContaining(["Test Agent", APP_NAME]));
   }
 });
 
@@ -66,13 +65,14 @@ it("draws a remedy with no error, or with a non-coded one, with the module's wor
   expect(plain(mount(<RecoveryGuidance recovery={FIX_REMEDY} error={new Error("boom")} />))).toBe(without);
 });
 
-it("fills the global placeholders of a remedy itself, as references, never from a param of the failure with the same name", () => {
+it("fills the global placeholders of a remedy itself, as plain product names, never from a param of the failure with the same name", () => {
   const error = new CodedError("Raw sentence.", GLOBAL_CODE, { agent: "Impostor", osName: "Impostor", testAgentBrand: "Impostor" });
   const container = mount(<RecoveryGuidance recovery={`${GLOBAL_CODE}.remedy`} error={error} />);
   const osName = globalParam("osName")!;
   const brand = TEST_BRAND_PARAMS.testAgentBrand;
   expect(plain(container)).toBe(`Check ${osName} and ${brand} for Test Agent.`);
-  expect(references(container).map(([text]) => text)).toEqual([osName, brand, "Test Agent"]);
+  expect(references(container)).toEqual([]);
+  expect([...container.querySelectorAll("bdi")].map((name) => name.textContent)).toEqual(expect.arrayContaining([osName, brand, "Test Agent"]));
 });
 
 it("leaves no placeholder in the remedy of an error that carries the code's params", () => {

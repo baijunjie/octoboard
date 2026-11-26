@@ -1,0 +1,14 @@
+timestamp=2026-11-26T08:21:42.600Z level=INFO run=79c77618 message="creating instance" directory=/private/tmp/ocprobe-imp/work
+timestamp=2026-11-26T08:21:42.600Z level=INFO run=79c77618 message=fromDirectory directory=/private/tmp/ocprobe-imp/work
+timestamp=2026-11-26T08:21:42.604Z level=INFO run=79c77618 message=bootstrapping directory=/private/tmp/ocprobe-imp/work
+timestamp=2026-11-26T08:21:42.607Z level=INFO run=79c77618 message=loading path=/private/tmp/ocprobe-imp/config/opencode/config.json
+timestamp=2026-11-26T08:21:42.607Z level=INFO run=79c77618 message=loading path=/private/tmp/ocprobe-imp/config/opencode/opencode.json
+timestamp=2026-11-26T08:21:42.608Z level=INFO run=79c77618 message=loading path=/private/tmp/ocprobe-imp/config/opencode/opencode.jsonc
+timestamp=2026-11-26T08:21:46.009Z level=INFO run=79c77618 message="all LSPs are disabled"
+timestamp=2026-11-26T08:21:46.010Z level=INFO run=79c77618 message="all formatters are disabled"
+timestamp=2026-11-26T08:21:46.010Z level=INFO run=79c77618 message=init
+timestamp=2026-11-26T08:21:46.534Z level=INFO run=79c77618 message=init count=1
+timestamp=2026-11-26T08:21:46.553Z level=INFO run=79c77618 message="watcher backend" directory=/private/tmp/ocprobe-imp/work platform=darwin backend=fs-events
+timestamp=2026-11-26T08:21:46.556Z level=INFO run=79c77618 message="project copy refresh started" projectID=global
+timestamp=2026-11-26T08:21:46.556Z level=INFO run=79c77618 message="project copy refresh done" projectID=global updated=[] removed=[]
+timestamp=2026-11-26T08:21:46.563Z level=INFO run=79c77618 message="booting location services" directory=/private/tmp/ocprobe-imp/work workspaceID=undefined

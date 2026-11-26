@@ -199,3 +199,35 @@ Captured from OpenCode 1.19.6 on macOS in scratch HOME and XDG directories, with
 real model turn. `opencode_db_rows_1.19.6.json` is the stdout of the provider's session/message/part SELECT after
 one completed turn. `opencode_mcp_list_1.19.6.txt` is the stdout of `opencode mcp list` with two local stand-ins
 using `/usr/bin/false`, one disabled and one that fails the MCP connection. The final blank line is omitted.
+
+## An option it does not know
+
+Taken on 2026-11-26 with OpenCode 1.19.6 on macOS, in a scratch `HOME`, scratch XDG directories and an empty working
+directory under `/private/tmp/ocprobe`, the environment cleared down to `PATH`, `HOME`, the XDG variables, `TERM` and
+`LANG`, in a 120x40 PTY that answered OpenCode's terminal queries. Nothing was edited and no prompt was sent.
+
+| File | Command | Outcome |
+|---|---|---|
+| `opencode_unknown_option_120x40_1.19.6.bin` | `opencode --octoboard-unknown-option` | exited with status 1 after 0.21 s, before drawing anything (three runs alike) |
+| `opencode_help_120x40_1.19.6.bin` | `opencode --help` | the near miss: exited with status 0 after 0.23 s |
+
+The two files are byte for byte the same: the logo and the usage text. No line names the option it refused or says that
+it refused one, so nothing in the output tells an option refusal from a request for help, and OpenCode's provider
+reads none (no reduced plan). Without a terminal the same unknown option printed the usage on standard error and
+exited with status 1. An option that only lacks its value (`opencode --session`) was taken: the TUI started and drew.
+
+## A plugin that throws while loading
+
+Taken the same day by the same method, with `OPENCODE_CONFIG_CONTENT` naming two plugins: one that throws, then one that
+writes a line to a file when it loads and for every event. Each run lasted 12 seconds and was ended with `SIGTERM`. The
+logs are OpenCode's own (`$XDG_DATA_HOME/opencode/log/opencode.log`), unedited, kept as `.txt`; the files committed come
+from a second pair of runs that day, under `/private/tmp/ocprobe-fn` and `/private/tmp/ocprobe-imp`, which logged the
+same, the second plugin again loading and seeing events (their screens were not looked at again).
+
+| File | The plugin that throws | Outcome |
+|---|---|---|
+| `opencode_plugin_throws_in_function_1.19.6.txt` | its exported function throws (`export const P = async () => { throw … }`) | `level=ERROR … message="failed to load plugin" path=… error="<the message>"`; the TUI drew its start screen as usual and nothing about the plugin was shown; the second plugin loaded and saw events |
+| `opencode_plugin_throws_at_import_1.19.6.txt` | the module throws as it is imported | the log says nothing about it; the TUI drew its start screen, the same bytes as a run with no plugin; the second plugin loaded and saw events |
+
+So OpenCode goes on past a plugin that fails to load, and nothing on its screen says so: a launch whose plugin failed
+is a launch whose events never come.

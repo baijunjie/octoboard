@@ -198,12 +198,18 @@ impl TurnMessages {
     }
 
     /// The message supplied for the turn that is ending, waited for up to `bound` where the
-    /// provider declares it supplies one and has not said yet; `gone` ends the wait early (the
-    /// process ended, the daemon is stopping). A blank message is none. The turn is over
-    /// afterwards: a message that comes later is dropped.
-    pub(super) fn take(&self, bound: Duration, gone: impl Fn() -> bool) -> Option<String> {
+    /// provider declares it supplies one, has not said yet and its hooks are not absent
+    /// (`hooks_absent`: nothing would supply it); `gone` ends the wait early (the process ended,
+    /// the daemon is stopping). A blank message is none. The turn is over afterwards: a message
+    /// that comes later is dropped.
+    pub(super) fn take(
+        &self,
+        bound: Duration,
+        hooks_absent: bool,
+        gone: impl Fn() -> bool,
+    ) -> Option<String> {
         let mut slot = self.slot();
-        if self.awaited {
+        if self.awaited && !hooks_absent {
             #[cfg(test)]
             let _waiting = Waiting::of(&self.waiters);
             let until = Instant::now() + bound;
@@ -232,7 +238,7 @@ impl LiveSession {
     /// thread of its own, never on the caller's, which is the session's hook queue, and dropped
     /// unrun while an earlier read for the session is still running.
     pub(crate) fn supply_turn_message(&self, message: TurnMessage) {
-        if !self.status_from_reports {
+        if !self.status_from_reports() {
             return;
         }
         let turn = self.turn_messages.turn();

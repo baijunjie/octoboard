@@ -1,0 +1,4 @@
+[1m[31merror:[0m invalid value '[33moctoboardMode[0m' for '[1m--permission-mode <MODE>[0m'
+  [possible values: [32mdefault[0m, [32macceptEdits[0m, [32mauto[0m, [32mdontAsk[0m, [32mbypassPermissions[0m, [32mplan[0m]
+
+For more information, try '[1m--help[0m'.

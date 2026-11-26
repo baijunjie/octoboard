@@ -99,7 +99,7 @@ pub(super) fn system_settings_path(shell_env: &HashMap<String, String>) -> PathB
 /// The most of the system settings file, and of the system defaults file, that is read: a launch
 /// carries the system settings file within it, and everything that reads a system file for what a
 /// launch would see (the hooks-off check, the model list, the configured model) reads it within
-/// the same size, so that none of them sees a file the launch refuses.
+/// the same size, so that none of them sees a file the enhanced launch cannot use.
 pub(super) const SYSTEM_FILE_LIMIT: usize = SMALL_FILE_LIMIT;
 
 /// Whether `path` is a settings file a launch of Octoboard's wrote for a session, and no system
@@ -195,20 +195,22 @@ pub(super) fn system_defaults_path(shell_env: &HashMap<String, String>) -> PathB
 }
 
 /// The content of the system settings file this launch's file stands in for, empty when there is
-/// none. A file that is there and cannot be used refuses the launch: it is where an administrator
-/// denies permissions, locks MCP servers down and sets the sandbox, Qwen Code itself reports such
-/// a file instead of going on without it, and a session started without that layer would say
-/// nothing of it. That goes for a file over the size read here too, though Qwen Code has no such
-/// limit: refusing is the safe side.
+/// none. A file that is there and cannot be used is an error, which makes the enhanced launch
+/// unavailable: it is where an administrator denies permissions, locks MCP servers down and sets
+/// the sandbox, and a launch file written without it would drop that layer without a word. The
+/// session then starts bare, naming no settings file, so Qwen Code reads and reports the file
+/// itself, as in a plain terminal. That goes for a file over the size read here too, though Qwen
+/// Code has no such limit: leaving the file to Qwen Code is the safe side.
 fn replaced_settings(spec: &LaunchSpec<'_>) -> Result<Map<String, Value>> {
     carried_settings(&system_settings_path(spec.shell_env))
 }
 
-/// What the settings file at `path` gives a launch's file to carry: its content without any hook
-/// of Octoboard's ([`without_own_hooks`]), nothing when it is not there, and a refusal when it is
-/// there and cannot be used. [`system_settings_path`] already keeps a launch file from being
-/// asked for here; the hooks are taken out all the same, so that a file holding one by any other
-/// route, the platform's own included, cannot hand it on.
+/// What the settings file at `path` gives a launch's file to carry: its content without any hook of
+/// Octoboard's ([`without_own_hooks`]), nothing when it is not there, and an error when it is there
+/// and cannot be used, which makes the enhanced launch unavailable ([`replaced_settings`]).
+/// [`system_settings_path`] already keeps a launch file from being asked for here; the hooks are
+/// taken out all the same, so that a file holding one by any other route, the platform's own
+/// included, cannot hand it on.
 fn carried_settings(path: &Path) -> Result<Map<String, Value>> {
     match settings_file::read(path, SYSTEM_FILE_LIMIT) {
         SettingsFile::Settings(settings) => Ok(without_own_hooks(settings)),
@@ -216,8 +218,8 @@ fn carried_settings(path: &Path) -> Result<Map<String, Value>> {
         SettingsFile::Unusable(why) => Err(CodedError::raised(
             Code::of_provider(qwen::SYSTEM_SETTINGS_UNUSABLE),
             format!(
-                "Qwen Code's system settings file `{}` cannot be used ({why}), so the session \
-                 was not started without it: repair the file or remove it",
+                "Qwen Code's system settings file `{}` cannot be used ({why}), so Octoboard's \
+                 settings file was not written",
                 path.display()
             ),
             &[("path", &path.to_string_lossy())],
@@ -627,11 +629,11 @@ mod tests {
     }
 
     /// A system file that is there and cannot be used (it cannot be read, is not JSON once its
-    /// comments are off, or is not an object) refuses the launch with the provider's own code and
-    /// the file's path, and writes no settings file: starting without that layer would drop what an
+    /// comments are off, or is not an object) is an error with the provider's own code and the
+    /// file's path, and writes no settings file: a launch file without that layer would drop what an
     /// administrator set in it.
     #[test]
-    fn a_system_file_that_cannot_be_used_refuses_the_launch() {
+    fn a_system_file_that_cannot_be_used_is_an_error_naming_it() {
         for content in ["{ not json", "[1, 2]", "\"text\"", "", "{\"a\": 1,}"] {
             let (fixture, system) = fixture_with_system_file(Some(content));
             let err = write(&fixture.spec()).expect_err(content);
@@ -660,10 +662,10 @@ mod tests {
 
     /// A system settings file path that is a directory is there, and cannot be read as settings.
     #[test]
-    fn a_system_file_that_cannot_be_read_refuses_the_launch() {
+    fn a_system_file_that_cannot_be_read_is_an_error_naming_it() {
         let (fixture, system) = fixture_with_system_file(None);
         std::fs::create_dir(&system).expect("a directory in its place");
-        let err = write(&fixture.spec()).expect_err("refused");
+        let err = write(&fixture.spec()).expect_err("unusable");
         assert_eq!(
             err.downcast_ref::<CodedError>().expect("coded").code,
             Code::of_provider(qwen::SYSTEM_SETTINGS_UNUSABLE)
@@ -1131,7 +1133,7 @@ mod tests {
     /// A settings file that holds a hook of Octoboard's, carried over the way a launch carries its
     /// system settings file, comes back without it and with the administrator's own hooks and
     /// settings as they were; a file that is not there carries nothing, and one that cannot be
-    /// used is refused.
+    /// used is an error.
     #[test]
     fn a_file_carried_over_loses_octoboards_hooks_and_keeps_the_administrators() {
         let dir = spec_fixture();
@@ -1159,7 +1161,7 @@ mod tests {
         assert!(carried_settings(&missing).expect("nothing").is_empty());
 
         std::fs::write(&file, "{ not json").expect("the file");
-        let err = carried_settings(&file).expect_err("refused");
+        let err = carried_settings(&file).expect_err("unusable");
         assert_eq!(
             err.downcast_ref::<CodedError>().expect("coded").code,
             Code::of_provider(qwen::SYSTEM_SETTINGS_UNUSABLE)

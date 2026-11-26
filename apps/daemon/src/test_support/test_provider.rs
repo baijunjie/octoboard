@@ -3,8 +3,9 @@
 //! `crate::adapter::test_provider::PASTE_WAITING_SCREEN`, say), its interrupt key, a screen reader
 //! of its own (an input box read off the screen as drawn, say), hooks of its own, what its status
 //! reports say beside its status integration, the done gap its reports declare, a private server,
-//! an extension channel, a launch without its status integration, the wait for its tool listing
-//! and its launch's further notices. The test-only provider is the one whose screen reader and
+//! an extension channel, a launch without its status integration, the wait for its tool listing,
+//! its launch's further notices, a plan that fails, a refusal of every launch, a reduced plan and
+//! when its launch's first hook is due. The test-only provider is the one whose screen reader and
 //! interpreter claim nothing, so a test of generic code that wants a declaration puts it there
 //! rather than naming a registered provider. Each switch holds on the thread that took it, as the
 //! variants of `crate::providers::test_provider` do: work a test hands to another thread sees the
@@ -22,7 +23,7 @@ use crate::session::screen::{Interrupt, ScreenReader};
 use crate::session::trust::Screen;
 use crate::session::ReportedSignals;
 
-/// What a test has the provider answer for its launch's further notices.
+/// What a test has the provider answer for a launch's further notices, or its check's.
 type FurtherNotices = fn() -> Vec<Notice>;
 
 thread_local! {
@@ -38,6 +39,12 @@ thread_local! {
     static LAUNCH_WITHOUT_STATUS_INTEGRATION: Cell<Option<()>> = const { Cell::new(None) };
     static TOOL_LISTING_WAIT: Cell<Option<Duration>> = const { Cell::new(None) };
     static FURTHER_NOTICES: Cell<Option<FurtherNotices>> = const { Cell::new(None) };
+    static CHECKED_NOTICES: Cell<Option<FurtherNotices>> = const { Cell::new(None) };
+    static FAILING_PLAN: Cell<Option<()>> = const { Cell::new(None) };
+    static LAUNCH_REFUSAL: Cell<Option<()>> = const { Cell::new(None) };
+    static REDUCED_PLAN: Cell<Option<()>> = const { Cell::new(None) };
+    static FIRST_HOOK: Cell<Option<crate::adapter::FirstHook>> = const { Cell::new(None) };
+    static LAUNCH_VERSION: Cell<Option<crate::adapter::AgentVersion>> = const { Cell::new(None) };
 }
 
 /// What each `declaring_*` switch of this module returns; what the thread declared before
@@ -192,6 +199,63 @@ pub(crate) fn declaring_further_launch_notices(
     Declared::new(&FURTHER_NOTICES, notices)
 }
 
+/// What a test has the test-only provider's check of every launch find to tell, on this thread
+/// ([`declaring_checked_notices`]).
+pub(crate) fn declared_checked_notices() -> Vec<Notice> {
+    CHECKED_NOTICES
+        .with(Cell::get)
+        .map_or_else(Vec::new, |notices| notices())
+}
+
+/// The launches this thread makes of the test-only provider are found by its check to have what
+/// `notices` gives to tell, at every tier (`AgentProvider::check_launch`). By default the check
+/// finds nothing.
+pub(crate) fn declaring_checked_notices(notices: FurtherNotices) -> Declared<FurtherNotices> {
+    Declared::new(&CHECKED_NOTICES, notices)
+}
+
+/// Whether a test has the test-only provider's plan fail on this thread
+/// ([`declaring_failing_plan`]).
+pub(crate) fn declares_failing_plan() -> bool {
+    FAILING_PLAN.with(Cell::get).is_some()
+}
+
+/// The test-only provider's plan fails on this thread (`AgentProvider::plan`), with the coded
+/// error [`FAILING_PLAN_CODE`], so its launches fall to its bare plan. By default it plans.
+pub(crate) fn declaring_failing_plan() -> Declared<()> {
+    Declared::new(&FAILING_PLAN, ())
+}
+
+/// The code the test-only provider's failing plan raises ([`declaring_failing_plan`]), with a
+/// `path` param: one a real plan raises for a file it cannot use.
+pub(crate) const FAILING_PLAN_CODE: crate::protocol::Code =
+    crate::protocol::error_code::CONFIG_DIR_UNREACHABLE;
+
+/// Whether a test has the test-only provider refuse its launches on this thread
+/// ([`declaring_launch_refusal`]).
+pub(crate) fn declares_launch_refusal() -> bool {
+    LAUNCH_REFUSAL.with(Cell::get).is_some()
+}
+
+/// The test-only provider refuses every launch on this thread (`AgentProvider::launch_refusal`),
+/// with `provider_unsupported`. By default it refuses none.
+pub(crate) fn declaring_launch_refusal() -> Declared<()> {
+    Declared::new(&LAUNCH_REFUSAL, ())
+}
+
+/// Whether a test has the test-only provider give a reduced plan on this thread
+/// ([`declaring_reduced_plan`]).
+pub(crate) fn declares_reduced_plan() -> bool {
+    REDUCED_PLAN.with(Cell::get).is_some()
+}
+
+/// The test-only provider gives a reduced plan after an early exit on this thread
+/// (`AgentProvider::reduced_plan`). By default it gives none, so its launch after an early exit
+/// is bare.
+pub(crate) fn declaring_reduced_plan() -> Declared<()> {
+    Declared::new(&REDUCED_PLAN, ())
+}
+
 /// Whether a test has the test-only provider's launches go without its status integration on this
 /// thread ([`declaring_launch_without_status_integration`]).
 pub(crate) fn declares_launch_without_status_integration() -> bool {
@@ -231,4 +295,33 @@ pub(crate) fn declares_extension_channel() -> bool {
 /// guard lives. By default it runs none.
 pub(crate) fn declaring_extension_channel() -> Declared<()> {
     Declared::new(&EXTENSION_CHANNEL, ())
+}
+
+/// When a test has the test-only provider's launches expect their first hook on this thread
+/// ([`declaring_first_hook`]).
+pub(crate) fn declared_first_hook() -> Option<crate::adapter::FirstHook> {
+    FIRST_HOOK.with(Cell::get)
+}
+
+/// The CLI version a test has stand-in sessions made on this thread say their launch started
+/// ([`declaring_launch_version`]).
+pub(crate) fn declared_launch_version() -> Option<crate::adapter::AgentVersion> {
+    LAUNCH_VERSION.with(Cell::get)
+}
+
+/// A stand-in session made on this thread says its launch started `version` of its agent's CLI
+/// (`crate::session::integration::Integration::agent_version`). By default it says none.
+pub(crate) fn declaring_launch_version(
+    version: crate::adapter::AgentVersion,
+) -> Declared<crate::adapter::AgentVersion> {
+    Declared::new(&LAUNCH_VERSION, version)
+}
+
+/// The launches this thread plans of the test-only provider expect their first hook as `first`
+/// says (`AgentProvider::first_hook_due`), and a stand-in session made meanwhile the same. By
+/// default none is expected.
+pub(crate) fn declaring_first_hook(
+    first: crate::adapter::FirstHook,
+) -> Declared<crate::adapter::FirstHook> {
+    Declared::new(&FIRST_HOOK, first)
 }

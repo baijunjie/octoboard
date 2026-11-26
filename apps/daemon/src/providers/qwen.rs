@@ -16,9 +16,10 @@ pub(crate) const QWEN_SETTINGS_FILE: &str = "settings.json";
 /// Qwen subscription.
 pub(crate) const QWEN_SUBSCRIPTION_FILE: &str = "subscription_credentials.json";
 
-/// A launch refused because the system settings file it would stand in for is there and cannot be
-/// read as settings: starting without it would drop what an administrator set there. `path` is
-/// the file.
+/// The system settings file a launch's settings would stand in for is there and cannot be read as
+/// settings: a launch file without it would drop what an administrator set there, so the enhanced
+/// launch is unavailable and the session starts bare, where Qwen Code reads the file itself. Shown
+/// as the reason of `launch_enhancements_unavailable`. `path` is the file.
 pub const SYSTEM_SETTINGS_UNUSABLE: ProviderCode =
     ProviderCode::error("provider.qwen.system_settings_unusable");
 

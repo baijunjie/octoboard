@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use crate::accounts::relocate;
 use crate::accounts::thread_registry::thread_registry;
@@ -31,8 +31,9 @@ use crate::accounts::choice::{account_dir, checked_account_reference};
 /// What a switch worked out before it ended anything.
 struct SwitchPlan {
     /// The snapshot the default account was resolved from, handed on to the relaunch so the copy
-    /// and the launch cannot disagree about where the default account is.
-    shell_env: Option<HashMap<String, String>>,
+    /// and the launch cannot disagree about where the default account is, with the fallback it
+    /// took where the login shell's environment could not be read.
+    shell_env: Option<crate::env_shell::LaunchEnv>,
     /// The conversation to copy. What the agent keeps beside it is listed only once the process is
     /// down, as it may still be creating some. None for a session with no conversation on the
     /// agent's side.
@@ -69,7 +70,7 @@ fn prepare_switch(
     // A thread registry is pointed with the environment the relaunch sees
     // (`ThreadRegistry::point_thread_at`), which can say where the account keeps it.
     let shell_env = if source.is_none() || target.is_none() || thread_registry(agent).is_some() {
-        Some(snapshot().context("snapshotting the user's shell environment")?)
+        Some(crate::env_shell::launch_env_from(snapshot()))
     } else {
         None
     };
@@ -79,7 +80,8 @@ fn prepare_switch(
             relocation: None,
         });
     };
-    let resolve = |pinned: Option<&str>| account_dir(agent, pinned, shell_env.as_ref());
+    let resolve =
+        |pinned: Option<&str>| account_dir(agent, pinned, shell_env.as_ref().map(|env| &env.vars));
     let (from, to) = (resolve(source), resolve(target));
     let record = relocate::locate(agent, &from, resume_id)?;
     Ok(SwitchPlan {
@@ -433,7 +435,11 @@ pub(crate) async fn switch_session_account_if(
                 let agent = before.agent;
                 // The environment the relaunch will see, which can say where the target keeps its
                 // thread registry.
-                let launch_env = plan.shell_env.clone().unwrap_or_default();
+                let launch_env = plan
+                    .shell_env
+                    .as_ref()
+                    .map(|env| env.vars.clone())
+                    .unwrap_or_default();
                 tokio::task::spawn_blocking(move || {
                     let Relocation {
                         from,
@@ -487,7 +493,7 @@ pub(crate) async fn switch_session_account_if(
                 put_back_on_account(state, &before);
                 return Err(err);
             }
-            if !came_up_under_claim(state, id).await {
+            if !came_up_under_claim(state, claim, id).await {
                 put_back_once_down(state, &before).await;
                 return Err(CodedError::raised(
                     error_code::SWITCH_DID_NOT_COME_UP,
@@ -566,7 +572,7 @@ pub(crate) async fn restore_after_failed_switch(
         put_back_on_account(state, before);
     }
     relaunch_session_with(state, &claim, id, None, false, None, None, launch).await?;
-    if !came_up_under_claim(state, id).await {
+    if !came_up_under_claim(state, &claim, id).await {
         return Err(CodedError::raised(
             error_code::SWITCH_DID_NOT_COME_UP,
             "the session ended as soon as it was relaunched on the account it had",

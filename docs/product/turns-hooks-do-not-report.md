@@ -1,6 +1,7 @@
 # Turns the agents' hooks do not report
 
-Antigravity CLI and Pi use program status reports to observe turn endings. Qwen Code reports a cancellation as `idle` immediately after `working`, even when its hooks say nothing. See “What reports can say beside an agent's hooks” in `docs/product/program-status-reports.md` for that case.
+Antigravity CLI and Pi use program status reports to observe turn endings. A session whose hooks are absent is in
+"A session whose hooks are absent and whose program reports nothing" below. Qwen Code reports a cancellation as `idle` immediately after `working`, even when its hooks say nothing. See “What reports can say beside an agent's hooks” in `docs/product/program-status-reports.md` for that case.
 
 A session's status follows the hook events its agent reports (see "What the statuses are derived from" in
 `docs/product/session-statuses.md`). A few ways a turn ends, or a raised hand comes down, are reported by no hook event,
@@ -296,3 +297,43 @@ is recognised by the shape of the record Codex writes for the turn's end; the be
 0.160.0, and the capacity failure's `server_overloaded` on rollouts of Codex 0.162. A release that renames that value
 breaks only the retry: such a turn is then reported at once as any other failed turn. A release that changes that shape breaks this silently — there is no error and nothing is reported as having
 failed — and the only symptom is a session reading *working* while Codex sits at its prompt.
+
+## A session whose hooks are absent and whose program reports nothing
+
+A session can run without its agent's hooks: a launch started without Octoboard's additions, or one whose hooks never
+arrived (see `docs/product/launching-without-octoboards-additions.md`). Its status then follows
+what the program in its terminal reports through OSC 7501, as for an agent with no status integration (see
+`docs/product/program-status-reports.md`), starting from what the program last reported when the hooks were found
+absent. Where the program has reported nothing in this launch either, its terminal title gives the status, for the
+agents whose title Octoboard reads for activity: Claude Code, Codex, Grok Build and Qwen Code. The title then gives
+*working* and the prompt, and nothing more:
+
+- **Working.** A running title the agent is still sending moves the session to *working* and opens a turn where none is
+  open, as a turn already under way, with no prompt attributed to it.
+- **Back at the prompt.** The title back at the prompt after a running one closes the turn only once all of these hold:
+  it has stayed at the prompt for about a second, as for a cancel read off the title (see "Cancelling a Claude Code
+  turn" above), with no running title meanwhile; no dialog of the agent's is up or has just gone; the session's
+  screen, looked at once at that moment, shows no dialog and no prompt Octoboard recognises; and, for Claude Code, Grok
+  Build and Qwen Code, whose input box Octoboard reads, the input box is drawn. A turn closed this way synthesises no
+  report for the session's owner, waits for no turn message, keeps what the session itself reported, and does not leave
+  the session *paused*; an end of the agent's own that still comes is taken as the turn's real end.
+- **Never from the title**: waiting for the user. A prompt, question or screen Octoboard recognises raises the hand as
+  it does in any session; while the session waits for the user, the title closes nothing. A running title that stops
+  coming with no prompt title after it leaves the session *working* until the process ends.
+
+The first status report the program makes takes over from the title for the rest of the launch, from the turn the
+title opened, and a hook that arrives ends the title's part at once; neither gives it back.
+
+What this reading cannot tell, and which is accepted:
+
+- **A wait on the user that no reader recognises**, with the input box still drawn, reads as being at the prompt.
+  Nothing is reported for it; the next running title reads *working* again and opens a new turn, so the session's turn
+  count is one more than the agent's.
+- **A turn's normal end and a cancel are not told apart**: neither is reported to an owner, and neither leaves the
+  session *paused*. An owner hears of such a turn only through the session's own `report` call, which a session started
+  without Octoboard's additions cannot make (see "The plain launch" in `docs/product/launching-without-octoboards-additions.md`).
+- **A title the user's configuration turned off, or a release that changes the title's glyphs**, leaves the session
+  reading as at its prompt, as a program that says nothing does.
+- **A running glyph the agent shows outside a turn** reads *working* until it stops.
+
+For the other agents, a session in this state whose program reports nothing keeps the status it last had.

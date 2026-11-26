@@ -333,6 +333,14 @@ impl TerminalSnapshot {
         self.terminal.mode().contains(TermMode::BRACKETED_PASTE)
     }
 
+    /// Whether the program shows the alternate screen now, read off the parsed state as
+    /// [`Self::bracketed_paste_on`] is. Only tests read it: an exit at start can leave the
+    /// alternate screen on, so it is no sign of a program that started.
+    #[cfg(test)]
+    pub fn alternate_screen_on(&self) -> bool {
+        self.terminal.mode().contains(TermMode::ALT_SCREEN)
+    }
+
     pub fn resize(&mut self, rows: u16, cols: u16) {
         let size = Size {
             rows: usize::from(rows),

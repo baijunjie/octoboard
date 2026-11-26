@@ -235,7 +235,7 @@ async fn helper_launches_and_ends_a_session_in_this_home() {
         SESSION,
         None,
         false,
-        Some(home_env()),
+        Some(crate::env_shell::LaunchEnv::captured(home_env())),
         None,
         term::launch,
     )

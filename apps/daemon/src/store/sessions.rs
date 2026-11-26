@@ -262,6 +262,25 @@ impl Store {
         )
     }
 
+    /// Forgets the conversation id `agent_session_id` the session holds, which named a
+    /// conversation its launch never started (a launch that exited as it started), with what the
+    /// agent's records gave it. Returns the record as it now stands, or `None` when the session
+    /// holds another id or is gone.
+    pub fn forget_agent_session_id(
+        &self,
+        id: &str,
+        agent_session_id: &str,
+    ) -> Result<Option<Session>> {
+        self.update_session_row(
+            id,
+            "UPDATE sessions SET agent_session_id = NULL, context = NULL, record_title = NULL,
+                                 record_prompt = NULL, observed_model = NULL,
+                                 observed_effort = NULL, observed_boundary = NULL
+             WHERE id = ?1 AND agent_session_id IS ?2",
+            params![id, agent_session_id],
+        )
+    }
+
     /// Adds `root` to the records directories the session's launches selected
     /// (`Session::record_roots`), unless it is there already. Nothing is written for a session
     /// that is gone. The list is never sent, so nothing is published.
@@ -1132,6 +1151,7 @@ pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Option<Session>> {
         screen_inexact: false,
         holder_link: None,
         interaction: None,
+        standing_notices: Vec::new(),
         default_effort: None,
         role: enum_from_row::<Role>(row, 19)?,
         has_conversation: row.get(10)?,
@@ -2151,6 +2171,51 @@ mod tests {
             "a record written under an earlier conversation is still looked for"
         );
         assert!(store.get_session("gone").unwrap().is_none());
+    }
+
+    /// A conversation id a launch recorded but never started is forgotten with what the agent's
+    /// records gave it, and only where the session still holds that very id: another id, or a
+    /// session that is gone, changes nothing.
+    #[test]
+    fn a_conversation_id_is_forgotten_only_where_the_session_holds_it() {
+        let path = temp_db("forget-agent-session-id");
+        let store = Store::open(&path).unwrap();
+        store.insert_console(&console(None, None, None)).unwrap();
+        store.insert_session(&session(None)).unwrap();
+        store
+            .set_agent_session_id("session-1", "never-started")
+            .unwrap();
+
+        assert!(store
+            .forget_agent_session_id("session-1", "another")
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            store
+                .require_session("session-1")
+                .unwrap()
+                .agent_session_id
+                .as_deref(),
+            Some("never-started")
+        );
+        assert!(store
+            .forget_agent_session_id("gone", "never-started")
+            .unwrap()
+            .is_none());
+
+        let forgotten = store
+            .forget_agent_session_id("session-1", "never-started")
+            .unwrap()
+            .expect("forgotten");
+        assert_eq!(forgotten.agent_session_id, None);
+        assert_eq!(
+            store.require_session("session-1").unwrap().agent_session_id,
+            None
+        );
+        assert!(store
+            .forget_agent_session_id("session-1", "never-started")
+            .unwrap()
+            .is_none());
     }
 
     #[test]

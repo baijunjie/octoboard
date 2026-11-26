@@ -901,7 +901,8 @@ fn a_new_session_opens_on_an_account_whose_quota_is_used_up() {
 }
 
 /// What each gate refuses of an account: turned off by all of them, used up by the full gate only,
-/// logged out by the full and the new-session gate.
+/// logged out by the full and the new-session gate, and not by the gate of the user's own open,
+/// which tells the session instead.
 #[test]
 fn each_account_gate_refuses_its_own_states() {
     use crate::protocol::{AccountQuota, QuotaUnavailable};
@@ -948,6 +949,7 @@ fn each_account_gate_refuses_its_own_states() {
     for (gate, expected) in [
         (AccountGate::Full, [disabled, used_up, signed_out, None]),
         (AccountGate::NewSession, [disabled, None, signed_out, None]),
+        (AccountGate::OwnOpen, [disabled, None, None, None]),
         (AccountGate::DisabledOnly, [disabled, None, None, None]),
     ] {
         let found = ["off", "spent", "out", "fresh"].map(|account| refusal(account, gate));

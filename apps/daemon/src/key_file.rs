@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use crate::hostfs::replace::{replace_beside, Permissions};
 
 /// Where a session's key file is, or would be, in its scratch directory.
-fn path(scratch: &Path) -> PathBuf {
+pub(crate) fn path(scratch: &Path) -> PathBuf {
     scratch.join("key")
 }
 

@@ -83,6 +83,7 @@ impl Drop for SessionRemovalClaim {
 pub struct LaunchClaim {
     held: Arc<ClaimHeld>,
     watches_launch: bool,
+    follows_launch: bool,
 }
 
 /// What a claim's handles hold between them, and what releases the claim when the last is gone.
@@ -102,6 +103,7 @@ impl LaunchClaim {
         Self {
             held: Arc::new(ClaimHeld { state, id }),
             watches_launch: false,
+            follows_launch: false,
         }
     }
 
@@ -112,12 +114,27 @@ impl LaunchClaim {
         self.watches_launch
     }
 
+    /// Whether the holder watches the process it launches under the claim come up and relaunches
+    /// it itself after an early exit (`crate::coordinator::restart::came_up_under_claim`), so the
+    /// exit watcher hands such an exit to it (`LiveSession::follow_under_claim`).
+    pub fn follows_launch(&self) -> bool {
+        self.follows_launch
+    }
+
+    /// This claim, for a holder that follows the launch it makes under it come up
+    /// ([`Self::follows_launch`]).
+    pub(crate) fn following(mut self) -> Self {
+        self.follows_launch = true;
+        self
+    }
+
     /// Another handle to the same claim, for work that has to keep the session claimed after the
     /// holder of this one is done or gone: a start that no holder has confirmed yet.
     pub(crate) fn share(&self) -> Self {
         Self {
             held: self.held.clone(),
             watches_launch: self.watches_launch,
+            follows_launch: self.follows_launch,
         }
     }
 }
@@ -264,7 +281,8 @@ impl AppState {
         id: &str,
         watches_launch: bool,
     ) -> Result<LaunchClaim> {
-        let mut claim = self.claim_switch(id)?;
+        // Every account switch watches the process it relaunches come up.
+        let mut claim = self.claim_switch(id)?.following();
         claim.watches_launch = watches_launch;
         self.live
             .write()
@@ -328,6 +346,27 @@ impl AppState {
         let was_changing_model = live.model_changes.remove(id);
         let was_prompted = live.prompted_launches.remove(id);
         drop(live);
+        // An early exit handed to an operation following the launch that is gone without taking
+        // it (its future dropped mid `came_up_under_claim`): nothing relaunches the session, which
+        // its exit watcher set back to starting with no process, so it is left interrupted, and the
+        // entry goes rather than being taken by a later operation's relaunch.
+        // Nobody follows or watches the session's process under this claim any more: an early exit
+        // from here on is the exit watcher's own to relaunch, not handed to an operation that is
+        // gone (`LiveSession::is_followed_under_claim`).
+        if let Some(live) = self.live_session(id) {
+            live.release_watch();
+        }
+        let left = self
+            .early_exits
+            .lock()
+            .expect("early exits lock poisoned")
+            .remove(id);
+        if left.is_some() {
+            tracing::info!(session = %id, "an early exit handed to an operation that is gone was dropped");
+            if let Err(err) = self.interrupt_session_record(id) {
+                tracing::warn!(session = %id, %err, "marking a session whose relaunch was dropped interrupted failed");
+            }
+        }
         if was_switching_account || was_changing_model || was_prompted {
             self.publish_session_by_id(id);
         }
@@ -443,6 +482,53 @@ pub(crate) fn session_archived(id: &str) -> anyhow::Error {
 
 #[cfg(test)]
 mod tests {
+    /// An operation following a process under its claim that is gone (its claim released, its
+    /// future dropped) follows it no more: an early exit of the process is then the exit watcher's
+    /// to relaunch, not handed to nobody.
+    #[tokio::test]
+    async fn a_process_followed_under_a_claim_is_released_with_the_claim() {
+        use crate::protocol::{AgentId, SessionStatus};
+        let (state, dir) = crate::test_support::app_state("claims-follow-released");
+        crate::state::test_support::insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = crate::test_support::fake_live_session("s", AgentId::TEST, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        let claim = state.begin_switch("s").unwrap().following();
+        live.follow_under_claim();
+        assert!(live.is_followed_under_claim());
+        drop(claim);
+        assert!(!live.is_followed_under_claim());
+        assert!(!live.is_watched_under_claim());
+        live.end();
+    }
+
+    /// An early exit handed to an operation following the launch that is gone without taking it
+    /// goes with the operation's claim, and leaves the session interrupted rather than starting
+    /// with no process; a later operation finds nothing to relaunch.
+    #[tokio::test]
+    async fn an_early_exit_left_by_a_gone_operation_goes_with_its_claim() {
+        use crate::protocol::SessionStatus;
+        use crate::session::relaunch::{EarlyExitRelaunch, LaunchAsked};
+        let (state, dir) = crate::test_support::app_state("claims-early-exit-left");
+        crate::state::test_support::insert_record(&state, &dir, "s", SessionStatus::Starting);
+        let claim = state.begin_switch("s").unwrap().following();
+        state.hand_early_exit(
+            "s",
+            EarlyExitRelaunch {
+                asked: LaunchAsked::new(None, None, None, None, Vec::new()),
+                exit: crate::adapter::EarlyExit::default(),
+                tier: crate::adapter::LaunchTier::Reduced,
+                previous_status: SessionStatus::Idle,
+                ran_as: None,
+            },
+        );
+        drop(claim);
+        assert!(state.take_early_exit("s").is_none());
+        assert_eq!(
+            state.session_record("s").unwrap().status,
+            SessionStatus::Interrupted
+        );
+    }
+
     /// A console's entry in the association map goes with its last claim, and stays while another
     /// claim for the console waits.
     #[tokio::test(start_paused = true)]

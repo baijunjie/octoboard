@@ -161,7 +161,6 @@ impl TitleActivity {
 
     /// Whether the program's status reports have taken over from the title
     /// ([`Self::note_report`]).
-    #[cfg(test)]
     pub fn reported(&self) -> bool {
         self.reported
     }

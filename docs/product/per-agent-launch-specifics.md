@@ -35,6 +35,20 @@ agent.
 | Qwen Code | Hooks in the launch’s system settings. | `--mcp-config` and `--append-system-prompt`. |
 | Pi | An extension loaded for the launch, together with program status reports. | The extension supplies the Octoboard tools. `--append-system-prompt` names the launch’s role file. |
 
+A launch started without Octoboard's additions (see "The plain launch" in `docs/product/launching-without-octoboards-additions.md`) passes
+none of the above, only this:
+
+| Agent | Resume | Model | A new session's task |
+|---|---|---|---|
+| Claude Code | `--resume <id>` | `--model` | the prompt argument, after a bare `--`, shaped as below; on a resume, the instruction or prompt to continue Octoboard has for it, the same way |
+| Codex | `codex resume <id>` | `-c model=…` | after a bare `--` |
+| Grok Build | `--resume <id>` | `--model` | after a bare `--` |
+| Antigravity CLI | `--conversation <id>` | `--model` | the session's first message |
+| GitHub Copilot CLI | `--resume=<id>` | `--model` | `--interactive=<task>` |
+| OpenCode | `--session <id>` | `--model` for OpenCode 1.x only; OpenCode 2 is passed no model | the session's first message |
+| Qwen Code | `--resume <id>` | `--model` | `--prompt-interactive=<task>` |
+| Pi | `--session <id>`, after `--session-dir <dir>` where the record is in a directory an earlier launch kept (see "Pi" below) | `--model` | after a bare `--`; a task that starts with `@` as the session's first message |
+
 The 660 seconds are Octoboard's own 10-minute limit on a forwarded call plus a minute (see "The time limit on
 Octoboard's tools" below and the Codex list below for why). A value the session leaves to the agent's default — no
 model, no effort, **Follow account configuration** for Claude Code and Grok Build or **Custom (config.toml)** for Codex
@@ -98,15 +112,26 @@ Octoboard's tools are therefore not put to Claude Code's auto-mode classifier ei
 the requests Octoboard puts to the user before acting on a session's behalf (see `docs/product/session-requests.md`),
 are unaffected.
 
+A model and an effort chosen for the session are passed to every Claude Code release, with no version checked first. A
+release that does not take one of the options Octoboard passes refuses it and exits before it draws anything; Octoboard
+then starts it once more as a plain terminal would, with the conversation, the model and the task alone, and tells the
+user with the standing notice `launch_retried_plain` (there is no in-between launch for Claude Code). A launch whose
+hooks never arrive — the user's or a managed configuration switching hooks off, say — is found without them 30 seconds
+after it starts: the messages Octoboard holds for it go in once its input box is drawn with no trust confirmation up,
+and the standing notice `hooks_not_received` says so until a hook arrives. Claude Code runs no hook while its trust
+confirmation is up, so the 30 seconds do not run while it is: they start once it has gone, and a confirmation left
+unanswered raises nothing.
+
 ## Codex
 
 Octoboard does not assign Codex a session id in advance. A resumed session has its conversation's id from the start;
 a new session learns its agent-side id from the first prompt submitted in it, so one opened without a task has none
 until then; with Codex's private app server an automatic message can be that first prompt, without the user having to
-submit the draft in the composer first. A session of Codex 0.166.0 or later runs with a private app server of its own
-(see "Codex's private app server" below). Any other session, and one whose server could not be started, runs as one
-terminal process, `codex` (`codex resume <id>` on a resume), whose own command line carries every override Octoboard
-passes, all of them again on a resume.
+submit the draft in the composer first. Every session started with Octoboard's additions runs with a private app server
+of its own, whatever Codex's version (see "Codex's private app server" below). One whose server could not be started
+runs as one terminal process, `codex` (`codex resume <id>` on a resume), whose own command line carries every override
+Octoboard passes, all of them again on a resume. A launch that Codex ends as it starts is started again with less (see
+"When Codex exits as it starts" below).
 
 On a Windows daemon host, where the `codex` found on the `PATH` is a package manager's shim, Octoboard runs the native
 Codex program (`codex.exe`) the installed package ships instead of that shim, for the session as for its account's
@@ -122,9 +147,11 @@ reads and sign-in. It finds the package through each package manager's install l
 Only a `codex.exe` built for an architecture the machine runs is taken, whichever architecture Octoboard's daemon
 itself is built for: on an x64 machine only an x64 build; on an ARM64 machine the ARM64 build, or, where the install
 has only the x64 build, that one, run emulated. A shim whose package ships no such program, and a script shim (`.cmd`,
-`.bat`, `.ps1`) whose package is in none of these layouts, are refused with `provider.codex.native_program_missing`,
-whose message says Codex's install is missing its native program and to reinstall Codex: the launcher script is never
-run in the native program's place. A `codex.exe` found in none of these layouts is run as it is.
+`.bat`, `.ps1`) whose package is in none of these layouts, start Codex as a plain terminal would, through the shim
+itself and without Octoboard's additions, which the shim's command line cannot carry; a new session's task is then
+given as its first message. The banner `launch_enhancements_unavailable` names the reason,
+`provider.codex.native_program_missing`: Codex's install is missing its native program, and reinstalling Codex starts
+it with Octoboard's additions again. A `codex.exe` found in none of these layouts is run as it is.
 
 The launch conditions that are visible:
 
@@ -210,14 +237,14 @@ this status hint. Actual action prompts are observed separately through Codex's 
 
 ### Codex's private app server
 
-**Which launches have one.** Every launch of Codex 0.166.0 or later, a resume included. The version is read from the
-install: the `codex-package.json` of a standalone release or the `package.json` of the
-`@openai/codex` package, found in one of the few directories above the program; on a Windows daemon host, where
-neither is found, Codex's own `--version` answer. A version with a suffix after `-` or `+` (a platform package's)
-counts by the release before it, and a metadata file that cannot be read for a version is passed over. An older
-version, and an install whose version cannot be told this way (a Homebrew one carries no such metadata), get the
-ordinary launch: the terminal alone. So does a launch whose terminal goes to a process holder of an earlier build that
-cannot run the server (see "Holders of other builds" in `docs/product/process-holders.md`), whatever the version.
+**Which launches have one.** Every launch with Octoboard's additions, a resume included, whatever Codex's version, and
+an install whose version cannot be read included: no release is known to have introduced the server, 0.166.0 being
+only the first one measured with it. A release that cannot run it is caught where it fails: a server that does not come
+up gives the ordinary launch (see "When it cannot be used" below), and a terminal that refuses to attach exits as it
+starts and is started again without it (see "When Codex exits as it starts" below). A launch whose terminal goes to a
+process holder of an earlier build that cannot run the server (see "Holders of other builds" in
+`docs/product/process-holders.md`) gets the ordinary launch, the terminal alone; so does a reduced launch without
+Octoboard's hooks, below.
 
 **Who runs it.** The process holder that runs the session's terminal (see `docs/product/process-holders.md`) runs the
 server too, beside the terminal, so the server outlives the daemon as the terminal does. Where holders cannot be set up
@@ -285,6 +312,35 @@ ordinary way: the terminal alone, with every override on its command line, and i
 terminal delivery. Nothing queued for the session is lost by it. When a single message cannot go into Codex's queue,
 see "Messages through Codex's own queue" in `docs/product/message-delivery.md`.
 
+### When Codex exits as it starts
+
+A Codex launch that ends by itself as it starts, before it has drawn anything and before a key was typed into it, is
+started again once with less, according to what Codex wrote as it exited (measured on Codex 0.167.1):
+
+- **A setting's value Codex does not take.** Codex refuses a value of a configuration key it does not know (`unknown
+  variant`), naming the key, and a `default_permissions` that names a built-in profile it does not know (`Error loading
+  configuration: default_permissions refers to unknown built-in profile …`). Where it is one Octoboard set for the
+  launch, the launch is started again without that one override, and the banner `provider.codex.setting_left_out` names
+  the key. Where it is one of the permission preset's three keys, all three are left out, and the banner
+  `provider.codex.permissions_left_out` says the permission approval chosen in Octoboard is not applied; Codex's own
+  configuration decides what it may do. A key Octoboard did not set is the user's own, and the launch goes on to the
+  plain one.
+- **Anything else**, an option Codex does not take among it: the launch is started again without the review bypass,
+  Octoboard's hooks and the private app server, which a release may not take as a whole, and with every other
+  addition. The banner `provider.codex.hooks_left_out` says so: the session's status follows what Codex reports through
+  its terminal, which it does by itself, edits to another project's files are not blocked, and its prompts can be
+  answered only in the terminal. Its automatic messages take the guarded terminal delivery. A new session started
+  this way has no hook to report its conversation's id, so the banner also carries `conversation_id_unknown`: its next
+  start opens a new conversation.
+
+A key Codex does not know at all is passed over without a word, so a release that lacks one of Octoboard's settings
+starts as usual without it. When the second launch exits as it starts too, Codex is started a last time as a plain
+terminal would, and when that exits too the session ends with Codex's own message on screen.
+
+A launch with Octoboard's hooks expects its first hook with its first turn: Codex runs none before the first prompt is
+submitted, on a new conversation and on a resume alike. A launch whose first turn brings no hook within half a minute
+is from then on read as a launch without them, its status following what Codex reports through its terminal.
+
 ## Grok Build
 
 An explicit permission mode chosen in Settings applies to every account on fresh launches and resumes through
@@ -295,7 +351,7 @@ nor writes a permission mode back from the session's copy, even when the source 
 symlink. The choices and confirmations are in "Approval modes" in `docs/product/per-agent-settings.md`.
 
 Always-approve leaves deny rules and hooks active; a session can still need the user's attention. It does not disable
-Grok Build's sandbox or bypass Octoboard's refusal of an incompatible sandboxed launch, described below. Octoboard
+Grok Build's sandbox, and a launch under the sandbox starts without Octoboard's additions, described below. Octoboard
 passes no separate grant to pre-approve its own tools for Grok Build.
 
 Grok Build is available on a Windows daemon host as on macOS. It is installed there with x.ai's PowerShell installer
@@ -440,28 +496,31 @@ A host that makes file links builds the home as described above.
 
 ### Grok's own sandbox
 
-**A Grok Build launch that would run under Grok's own sandbox is refused** before the per-session home is built, with
-the code `provider.grok.sandbox_unsupported`, whose message names the sandbox profile and what sets it. The sandbox lets Grok
-write only to its own home, the working directory and temporary directories, judged by where links really lead, and the
-per-session home's login and session records are links back into the source home, so a sandboxed session could not even
-create its conversation. The alert's remedy is to turn the sandbox off where it is set, or to have whoever manages that
-setting do so; a conversation begun under the sandbox keeps it, so it is to be continued in Grok itself. A profile of
-`off` is no sandbox. Which profile applies is read as Grok layers it. The system-wide files below are read from
-`/etc/grok` on macOS and Linux only: Grok Build has no system-wide configuration directory on Windows, so neither is read
-there, and a file under `\etc\grok` on the daemon's current drive refuses nothing.
+**A Grok Build launch that would run under Grok's own sandbox starts bare**: no per-session home is built, and Grok runs
+against the account's own home as it would in a plain terminal, with only the conversation to resume, the model and the
+task on its command line (a bare launch). The terminal banner says the
+session started without Octoboard's additions, with `provider.grok.sandbox_unsupported` as the reason, naming the
+sandbox profile and what sets it. The sandbox lets Grok write only to its own home, the working directory and temporary
+directories, judged by where links really lead, and the per-session home's login and session records are links back
+into the source home, so a sandboxed session could not even create its conversation there. The banner's remedy is to
+turn the sandbox off where it is set, or to have whoever manages that setting do so, for sessions to have Octoboard's
+additions. A conversation begun under the sandbox keeps it, so its resumes start bare too. A profile of `off` is no
+sandbox. Which profile applies is read as Grok layers it. The system-wide files below are read from `/etc/grok` on
+macOS and Linux only: Grok Build has no system-wide configuration directory on Windows, so neither is read there, and a
+file under `\etc\grok` on the daemon's current drive counts for nothing.
 
 - `[sandbox] profile` in the system-wide `/etc/grok/requirements.toml` is a pin that takes precedence over everything:
-  any other profile there refuses, and `off` there allows the launch whatever else is set;
+  any other profile there starts the launch bare, and `off` there gives it the per-session home whatever else is set;
 - on a resume, the profile Grok saved with the conversation (its `summary.json`'s `sandbox_profile`), or a
-  `GROK_SANDBOX` in the launch environment (see "The launch environment" in `docs/product/launching-agents.md`), refuses
-  when either is not `off`, since Grok restores a saved profile and refuses a resume that asks for a different one; a
+  `GROK_SANDBOX` in the launch environment (see "The launch environment" in `docs/product/launching-agents.md`), starts
+  it bare when either is not `off`, since Grok restores a saved profile and refuses a resume that asks for a different one; a
   resume whose conversation has no saved profile is judged like a new session;
 - otherwise the first of these that sets a profile decides: `GROK_SANDBOX` in the launch environment, then `[sandbox]
   profile` in the source home's `config.toml`, then the fleet default in the system-wide
   `/etc/grok/managed_config.toml`.
 
-Not read: macOS managed preferences for Grok, so a sandbox set only there is not refused up front and the session fails
-inside Grok instead; and the source home's own `requirements.toml` and `managed_config.toml`, which are left out of the
+Not read: macOS managed preferences for Grok, so a sandbox set only there does not start the launch bare and the session
+fails inside Grok instead; and the source home's own `requirements.toml` and `managed_config.toml`, which are left out of the
 per-session home, so Grok never loads them for an Octoboard session.
 
 ### Grok's leader mode
@@ -473,6 +532,19 @@ already running. Under leader mode the terminal would be only a client of that l
 kill the leader outright mid-turn, so Grok would neither end the turn nor shut the session down cleanly; with
 `--no-leader`, stopping the session ends the agent's work through Grok's own shutdown. Leader mode is not available
 in a session Octoboard starts.
+
+`grok --help` does not list the flag, and Octoboard passes it whatever the installed version. A release that refuses it
+exits as it starts, printing that it does not take the argument; the session is then started again with everything else
+of Octoboard's but `--no-leader`, and its terminal banner says (`provider.grok.leader_not_overridden`) that where the Grok
+configuration turns leader mode on, stopping the session cuts off a running turn without Grok's own shutdown. Any other
+option Grok refuses as it starts, or any other exit as it starts, starts it again bare, with nothing of Octoboard's on
+its command line.
+
+A Grok Build launch with Octoboard's hooks expects its first hook as it starts: Grok runs `SessionStart` within about a
+second of the launch, on a new conversation and on a resume alike, before anything is written into it (measured on
+Grok Build 1.0.67). One with none within 30 seconds, not counting the time its trust confirmation is up, is from then
+on read as a launch without hooks (see "When the hooks never arrive" in `docs/product/launching-without-octoboards-additions.md`). The draft
+stash is used whatever Grok Build's version (see `docs/product/draft-preservation.md`).
 
 ### The time limit on Octoboard's tools
 
@@ -517,9 +589,12 @@ A Grok Build config directory must **already be a Grok home, one Grok has been r
 exist in the source home are linked; for an empty directory, Grok creates its login and session records inside the
 per-session home, which is discarded with the session's process, so neither the login nor the conversation persists.
 Octoboard does not check this when the directory is set — a user pointing it at a directory they are about to create
-should not be stopped. It is checked at **launch** instead, and a Grok Build session pinned to a directory that is not
-an initialized Grok home is refused there (`provider.grok.home_not_initialized`), naming the directory and what is wrong with it; a session on the default
-account is never held to this, since that directory is the user's own existing setup.
+should not be stopped. It is checked at **launch** instead: a Grok Build session pinned to a directory that is not an
+initialized Grok home starts bare against that directory, as `GROK_HOME=<directory> grok` would in a plain terminal, so
+Grok signs in and keeps its conversation there, and the terminal banner gives `provider.grok.home_not_initialized`,
+naming the directory, as the reason the session has no Octoboard additions. Moving a session to such an account is still
+refused before anything is copied into it, with the same code. A session on the default account is never held to this,
+since that directory is the user's own existing setup.
 
 ### A project's hooks and instruction files
 
@@ -549,6 +624,31 @@ started by a shell tool or MCP server cannot report its status as that launch.
 For sign-in on either host, see "How a quota is read" in `docs/product/account-quota-readings.md` and "How each
 agent signs in" in `docs/product/logging-accounts-in.md`.
 
+## GitHub Copilot CLI
+
+- **An option a Copilot release does not take.** Copilot refuses an option it does not know and exits at once, before
+  it draws anything, and its message does not tell one of Octoboard's options from another. Octoboard has no reduced
+  launch for it: such a launch is started again bare, with only the conversation, the model and the task, and the
+  terminal's banner says that the session runs without Octoboard's additions.
+- **When its hooks are expected.** Copilot runs its first hook with the session's first prompt, not as it starts, so
+  an idle session waits for no hook. Once a prompt has gone in and no hook follows within the bound, the session is
+  read as one without hooks and the banner says so.
+- **The draft stash** is used from 1.0.60 on, the release whose changelog made Ctrl-S the stash key, and when the
+  installed version cannot be read.
+
+## Qwen Code
+
+A system settings file that is there but cannot be read as settings no longer stops a launch. The session starts
+as Qwen Code would in a plain terminal, without Octoboard's additions, so Qwen Code reads and reports that file
+itself; the banner names the file, says to repair or remove it, and the next launch after that has the additions
+again. On Windows, when Node cannot be found beside the npm launcher or on `PATH`, the session likewise starts
+through the npm launcher itself without the additions. A Qwen Code release that no longer takes one of Octoboard's
+options exits as it starts; the session is then started again without the additions, with the banner saying so.
+
+A Qwen Code session's first hook comes with its first turn, so a session that sits idle raises no notice. When a
+turn starts and no hook arrives within the bound, the session is read as one without hooks and the banner says so.
+A launch found with Qwen Code's hooks switched off by the user says so from its start and waits for none.
+
 ## Antigravity CLI
 
 A launch uses its own copy of the hooks, MCP server configuration and global rule file. Changes a session makes
@@ -556,14 +656,71 @@ to those copies or to its enabled plugins end with the launch. To keep these cha
 directly. A launch can create the native `antigravity-cli` and `config/projects` directories under `~/.gemini`
 when they are missing. Model listing runs in a private directory and leaves the user's home as it was.
 
-Octoboard refuses to launch or list models from an unmigrated Antigravity configuration. Run `agy` directly to
-migrate it. If a hooks or MCP configuration file exists in both layouts and migration would overwrite one,
-choose which file to keep before migrating. Octoboard never starts the migration.
+When Octoboard cannot prepare its additions, the session still starts, as `agy` does in a plain terminal, and the
+terminal's banner says why: this version of `agy` does not take the option that names the launch's directory, a
+hooks, MCP server or global rule file cannot be used, or the configuration is still in an earlier version's layout.
+Only an account with a directory of its own is refused, since `agy` has one sign-in whatever directory it is given.
+
+A session started that way runs `agy` against the user's own `~/.gemini`, so `agy` migrates an earlier layout itself
+as it starts, and the next launch has Octoboard's additions again. If a hooks or MCP configuration file exists in both
+layouts, that migration replaces this version's file with the earlier one and keeps no copy; the banner names both
+files, and what the newer one held has to come from a backup. To avoid that, choose which file to keep and run `agy`
+directly before launching. Model listing never migrates: from an unmigrated configuration it lists nothing and says
+why.
+
+If `agy` exits as it starts because it refuses one of the settings Octoboard launches it with, Octoboard starts it
+again without that setting and the banner names it (`provider.antigravity.launch_setting_not_taken`); the rest of
+Octoboard's additions stay. Any other exit at start starts it again as in a plain terminal.
+
+A launch with Octoboard's hooks expects its first hook with its first turn: nothing fires as `agy` starts, and every
+turn of a new or a resumed conversation runs `PreInvocation` at its first model request (measured on 1.5.14). A user
+settings file that `agy` cannot read as settings, which `agy` then runs without, is told in the banner for the rest of
+the launch (`provider.antigravity.settings_not_read`), naming the file to repair.
 
 ## OpenCode
 
 Octoboard launches any OpenCode version; it was measured on 1.19.6, 2.3.2, 2.4.0 and 2.4.1, and a newer one is
-not refused for being unmeasured. A version of a minor not measured shows a notice that some Octoboard
-features may be unavailable for the session; the terminal works as usual. If OpenCode 2 still needs to import legacy credentials, launch asks the user to run
-OpenCode directly to finish its migration. For session messages, see "Messages through OpenCode's private server"
-in `docs/product/message-delivery.md`.
+not refused for being unmeasured. A version of a minor not measured shows a standing notice that some Octoboard
+features may be unavailable for the session; the terminal works as usual. The major version picks how a session is
+launched: a version from 2.0.0 on, or one that cannot be read, is launched as OpenCode 2. For session messages, see
+"Messages through OpenCode's private server" in `docs/product/message-delivery.md`.
+
+- **A migration of OpenCode's own still pending.** When OpenCode 2 has yet to import the first generation's
+  credentials or terminal settings, the session starts bare, as in a plain terminal, and the banner says why
+  (`launch_enhancements_unavailable`, its reason `provider.opencode.migration_required`): OpenCode migrates as it
+  starts, and the next start or resume of the session has Octoboard's additions again.
+- **Resuming on OpenCode 2.** Before the launch Octoboard asks OpenCode whether it still has the conversation. Only
+  OpenCode's own answer that it has no such conversation refuses the resume (`conversation_unresumable`), since
+  OpenCode 2 would otherwise start a new conversation under that id. Any other outcome (no database where it is looked
+  for, a pending migration, a query that timed out or answered something unreadable) resumes anyway, and tells the
+  user with the standing `conversation_record_not_found`, a bare launch as well as one with Octoboard's additions.
+  OpenCode 1.x answers a conversation it no longer has itself as it starts.
+- **An option it does not know.** OpenCode exits at once and prints its usage, naming no option, so a launch it
+  refuses is started again bare.
+- **When its events are expected.** Its plugin forwards nothing as OpenCode starts; the first event comes with the
+  first prompt submitted, on a new conversation and on a resume alike.
+- **Its plugin.** Octoboard's plugin turns itself off rather than fail if OpenCode's plugin interface changed;
+  OpenCode itself goes on past a plugin that fails to load and shows nothing. The session then has no events: once its
+  first prompt has gone in without one, the banner says that none arrive (`hooks_not_received`).
+- **Its private server.** When the server Octoboard starts for a session does not come up, the terminal is launched on
+  its own and messages go through it.
+
+## Pi
+
+When a Pi release no longer takes one of the options Octoboard adds, or cannot load Octoboard's extension, Pi
+exits as it starts. Octoboard then starts it again without its additions: the conversation, the model and the task
+only. The terminal shows a notice that the session runs without Octoboard's additions. If Octoboard's extension
+loads but cannot set itself up under a changed extension interface, Pi keeps running without it. The session then
+shows a notice that no hooks arrive.
+
+A launch with Octoboard's extension expects its first hook as Pi starts: the extension forwards Pi's `session_start`
+once Pi is past its project-trust confirmation, before anything is written into it.
+
+A session keeps every records directory its launches selected through `PI_CODING_AGENT_SESSION_DIR`. A conversation
+whose record is in one of them resumes from it, with `--session-dir <that directory>` before `--session <id>`, since
+`--session` alone looks only in the directory the current environment selects (measured on Pi 1.5.2), even after the
+variable has changed or been removed; that holds for a plain launch too. Such a record counts as the session's when
+judging whether its conversation can still be resumed, and is moved to the Trash with the session (see "When a
+conversation can no longer be resumed" in `docs/product/archiving-and-resuming-sessions.md` and "Moving the agent's own
+records to the Trash" in `docs/product/deleting-sessions.md`). A record in none of them is looked for where a plain
+terminal's run would look.

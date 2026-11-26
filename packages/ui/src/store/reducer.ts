@@ -6,6 +6,7 @@ import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, 
 import { CODE } from "../errors/codes";
 import type { PageSubmission, State, TrustPrompt } from "./state";
 import { sessionRequestOf, withRequest } from "./sessionRequests";
+import { standingNoticeSession } from "./standingNotices";
 
 export type Action =
   | { kind: "connection"; state: ConnectionState }
@@ -18,6 +19,7 @@ export type Action =
   | { kind: "dismiss_account_login"; login: AccountLogin }
   | { kind: "queue_account_switches"; ids: readonly string[]; queued: boolean }
   | { kind: "await_restart"; awaited: boolean }
+  | { kind: "dismiss_standing_notice"; key: string }
   | { kind: "native_apps"; agents: readonly Agent[]; asked: readonly string[]; seen: readonly string[] };
 
 /** The map of `records` by `idOf`, each one the record `previous` already holds for its id when that
@@ -151,6 +153,7 @@ function withoutSessions(state: State, ids: ReadonlySet<string>): State {
     pagesListing: new Set(Array.from(state.pagesListing).filter((id) => !ids.has(id))),
     trustPrompts: state.trustPrompts.filter((p) => !ids.has(p.session)),
     sessionRequests: state.sessionRequests.filter((r) => !ids.has(r.session)),
+    dismissedStandingNotices: new Set(Array.from(state.dismissedStandingNotices).filter((key) => !ids.has(standingNoticeSession(key)))),
   };
 }
 
@@ -164,6 +167,10 @@ export function reducer(state: State, action: Action): State {
       return { ...state, retryPending: action.pending };
     case "dismiss_trust_prompt":
       return { ...state, trustPrompts: state.trustPrompts.filter((p) => p.session !== action.session) };
+    case "dismiss_standing_notice": {
+      const dismissedStandingNotices = withMember(state.dismissedStandingNotices, action.key, true);
+      return dismissedStandingNotices === state.dismissedStandingNotices ? state : { ...state, dismissedStandingNotices };
+    }
     case "track_account_login": {
       const held = state.loginsStartedHere.includes(action.key);
       if (held === action.tracked) return state;

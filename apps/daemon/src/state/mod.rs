@@ -73,6 +73,7 @@ pub(crate) mod session_as_left;
 mod sessions;
 mod sharing_lock;
 mod sharing_status;
+mod standing_notices;
 mod status;
 mod stop;
 #[cfg(test)]
@@ -99,6 +100,7 @@ pub use live::Running;
 pub use restart_screens::ExactScreen;
 pub use sessions::Deletion;
 pub use sharing_lock::AccountSharingLock;
+pub(crate) use standing_notices::withdrawn_in as withdrawn_notices_in;
 pub use stop::{RestartRefusal, StopKind};
 pub use tool_calls::ToolCallActivity;
 pub use turns::{LastReport, TurnClose};
@@ -186,6 +188,17 @@ pub struct AppState {
     /// (`crate::coordinator::launch::SWITCH_STOP_TIMEOUT`).
     #[cfg(test)]
     pub(crate) restart_stop_timeout: Mutex<Option<std::time::Duration>>,
+    /// The lower launch tiers that stayed up after an early exit, per agent, program and version,
+    /// which later launches start at for a while (`crate::session::relaunch::LowerTiers`).
+    pub(crate) lower_tiers: Arc<crate::session::relaunch::LowerTiers>,
+    /// The early exits the exit watcher handed to the operation following the launch under its
+    /// claim, per session, for that operation to relaunch one tier down
+    /// (`crate::coordinator::restart::came_up_under_claim`).
+    early_exits: Mutex<HashMap<String, crate::session::relaunch::EarlyExitRelaunch>>,
+    /// What a launch one tier down after an early exit starts its agent with, in place of
+    /// `crate::session::term::launch`, which cannot start an agent in a test.
+    #[cfg(test)]
+    pub(crate) relauncher: Mutex<Option<crate::session::term::Relauncher>>,
     /// The generation each session's record watch (`crate::records::watch`, run for Claude Code by
     /// `crate::adapter::claude::transcript_watch` and for Codex by
     /// `crate::adapter::codex::rollout_watch`) is currently on. Starting a watch records a fresh
@@ -238,6 +251,9 @@ pub struct AppState {
     /// run no hooks and so never report sending anything.
     pub send_wait: Mutex<Option<Duration>>,
     pub record_hints: crate::records::Hints,
+    /// The CLI versions whose records the reader was seen to recognise, without which a record
+    /// missing proves nothing (`crate::records::witness`).
+    pub record_witnesses: crate::records::Witnesses,
     /// The conversations connections follow, held while one does.
     pub conversation_feeds: ConversationFeeds,
     /// The context window each Claude Code session's status line last reported.
@@ -341,6 +357,10 @@ pub struct AppState {
     /// session keeps it when it is of the launch adopted.
     /// Dropped with the session's other bookkeeping.
     background_tasks: Mutex<HashMap<String, BackgroundWork>>,
+    /// The standing notices of each session's running launch (`Session::standing_notices`).
+    /// Held in memory only; dropped with the session's other bookkeeping when its process leaves,
+    /// and with the record.
+    standing_notices: standing_notices::StandingNotices,
     /// The file `background_tasks` is copied to on every change, and what the previous daemon left
     /// in it; see [`background_store`].
     saved_background: background_store::SavedBackground,
@@ -473,9 +493,14 @@ impl AppState {
             auto_switch: Default::default(),
             #[cfg(test)]
             restart_stop_timeout: Mutex::new(None),
+            lower_tiers: Default::default(),
+            early_exits: Mutex::new(HashMap::new()),
+            #[cfg(test)]
+            relauncher: Mutex::new(None),
             request_hands: Mutex::new(HashMap::new()),
             ended_turns: Mutex::new(HashMap::new()),
             background_tasks: Mutex::new(HashMap::new()),
+            standing_notices: Default::default(),
             saved_background: Default::default(),
             tool_calls: Mutex::new(HashMap::new()),
             default_efforts: Mutex::new(HashMap::new()),
@@ -497,6 +522,7 @@ impl AppState {
             host_tools: Default::default(),
             send_wait: Mutex::new(Some(SEND_WAIT)),
             record_hints: Default::default(),
+            record_witnesses: Default::default(),
             conversation_feeds: Default::default(),
             context_windows: Default::default(),
             launch_context: Default::default(),

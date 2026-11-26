@@ -502,7 +502,12 @@ async fn held_for_a_completion_notice(
         Ok(Some(session))
             if session.agent.descriptor().capabilities.delivery.holds_report_for_completion_notice
     );
-    if !holds {
+    // The completion notice is told by a hook, which a launch whose hooks are absent never sends.
+    if !holds
+        || state
+            .live_session(session_id)
+            .is_some_and(|live| live.hooks_absent())
+    {
         return false;
     }
     tokio::time::sleep(COMPLETION_NOTICE_SETTLE).await;
@@ -1588,6 +1593,43 @@ mod tests {
         let heard = hub_heard_of(&hub, "both-reviews-passed").await;
         assert!(heard.contains("both-reviews-passed"), "{heard}");
         assert!(!heard.contains("waiting-for-the-other-review"), "{heard}");
+    }
+
+    /// The hold for a completion notice (Claude Code's reports wait for the turn it tells itself)
+    /// is for a launch that sends hooks: a notice is told by a hook, so a launch whose hooks are
+    /// absent is never held for one, and a session with its hooks is. Judged on the paused
+    /// clock, a hold that has not run out reading as still pending.
+    #[tokio::test(start_paused = true)]
+    async fn a_launch_without_hooks_is_not_held_for_a_completion_notice() {
+        let (state, _dir, _hub) = team_state(
+            "reporting-completion-notice-no-hooks",
+            &[
+                ("bare", "hub", false, SessionStatus::Working),
+                ("hooked", "hub", false, SessionStatus::Working),
+            ],
+        );
+        assert!(
+            AgentId::CLAUDE
+                .descriptor()
+                .capabilities
+                .delivery
+                .holds_report_for_completion_notice,
+            "the fixture's agent holds its reports"
+        );
+        let bare = crate::test_support::bare_stand_in_of("bare", AgentId::CLAUDE, 120, 40);
+        state.register_live(bare.clone());
+        let hooked = crate::test_support::idle_stand_in("hooked");
+        state.register_live(hooked.clone());
+        let judged = |id: &'static str| {
+            let state = state.clone();
+            async move {
+                tokio::time::timeout(Duration::ZERO, held_for_a_completion_notice(&state, id, 0))
+                    .await
+            }
+        };
+
+        assert_eq!(judged("bare").await, Ok(false), "judged at once");
+        assert!(judged("hooked").await.is_err(), "held for the settle");
     }
 
     /// The same, for a subagent's final report handed back as an `<agent-message>` prompt (Claude

@@ -8,11 +8,20 @@ use serde_json::{json, Value};
 
 use super::*;
 use crate::adapter::tests::SpecFixture;
+use crate::protocol::notice_code;
 use crate::providers::{ProviderSettings, SettingValue};
 
+/// The shared fixture at 1.19.6, with an empty scratch home, so that nothing of this machine's own
+/// OpenCode is read: its data, configuration and state directories all follow `HOME` where no XDG
+/// variable names them, and the fixture's environment names none.
 fn spec_fixture() -> SpecFixture {
     let mut fixture = crate::adapter::tests::spec_fixture();
     fixture.agent_version = Some((1, 19, 6));
+    let home = fixture.scratch.join("home");
+    std::fs::create_dir_all(&home).expect("home");
+    fixture
+        .shell_env
+        .insert("HOME".to_string(), home.to_string_lossy().into_owned());
     fixture
 }
 
@@ -238,7 +247,7 @@ fn a_launch_given_an_account_directory_is_refused() {
     let dir = fixture.scratch.join("account").join("opencode");
     std::fs::create_dir_all(&dir).expect("dir");
     fixture.config_dir = Some(dir);
-    let Err(refusal) = OpenCodeProvider.plan(&fixture.spec()) else {
+    let Err(refusal) = OpenCodeProvider.check_launch(&fixture.spec()) else {
         panic!("a launch given an account directory was planned");
     };
     assert_eq!(
@@ -270,6 +279,7 @@ fn only_a_version_of_an_unmeasured_minor_raises_the_notice() {
             notice.code,
             crate::protocol::Code::of_provider(crate::providers::opencode::VERSION_UNMEASURED)
         );
+        assert!(notice.standing, "it holds for the whole launch");
         assert_eq!(
             notice.params["version"],
             format!("{}.{}.{}", version.0, version.1, version.2)
@@ -1512,4 +1522,255 @@ fn a_version_nobody_measured_is_launched() {
             .plan(&fixture.spec())
             .unwrap_or_else(|error| panic!("{version:?} was refused: {error:#}"));
     }
+}
+
+/// OpenCode's bare launch: `--session` for a resume, `--model` for a launch of the first generation
+/// (a version below 2.0.0), and a new conversation's task as the first message; no `--standalone`.
+#[test]
+fn its_bare_plan_names_the_conversation_the_model_and_the_task_only() {
+    let bare = |version, resume: Option<&str>, task: Option<&str>| {
+        let mut fixture = crate::adapter::tests::spec_fixture();
+        fixture.model = Some("model-a".to_string());
+        fixture.agent_version = version;
+        let mut spec = fixture.spec();
+        spec.resume_agent_session_id = resume;
+        spec.task = task;
+        OpenCodeProvider.bare_plan(&spec)
+    };
+    for version in [Some((1, 19, 6)), Some((0, 9, 0))] {
+        assert_eq!(
+            bare(version, Some("c-1"), None).args,
+            ["--session", "c-1", "--model", "model-a"],
+            "{version:?}"
+        );
+    }
+    for version in [Some((2, 0, 0)), None] {
+        assert_eq!(
+            bare(version, Some("c-1"), None).args,
+            ["--session", "c-1"],
+            "{version:?}"
+        );
+    }
+    let fresh = bare(None, None, Some("do it"));
+    assert!(fresh.args.is_empty());
+    assert_eq!(fresh.first_message.as_deref(), Some("do it"));
+}
+
+/// A conversation id of OpenCode's form, which no database in a scratch home holds.
+const OPENCODE_ID: &str = "ses_0123456789abcdefghijklmnop";
+
+/// A fixture of the second generation, its session named `session`, with a scratch home holding
+/// no OpenCode data.
+fn v2_fixture(session: &str) -> SpecFixture {
+    let mut fixture = spec_fixture();
+    fixture.agent_version = Some((2, 4, 1));
+    fixture.session_id = session.to_string();
+    let home = fixture.scratch.join("home");
+    std::fs::create_dir_all(&home).expect("home");
+    fixture
+        .shell_env
+        .insert("HOME".into(), home.display().to_string());
+    fixture
+}
+
+/// [`v2_fixture`] with a migration of OpenCode's own pending: first-generation credentials
+/// (`auth.json`) and no database that has imported them.
+fn migration_pending_fixture(session: &str) -> SpecFixture {
+    let fixture = v2_fixture(session);
+    let data = fixture.scratch.join("home/.local/share/opencode");
+    std::fs::create_dir_all(&data).expect("data directory");
+    std::fs::write(data.join("auth.json"), "{}").expect("credentials");
+    fixture
+}
+
+/// The codes, and whether each is standing, of what the check of a launch of `spec` found to tell;
+/// the launch must go ahead.
+fn notice_codes(spec: &LaunchSpec<'_>) -> Vec<(Code, bool)> {
+    OpenCodeProvider
+        .check_launch(spec)
+        .unwrap_or_else(|err| panic!("refused: {err:#}"))
+        .into_iter()
+        .map(|notice| (notice.code, notice.standing))
+        .collect()
+}
+
+/// The generation dispatch is a floor: 2.0.0 switches the second generation on, and a version
+/// that cannot be read takes the newest.
+#[test]
+fn the_second_generation_is_switched_on_at_2_0_0_and_an_unreadable_version_takes_it() {
+    for (version, generation) in [
+        (Some((0, 9, 0)), Generation::V1),
+        (Some((1, 19, 6)), Generation::V1),
+        (Some((1, 99, 99)), Generation::V1),
+        (Some((2, 0, 0)), Generation::V2),
+        (Some((2, 4, 1)), Generation::V2),
+        (Some((3, 0, 0)), Generation::V2),
+        (None, Generation::V2),
+    ] {
+        assert_eq!(
+            super::version::generation_of(version),
+            generation,
+            "{version:?}"
+        );
+    }
+}
+
+/// A migration of OpenCode's own that is pending refuses nothing: the enhanced launch is
+/// unavailable with `provider.opencode.migration_required`, so the launch is bare and OpenCode
+/// migrates as it starts. The first generation has nothing to migrate.
+#[test]
+fn a_pending_migration_leaves_only_the_enhanced_launch_unavailable() {
+    let mut fixture = migration_pending_fixture("opencode-migration-pending");
+    let spec = fixture.spec();
+    OpenCodeProvider
+        .check_launch(&spec)
+        .expect("a pending migration refuses no launch");
+    let err = OpenCodeProvider
+        .plan(&spec)
+        .err()
+        .expect("no enhanced launch before the migration");
+    assert_eq!(
+        CodedError::of(&err).code,
+        Code::of_provider(crate::providers::opencode::MIGRATION_REQUIRED)
+    );
+
+    fixture.agent_version = Some((1, 19, 6));
+    OpenCodeProvider
+        .plan(&fixture.spec())
+        .expect("the first generation plans as before");
+}
+
+/// A resume of the second generation that OpenCode could not be asked about (no database where
+/// it is looked for, or a migration pending, before which no command of OpenCode's is run) goes
+/// ahead and is told by a standing `conversation_record_not_found`, found by the check every tier
+/// asks, so a bare launch tells it too; the plan's further notices do not tell it again.
+#[test]
+fn a_resume_opencode_did_not_answer_for_goes_ahead_and_is_told() {
+    for (n, fixture) in [
+        v2_fixture("opencode-resume-no-database"),
+        migration_pending_fixture("opencode-resume-migration"),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let mut spec = fixture.spec();
+        spec.resume_agent_session_id = Some(OPENCODE_ID);
+        assert_eq!(
+            notice_codes(&spec),
+            [(notice_code::CONVERSATION_RECORD_NOT_FOUND, true)],
+            "case {n}"
+        );
+        assert!(
+            !OpenCodeProvider
+                .further_launch_notices(&spec, &LaunchPlan::default())
+                .iter()
+                .any(|notice| notice.code == notice_code::CONVERSATION_RECORD_NOT_FOUND),
+            "case {n}: told once"
+        );
+    }
+}
+
+/// Only a resume of the second generation is checked: a new conversation, and a resume of the
+/// first generation, which OpenCode answers itself as it starts, have nothing to tell.
+#[test]
+fn only_a_second_generation_resume_is_told() {
+    let fresh = v2_fixture("opencode-new-conversation");
+    assert!(notice_codes(&fresh.spec()).is_empty());
+
+    let mut first = v2_fixture("opencode-resume-first-generation");
+    first.agent_version = Some((1, 19, 6));
+    let mut spec = first.spec();
+    spec.resume_agent_session_id = Some(OPENCODE_ID);
+    assert!(notice_codes(&spec).is_empty());
+}
+
+/// OpenCode's own answer that it has no such conversation is the one that refuses a resume
+/// (`conversation_unresumable`); it has it, and the launch goes ahead untold.
+#[test]
+fn only_opencodes_own_not_found_refuses_a_resume() {
+    let fixture = v2_fixture("opencode-resume-answered");
+    let spec = fixture.spec();
+    let err = resume_check(&spec, ResumeAnswer::Absent).expect_err("refused");
+    let coded = CodedError::of(&err);
+    assert_eq!(coded.code, error_code::CONVERSATION_UNRESUMABLE);
+    assert_eq!(
+        coded.params.get("session").map(String::as_str),
+        Some("opencode-resume-answered")
+    );
+    assert_eq!(
+        coded.params.get("agent").map(String::as_str),
+        Some("OpenCode")
+    );
+
+    assert!(resume_check(&spec, ResumeAnswer::Present)
+        .expect("it has it")
+        .is_none());
+}
+
+/// What a lookup comes to: absent only on OpenCode's own `NotFound`; a query that timed out,
+/// could not run, gave an unreadable answer or waited on busy readers proves nothing.
+#[test]
+fn a_lookup_is_absent_only_on_opencodes_own_not_found() {
+    use std::io::{Error, ErrorKind};
+    assert_eq!(ResumeAnswer::of::<()>(&Ok(())), ResumeAnswer::Present);
+    assert_eq!(
+        ResumeAnswer::of::<()>(&Err(Error::new(ErrorKind::NotFound, "missing"))),
+        ResumeAnswer::Absent
+    );
+    for kind in [
+        ErrorKind::TimedOut,
+        ErrorKind::WouldBlock,
+        ErrorKind::InvalidData,
+        ErrorKind::Other,
+    ] {
+        assert_eq!(
+            ResumeAnswer::of::<()>(&Err(Error::new(kind, "no answer"))),
+            ResumeAnswer::Unconfirmed,
+            "{kind:?}"
+        );
+    }
+}
+
+/// Its plugin forwards the first event with the first prompt, for a new conversation and a
+/// resumed one alike.
+#[test]
+fn its_first_hook_comes_with_the_first_turn() {
+    for version in [Some((1, 19, 6)), Some((2, 4, 1))] {
+        let mut fixture = v2_fixture("opencode-first-hook");
+        fixture.agent_version = version;
+        let mut spec = fixture.spec();
+        let plan = OpenCodeProvider.plan(&spec).expect("plan");
+        assert_eq!(
+            OpenCodeProvider.first_hook_due(&spec, &plan),
+            FirstHook::WithFirstTurn,
+            "{version:?}"
+        );
+        spec.resume_agent_session_id = Some(RESUMED);
+        assert_eq!(
+            OpenCodeProvider.first_hook_due(&spec, &plan),
+            FirstHook::WithFirstTurn,
+            "{version:?}, resumed"
+        );
+    }
+}
+
+/// OpenCode exits at once on an option it does not know, before it draws anything, printing its
+/// usage exactly as `--help` does, which exits 0 (1.19.6, `testdata/opencode-captures.md`, "An
+/// option it does not know"): no line names the option, so OpenCode gives no reduced plan and an
+/// early exit goes to the bare launch.
+#[test]
+fn an_option_it_does_not_know_is_named_nowhere_so_an_early_exit_goes_bare() {
+    let refused = include_bytes!("../../../testdata/opencode_unknown_option_120x40_1.19.6.bin");
+    let help = include_bytes!("../../../testdata/opencode_help_120x40_1.19.6.bin");
+    assert_eq!(refused[..], help[..], "the near miss reads the same");
+    let output = String::from_utf8_lossy(refused).into_owned();
+    assert!(!output.contains("octoboard-unknown-option"));
+    let fixture = spec_fixture();
+    let exit = crate::adapter::EarlyExit {
+        output,
+        status: Some(1),
+    };
+    assert!(OpenCodeProvider
+        .reduced_plan(&fixture.spec(), &exit)
+        .is_none());
 }

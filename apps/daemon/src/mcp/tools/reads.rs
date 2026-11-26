@@ -233,7 +233,9 @@ async fn resumable_of(
 ) -> Result<HashMap<String, Option<bool>>> {
     let state = Arc::clone(state);
     Ok(tokio::task::spawn_blocking(move || {
-        let locator = Locator::default().with_store(&state.store);
+        let locator = Locator::default()
+            .with_store(&state.store)
+            .with_witnesses(&state.record_witnesses);
         sessions
             .into_iter()
             .map(|session| {

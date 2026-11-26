@@ -137,6 +137,17 @@ fn settled(taken: Result<HashMap<String, String>>) -> Result<HashMap<String, Str
     Ok(env)
 }
 
+/// The daemon's own environment as it stands outside any session it was started in, with `HOME`
+/// settled: what a launch runs with when no capture of the login shell's exists.
+pub(super) fn daemon_environment() -> HashMap<String, String> {
+    let own = std::env::vars_os()
+        .filter_map(|(name, value)| Some((name.into_string().ok()?, value.into_string().ok()?)))
+        .collect();
+    let mut env = outside_session(own);
+    settle_home(&mut env);
+    env
+}
+
 /// Gives the snapshot an absolute `HOME`: one the shell left unset or relative becomes the
 /// daemon's own home directory (`crate::paths::home_dir`). Agents are launched with this
 /// environment, and every directory taken from its `HOME` (an account's, a Codex database's) must
@@ -451,6 +462,18 @@ mod tests {
             }
             settle_home(&mut env);
             assert_eq!(env["HOME"], expected, "{given:?}");
+        }
+    }
+
+    /// What a launch falls back on when no capture exists is the daemon's own environment, with
+    /// its values as they are and an absolute `HOME`.
+    #[test]
+    fn the_daemons_own_environment_carries_its_values_and_an_absolute_home() {
+        let env = daemon_environment();
+        assert!(Path::new(&env["HOME"]).is_absolute(), "{:?}", env["HOME"]);
+        #[cfg(unix)]
+        if let Some(path) = std::env::var_os("PATH").and_then(|path| path.into_string().ok()) {
+            assert_eq!(env["PATH"], path);
         }
     }
 }

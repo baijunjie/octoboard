@@ -238,6 +238,15 @@ pub trait ScreenReader: Send + Sync {
         None
     }
 
+    /// Whether [`Self::input_box_rows`] recognises the provider's input box wherever the agent is
+    /// at its prompt, so that a screen with no box on it is one where the agent is not: then a
+    /// turn opened off the title closes only while the box is drawn
+    /// (`crate::session::title_status`). By default no reader is relied on for that, and the
+    /// title's settle, the dialogs and the interaction reader decide alone.
+    fn reads_input_box(&self) -> bool {
+        false
+    }
+
     /// Whether a new prompt hook together with a newly stopped title proves that the
     /// interrupted turn ended. Unmeasured providers make no such inference.
     fn prompt_after_title_stop_ends_turn(&self) -> bool {
@@ -402,6 +411,7 @@ mod tests {
         assert!(screen.dialogs().is_empty());
         assert!(crate::session::dialogs::recognise(AgentId::TEST, text).is_none());
         assert!(screen.input_box_rows(text).is_none());
+        assert!(!screen.reads_input_box());
         assert_eq!(screen.input_box_screen(), super::ScreenText::FaintBlanked);
         assert!(!screen.cancel_restores_held_messages());
         assert!(screen.same_as_submitted("typed", "typed"));

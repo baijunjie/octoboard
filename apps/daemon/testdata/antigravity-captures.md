@@ -218,3 +218,25 @@ permission mode with `permissions.allow` holding `mcp(octoboard/*)`.
   another 5 and 6. Scratch paths are rewritten as above.
 - `antigravity_quota.jsonl` holds the fields Octoboard consumes from the measured 1.5.14 free account
   `/usage` JSON reply, with the two weekly buckets. It excludes unrelated reply and diagnostic data.
+
+## A launch that exits as it starts
+
+Measured on Antigravity CLI 1.5.14 (macOS, 2026-11-26), each an interactive launch in a 120x40 PTY with a scratch
+`HOME`, working directory and `--gemini_dir` directory (its `config/.migrated` in place), `AGY_CLI_OSC7501=on` and
+`AGY_CLI_DISABLE_AUTO_UPDATE=true`; no prompt was given and nothing was sent. Each file is the whole terminal output
+of the launch, which ended by itself before it drew anything. Paths are rewritten to `/scratch/...`.
+
+- `antigravity_exit_settings_unknown_key.bin`: `--settings` naming a file of `{"bogusKey": true}`. Status 1 after
+  0.15 s: `Error: --settings: unknown setting "bogusKey"`.
+- `antigravity_exit_settings_invalid_value.bin`: `--settings` naming a file of `{"showFeedbackSurvey": "maybe"}`, a
+  key a launch of Octoboard's gives with a value the CLI does not take. Status 1 after 0.15 s: `Error: --settings:
+  invalid value for setting "showFeedbackSurvey": showFeedbackSurvey: invalid value "maybe"`.
+- `antigravity_exit_settings_file_missing.bin`, a near-miss: `--settings` naming a file that is not there. Status 1
+  after 0.13 s, as fast as a refused setting, with no setting named: `Error: reading --settings file: open
+  /scratch/nope.json: no such file or directory`.
+- `antigravity_exit_unknown_option.bin`, a near-miss: `--bogus-option`. Status 2 after 0.7 s: `flags provided but
+  not defined: -bogus-option`, then the whole usage text.
+
+A file of `{"permissions": {"allow": [], "bogusList": []}}` was taken: the launch went on to its sign-in screen (the
+scratch `HOME` had no sign-in) and was stopped after 8 s. So the CLI checks the top-level keys of `--settings` only,
+and a refusal always names one of them.

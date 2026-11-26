@@ -27,16 +27,20 @@ pub(crate) mod dialogs;
 mod draft;
 mod draft_clear;
 mod draft_hold;
+pub(crate) mod hook_absence;
 pub(crate) mod input_box;
 mod input_box_clear;
+pub(crate) mod integration;
 pub(crate) mod interaction;
 pub(crate) mod interrupt;
 mod output_pace;
 mod paste_apart;
 pub(crate) mod pasted_image;
 mod program_status;
+pub(crate) mod relaunch;
 pub(crate) mod scratch;
 pub(crate) mod screen;
+pub(crate) mod startup;
 mod swap;
 pub(crate) mod term;
 #[cfg(test)]
@@ -44,6 +48,7 @@ pub(crate) mod test_support;
 mod text;
 pub(crate) mod title_activity;
 pub(crate) mod title_interrupt;
+mod title_status;
 pub(crate) mod trust;
 mod turn_reading;
 pub(crate) mod upload;
@@ -217,32 +222,40 @@ pub struct LiveSession {
     /// meanwhile that operation reports the outcome, and the owner is not also told the process
     /// ended on its own.
     watched_under_claim: AtomicBool,
+    /// Set while an operation holding the session's claim watches this process come up and
+    /// relaunches it itself after an early exit (`LaunchClaim::follows_launch`), until it has seen
+    /// it come up: the exit watcher hands such an early exit to it instead of relaunching.
+    followed_under_claim: AtomicBool,
+    /// What this launch's process has shown of an interactive program, and what it was asked
+    /// (`startup`): what tells its exit at start from any other.
+    pub startup: startup::StartupEvidence,
     /// Set by the exit watcher (`crate::coordinator::exit_watch::watch_exit`) once it is done with
     /// this process's end: the end is recorded and the owner, if it was to be told, has been sent
     /// the notice (written to it or queued for it) or could not be.
     exit_settled: AtomicBool,
-    /// The agent's hooks and signals give no status, so the program's own reports (OSC 7501) do;
-    /// see [`program_status`].
+    /// The agent's hooks and signals give no status, so the program's own reports (OSC 7501) do,
+    /// as the launch was planned; see [`program_status`]. A launch whose hooks are absent takes
+    /// its status from the reports whatever this says ([`Self::status_from_reports`]).
     status_from_reports: bool,
     /// The moves of the program's root status record on their way to the session's status.
     status_reports: Arc<program_status::StatusReports>,
     /// How long a `done` straight after `working` is held as a possible gap inside the turn, as
     /// the provider declares (`AgentProvider::reported_done_gap`); `None` where a `done` ends the
-    /// turn at once, and where the reports do not give this session its status.
+    /// turn at once. Read only where the reports give this session its status
+    /// ([`Self::done_gap`]).
     done_gap: Option<std::time::Duration>,
     /// Whether the provider's cancel puts the messages it held back into its input box
     /// (`screen::ScreenReader::cancel_restores_held_messages`), read once at the launch.
     cancel_gives_back: bool,
     /// Whether the launch's cancel can drop the messages its agent held, as its provider answered
-    /// for the launch (`AgentProvider::launch_cancel_drops_held_messages`).
+    /// for the launch (`AgentProvider::launch_cancel_drops_held_messages`); never while its hooks
+    /// are absent ([`Self::cancel_drops`]).
     cancel_drops: bool,
-    /// Whether the launch's cancel can drop the messages its agent held although nothing queues
-    /// them again: the provider's reader declares such a cancel
-    /// (`screen::ScreenReader::cancel_drops_held_messages`) and the launch is without the reports
-    /// that tell a message the turn took from one the cancel dropped
-    /// (`AgentProvider::launch_cancel_drops_held_messages` answered false). Such messages may not
-    /// have been carried out, which the user is told (`crate::messaging::cleared_messages`).
-    cancel_drops_unseen: bool,
+    /// Whether the provider's reader declares a cancel that can drop the messages the agent held
+    /// (`screen::ScreenReader::cancel_drops_held_messages`), read once at the launch: where the
+    /// launch is without the reports that tell a message the turn took from one the cancel
+    /// dropped, nothing queues them again ([`Self::cancel_drops_unseen`]).
+    reader_cancel_drops: bool,
     /// What the reports say beside the provider's own status integration, where it declares that
     /// they do; see [`program_status::ReportedSignals`].
     signals: program_status::DeclaredSignals,
@@ -251,6 +264,8 @@ pub struct LiveSession {
     /// The launch gave the agent a prompt on its command line and the reports have not shown its
     /// turn start yet; see [`program_status`], "The idle before a launch's first turn".
     awaits_launch_turn: AtomicBool,
+    /// The watch that closes the turns the title opens runs ([`title_status`]).
+    title_watch: AtomicBool,
     /// Until when the launch waits, before anything is written into it, for the session's MCP
     /// server to have answered a listing of its tools ([`Self::await_tool_listing`]); `None`
     /// where the provider declares no such wait, or for a launch a daemon adopted.
@@ -260,6 +275,11 @@ pub struct LiveSession {
     /// What the provider's hook interpreter keeps for this session from one event to the next
     /// (`crate::hooks::HookSession::carry`); gone with the process.
     pub(crate) hook_carry: crate::hooks::HookCarry,
+    /// What the launch carries of Octoboard's integration ([`integration::Integration`]).
+    integration: integration::Integration,
+    /// Where the launch stands with its hooks ([`integration::HookPresence`],
+    /// `crate::session::hook_absence`).
+    pub hooks: integration::HookPresence,
 }
 
 impl std::ops::Deref for LiveSession {
@@ -302,16 +322,9 @@ pub struct NewSession {
     pub before_scratch_removal: Option<Box<dyn FnOnce() + Send>>,
     /// See `NewPty::display`.
     pub display: crate::terminal::display::DisplaySeed,
-    /// Whether the program's reports give this launch its status, as its provider answered for
-    /// the launch (`AgentProvider::launch_has_status_integration`); `None` where nobody asked (a
-    /// launch adopted from a build that did not record it, a stand-in), which takes the provider's
-    /// answer for all its launches.
-    pub status_from_reports: Option<bool>,
-    /// Whether a cancel of this launch can drop the messages its agent held, as its provider
-    /// answered for the launch (`AgentProvider::launch_cancel_drops_held_messages`); `None` where
-    /// nobody asked (a launch adopted from a build that did not record it, a stand-in), which
-    /// takes the provider's reader's declaration.
-    pub cancel_drops: Option<bool>,
+    /// What the launch carries of Octoboard's integration and the provider's per-launch answers
+    /// (`integration::Integration`), through which the session reads them.
+    pub integration: integration::Integration,
     /// The agent's configuration directory the launch runs on (`LaunchSpec::config_dir`).
     pub config_dir: Option<std::path::PathBuf>,
 }
@@ -332,21 +345,15 @@ impl LiveSession {
         // Read here, on the thread that launches: the declarations are the provider's for the
         // whole launch.
         let provider = crate::adapter::provider(session.agent);
-        let status_from_reports = session
-            .status_from_reports
-            .unwrap_or_else(|| !provider.has_status_integration());
+        let integration = session.integration;
+        let status_from_reports = integration.status_from_reports(provider);
         let cancel_gives_back = provider.screen().cancel_restores_held_messages();
-        let cancel_drops = session
-            .cancel_drops
-            .unwrap_or_else(|| provider.screen().cancel_drops_held_messages());
-        let cancel_drops_unseen = provider.screen().cancel_drops_held_messages() && !cancel_drops;
-        let signals = if status_from_reports {
-            program_status::ReportedSignals::NONE
-        } else {
-            provider.reported_signals()
-        };
+        let cancel_drops = integration.cancel_drops(provider);
+        let reader_cancel_drops = provider.screen().cancel_drops_held_messages();
+        let signals = integration.reported_signals(provider);
         let awaits_turn_message = status_from_reports && provider.hooks().supplies_turn_message();
-        let done_gap = provider.reported_done_gap().filter(|_| status_from_reports);
+        let done_gap = provider.reported_done_gap();
+        let hooks = integration::HookPresence::of(&integration);
         let msg_is_turn_message = provider.hooks().report_msg_is_turn_message();
         let host_renders = crate::platform::term::facts().host_renders;
         if host_renders {
@@ -392,23 +399,68 @@ impl LiveSession {
             screen_watchers: AtomicU32::new(0),
             ended_on_purpose: AtomicBool::new(false),
             watched_under_claim: AtomicBool::new(false),
+            followed_under_claim: AtomicBool::new(false),
+            startup: startup::StartupEvidence::new(),
             exit_settled: AtomicBool::new(false),
             status_from_reports,
             status_reports: Arc::default(),
             done_gap,
             cancel_gives_back,
             cancel_drops,
-            cancel_drops_unseen,
+            reader_cancel_drops,
             signals: program_status::DeclaredSignals::new(signals),
             turn_messages: Arc::new(program_status::TurnMessages::new(
                 awaits_turn_message,
                 msg_is_turn_message,
             )),
             awaits_launch_turn: AtomicBool::new(false),
+            title_watch: AtomicBool::new(false),
             tool_listing_until: Mutex::new(None),
             config_dir: session.config_dir,
             hook_carry: crate::hooks::HookCarry::default(),
+            integration,
+            hooks,
         }
+    }
+
+    /// Whether the launch is taken to be without hooks: bare, or an expected hook did not come
+    /// within the bound (`crate::session::hook_absence`). Every generic reader of a fact that only
+    /// holds with hooks takes the no-hooks answer then.
+    pub(crate) fn hooks_absent(&self) -> bool {
+        self.hooks.absent()
+    }
+
+    /// Whether the program's reports (OSC 7501) give the session its status: as the launch was
+    /// planned, and always while its hooks are absent.
+    pub(crate) fn status_from_reports(&self) -> bool {
+        self.status_from_reports || self.hooks_absent()
+    }
+
+    /// How long a `done` straight after `working` is held as a possible gap inside the turn, where
+    /// the reports give the session its status and the provider declares one.
+    fn done_gap(&self) -> Option<std::time::Duration> {
+        self.done_gap.filter(|_| self.status_from_reports())
+    }
+
+    /// Whether the launch's cancel can drop the messages its agent held and have them queued
+    /// again: as the provider answered for the launch, and never while its hooks are absent, since
+    /// nothing then reports a message the turn took.
+    pub(crate) fn cancel_drops(&self) -> bool {
+        self.cancel_drops && !self.hooks_absent()
+    }
+
+    /// Whether the launch's cancel can drop the messages its agent held although nothing queues
+    /// them again: the provider's reader declares such a cancel and the launch is without the
+    /// reports that tell a message the turn took from one the cancel dropped. Such messages may not
+    /// have been carried out, which the user is told (`crate::messaging::cleared_messages`).
+    pub(crate) fn cancel_drops_unseen(&self) -> bool {
+        self.reader_cancel_drops && !self.cancel_drops()
+    }
+
+    /// What this launch carries of Octoboard's integration with its agent: the tier it was started
+    /// at, the CLI version it started and the provider's per-launch answers.
+    pub fn integration(&self) -> integration::Integration {
+        self.integration
     }
 
     /// Whether the session's terminal is read as a host that renders what the program draws has it
@@ -444,6 +496,14 @@ impl LiveSession {
         if self.signals.waits() {
             self.publish_declared_wait();
         }
+    }
+
+    /// The state the session was registered with and the runtime it was registered on
+    /// ([`Self::observe_titles`]), for work started from the PTY reader thread, which runs outside
+    /// the runtime; `None` before it is registered, or once the state is gone.
+    fn state_and_runtime(&self) -> Option<(Arc<crate::state::AppState>, tokio::runtime::Handle)> {
+        let observer = self.title.lock().expect("title observer lock poisoned");
+        Some((observer.state.upgrade()?, observer.runtime.clone()?))
     }
 
     /// The state the session was registered with ([`Self::observe_titles`]), for code that acts
@@ -638,9 +698,15 @@ impl LiveSession {
             self.look_for_input_box();
         });
         if titled {
+            self.startup.note_shown();
             self.trust.note_title();
         }
         self.note_program_status();
+        // After the reports the chunk carried, so a title that came with the program's first
+        // report does not open a turn the report has taken over.
+        if titled {
+            self.follow_title_status();
+        }
         self.schedule_input_recovery();
     }
 
@@ -717,7 +783,12 @@ impl LiveSession {
             // A title of nothing but a spinner reaches here empty, and still shows a turn.
             let empty = title.is_none() && glyph.is_none();
             let shown = title_activity::shown(self.agent, glyph, empty);
-            observer.activity.note(shown, Instant::now());
+            let now = Instant::now();
+            observer.activity.note(shown, now);
+            // A turn shown running: a hook that comes with the first turn is due.
+            if observer.activity.shows_running(now) {
+                self.hooks.note_due();
+            }
         }
         if let Some(title) = &completed {
             // A title that only spun since the last one changes nothing, so it does not reach the
@@ -750,6 +821,10 @@ impl LiveSession {
     }
 
     pub(crate) fn write_terminal_input(&self, data: &[u8]) -> Result<(), PartialWrite> {
+        // A person who quits a program has to type; the terminal's own reports are not typing.
+        if !is_terminal_protocol(data) {
+            self.startup.note_typed();
+        }
         if self.buffer_terminal_input(data)? {
             return Ok(());
         }
@@ -985,6 +1060,8 @@ impl LiveSession {
             stashed: false,
         });
         if written.is_ok() {
+            // A prompt has gone in: a hook that comes with the first turn is due.
+            self.hooks.note_due();
             if held.is_some() {
                 // What the box held goes with the message: the typing record holds nothing of it.
                 draft.cleared_by_octoboard();
@@ -1062,7 +1139,19 @@ impl LiveSession {
         self.config_dir.as_deref()
     }
 
+    /// The prompt this launch put on the agent's command line: it goes in with the launch, so a
+    /// hook that comes with the first turn is due, and the draft keeps it as submitted. An adopted
+    /// launch restores the draft alone ([`Self::restore_launch_prompt`]).
     pub(crate) fn note_launch_prompt(&self, prompt: String) {
+        self.hooks.note_due();
+        self.restore_launch_prompt(prompt);
+    }
+
+    /// Keeps the prompt the launch put on the command line as submitted in the draft, without
+    /// marking a first hook due: for a launch adopted from a holder, whose prompt went in, and
+    /// whose first turn ran, under the previous daemon (`crate::coordinator::adopt`), so its next
+    /// hook comes with its next turn.
+    pub(crate) fn restore_launch_prompt(&self, prompt: String) {
         self.draft
             .lock()
             .expect("draft lock poisoned")
@@ -1567,6 +1656,20 @@ impl LiveSession {
     /// agent's own again.
     pub fn release_watch(&self) {
         self.watched_under_claim.store(false, Ordering::Release);
+        self.followed_under_claim.store(false, Ordering::Release);
+    }
+
+    /// Marks the process as followed by the operation that launched it under its claim, which
+    /// relaunches it itself after an early exit, until that operation calls
+    /// [`Self::release_watch`].
+    pub fn follow_under_claim(&self) {
+        self.followed_under_claim.store(true, Ordering::Release);
+    }
+
+    /// Whether an operation holding the session's claim follows this process come up and
+    /// relaunches it after an early exit ([`Self::follow_under_claim`]).
+    pub fn is_followed_under_claim(&self) -> bool {
+        self.followed_under_claim.load(Ordering::Acquire)
     }
 
     /// Whether an operation holding the session's claim is watching this process come up.
@@ -1585,8 +1688,8 @@ impl LiveSession {
     }
 
     /// Whether the exit watcher is done with this process's end, so that what it would send is
-    /// sent: what a test waits for before asserting an owner was not told.
-    #[cfg(test)]
+    /// sent: what a test waits for before asserting an owner was not told, and what an operation
+    /// following its launch waits for before it takes an early exit handed to it.
     pub fn is_exit_settled(&self) -> bool {
         self.exit_settled.load(Ordering::Acquire)
     }
@@ -2411,5 +2514,31 @@ mod tests {
         live.mark_unsent(0);
         assert!(live.unsent_waiting());
         assert!(!live.unsent_hold_over());
+    }
+
+    /// A key a client typed is startup evidence of its own (a person who quits has to type); the
+    /// terminal's own protocol traffic (focus reports, replies to the program's queries) is not
+    /// typing, however it reaches the program.
+    #[test]
+    fn only_a_typed_key_counts_as_typed_not_the_terminals_own_traffic() {
+        let live = crate::test_support::fake_live_session(
+            "startup-typed",
+            crate::protocol::AgentId::CLAUDE,
+            120,
+            40,
+            "sleep 30",
+        );
+        assert!(!live.startup.was_typed());
+
+        live.write_terminal_input(b"\x1b[I").unwrap();
+        live.write_terminal_input(b"\x1b[?62;4c").unwrap();
+        live.write_terminal_reply(b"\x1b[1;1R").unwrap();
+        assert!(!live.startup.was_typed());
+        // Nothing the program drew or reported is typed either.
+        live.on_output(b"\x1b]0;agent\x07");
+        assert!(!live.startup.was_typed());
+
+        live.write_terminal_input(b"q").unwrap();
+        assert!(live.startup.was_typed());
     }
 }

@@ -56,3 +56,8 @@ terminal preview.
   an earlier process left some; one whose screen a planned stop saved before its holder was lost shows that screen
   instead (see "The screen of a terminal handed over" in `docs/product/process-holders.md`). Deleting the session's
   record deletes its saved preview too (see `docs/product/files-octoboard-owns.md`).
+- **A process that exits as it starts does not interrupt the session** when Octoboard starts the agent again with less
+  of its additions (see "When the agent exits as it starts" in `docs/product/launching-without-octoboards-additions.md`): the session stays
+  *starting*, shows no card, and the next process redraws the terminal. Only when the last of those launches exits as
+  it starts too is the session interrupted, its preview that process's final screen, with the agent's own message on
+  it.

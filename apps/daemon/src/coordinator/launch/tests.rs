@@ -12,6 +12,7 @@ use crate::test_support::{
     bare_session, console_with_project_and_accounts, fake_live_session, idle_stand_in,
     output_containing, project_session,
 };
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -177,7 +178,7 @@ async fn an_unset_claude_model_is_launched_as_the_default_unless_claude_code_nam
                     &id,
                     None,
                     true,
-                    Some(env),
+                    Some(crate::env_shell::LaunchEnv::captured(env)),
                     None,
                     move |request| {
                         seen.lock().unwrap().push(request.model.clone());
@@ -1140,7 +1141,7 @@ mod compatibility {
                 "s",
                 None,
                 false,
-                Some(HashMap::new()),
+                Some(crate::env_shell::LaunchEnv::captured(HashMap::new())),
                 None,
                 move |request| {
                     *seen.lock().unwrap() = Some(request.settings.switch("claude_compatibility"));
@@ -1294,7 +1295,9 @@ async fn a_launch_names_the_installation_for_the_git_hooks() {
         "s",
         None,
         false,
-        Some(std::collections::HashMap::new()),
+        Some(crate::env_shell::LaunchEnv::captured(
+            std::collections::HashMap::new(),
+        )),
         None,
         move |request| {
             *seen.lock().unwrap() = Some((request.install_exe.clone(), request.self_exe.clone()));
@@ -1369,9 +1372,11 @@ mod first_message {
                 session: (**live).clone(),
                 agent_session_id: agent_session_id.map(str::to_string),
                 notices: Vec::new(),
+                notices_at: 0,
                 first_message: first_message.map(str::to_string),
                 record_root: None,
             },
+            crate::coordinator::launch::Asked::plain(),
         )
     }
 
@@ -1584,9 +1589,11 @@ async fn a_launch_keeps_the_records_directory_its_environment_selected() {
             session: (*live).clone(),
             agent_session_id: None,
             notices: Vec::new(),
+            notices_at: 0,
             first_message: None,
             record_root: Some(selected.clone()),
         },
+        crate::coordinator::launch::Asked::plain(),
     )
     .unwrap();
 
@@ -1638,9 +1645,11 @@ mod notices_and_tool_listing {
                 session: (**live).clone(),
                 agent_session_id: None,
                 notices,
+                notices_at: 0,
                 first_message: first_message.map(str::to_string),
                 record_root: None,
             },
+            crate::coordinator::launch::Asked::plain(),
         )
         .unwrap();
     }
@@ -1684,6 +1693,56 @@ mod notices_and_tool_listing {
                 "The settings file was not read.",
                 "The leftover rules were not read."
             ]
+        );
+    }
+
+    /// A launch's standing notice is told marked standing and kept on the session's record with
+    /// the launch's stamp; its plain notices are told and kept nowhere.
+    #[tokio::test]
+    async fn a_launchs_standing_notice_is_kept_on_the_record() {
+        let (state, _dir, live) = launched("coordinator-launch-standing");
+        let mut events = state.subscribe();
+        let claim = state.begin_launch("s").unwrap();
+        register_launched(
+            &state,
+            &claim,
+            "s",
+            term::Launch {
+                session: (*live).clone(),
+                agent_session_id: None,
+                notices: vec![
+                    told(notice_code::HOOKS_NOT_RECEIVED, "No hooks came.").standing(),
+                    told(notice_code::DRAFT_DISCARDED, "Told once."),
+                ],
+                notices_at: 7,
+                first_message: None,
+                record_root: None,
+            },
+            crate::coordinator::launch::Asked::plain(),
+        )
+        .unwrap();
+        let standing: Vec<(String, bool)> = std::iter::from_fn(|| events.try_recv().ok())
+            .filter_map(|event| match event {
+                Event::SessionNotice { code, standing, .. } => {
+                    Some((code.as_str().to_string(), standing))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            standing,
+            [
+                ("hooks_not_received".to_string(), true),
+                ("draft_discarded".to_string(), false)
+            ]
+        );
+        let kept = state
+            .wire_session(state.session_record("s").unwrap())
+            .standing_notices;
+        assert_eq!(kept.len(), 1);
+        assert_eq!(
+            (kept[0].code.as_str(), kept[0].at),
+            ("hooks_not_received", 7)
         );
     }
 

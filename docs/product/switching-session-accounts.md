@@ -80,14 +80,13 @@ The failures of one confirmed set are reported together, in one error alert (see
   neither shows the system's own text, which is in **Error details** (see "Failures shown on the screen" in
   `docs/product/error-alerts.md`).
 - **Remedies after the list, each said once**: a failure whose code has a remedy sentence of its own gets it once for
-  that code, a login shell environment that could not be read in time included; the other failures with a known
+  that code; the other failures with a known
   remedy share one sentence per kind of remedy. A conversation that could not be moved has the remedy of its cause,
   or two of them (see "When a switch fails" below), and counts as unexpected when its cause is none the window knows.
 - **When any failure is unexpected**, the alert's own paragraph asking for an issue report follows,
   with **Report issue** in the footer (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
 - **Error details** holds, under a heading naming each session, what says more than its row: the system's own text
-  of a conversation that could not be moved; for a login shell environment that could not be read in time, the
-  command that was run and how long it was given; or, for a failure with no sentence of its own, its message,
+  of a conversation that could not be moved; or, for a failure with no sentence of its own, its message,
   followed by its stack when it is an unexpected error of the window's own. A session whose row says it all has no
   entry there, and when no session has one the alert has no **Error details**, even when a failure is unexpected.
 - **The footer** is the alert's usual one, with no retry: the acknowledgement button, **Report issue** when a failure
@@ -402,10 +401,9 @@ moment, when it is archived, when it is on that account already, when the target
 at that moment (`account_quota_exhausted`, carrying what "When the agent or the account cannot open a session" in
 `docs/product/opening-sessions.md` describes for it), when the reading the daemon holds found the target account not
 logged in (`account_not_signed_in`, likewise), when the target is a Grok Build directory that is not an initialized Grok
-home, when the user's shell environment could not be captured — which is read whenever either side of the switch is the
-default account, since that is what resolves its directory, and for any Codex switch, since that environment says where
-the target keeps its database (see "The launch environment" in `docs/product/launching-agents.md`) — when the
-conversation record is not where it should be, and while a change of the sharing of the default configuration runs for
+home, when the conversation record is not where it should be (the default account's directory, and for Codex where
+the target keeps its database, are resolved from the launch environment, a fallback one where the user's login shell
+environment cannot be read; see "The launch environment" in `docs/product/launching-agents.md`), and while a change of the sharing of the default configuration runs for
 the session's account or for the target (`account_sharing_in_progress`; see "When a change is carried out" in
 `docs/product/sharing-the-default-configuration.md`), and once the daemon has begun to shut down
 (`daemon_shutting_down`; see "Quitting" in `docs/product/application-lifecycle.md`); the session's process is then left

@@ -57,12 +57,16 @@
 //! - Claude Code and Grok run a hook as they start, once they are past the screen, so their
 //!   messages are held until that first hook and released by it ([`on_hook`]); another startup
 //!   modal can follow Claude Code's screen, and only the hook says the session is ready. A Claude
-//!   Code session whose hooks never arrive holds its messages for as long as it runs; a Grok one
-//!   does so only until [`HOOK_FALLBACK`] after its launch, since a managed policy can keep every
-//!   hook of Octoboard's from running. Then they are let through ([`release_when_no_hook_comes`]),
-//!   unless its screen has been sighted, which keeps them held until the rendered screen no longer
-//!   shows it ([`release_when_the_sighted_screen_goes`]). A dialog of the agent's holds them as
-//!   it does at any other time ([`crate::session::dialogs`]).
+//!   Code session whose hooks never arrive holds its messages until they are found absent
+//!   (`crate::session::hook_absence`: [`HOOK_FALLBACK`] after the launch, a bound that does not run
+//!   while its screen is up), and from then until its input box is drawn with no trust screen up,
+//!   as for an adopted session ([`on_start_hook_absent`]), a screen sighted and answered in the
+//!   terminal included: a failed enhancement must not keep delivery wedged. A Grok one does so only
+//!   until [`HOOK_FALLBACK`] after its launch, since a managed policy can keep every hook of
+//!   Octoboard's from running. Then they are let through ([`release_when_no_hook_comes`]), unless
+//!   its screen has been sighted, which keeps them held until the rendered screen no longer shows
+//!   it ([`release_when_the_sighted_screen_goes`]). A dialog of the agent's holds them as it does
+//!   at any other time ([`crate::session::dialogs`]).
 //! - Claude Code's hook is not enough on its own: with the fullscreen renderer `SessionStart`
 //!   runs before it reads its input, and a message written in that gap is taken by its
 //!   early-input capture, which drops the paste markers and turns the Enter into a newline. They
@@ -643,7 +647,8 @@ fn release_when_paste_mode_comes(state: &Arc<AppState>, live: &Arc<LiveSession>)
 /// restored screen that nothing will redraw, and then at each poll that finds output printed since
 /// the last look, for one the program draws again after the adoption, and every [`ADOPTED_RECHECK`]
 /// regardless. A session that never draws its box costs a look every so often, not a rendering of
-/// its screen at every poll. A hook or a sighted screen leaves the hold to the launch's own rules.
+/// its screen at every poll. A hook, or a sighted screen of an adopted session, leaves the hold to
+/// the launch's own rules.
 fn release_when_the_adopted_agent_reads_input(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     let state = state.clone();
     let live = Arc::downgrade(live);
@@ -672,6 +677,42 @@ fn release_when_the_adopted_agent_reads_input(state: &Arc<AppState>, live: &Arc<
             tokio::time::sleep(RELEASE_POLL).await;
         }
     });
+}
+
+/// The session's start hook is not coming: its launch's hooks were due and did not come within the
+/// bound (`crate::session::hook_absence`). From then on it is held as an adopted session is: its
+/// input box on the parsed screen with no trust screen up stands in for the hook
+/// ([`release_when_the_adopted_agent_reads_input`]), whether or not a screen was sighted on the
+/// way; a screen still up keeps the hold, and a provider with a [`Screen::hook_fallback`] has had
+/// what is held let through blind already while no screen was sighted. Nothing more for a session
+/// that already stands that way or has had a hook.
+pub(crate) fn on_start_hook_absent(state: &Arc<AppState>, live: &Arc<LiveSession>) {
+    if live.trust.awaits_adopted_start() {
+        return;
+    }
+    live.trust.note_start_hook_absent();
+    if live.trust.awaits_adopted_start() {
+        release_when_the_adopted_agent_reads_input(state, live);
+    }
+}
+
+/// Whether `live`'s trust screen may come up at all: one that has not been measured is never
+/// sighted ([`screen_up`]).
+pub(crate) fn screen_can_come_up(live: &LiveSession) -> bool {
+    live.trust.screen.can_be_sighted()
+}
+
+/// Whether `live`'s trust screen is up now: it has been sighted, nothing has shown it past (a hook,
+/// Octoboard's press counted, its going seen), and the parsed screen still shows it wherever its
+/// cursor is ([`Screen::is_up_in`]), which also tells an answer in the terminal that nothing else
+/// reports. An agent that runs a hook as it starts runs none while its screen is up.
+pub(crate) fn screen_up(live: &LiveSession) -> bool {
+    let trust = &live.trust;
+    trust.sighted.load(Ordering::Acquire)
+        && !trust.hook_seen.load(Ordering::Acquire)
+        && !trust.pressed.load(Ordering::Acquire)
+        && !trust.dismissed.load(Ordering::Acquire)
+        && trust.screen.is_up_in(live.screen_text().as_bytes())
 }
 
 /// [`TrustState::stand_in_for_start`] for the session's parsed screen as it is now.
@@ -1010,6 +1051,7 @@ fn report_failure(state: &Arc<AppState>, session_id: &str, agent: AgentId, err: 
         code,
         message: coded.message.clone(),
         params: coded.params.clone(),
+        standing: false,
     };
     let notice = match err.downcast_ref::<CodedError>() {
         Some(coded) if coded.code == error_code::TRUST_ANSWER_FAILED => {

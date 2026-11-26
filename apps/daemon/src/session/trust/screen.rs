@@ -434,6 +434,10 @@ pub struct TrustState {
     /// ([`Self::note_adopted`]): its agent may have run its start hook before this daemon, and will
     /// not run it again.
     adopted: AtomicBool,
+    /// The launch runs no start hook of Octoboard's: a bare one, or one whose hooks were found
+    /// absent ([`Self::note_start_hook_absent`]). Unlike an adoption, a screen sighted on the way
+    /// does not keep the hold once it is gone.
+    start_hook_absent: AtomicBool,
     /// An answer has been started. A session is answered at most once.
     pub(super) answered: AtomicBool,
     /// The session records its trust in a home of its own and nothing of it is the user's to
@@ -480,6 +484,7 @@ impl TrustState {
             session_started: AtomicBool::new(false),
             input_box_seen: AtomicBool::new(false),
             adopted: AtomicBool::new(false),
+            start_hook_absent: AtomicBool::new(false),
             answered: AtomicBool::new(false),
             carries_nothing: AtomicBool::new(false),
             pressed: AtomicBool::new(false),
@@ -654,8 +659,10 @@ impl TrustState {
     /// Whether a message written into the session now could land on its trust screen, and so has to
     /// be held. A paste's trailing carriage return accepts Codex's screen and Grok's, and exits
     /// Claude Code's. For an agent that runs a hook at start (`Screen::hook_at_start`) messages are
-    /// held until that hook, so a session whose hooks never arrive holds them for as long as it
-    /// runs, unless the agent has a [`Screen::hook_fallback`] and it has let them through. For one
+    /// held until that hook, so a session whose hooks never arrive holds them until they are found
+    /// absent and its input box is drawn with no trust screen up ([`Self::note_start_hook_absent`]),
+    /// or for as long as it runs where they are never found absent, unless the agent has a
+    /// [`Screen::hook_fallback`] and it has let them through. For one
     /// that runs none (Codex) they are held while the watch is still looking for the screen — it
     /// ends with the agent's terminal title — and, once the screen is up, until Octoboard's press
     /// of it has succeeded, the person's own answer in the terminal has been seen to take it away,
@@ -782,16 +789,34 @@ impl TrustState {
         self.adopted.store(true, Ordering::Release);
     }
 
-    /// Whether the session was adopted and its start hook is still stood in for by its input box
-    /// ([`Self::stand_in_for_start`]).
-    pub(super) fn awaits_adopted_start(&self) -> bool {
-        self.adopted.load(Ordering::Acquire)
-            && !self.hook_seen.load(Ordering::Acquire)
-            && !self.sighted.load(Ordering::Acquire)
+    /// The session's agent runs no start hook of Octoboard's (a launch at the bare tier, given
+    /// none, or one whose hooks were found absent): its input box stands in for that hook
+    /// ([`Self::stand_in_for_start`]), as for a session adopted from a holder, and also once a
+    /// screen sighted on the way has gone, which no hook will say: a failed enhancement must not
+    /// keep its messages held.
+    pub(crate) fn note_start_hook_absent(&self) {
+        self.start_hook_absent.store(true, Ordering::Release);
     }
 
-    /// For an adopted session ([`Self::note_adopted`]) whose hook has not come and whose screen has
-    /// not been sighted: when the parsed `screen` shows the agent's input box (`shows_input_box`)
+    /// Whether the launch was noted as running no start hook of Octoboard's
+    /// ([`Self::note_start_hook_absent`]), for a test.
+    #[cfg(test)]
+    pub(crate) fn start_hook_noted_absent(&self) -> bool {
+        self.start_hook_absent.load(Ordering::Acquire)
+    }
+
+    /// Whether the session's start hook is still stood in for by its input box
+    /// ([`Self::stand_in_for_start`]): one adopted whose screen has not been sighted (a sighted one
+    /// is left to the launch's own rules, its hook carrying what it carries), or one whose start
+    /// hook is absent, sighted screen or not; never once a hook has come.
+    pub(super) fn awaits_adopted_start(&self) -> bool {
+        !self.hook_seen.load(Ordering::Acquire)
+            && (self.start_hook_absent.load(Ordering::Acquire)
+                || (self.adopted.load(Ordering::Acquire) && !self.sighted.load(Ordering::Acquire)))
+    }
+
+    /// For a session whose start hook is stood in for ([`Self::awaits_adopted_start`]): when the
+    /// parsed `screen` shows the agent's input box (`shows_input_box`)
     /// and not its trust screen, the agent is past both and reads its input, as its start hook and
     /// bracketed paste would have said had this daemon launched it, so the watch ends as at that
     /// hook and nothing more is held for it. A screen still up keeps the hold, as does a screen

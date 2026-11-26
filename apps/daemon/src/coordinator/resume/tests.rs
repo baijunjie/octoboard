@@ -7,8 +7,8 @@ use crate::coordinator::test_support::{
     temp_dir,
 };
 use crate::protocol::{
-    error_code, Account, AgentId, CodedError, ConversationLocation, Event, Origin, RequestBody,
-    Role, Session, SessionKind, SessionStatus,
+    error_code, notice_code, Account, AgentId, CodedError, ConversationLocation, Event, Origin,
+    RequestBody, Role, Session, SessionKind, SessionStatus,
 };
 use crate::session::term;
 use crate::state::AppState;
@@ -140,30 +140,36 @@ async fn a_conversation_to_resume_is_checked_before_a_session_is_opened() {
 }
 
 /// The conversation to resume is looked for in the directory the session will launch with: the
-/// pinned one, else the default account's from the shell snapshot.
+/// pinned one, else the default account's from the shell snapshot. One not found there is no
+/// refusal: the launch is handed `conversation_record_not_found` to tell the user with.
 #[test]
-fn a_conversation_to_resume_must_be_in_the_accounts_directory() {
+fn a_conversation_to_resume_not_in_the_accounts_directory_is_told_not_refused() {
     const ID: &str = "11111111-2222-3333-4444-555555555555";
     let dir = temp_dir("resume-conversation-located");
     let (pinned, default) = (dir.join("pinned"), dir.join("default-claude"));
     let no_snapshot = || panic!("a pinned account needs no snapshot");
     let snapshot = shell_env(&dir);
 
-    let err = locate_conversation_to_resume(
+    let (shell, notice) = locate_conversation_to_resume(
         AgentId::CLAUDE,
         Some(&pinned.to_string_lossy()),
         ID,
         no_snapshot,
     )
-    .expect_err("not there");
-    let coded = err.downcast_ref::<CodedError>().expect("a coded error");
-    assert_eq!(coded.code, error_code::CONVERSATION_TO_RESUME_NOT_FOUND);
-    assert_eq!(coded.params["id"], ID);
+    .expect("not found is no refusal");
+    assert!(shell.is_none());
+    let notice = notice.expect("the user is told");
+    assert_eq!(notice.code, notice_code::CONVERSATION_RECORD_NOT_FOUND);
+    assert!(notice.standing);
+    assert_eq!(notice.params["agent"], "Claude Code");
 
     let record = default.join("projects/slug").join(format!("{ID}.jsonl"));
     std::fs::create_dir_all(record.parent().unwrap()).unwrap();
     std::fs::write(&record, "").unwrap();
-    locate_conversation_to_resume(AgentId::CLAUDE, None, ID, snapshot).unwrap();
+    let (shell, notice) =
+        locate_conversation_to_resume(AgentId::CLAUDE, None, ID, snapshot).unwrap();
+    assert!(shell.is_some());
+    assert!(notice.is_none());
 }
 
 /// The conversation to resume is placed in the account whose record was written to last, in the
@@ -238,17 +244,19 @@ fn a_conversation_to_resume_is_located_in_the_account_written_to_last() {
         })
     );
 
-    // A shell that cannot be snapshotted leaves the default accounts out, not the stored ones;
-    // it is the failure only when nothing was found.
+    // A shell that cannot be snapshotted refuses nothing: the default accounts are looked for in
+    // the fallback environment a launch would run with, and the stored ones as ever.
     let no_shell = || -> Result<HashMap<String, String>> { anyhow::bail!("no login shell") };
     assert_eq!(
         find_conversation_to_resume(&[AgentId::CLAUDE], &accounts, ID, no_shell).unwrap(),
         in_account(AgentId::CLAUDE, "work"),
     );
     let other_id = "99999999-2222-3333-4444-555555555555";
-    let err = find_conversation_to_resume(&[AgentId::CLAUDE], &accounts, other_id, no_shell)
-        .expect_err("nothing found, and the default account unknown");
-    assert!(format!("{err:#}").contains("no login shell"));
+    assert_eq!(
+        find_conversation_to_resume(&[AgentId::CLAUDE], &accounts, other_id, no_shell).unwrap(),
+        None,
+        "not found, which a failed snapshot does not turn into an error"
+    );
 
     // A Grok record in another agent's directory layout, written later still.
     let grok = dir.join("grok-home");
@@ -467,6 +475,8 @@ fn assert_still_archived_at_5(state: &Arc<AppState>, id: &str) {
 #[tokio::test]
 async fn a_reopen_is_refused_when_the_conversation_record_is_gone() {
     let (state, dir) = console_with_project_and_accounts("coordinator-reopen-unresumable");
+    // A record missing is proof only once the installed version was seen writing records.
+    crate::records::fixtures::witness_every_agent(&state.record_witnesses);
     let account = dir.join("claude-a");
     std::fs::create_dir_all(account.join("projects")).unwrap();
     state
@@ -491,12 +501,132 @@ async fn a_reopen_is_refused_when_the_conversation_record_is_gone() {
     assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
 }
 
+/// A record looked for whole and not found, under a CLI version never seen writing records, is
+/// no proof: the reopen goes on to the launch with the agent's own resume option, and the launch
+/// is handed `conversation_record_not_found` to tell the user with. Once the installed version
+/// is witnessed, the same reopen is refused.
+#[tokio::test]
+async fn a_reopen_of_a_record_not_found_without_a_witness_launches_and_says_so() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-reopen-unwitnessed");
+    std::fs::create_dir_all(dir.join("no-such-project")).unwrap();
+    let account = dir.join("claude-a");
+    std::fs::create_dir_all(account.join("projects")).unwrap();
+    state
+        .store
+        .insert_session(&archived_with_conversation("s", AgentId::CLAUDE, &account))
+        .unwrap();
+    state
+        .record_witnesses
+        .install(AgentId::CLAUDE, crate::records::fixtures::WITNESSED_VERSION);
+    let handed = Arc::new(std::sync::Mutex::new(None));
+    let launch = {
+        let handed = handed.clone();
+        move |request: term::LaunchRequest| {
+            *handed.lock().unwrap() = Some((
+                request.resume_agent_session_id.clone(),
+                request.notices.clone(),
+            ));
+            Err(anyhow::anyhow!("the stand-in starts nothing"))
+        }
+    };
+    resume_session_with_launch(
+        &state,
+        "s",
+        None,
+        None,
+        LaunchEdit::default(),
+        stub_shell(&dir),
+        launch,
+    )
+    .await
+    .expect_err("the stand-in starts nothing");
+    let (resumed, notices) = handed.lock().unwrap().take().expect("the reopen launched");
+    assert_eq!(resumed.as_deref(), Some(AGENT_ID));
+    assert_eq!(notices.len(), 1);
+    assert_eq!(
+        notices[0].code,
+        crate::protocol::notice_code::CONVERSATION_RECORD_NOT_FOUND
+    );
+    assert!(notices[0].standing);
+    assert_eq!(notices[0].params["agent"], "Claude Code");
+
+    crate::records::fixtures::witness_every_agent(&state.record_witnesses);
+    let err = resume_session_with(&state, "s", None, None, stub_shell(&dir))
+        .await
+        .expect_err("proven gone");
+    assert_eq!(code_of(&err), error_code::CONVERSATION_UNRESUMABLE);
+}
+
+/// A login-shell snapshot that cannot be taken refuses no reopen: the session is launched on the
+/// fallback environment (the last capture, else the daemon's own), which the launch is handed
+/// with the fallback marked, so it tells the user (`shell_environment_unavailable`).
+#[tokio::test]
+async fn a_reopen_whose_snapshot_fails_launches_on_the_fallback_environment() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-reopen-no-snapshot");
+    std::fs::create_dir_all(dir.join("no-such-project")).unwrap();
+    let account = dir.join("claude-a");
+    std::fs::create_dir_all(account.join("projects")).unwrap();
+    state
+        .store
+        .insert_session(&archived_with_conversation("s", AgentId::CLAUDE, &account))
+        .unwrap();
+    let handed = Arc::new(std::sync::Mutex::new(None));
+    let launch = {
+        let handed = handed.clone();
+        move |request: term::LaunchRequest| {
+            *handed.lock().unwrap() = Some(request.preresolved_shell_env.clone());
+            Err(anyhow::anyhow!("the stand-in starts nothing"))
+        }
+    };
+    resume_session_with_launch(
+        &state,
+        "s",
+        None,
+        None,
+        LaunchEdit::default(),
+        || anyhow::bail!("the login shell hung"),
+        launch,
+    )
+    .await
+    .expect_err("the stand-in starts nothing");
+    let env = handed
+        .lock()
+        .unwrap()
+        .take()
+        .expect("the reopen launched")
+        .expect("handed the environment it checked with");
+    let fallback = env.fallback.expect("marked as a fallback");
+    assert!(fallback.detail().contains("the login shell hung"));
+    let notice = fallback.notice();
+    assert_eq!(
+        notice.code,
+        crate::protocol::notice_code::SHELL_ENVIRONMENT_UNAVAILABLE
+    );
+    assert!(notice.standing);
+}
+
+/// The record of a conversation to resume in the default account is looked for in the fallback
+/// environment where the snapshot fails, which the launch is then handed, rather than refused.
+#[test]
+fn a_conversation_to_resume_is_looked_for_in_the_fallback_environment() {
+    let (shell, _) = locate_conversation_to_resume(
+        AgentId::CLAUDE,
+        None,
+        "11111111-2222-3333-4444-555555555555",
+        || anyhow::bail!("the login shell hung"),
+    )
+    .expect("a failed snapshot refuses nothing");
+    assert!(shell.expect("an environment").fallback.is_some());
+}
+
 /// The check made before a request to resume is put to the user raises what the resume would
 /// raise for a conversation the agent no longer has, changes nothing, and otherwise names the
 /// archived owners that would come back with the session.
 #[tokio::test]
 async fn the_check_before_asking_to_resume_refuses_a_conversation_that_is_gone() {
     let (state, dir) = console_with_project_and_accounts("coordinator-check-can-resume");
+    // A record missing is proof only once the installed version was seen writing records.
+    crate::records::fixtures::witness_every_agent(&state.record_witnesses);
     let account = dir.join("claude-a");
     std::fs::create_dir_all(account.join("projects")).unwrap();
     let mut owner = archived_with_conversation("owner", AgentId::CLAUDE, &account);
@@ -566,6 +696,8 @@ fn insert_hub_and_worker(state: &Arc<AppState>, hub_account: &Path, worker_accou
 #[tokio::test]
 async fn a_reopen_checks_the_session_before_reopening_any_owner() {
     let (state, dir) = console_with_project_and_accounts("coordinator-reopen-target-unresumable");
+    // A record missing is proof only once the installed version was seen writing records.
+    crate::records::fixtures::witness_every_agent(&state.record_witnesses);
     let hub_account = dir.join("claude-hub");
     let record = hub_account.join("projects/work/22222222-2222-3333-4444-555555555555.jsonl");
     std::fs::create_dir_all(record.parent().unwrap()).unwrap();
@@ -587,6 +719,8 @@ async fn a_reopen_checks_the_session_before_reopening_any_owner() {
 #[tokio::test]
 async fn a_refused_reopen_leaves_an_unresumable_owner_with_its_conversation() {
     let (state, dir) = console_with_project_and_accounts("coordinator-reopen-both-unresumable");
+    // A record missing is proof only once the installed version was seen writing records.
+    crate::records::fixtures::witness_every_agent(&state.record_witnesses);
     let (hub_account, worker_account) = (dir.join("claude-hub"), dir.join("claude-worker"));
     std::fs::create_dir_all(hub_account.join("projects")).unwrap();
     std::fs::create_dir_all(worker_account.join("projects")).unwrap();
@@ -612,6 +746,8 @@ async fn a_refused_reopen_leaves_an_unresumable_owner_with_its_conversation() {
 #[tokio::test]
 async fn a_reopen_relaunches_an_owner_whose_record_is_gone_into_a_fresh_conversation() {
     let (state, dir) = console_with_project_and_accounts("coordinator-reopen-owner-unresumable");
+    // A record missing is proof only once the installed version was seen writing records.
+    crate::records::fixtures::witness_every_agent(&state.record_witnesses);
     let hub_account = dir.join("claude-hub");
     std::fs::create_dir_all(hub_account.join("projects")).unwrap();
     let worker_account = dir.join("claude-worker");
@@ -675,6 +811,8 @@ async fn a_reopen_whose_target_cannot_be_unarchived_leaves_the_owner_archived() 
 #[tokio::test]
 async fn a_reopen_leaves_the_leftovers_of_the_conversation_an_owner_gives_up() {
     let (state, dir) = console_with_project_and_accounts("coordinator-reopen-owner-leftover");
+    // A record missing is proof only once the installed version was seen writing records.
+    crate::records::fixtures::witness_every_agent(&state.record_witnesses);
     let hub_account = dir.join("claude-hub");
     std::fs::create_dir_all(hub_account.join("projects")).unwrap();
     let leftover = dir

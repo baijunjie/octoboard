@@ -387,9 +387,10 @@ pub mod error_code {
     /// (`set_account_disabled`). `params` names the `agent` and the `account` (by name).
     pub const ACCOUNT_DISABLED: Code = Code("account_disabled");
     /// A session cannot be opened on, handed off to, or switched to an account the last quota
-    /// reading found not signed in (`quota_not_signed_in`, `quota_config_dir_missing`). A reading
-    /// that failed for another reason, a network error say, does not refuse. `params` names the
-    /// `agent` and the `account` (by name).
+    /// reading found not signed in (`quota_not_signed_in`, `quota_config_dir_missing`), except by
+    /// the user's own `open_session` from a client, which raises `account_sign_in_unconfirmed`
+    /// instead. A reading that failed for another reason, a network error say, does not refuse.
+    /// `params` names the `agent` and the `account` (by name).
     pub const ACCOUNT_NOT_SIGNED_IN: Code = Code("account_not_signed_in");
     /// A session's resolved agent is not on `Settings.added_agents`, so a new session or a handoff
     /// to it is refused, as is an `update_agent_cli` for it; never raised while that list is
@@ -560,7 +561,10 @@ pub mod error_code {
     pub const CONVERSATION_NOT_FOUND: Code = Code("conversation_not_found");
     /// An `open_session` asked to resume a conversation found no record of it in the
     /// session's account directory. `params` names `agent`, the `path` of that directory and the
-    /// `id` asked for.
+    /// `id` asked for. No longer raised: such a session opens and is told
+    /// (`conversation_record_not_found`). Kept, as a released code is, for what an older daemon
+    /// sends.
+    #[allow(dead_code)]
     pub const CONVERSATION_TO_RESUME_NOT_FOUND: Code = Code("conversation_to_resume_not_found");
     /// Reopening a session was refused because its agent no longer has the conversation record to
     /// resume, so the launch could only fail. The session is left as it was. `params` names
@@ -1041,4 +1045,39 @@ pub mod notice_code {
     /// meanwhile are not replayed into a resumed session. `params` names the `agent` and the
     /// `bytes` held back.
     pub const TYPING_LOST: Code = Code("typing_lost");
+    /// The launch the session wanted (Octoboard's additions to its agent) could not be prepared, so
+    /// it started as the agent's CLI starts in a plain terminal. A standing notice, never withdrawn.
+    /// `params` names the `agent` and carries the failure as `launch_failed` does: `reason`,
+    /// `reason_code` and the failure's own params.
+    pub const LAUNCH_ENHANCEMENTS_UNAVAILABLE: Code = Code("launch_enhancements_unavailable");
+    /// The agent's CLI exited as it started, and the relaunch without Octoboard's additions stayed
+    /// up. A standing notice, never withdrawn. `params` names the `agent` and gives the CLI's
+    /// output as `detail`.
+    pub const LAUNCH_RETRIED_PLAIN: Code = Code("launch_retried_plain");
+    /// A hook was due and none came within the bound, so the session runs without what depends on
+    /// the agent's hooks. A standing notice, withdrawn when a hook arrives. `params` names the
+    /// `agent`.
+    pub const HOOKS_NOT_RECEIVED: Code = Code("hooks_not_received");
+    /// The launch has no conversation id and no hook will report one, so the conversation cannot be
+    /// resumed by id. A standing notice, withdrawn when the id is learned. `params` names the
+    /// `agent`.
+    pub const CONVERSATION_ID_UNKNOWN: Code = Code("conversation_id_unknown");
+    /// A resume went ahead although the conversation's record was not found, since a record not
+    /// found is no proof the conversation is gone. A standing notice, never withdrawn. `params`
+    /// names the `agent`.
+    pub const CONVERSATION_RECORD_NOT_FOUND: Code = Code("conversation_record_not_found");
+    /// A session was opened on an account last read as signed out. A standing notice, withdrawn
+    /// when a reading finds the account signed in. `params` names the `agent`, its wire id as
+    /// `agent_id`, the `account` and its directory as `config_dir` (the default account's as
+    /// resolved, absent when that is not known yet), as `account_not_signed_in` does.
+    pub const ACCOUNT_SIGN_IN_UNCONFIRMED: Code = Code("account_sign_in_unconfirmed");
+    /// The launch ran on a fallback environment, since the login shell's could not be read. A
+    /// standing notice, never withdrawn. `params` carries the failure's English text as `detail`
+    /// and a `cause`: `earlier_capture` (the last capture of the login shell's environment, however
+    /// old) or `daemon` (the daemon's own environment).
+    pub const SHELL_ENVIRONMENT_UNAVAILABLE: Code = Code("shell_environment_unavailable");
+    /// A project session could not be given its git hook dispatchers. A standing notice, never
+    /// withdrawn. `params` carries a `cause`: `git_too_old`, `user_configuration` or `other`, and
+    /// the installed git's `version` where it is known.
+    pub const SESSION_GIT_HOOKS_UNAVAILABLE: Code = Code("session_git_hooks_unavailable");
 }

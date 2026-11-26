@@ -103,11 +103,22 @@ it("masks the authorization code, sends it to the waiting login and clears the f
   expect(field.value).toBe("");
 });
 
+it("shows a placeholder in the empty secret field, so it is not read as left blank", async () => {
+  const { dialog } = setup(asking({
+    agent: "antigravity",
+    question: { id: "google_authorization_code", params: {}, message: "Paste the authorization code.", answer_kind: "secret_text" },
+  }));
+  await settleFrames();
+  const field = dialog().querySelector<HTMLInputElement>('input[type="password"]')!;
+  expect(field.value).toBe("");
+  expect(field.placeholder).toBe("Value from the login page");
+});
+
 it("keeps the typed code in the field when sending it fails", async () => {
   const { dialog, button } = setup(asking({
     agent: "antigravity",
     question: { id: "google_authorization_code", params: {}, message: "Paste the authorization code.", answer_kind: "secret_text" },
-  }), () => Promise.reject(new Error("The daemon is unreachable.")));
+  }), () => Promise.reject(new CodedError("The daemon control connection closed.", "connection_closed", {})));
   await settleFrames();
   const field = dialog().querySelector<HTMLInputElement>('input[type="password"]')!;
   await typeInto(field, "example-code");

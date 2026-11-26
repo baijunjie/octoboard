@@ -10,6 +10,7 @@ import { daemonParams, NO_RECORDS } from "../../errors/daemonMessage";
 import { classifyError, isProviderRemedy, type ErrorRecovery, type ProviderRemedy } from "../../errors/errorRecovery";
 import { CORE_PARAM_NAMES, globalParam, PROVIDER_PARAM_NAMES, type MessageKey, type Translate } from "../../i18n/catalog";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
+import type { Language } from "../../i18n/languages";
 import { InlinePath, pathText } from "../../i18n/InlinePath";
 import { InlineReference } from "../../i18n/InlineReference";
 import { useDaemonStoreOrEmpty } from "../../store";
@@ -67,6 +68,18 @@ const RICH_MARKS: RecoveryMarks<ReactElement> = {
   path: (steps) => <InlinePath steps={steps} />,
 };
 
+/** The product names a remedy can name: the application, Git, Tauri, the operating system and the providers. */
+const PRODUCT_PARAM_NAMES: readonly string[] = ["appName", "git", "tauri", "osName", ...PROVIDER_PARAM_NAMES];
+
+/** The product names as a remedy shows them in rich text: plain text isolated as an element, with no chip, as the
+ * daemon's message shows them (`daemonParams`), in place of the chip `Message` would otherwise draw for a global name. */
+function plainProductNames(language: Language): Record<string, ReactElement> {
+  return Object.fromEntries(PRODUCT_PARAM_NAMES.flatMap((name) => {
+    const value = globalParam(name, language);
+    return value === undefined ? [] : [[name, <bdi key={name} dir="auto">{value}</bdi>]];
+  }));
+}
+
 /** Plain recovery parameters stay suitable for accessibility and system text. The same values are
  * marked at the rich boundary, keeping control labels and command literals distinct. */
 export function recoveryParams<V = never>(t: Translate, mark?: RecoveryMarks<V>): Record<string, string | V> {
@@ -106,12 +119,14 @@ function ProviderRemedyGuidance({ remedy, error }: { remedy: ProviderRemedy; err
     Object.entries(daemonParams<ReactElement>(language, code, error instanceof CodedError ? error.params : {}, NO_RECORDS, (value, monospace) => RICH_MARKS.reference(value, monospace)))
       .filter(([name]) => !CORE_PARAM_NAMES.includes(name) && !PROVIDER_PARAM_NAMES.includes(name)),
   );
-  const params = { ...own, ...recoveryParams(t, RICH_MARKS), ...marked, agent: <InlineReference dir="auto" wrap>{providerLabel(t, [], id)}</InlineReference> };
+  // The agent and every other product name is plain text, as in the failure's own message; account names and paths keep
+  // their chips.
+  const params = { ...own, ...recoveryParams(t, RICH_MARKS), ...plainProductNames(language), ...marked, agent: <bdi dir="auto">{providerLabel(t, [], id)}</bdi> };
   return <Message id={remedy as MessageKey} params={params as never} />;
 }
 
 /** Which provider's own way to log in an `error` asks for in place of the advice to log in: the agent of an
- * `account_not_signed_in` that names a served provider (`agent_id`) with no login flow (`offersLoginFlow`), with the
+ * `account_not_signed_in` (the one code whose remedy is the account's own, `accountNotSignedIn`) that names a served provider (`agent_id`) with no login flow (`offersLoginFlow`), with the
  * account's configuration directory the daemon names (`config_dir`) or, for the default account, for which the daemon
  * names none until it knows it, the one the agent's availability gives, else the provider's usual one. `undefined` for
  * any other failure, any provider with a flow, a provider this client does not serve, and an older daemon's error that
@@ -132,6 +147,7 @@ export function useSignInHintOf(error: unknown): { agent: string; dir: string } 
  * itself (`useSignInHintOf`). */
 export function RecoveryGuidance({ recovery, error }: { recovery: ErrorRecovery; error?: unknown }): ReactElement | null {
   const t = useT();
+  const language = useCurrentLanguage();
   const providers = useDaemonStoreOrEmpty((state) => state.providers);
   const hint = useSignInHintOf(recovery === "accountNotSignedIn" ? error : undefined);
   if (recovery === "none") return null;
@@ -139,7 +155,8 @@ export function RecoveryGuidance({ recovery, error }: { recovery: ErrorRecovery;
   if (hint) return <SignInHint providers={providers} {...hint} />;
   if (isProviderRemedy(recovery)) return <ProviderRemedyGuidance remedy={recovery} error={error} />;
   const id = `error.recovery.${recovery === "trash" ? "trashRetry" : recovery}` as const;
-  const params = recoveryParams(t, RICH_MARKS);
+  // Product names are plain text, as in the failure's own message.
+  const params = { ...recoveryParams(t, RICH_MARKS), ...plainProductNames(language) };
   return <Message id={id} params={params as never} />;
 }
 

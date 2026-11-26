@@ -118,6 +118,20 @@ struct SessionMeta {
     /// The agent's configuration directory the launch runs on, where it named one.
     #[serde(default)]
     config_dir: Option<String>,
+    /// The standing notices the launch had at its spawn. Absent from builds that predate them.
+    #[serde(default)]
+    standing_notices: Vec<crate::protocol::StandingNotice>,
+    /// The tier the launch was started at. Absent from builds that predate tiers, whose every
+    /// launch was enhanced.
+    #[serde(default)]
+    tier: Option<crate::adapter::LaunchTier>,
+    /// The version of the agent's CLI the launch started, where it could be told.
+    #[serde(default)]
+    agent_version: Option<crate::adapter::AgentVersion>,
+    /// When the launch's first hook was due, as its provider answered at the launch. Absent from
+    /// builds that predate the answer, which expected none.
+    #[serde(default)]
+    first_hook: Option<crate::adapter::FirstHook>,
 }
 
 /// What a terminal found in a holder is, by its meta and what the daemon has on record.
@@ -441,15 +455,33 @@ fn adopt_session(
         // the holder, which ends it with the terminal.
         before_scratch_removal: crate::session::term::before_scratch_removal(transport, after_exit),
         display: DisplaySeed::new(state.display_fallback.clone(), None),
-        status_from_reports: meta.status_from_reports,
-        cancel_drops: meta.cancel_drops,
+        integration: crate::session::integration::Integration {
+            tier: meta.tier.unwrap_or(crate::adapter::LaunchTier::Enhanced),
+            agent_version: meta.agent_version,
+            status_from_reports: meta.status_from_reports,
+            cancel_drops: meta.cancel_drops,
+            first_hook: meta.first_hook.unwrap_or_default(),
+        },
         config_dir: meta.config_dir.map(PathBuf::from),
     }));
     // Its agent ran its start hook, if it ever did, before this daemon was there to see it.
     live.trust.note_adopted();
+    // A launch that runs no hook of Octoboard's at all, which its launch noted for the previous
+    // daemon (`session::term::launch`): a screen sighted after the adoption does not keep its
+    // messages held once gone. A meta from a build that recorded no first hook says nothing of it.
+    if (meta.first_hook.is_some() && live.integration().runs_no_hook())
+        || !live.integration().tier.integrated()
+    {
+        live.trust.note_start_hook_absent();
+    }
+    // Nor will it run that hook again: an expected one is due with its next turn.
+    live.hooks.note_adopted();
     live.enable_native_stash(meta.native_stash);
+    // The draft alone: the prompt went in under the previous daemon, so it makes no hook due
+    // (`LiveSession::restore_launch_prompt`), which would raise a false `hooks_not_received` for
+    // an idle session.
     if let Some(prompt) = meta.launch_prompt {
-        live.note_launch_prompt(prompt);
+        live.restore_launch_prompt(prompt);
     }
     match exact {
         // The screen as the previous daemon saved it (marked inexact only when it was then), and
@@ -478,6 +510,16 @@ fn adopt_session(
     if let Some(token) = &meta.mcp_token {
         state.restore_mcp_token(&meta.session_id, token);
     }
+    // Before the session is live, so its first publication carries them. The meta keeps them as
+    // they were at the spawn: one withdrawn since is written down in the scratch directory and is
+    // not brought back.
+    let withdrawn = scratch
+        .as_deref()
+        .map(crate::state::withdrawn_notices_in)
+        .unwrap_or_default();
+    let mut standing_notices = meta.standing_notices;
+    standing_notices.retain(|notice| !withdrawn.iter().any(|gone| gone.is(notice)));
+    state.restore_standing_notices(&meta.session_id, standing_notices);
     // Before the session is live: nothing may see it live with work not confirmed for its launch,
     // and a persist must not tag that work with the live launch.
     state.restore_background_work(&meta.session_id, &live.launch_id);
@@ -488,6 +530,7 @@ fn adopt_session(
     exit_watch::watch_exit(state, live.clone());
     trust::supervise(state, &live);
     dialogs::watch(state, &live);
+    crate::session::hook_absence::watch(state, &live, true);
     // Last, so what the program draws in answer reaches everything that watches its output. A
     // screen restored exact is the program's own already.
     if !exited && !exact_screen {

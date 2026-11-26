@@ -14,6 +14,10 @@ const names = {
 // kept in a folder of rules that the user's home already has is written there and stays.
 // The two notices are told at a launch that goes on without something of the user's that the CLI itself only logs;
 // the one about an earlier version's folders is worded by which of them is left (`left`).
+// The four launch codes each state a cause only: they are the reason shown inside the notice that the session started
+// as in a plain terminal. A file in both layouts is told after that plain launch, whose own run of the CLI replaced the
+// newer file, so its remedy covers both that case and the models list, where nothing ran yet. The setting notice is
+// told by a launch started again without one setting the CLI refused, which it names (`setting`).
 const en = {
   "provider.antigravity.signInHint": "To log in, run {command} in a terminal in the environment where sessions run.",
   "provider.antigravity.loginQuestion.google_authorization_code": "Paste the authorization code from the browser.",
@@ -35,14 +39,14 @@ const en = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "Auto-approve tool calls",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "Always approve tool calls?",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "Tools can change or delete files without a routine permission prompt in {agent} sessions. Deny rules still apply.",
-  "provider.antigravity.launch_directory_flag_not_taken": "This version of {agent} does not take the option {appName} launches it with, so the session was not launched. Version {version} takes it.",
+  "provider.antigravity.launch_directory_flag_not_taken": "This version of {agent} does not take the option {appName} launches it with. Version {version} takes it.",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "Install a version of {agent} that takes that option, then launch the session again.",
-  "provider.antigravity.user_config_unusable": "The {agent} file {path} cannot be used, so the session was not launched.",
+  "provider.antigravity.user_config_unusable": "The {agent} file {path} cannot be used.",
   "provider.antigravity.user_config_unusable.remedy": "Repair the file or remove it, then launch the session again.",
   "provider.antigravity.earlier_layout_not_migrated": "The {agent} configuration is still where an earlier version kept it, and this version has not moved it yet.",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "Run {command} once in a terminal in the environment where sessions run.",
-  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} has two files for the same configuration: {path} from this version, and {earlier_path} from an earlier version.",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "Running {command} replaces this version's file with the earlier version's. Keep the file you want and move or remove the other first, then run {command} once in a terminal in the environment where sessions run.",
+  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} has two files for the same configuration: {path} from this version, and {earlier_path} from an earlier version. When {agent} runs on its own, it replaces the first with the second and keeps no copy.",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "If {agent} has run on its own since, this version's file now holds the earlier version's configuration, so restore anything you need from a backup. Otherwise, keep the file you want and move or remove the other first, then run {command} once in a terminal in the environment where sessions run.",
   "provider.antigravity.settings_not_read": "{agent} cannot read its settings file {path} as settings, so this session runs on the default settings, without the file's permission rules and trusted folders. Repair the file, then launch the session again.",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent} does not read the {rules} or {plugins} folder that an earlier version left in {path}. It reads only the folders in {current_path}, so this session runs without anything that is only in the earlier folder. To keep something from the earlier folder, move it into the folder that is read.",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent} does not read the {left} folder that an earlier version left in {path}. It reads only the one in {current_path}, so this session runs without anything that is only in the earlier folder. To keep something from the earlier folder, move it into the folder that is read.",
@@ -50,6 +54,7 @@ const en = {
   "provider.antigravity.settings_not_read.alertTitle": "Settings file not read",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "Earlier folders not read",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "Earlier folder not read",
+  "provider.antigravity.launch_setting_not_taken": "{agent} exited as it started because it does not take the setting {setting} that {appName} launches it with, so {appName} started it again without that setting. The rest of {appName}'s additions work as usual.",
 } as const;
 
 const arMessages = {
@@ -73,14 +78,14 @@ const arMessages = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "الموافقة التلقائية على استدعاءات الأدوات",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "الموافقة دائماً على استدعاءات الأدوات؟",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "يمكن للأدوات تغيير الملفات أو حذفها دون طلب إذن اعتيادي في جلسات {agent}. تظل قواعد الرفض سارية.",
-  "provider.antigravity.launch_directory_flag_not_taken": "هذا الإصدار من {agent} لا يقبل الخيار الذي يشغّله به {appName}، لذا لم تبدأ الجلسة. الإصدار {version} يقبله.",
+  "provider.antigravity.launch_directory_flag_not_taken": "هذا الإصدار من {agent} لا يقبل الخيار الذي يشغّله به {appName}. الإصدار {version} يقبله.",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "ثبّت إصداراً من {agent} يقبل هذا الخيار، ثم ابدأ الجلسة مجدداً.",
-  "provider.antigravity.user_config_unusable": "تعذّر استخدام ملف {agent} في {path}، لذا لم تبدأ الجلسة.",
+  "provider.antigravity.user_config_unusable": "تعذّر استخدام ملف {agent} في {path}.",
   "provider.antigravity.user_config_unusable.remedy": "أصلح الملف أو احذفه، ثم ابدأ الجلسة مجدداً.",
   "provider.antigravity.earlier_layout_not_migrated": "ما زالت إعدادات {agent} في الموضع الذي كان يحفظها فيه إصدار سابق، ولم ينقلها هذا الإصدار بعد.",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "شغّل {command} مرة واحدة في طرفية ضمن البيئة التي تعمل فيها الجلسات.",
-  "provider.antigravity.earlier_layout_file_in_both_places": "لدى {agent} ملفان للإعدادات نفسها: {path} العائد إلى هذا الإصدار، و{earlier_path} العائد إلى إصدار سابق.",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "تشغيل {command} يضع ملف الإصدار السابق مكان ملف هذا الإصدار. أبقِ أولاً الملف الذي تريده وانقل الملف الآخر أو احذفه، ثم شغّل {command} مرة واحدة في طرفية ضمن البيئة التي تعمل فيها الجلسات.",
+  "provider.antigravity.earlier_layout_file_in_both_places": "لدى {agent} ملفان للإعدادات نفسها: {path} العائد إلى هذا الإصدار، و{earlier_path} العائد إلى إصدار سابق. عندما يعمل {agent} بمفرده، يضع الملف الثاني مكان الأول دون الاحتفاظ بنسخة.",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "إذا عمل {agent} بمفرده منذ ذلك الحين، فإن ملف هذا الإصدار يحتوي الآن على إعدادات الإصدار السابق، لذا استعد ما تحتاجه من نسخة احتياطية. وإلا، فأبقِ أولاً الملف الذي تريده وانقل الملف الآخر أو احذفه، ثم شغّل {command} مرة واحدة في طرفية ضمن البيئة التي تعمل فيها الجلسات.",
   "provider.antigravity.settings_not_read": "يتعذر على {agent} قراءة ملف إعداداته {path} كإعدادات، لذا تعمل هذه الجلسة بالإعدادات الافتراضية، دون قواعد الأذونات والمجلدات الموثوقة الواردة في الملف. أصلح الملف، ثم ابدأ الجلسة مجدداً.",
   "provider.antigravity.earlier_layout_leftovers_not_read": "لا يقرأ {agent} المجلد {rules} أو {plugins} الذي تركه إصدار سابق في {path}. يقرأ فقط المجلدات الموجودة في {current_path}، لذا تعمل هذه الجلسة دون أي شيء موجود في المجلد السابق فقط. للاحتفاظ بشيء من المجلد السابق، انقله إلى المجلد الذي يُقرأ.",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "لا يقرأ {agent} المجلد {left} الذي تركه إصدار سابق في {path}. يقرأ فقط المجلد الموجود في {current_path}، لذا تعمل هذه الجلسة دون أي شيء موجود في المجلد السابق فقط. للاحتفاظ بشيء من المجلد السابق، انقله إلى المجلد الذي يُقرأ.",
@@ -88,6 +93,7 @@ const arMessages = {
   "provider.antigravity.settings_not_read.alertTitle": "لم يُقرأ ملف الإعدادات",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "لم تُقرأ المجلدات السابقة",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "لم يُقرأ المجلد السابق",
+  "provider.antigravity.launch_setting_not_taken": "خرج {agent} فور بدئه لأنه لا يقبل الإعداد {setting} الذي يشغّله به {appName}، لذا أعاد {appName} تشغيله دون هذا الإعداد. تعمل بقية إضافات {appName} كالمعتاد.",
 } as const;
 
 const deMessages = {
@@ -111,14 +117,14 @@ const deMessages = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "Werkzeugaufrufe automatisch genehmigen",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "Werkzeugaufrufe immer genehmigen?",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "Werkzeuge können in {agent}-Sitzungen Dateien ohne die übliche Berechtigungsabfrage ändern oder löschen. Ablehnungsregeln gelten weiterhin.",
-  "provider.antigravity.launch_directory_flag_not_taken": "Diese Version von {agent} akzeptiert die Option nicht, mit der {appName} sie startet. Die Sitzung wurde daher nicht gestartet. Version {version} akzeptiert sie.",
+  "provider.antigravity.launch_directory_flag_not_taken": "Diese Version von {agent} akzeptiert die Option nicht, mit der {appName} sie startet. Version {version} akzeptiert sie.",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "Installiere eine Version von {agent}, die diese Option akzeptiert, und starte die Sitzung dann erneut.",
-  "provider.antigravity.user_config_unusable": "Die Datei von {agent}, {path}, kann nicht verwendet werden. Die Sitzung wurde daher nicht gestartet.",
+  "provider.antigravity.user_config_unusable": "Die Datei von {agent}, {path}, kann nicht verwendet werden.",
   "provider.antigravity.user_config_unusable.remedy": "Repariere oder entferne die Datei und starte die Sitzung dann erneut.",
   "provider.antigravity.earlier_layout_not_migrated": "Die Konfiguration von {agent} liegt noch dort, wo eine frühere Version sie abgelegt hat, und diese Version hat sie noch nicht verschoben.",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "Führe {command} einmal in einem Terminal in der Umgebung aus, in der die Sitzungen laufen.",
-  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} hat zwei Dateien für dieselbe Konfiguration: {path} aus dieser Version und {earlier_path} aus einer früheren Version.",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "Die Ausführung von {command} ersetzt die Datei dieser Version durch die der früheren Version. Behalte zuerst die Datei, die du möchtest, und verschiebe oder entferne die andere. Führe dann {command} einmal in einem Terminal in der Umgebung aus, in der die Sitzungen laufen.",
+  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} hat zwei Dateien für dieselbe Konfiguration: {path} aus dieser Version und {earlier_path} aus einer früheren Version. Wenn {agent} selbst läuft, ersetzt es die erste durch die zweite und behält keine Kopie.",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "Wenn {agent} seitdem selbst gelaufen ist, enthält die Datei dieser Version jetzt die Konfiguration der früheren Version. Stelle dann aus einer Sicherung wieder her, was du brauchst. Andernfalls behalte zuerst die Datei, die du möchtest, und verschiebe oder entferne die andere. Führe dann {command} einmal in einem Terminal in der Umgebung aus, in der die Sitzungen laufen.",
   "provider.antigravity.settings_not_read": "{agent} kann seine Einstellungsdatei {path} nicht als Einstellungen lesen. Diese Sitzung läuft daher mit den Standardeinstellungen, ohne die Berechtigungsregeln und vertrauenswürdigen Ordner aus der Datei. Repariere die Datei und starte die Sitzung dann erneut.",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent} liest den Ordner {rules} oder {plugins} nicht, den eine frühere Version in {path} hinterlassen hat. Gelesen werden nur die Ordner in {current_path}. Diese Sitzung läuft daher ohne alles, was nur im früheren Ordner liegt. Um etwas aus dem früheren Ordner zu behalten, verschiebe es in den Ordner, der gelesen wird.",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent} liest den Ordner {left} nicht, den eine frühere Version in {path} hinterlassen hat. Gelesen wird nur der Ordner in {current_path}. Diese Sitzung läuft daher ohne alles, was nur im früheren Ordner liegt. Um etwas aus dem früheren Ordner zu behalten, verschiebe es in den Ordner, der gelesen wird.",
@@ -126,6 +132,7 @@ const deMessages = {
   "provider.antigravity.settings_not_read.alertTitle": "Einstellungsdatei nicht gelesen",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "Frühere Ordner nicht gelesen",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "Früherer Ordner nicht gelesen",
+  "provider.antigravity.launch_setting_not_taken": "{agent} wurde direkt beim Start beendet, weil es die Einstellung {setting} nicht akzeptiert, mit der {appName} es startet. {appName} hat es daher ohne diese Einstellung neu gestartet. Die übrigen Erweiterungen von {appName} funktionieren wie gewohnt.",
 } as const;
 
 const esMessages = {
@@ -149,14 +156,14 @@ const esMessages = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "Aprobar automáticamente las llamadas a herramientas",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "¿Aprobar siempre las llamadas a herramientas?",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "Las herramientas pueden modificar o eliminar archivos sin una solicitud rutinaria de permiso en las sesiones de {agent}. Las reglas de denegación siguen aplicándose.",
-  "provider.antigravity.launch_directory_flag_not_taken": "Esta versión de {agent} no acepta la opción con la que {appName} la inicia, por lo que no se inició la sesión. La versión {version} la acepta.",
+  "provider.antigravity.launch_directory_flag_not_taken": "Esta versión de {agent} no acepta la opción con la que {appName} la inicia. La versión {version} la acepta.",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "Instala una versión de {agent} que acepte esa opción y vuelve a iniciar la sesión.",
-  "provider.antigravity.user_config_unusable": "El archivo de {agent}, {path}, no se puede usar, por lo que no se inició la sesión.",
+  "provider.antigravity.user_config_unusable": "El archivo de {agent}, {path}, no se puede usar.",
   "provider.antigravity.user_config_unusable.remedy": "Repara o elimina el archivo y vuelve a iniciar la sesión.",
   "provider.antigravity.earlier_layout_not_migrated": "La configuración de {agent} sigue donde la guardaba una versión anterior, y esta versión aún no la ha movido.",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "Ejecuta {command} una vez en un terminal del entorno donde se ejecutan las sesiones.",
-  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} tiene dos archivos para la misma configuración: {path}, que procede de esta versión, y {earlier_path}, que procede de una versión anterior.",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "Al ejecutar {command}, el archivo de esta versión se reemplaza por el de la versión anterior. Antes, conserva el archivo que quieras y mueve o elimina el otro. Después, ejecuta {command} una vez en un terminal del entorno donde se ejecutan las sesiones.",
+  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} tiene dos archivos para la misma configuración: {path}, que procede de esta versión, y {earlier_path}, que procede de una versión anterior. Cuando {agent} se ejecuta por sí solo, reemplaza el primero por el segundo sin conservar ninguna copia.",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "Si {agent} se ha ejecutado por sí solo desde entonces, el archivo de esta versión contiene ahora la configuración de la versión anterior, así que restaura desde una copia de seguridad lo que necesites. Si no, conserva primero el archivo que quieras y mueve o elimina el otro. Después, ejecuta {command} una vez en un terminal del entorno donde se ejecutan las sesiones.",
   "provider.antigravity.settings_not_read": "{agent} no puede leer su archivo de ajustes {path} como ajustes, por lo que esta sesión se ejecuta con los ajustes predeterminados, sin las reglas de permisos ni las carpetas de confianza del archivo. Repara el archivo y vuelve a iniciar la sesión.",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent} no lee la carpeta {rules} o {plugins} que una versión anterior dejó en {path}. Solo lee las carpetas de {current_path}, por lo que esta sesión se ejecuta sin nada de lo que solo está en la carpeta anterior. Para conservar algo de la carpeta anterior, muévelo a la carpeta que sí se lee.",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent} no lee la carpeta {left} que una versión anterior dejó en {path}. Solo lee la de {current_path}, por lo que esta sesión se ejecuta sin nada de lo que solo está en la carpeta anterior. Para conservar algo de la carpeta anterior, muévelo a la carpeta que sí se lee.",
@@ -164,6 +171,7 @@ const esMessages = {
   "provider.antigravity.settings_not_read.alertTitle": "Archivo de ajustes no leído",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "Carpetas anteriores no leídas",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "Carpeta anterior no leída",
+  "provider.antigravity.launch_setting_not_taken": "{agent} se cerró nada más iniciarse porque no acepta el ajuste {setting} con el que {appName} lo inicia, así que {appName} lo volvió a iniciar sin ese ajuste. El resto de las funciones que añade {appName} funcionan con normalidad.",
 } as const;
 
 const frMessages = {
@@ -187,14 +195,14 @@ const frMessages = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "Approuver automatiquement les appels d’outils",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "Toujours approuver les appels d’outils ?",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "Les outils peuvent modifier ou supprimer des fichiers sans demande d’autorisation habituelle dans les sessions {agent}. Les règles de refus restent applicables.",
-  "provider.antigravity.launch_directory_flag_not_taken": "Cette version de {agent} n’accepte pas l’option avec laquelle {appName} la lance. La session n’a donc pas été lancée. La version {version} l’accepte.",
+  "provider.antigravity.launch_directory_flag_not_taken": "Cette version de {agent} n’accepte pas l’option avec laquelle {appName} la lance. La version {version} l’accepte.",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "Installez une version de {agent} qui accepte cette option, puis relancez la session.",
-  "provider.antigravity.user_config_unusable": "Le fichier de {agent}, {path}, ne peut pas être utilisé. La session n’a donc pas été lancée.",
+  "provider.antigravity.user_config_unusable": "Le fichier de {agent}, {path}, ne peut pas être utilisé.",
   "provider.antigravity.user_config_unusable.remedy": "Réparez ou supprimez le fichier, puis relancez la session.",
   "provider.antigravity.earlier_layout_not_migrated": "La configuration de {agent} se trouve encore là où une version antérieure la conservait, et cette version ne l’a pas encore déplacée.",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "Exécutez {command} une fois dans un terminal de l’environnement où les sessions s’exécutent.",
-  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} possède deux fichiers pour la même configuration : {path}, qui provient de cette version, et {earlier_path}, qui provient d’une version antérieure.",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "L’exécution de {command} remplace le fichier de cette version par celui de la version antérieure. Conservez d’abord le fichier que vous voulez et déplacez ou supprimez l’autre. Exécutez ensuite {command} une fois dans un terminal de l’environnement où les sessions s’exécutent.",
+  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} possède deux fichiers pour la même configuration : {path}, qui provient de cette version, et {earlier_path}, qui provient d’une version antérieure. Quand {agent} s’exécute seul, il remplace le premier par le second sans en garder de copie.",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "Si {agent} s’est exécuté seul depuis, le fichier de cette version contient désormais la configuration de la version antérieure : restaurez ce dont vous avez besoin à partir d’une sauvegarde. Sinon, conservez d’abord le fichier que vous voulez et déplacez ou supprimez l’autre. Exécutez ensuite {command} une fois dans un terminal de l’environnement où les sessions s’exécutent.",
   "provider.antigravity.settings_not_read": "{agent} ne peut pas lire son fichier de réglages {path} comme des réglages. Cette session s’exécute donc avec les réglages par défaut, sans les règles d’autorisation ni les dossiers de confiance du fichier. Réparez le fichier, puis relancez la session.",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent} ne lit pas le dossier {rules} ou {plugins} qu’une version antérieure a laissé dans {path}. Il ne lit que les dossiers de {current_path}. Cette session s’exécute donc sans ce qui se trouve uniquement dans l’ancien dossier. Pour conserver un élément de l’ancien dossier, déplacez-le dans le dossier qui est lu.",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent} ne lit pas le dossier {left} qu’une version antérieure a laissé dans {path}. Il ne lit que celui de {current_path}. Cette session s’exécute donc sans ce qui se trouve uniquement dans l’ancien dossier. Pour conserver un élément de l’ancien dossier, déplacez-le dans le dossier qui est lu.",
@@ -202,6 +210,7 @@ const frMessages = {
   "provider.antigravity.settings_not_read.alertTitle": "Fichier de réglages non lu",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "Anciens dossiers non lus",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "Ancien dossier non lu",
+  "provider.antigravity.launch_setting_not_taken": "{agent} s’est fermé dès son démarrage, car il n’accepte pas le paramètre {setting} avec lequel {appName} le lance. {appName} l’a donc relancé sans ce paramètre. Les autres ajouts de {appName} fonctionnent normalement.",
 } as const;
 
 const hiMessages = {
@@ -225,14 +234,14 @@ const hiMessages = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "टूल कॉल अपने आप मंज़ूर करें",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "टूल कॉल हमेशा मंज़ूर करें?",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "{agent} के सेशन में टूल सामान्य अनुमति माँगे बिना फ़ाइलें बदल या मिटा सकते हैं। अस्वीकार करने के नियम अब भी लागू होते हैं।",
-  "provider.antigravity.launch_directory_flag_not_taken": "{agent} का यह संस्करण वह विकल्प स्वीकार नहीं करता जिसके साथ {appName} इसे शुरू करता है, इसलिए सेशन शुरू नहीं हुआ। संस्करण {version} इसे स्वीकार करता है।",
+  "provider.antigravity.launch_directory_flag_not_taken": "{agent} का यह संस्करण वह विकल्प स्वीकार नहीं करता जिसके साथ {appName} इसे शुरू करता है। संस्करण {version} इसे स्वीकार करता है।",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "{agent} का ऐसा संस्करण इंस्टॉल करें जो यह विकल्प स्वीकार करता हो, फिर सेशन दोबारा शुरू करें।",
-  "provider.antigravity.user_config_unusable": "{agent} की फ़ाइल {path} का उपयोग नहीं किया जा सका, इसलिए सेशन शुरू नहीं हुआ।",
+  "provider.antigravity.user_config_unusable": "{agent} की फ़ाइल {path} का उपयोग नहीं किया जा सका।",
   "provider.antigravity.user_config_unusable.remedy": "फ़ाइल ठीक करें या हटाएँ, फिर सेशन दोबारा शुरू करें।",
   "provider.antigravity.earlier_layout_not_migrated": "{agent} का कॉन्फ़िगरेशन अब भी वहीं है जहाँ पिछला संस्करण उसे रखता था, और इस संस्करण ने उसे अभी तक स्थानांतरित नहीं किया है।",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "जिस एनवायरनमेंट में सेशन चलते हैं, वहाँ टर्मिनल में {command} एक बार चलाएँ।",
-  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} के पास एक ही कॉन्फ़िगरेशन की दो फ़ाइलें हैं: इस संस्करण की {path} और पिछले संस्करण की {earlier_path}।",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "{command} चलाने पर इस संस्करण की फ़ाइल की जगह पिछले संस्करण की फ़ाइल आ जाती है। पहले, जो फ़ाइल आप रखना चाहते हैं उसे रखें और दूसरी फ़ाइल को कहीं और ले जाएँ या हटाएँ। फिर जिस एनवायरनमेंट में सेशन चलते हैं, वहाँ टर्मिनल में {command} एक बार चलाएँ।",
+  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} के पास एक ही कॉन्फ़िगरेशन की दो फ़ाइलें हैं: इस संस्करण की {path} और पिछले संस्करण की {earlier_path}। जब {agent} अपने-आप चलता है, तो वह पहली फ़ाइल की जगह दूसरी रख देता है और कोई कॉपी नहीं रखता।",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "अगर तब से {agent} अपने-आप चल चुका है, तो इस संस्करण की फ़ाइल में अब पिछले संस्करण का कॉन्फ़िगरेशन है, इसलिए जो चाहिए उसे बैकअप से वापस लाएँ। नहीं तो, पहले जो फ़ाइल आप रखना चाहते हैं उसे रखें और दूसरी फ़ाइल को कहीं और ले जाएँ या हटाएँ। फिर जिस एनवायरनमेंट में सेशन चलते हैं, वहाँ टर्मिनल में {command} एक बार चलाएँ।",
   "provider.antigravity.settings_not_read": "{agent} अपनी सेटिंग फ़ाइल {path} को सेटिंग के रूप में नहीं पढ़ पाता, इसलिए यह सेशन डिफ़ॉल्ट सेटिंग पर चलता है और फ़ाइल के अनुमति नियम और भरोसेमंद फ़ोल्डर लागू नहीं होते। फ़ाइल ठीक करें, फिर सेशन दोबारा शुरू करें।",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent} उस {rules} या {plugins} फ़ोल्डर को नहीं पढ़ता जो पिछला संस्करण {path} में छोड़ गया था। वह केवल {current_path} वाले फ़ोल्डर पढ़ता है, इसलिए यह सेशन उन चीज़ों के बिना चलता है जो केवल पुराने फ़ोल्डर में हैं। पुराने फ़ोल्डर से कुछ रखना हो, तो उसे पढ़े जाने वाले फ़ोल्डर में ले जाएँ।",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent} उस {left} फ़ोल्डर को नहीं पढ़ता जो पिछला संस्करण {path} में छोड़ गया था। वह केवल {current_path} वाला फ़ोल्डर पढ़ता है, इसलिए यह सेशन उन चीज़ों के बिना चलता है जो केवल पुराने फ़ोल्डर में हैं। पुराने फ़ोल्डर से कुछ रखना हो, तो उसे पढ़े जाने वाले फ़ोल्डर में ले जाएँ।",
@@ -240,6 +249,7 @@ const hiMessages = {
   "provider.antigravity.settings_not_read.alertTitle": "सेटिंग फ़ाइल नहीं पढ़ी गई",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "पुराने फ़ोल्डर नहीं पढ़े गए",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "पुराना फ़ोल्डर नहीं पढ़ा गया",
+  "provider.antigravity.launch_setting_not_taken": "{agent} शुरू होते ही बंद हो गया, क्योंकि वह सेटिंग {setting} स्वीकार नहीं करता जिसके साथ {appName} उसे शुरू करता है, इसलिए {appName} ने उसे इस सेटिंग के बिना फिर से शुरू किया। {appName} की बाकी सुविधाएँ हमेशा की तरह काम करती हैं।",
 } as const;
 
 const idMessages = {
@@ -263,14 +273,14 @@ const idMessages = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "Setujui panggilan alat secara otomatis",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "Selalu setujui panggilan alat?",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "Alat dapat mengubah atau menghapus file tanpa permintaan izin rutin dalam sesi {agent}. Aturan penolakan tetap berlaku.",
-  "provider.antigravity.launch_directory_flag_not_taken": "Versi {agent} ini tidak menerima opsi yang digunakan {appName} untuk meluncurkannya, sehingga sesi tidak diluncurkan. Versi {version} menerimanya.",
+  "provider.antigravity.launch_directory_flag_not_taken": "Versi {agent} ini tidak menerima opsi yang digunakan {appName} untuk meluncurkannya. Versi {version} menerimanya.",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "Instal versi {agent} yang menerima opsi tersebut, lalu luncurkan sesi lagi.",
-  "provider.antigravity.user_config_unusable": "File {agent}, {path}, tidak dapat digunakan, sehingga sesi tidak diluncurkan.",
+  "provider.antigravity.user_config_unusable": "File {agent}, {path}, tidak dapat digunakan.",
   "provider.antigravity.user_config_unusable.remedy": "Perbaiki atau hapus file tersebut, lalu luncurkan sesi lagi.",
   "provider.antigravity.earlier_layout_not_migrated": "Konfigurasi {agent} masih berada di tempat versi sebelumnya menyimpannya, dan versi ini belum memindahkannya.",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "Jalankan {command} satu kali di terminal pada lingkungan tempat sesi berjalan.",
-  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} memiliki dua file untuk konfigurasi yang sama: {path} dari versi ini dan {earlier_path} dari versi sebelumnya.",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "Menjalankan {command} akan mengganti file versi ini dengan file dari versi sebelumnya. Simpan dahulu file yang diinginkan dan pindahkan atau hapus file lainnya. Lalu jalankan {command} satu kali di terminal pada lingkungan tempat sesi berjalan.",
+  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} memiliki dua file untuk konfigurasi yang sama: {path} dari versi ini dan {earlier_path} dari versi sebelumnya. Saat berjalan sendiri, {agent} mengganti file pertama dengan file kedua tanpa menyimpan salinan.",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "Jika {agent} sudah berjalan sendiri sejak saat itu, file versi ini kini berisi konfigurasi versi sebelumnya, jadi pulihkan yang Anda perlukan dari cadangan. Jika belum, simpan dahulu file yang diinginkan dan pindahkan atau hapus file lainnya. Lalu jalankan {command} satu kali di terminal pada lingkungan tempat sesi berjalan.",
   "provider.antigravity.settings_not_read": "{agent} tidak dapat membaca file pengaturannya, {path}, sebagai pengaturan, sehingga sesi ini berjalan dengan pengaturan default, tanpa aturan izin dan folder tepercaya dari file tersebut. Perbaiki file tersebut, lalu luncurkan sesi lagi.",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent} tidak membaca folder {rules} atau {plugins} yang ditinggalkan versi sebelumnya di {path}. Yang dibaca hanya folder di {current_path}, sehingga sesi ini berjalan tanpa apa pun yang hanya ada di folder lama. Untuk mempertahankan sesuatu dari folder lama, pindahkan ke folder yang dibaca.",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent} tidak membaca folder {left} yang ditinggalkan versi sebelumnya di {path}. Yang dibaca hanya folder di {current_path}, sehingga sesi ini berjalan tanpa apa pun yang hanya ada di folder lama. Untuk mempertahankan sesuatu dari folder lama, pindahkan ke folder yang dibaca.",
@@ -278,6 +288,7 @@ const idMessages = {
   "provider.antigravity.settings_not_read.alertTitle": "File pengaturan tidak dibaca",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "Folder lama tidak dibaca",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "Folder lama tidak dibaca",
+  "provider.antigravity.launch_setting_not_taken": "{agent} langsung keluar saat dimulai karena tidak menerima pengaturan {setting} yang digunakan {appName} untuk meluncurkannya, sehingga {appName} memulainya lagi tanpa pengaturan itu. Tambahan {appName} lainnya berfungsi seperti biasa.",
 } as const;
 
 const itMessages = {
@@ -301,14 +312,14 @@ const itMessages = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "Approva automaticamente le chiamate agli strumenti",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "Approvare sempre le chiamate agli strumenti?",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "Gli strumenti possono modificare o eliminare file senza la consueta richiesta di permesso nelle sessioni di {agent}. Le regole di rifiuto restano valide.",
-  "provider.antigravity.launch_directory_flag_not_taken": "Questa versione di {agent} non accetta l’opzione con cui {appName} la avvia, quindi la sessione non è stata avviata. La versione {version} la accetta.",
+  "provider.antigravity.launch_directory_flag_not_taken": "Questa versione di {agent} non accetta l’opzione con cui {appName} la avvia. La versione {version} la accetta.",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "Installa una versione di {agent} che accetti questa opzione, quindi avvia di nuovo la sessione.",
-  "provider.antigravity.user_config_unusable": "Il file di {agent}, {path}, non può essere usato, quindi la sessione non è stata avviata.",
+  "provider.antigravity.user_config_unusable": "Il file di {agent}, {path}, non può essere usato.",
   "provider.antigravity.user_config_unusable.remedy": "Ripara o rimuovi il file, quindi avvia di nuovo la sessione.",
   "provider.antigravity.earlier_layout_not_migrated": "La configurazione di {agent} si trova ancora dove la conservava una versione precedente, e questa versione non l’ha ancora spostata.",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "Esegui {command} una volta in un terminale nell’ambiente in cui vengono eseguite le sessioni.",
-  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} ha due file per la stessa configurazione: {path}, che proviene da questa versione, e {earlier_path}, che proviene da una versione precedente.",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "L’esecuzione di {command} sostituisce il file di questa versione con quello della versione precedente. Prima conserva il file che vuoi e sposta o rimuovi l’altro. Poi esegui {command} una volta in un terminale nell’ambiente in cui vengono eseguite le sessioni.",
+  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} ha due file per la stessa configurazione: {path}, che proviene da questa versione, e {earlier_path}, che proviene da una versione precedente. Quando {agent} viene eseguito da solo, sostituisce il primo con il secondo senza conservarne una copia.",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "Se da allora {agent} è stato eseguito da solo, il file di questa versione contiene ora la configurazione della versione precedente, quindi ripristina da un backup ciò che ti serve. Altrimenti, prima conserva il file che vuoi e sposta o rimuovi l’altro. Poi esegui {command} una volta in un terminale nell’ambiente in cui vengono eseguite le sessioni.",
   "provider.antigravity.settings_not_read": "{agent} non riesce a leggere il proprio file delle impostazioni {path} come impostazioni, quindi questa sessione viene eseguita con le impostazioni predefinite, senza le regole dei permessi e le cartelle attendibili del file. Ripara il file, quindi avvia di nuovo la sessione.",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent} non legge la cartella {rules} o {plugins} che una versione precedente ha lasciato in {path}. Legge solo le cartelle in {current_path}, quindi questa sessione viene eseguita senza ciò che si trova solo nella cartella precedente. Per conservare qualcosa della cartella precedente, spostalo nella cartella che viene letta.",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent} non legge la cartella {left} che una versione precedente ha lasciato in {path}. Legge solo quella in {current_path}, quindi questa sessione viene eseguita senza ciò che si trova solo nella cartella precedente. Per conservare qualcosa della cartella precedente, spostalo nella cartella che viene letta.",
@@ -316,6 +327,7 @@ const itMessages = {
   "provider.antigravity.settings_not_read.alertTitle": "File delle impostazioni non letto",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "Cartelle precedenti non lette",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "Cartella precedente non letta",
+  "provider.antigravity.launch_setting_not_taken": "{agent} si è chiuso appena avviato perché non accetta l’impostazione {setting} con cui {appName} lo avvia, quindi {appName} lo ha riavviato senza quell’impostazione. Le altre aggiunte di {appName} funzionano come al solito.",
 } as const;
 
 const jaMessages = {
@@ -339,14 +351,14 @@ const jaMessages = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "ツール呼び出しを自動承認",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "ツール呼び出しを常に承認しますか？",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "{agent} のセッションで、ツールが通常の権限確認なしにファイルを変更または削除できます。拒否ルールは引き続き適用されます。",
-  "provider.antigravity.launch_directory_flag_not_taken": "このバージョンの {agent} は、{appName} が起動時に指定するオプションを受け付けないため、セッションを起動しませんでした。バージョン {version} はこのオプションを受け付けます。",
+  "provider.antigravity.launch_directory_flag_not_taken": "このバージョンの {agent} は、{appName} が起動時に指定するオプションを受け付けません。バージョン {version} はこのオプションを受け付けます。",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "このオプションを受け付けるバージョンの {agent} をインストールしてから、セッションをもう一度起動してください。",
-  "provider.antigravity.user_config_unusable": "{agent} のファイル {path} を使用できないため、セッションを起動しませんでした。",
+  "provider.antigravity.user_config_unusable": "{agent} のファイル {path} を使用できません。",
   "provider.antigravity.user_config_unusable.remedy": "ファイルを修正または削除してから、セッションをもう一度起動してください。",
   "provider.antigravity.earlier_layout_not_migrated": "{agent} の設定が以前のバージョンの保存場所に残っており、このバージョンではまだ移行されていません。",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "セッションを実行する環境のターミナルで {command} を一度実行してください。",
-  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} に同じ設定のファイルが 2 つあります。このバージョンの {path} と、以前のバージョンの {earlier_path} です。",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "{command} を実行すると、このバージョンのファイルが以前のバージョンのファイルで置き換えられます。先に、残したいファイルを残し、もう一方を移動または削除してください。その後、セッションを実行する環境のターミナルで {command} を一度実行してください。",
+  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} に同じ設定のファイルが 2 つあります。このバージョンの {path} と、以前のバージョンの {earlier_path} です。{agent} を単独で実行すると、前者が後者で置き換えられ、コピーは残りません。",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "その後 {agent} を単独で実行した場合、このバージョンのファイルには以前のバージョンの設定が入っています。必要な内容はバックアップから復元してください。まだの場合は、先に残したいファイルを残し、もう一方を移動または削除してください。その後、セッションを実行する環境のターミナルで {command} を一度実行してください。",
   "provider.antigravity.settings_not_read": "{agent} は設定ファイル {path} を設定として読み込めないため、このセッションはデフォルトの設定で実行され、ファイル内の権限ルールと信頼済みフォルダは適用されません。ファイルを修正してから、セッションをもう一度起動してください。",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent} は、以前のバージョンが {path} に残した {rules} フォルダや {plugins} フォルダを読み込みません。読み込まれるのは {current_path} にあるフォルダだけのため、このセッションは以前のフォルダにしかないものを使わずに実行されます。以前のフォルダから残したいものは、読み込まれるフォルダへ移動してください。",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent} は、以前のバージョンが {path} に残した {left} フォルダを読み込みません。読み込まれるのは {current_path} にあるフォルダだけのため、このセッションは以前のフォルダにしかないものを使わずに実行されます。以前のフォルダから残したいものは、読み込まれるフォルダへ移動してください。",
@@ -354,6 +366,7 @@ const jaMessages = {
   "provider.antigravity.settings_not_read.alertTitle": "設定ファイルが読み込まれていません",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "以前のフォルダが読み込まれていません",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "以前のフォルダが読み込まれていません",
+  "provider.antigravity.launch_setting_not_taken": "{agent} は、{appName} が起動時に指定する設定 {setting} を受け付けないため起動直後に終了しました。そのため {appName} はこの設定を外して再起動しました。{appName} のその他の機能は通常どおり動作します。",
 } as const;
 
 const koMessages = {
@@ -377,14 +390,14 @@ const koMessages = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "도구 호출 자동 승인",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "도구 호출을 항상 승인할까요?",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "{agent} 세션에서 도구가 일반적인 권한 확인 없이 파일을 변경하거나 삭제할 수 있습니다. 거부 규칙은 계속 적용됩니다.",
-  "provider.antigravity.launch_directory_flag_not_taken": "이 버전의 {agent}은(는) {appName}이(가) 시작할 때 사용하는 옵션을 받지 않아 세션을 시작하지 않았습니다. 버전 {version}은(는) 이 옵션을 받습니다.",
+  "provider.antigravity.launch_directory_flag_not_taken": "이 버전의 {agent}은(는) {appName}이(가) 시작할 때 사용하는 옵션을 받지 않습니다. 버전 {version}은(는) 이 옵션을 받습니다.",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "이 옵션을 받는 버전의 {agent}을(를) 설치한 다음 세션을 다시 시작해 주세요.",
-  "provider.antigravity.user_config_unusable": "{agent}의 파일 {path}을(를) 사용할 수 없어 세션을 시작하지 않았습니다.",
+  "provider.antigravity.user_config_unusable": "{agent}의 파일 {path}을(를) 사용할 수 없습니다.",
   "provider.antigravity.user_config_unusable.remedy": "파일을 수정하거나 삭제한 다음 세션을 다시 시작해 주세요.",
   "provider.antigravity.earlier_layout_not_migrated": "{agent}의 설정이 이전 버전이 저장하던 위치에 남아 있으며, 이 버전에서는 아직 옮겨지지 않았습니다.",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "세션이 실행되는 환경의 터미널에서 {command}을(를) 한 번 실행해 주세요.",
-  "provider.antigravity.earlier_layout_file_in_both_places": "{agent}에 같은 설정의 파일이 두 개 있습니다. 이 버전의 {path}과(와) 이전 버전의 {earlier_path}입니다.",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "{command}을(를) 실행하면 이 버전의 파일이 이전 버전의 파일로 바뀝니다. 먼저 사용할 파일을 남기고 다른 파일은 옮기거나 삭제해 주세요. 그런 다음 세션이 실행되는 환경의 터미널에서 {command}을(를) 한 번 실행해 주세요.",
+  "provider.antigravity.earlier_layout_file_in_both_places": "{agent}에 같은 설정의 파일이 두 개 있습니다. 이 버전의 {path}과(와) 이전 버전의 {earlier_path}입니다. {agent}이(가) 단독으로 실행되면 앞의 파일을 뒤의 파일로 바꾸며 사본은 남기지 않습니다.",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "그 뒤로 {agent}이(가) 단독으로 실행되었다면 이 버전의 파일에는 이제 이전 버전의 설정이 들어 있으므로 필요한 내용을 백업에서 복원해 주세요. 그렇지 않다면 먼저 사용할 파일을 남기고 다른 파일은 옮기거나 삭제해 주세요. 그런 다음 세션이 실행되는 환경의 터미널에서 {command}을(를) 한 번 실행해 주세요.",
   "provider.antigravity.settings_not_read": "{agent}이(가) 설정 파일 {path}을(를) 설정으로 읽을 수 없어 이 세션은 기본 설정으로 실행되며, 파일의 권한 규칙과 신뢰하는 폴더가 적용되지 않습니다. 파일을 수정한 다음 세션을 다시 시작해 주세요.",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent}은(는) 이전 버전이 {path}에 남긴 {rules} 폴더나 {plugins} 폴더를 읽지 않습니다. {current_path}에 있는 폴더만 읽으므로 이 세션은 이전 폴더에만 있는 항목 없이 실행됩니다. 이전 폴더의 항목을 유지하려면 읽는 폴더로 옮겨 주세요.",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent}은(는) 이전 버전이 {path}에 남긴 {left} 폴더를 읽지 않습니다. {current_path}에 있는 폴더만 읽으므로 이 세션은 이전 폴더에만 있는 항목 없이 실행됩니다. 이전 폴더의 항목을 유지하려면 읽는 폴더로 옮겨 주세요.",
@@ -392,6 +405,7 @@ const koMessages = {
   "provider.antigravity.settings_not_read.alertTitle": "설정 파일을 읽지 않았습니다",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "이전 폴더를 읽지 않았습니다",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "이전 폴더를 읽지 않았습니다",
+  "provider.antigravity.launch_setting_not_taken": "{agent}이(가) {appName}이(가) 시작할 때 사용하는 설정 {setting}을(를) 받지 않아 시작하자마자 종료되었으므로, {appName}이(가) 이 설정 없이 다시 시작했습니다. {appName}의 나머지 기능은 평소처럼 작동합니다.",
 } as const;
 
 const ptMessages = {
@@ -415,14 +429,14 @@ const ptMessages = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "Aprovar automaticamente chamadas de ferramentas",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "Sempre aprovar chamadas de ferramentas?",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "As ferramentas podem alterar ou excluir arquivos sem um pedido rotineiro de permissão nas sessões de {agent}. As regras de negação continuam válidas.",
-  "provider.antigravity.launch_directory_flag_not_taken": "Esta versão de {agent} não aceita a opção com que o {appName} a inicia. Por isso, a sessão não foi iniciada. A versão {version} aceita essa opção.",
+  "provider.antigravity.launch_directory_flag_not_taken": "Esta versão de {agent} não aceita a opção com que o {appName} a inicia. A versão {version} aceita essa opção.",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "Instale uma versão de {agent} que aceite essa opção e inicie a sessão novamente.",
-  "provider.antigravity.user_config_unusable": "O arquivo de {agent}, {path}, não pode ser usado. Por isso, a sessão não foi iniciada.",
+  "provider.antigravity.user_config_unusable": "O arquivo de {agent}, {path}, não pode ser usado.",
   "provider.antigravity.user_config_unusable.remedy": "Corrija ou remova o arquivo e inicie a sessão novamente.",
   "provider.antigravity.earlier_layout_not_migrated": "A configuração de {agent} ainda está onde uma versão anterior a guardava, e esta versão ainda não moveu a configuração.",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "Execute {command} uma vez em um terminal no ambiente em que as sessões são executadas.",
-  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} tem dois arquivos para a mesma configuração: {path}, que vem desta versão, e {earlier_path}, que vem de uma versão anterior.",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "A execução de {command} substitui o arquivo desta versão pelo da versão anterior. Antes, mantenha o arquivo que você quer e mova ou remova o outro. Depois, execute {command} uma vez em um terminal no ambiente em que as sessões são executadas.",
+  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} tem dois arquivos para a mesma configuração: {path}, que vem desta versão, e {earlier_path}, que vem de uma versão anterior. Quando {agent} é executado sozinho, substitui o primeiro pelo segundo sem manter cópia.",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "Se {agent} foi executado sozinho desde então, o arquivo desta versão agora contém a configuração da versão anterior, então restaure de um backup o que você precisar. Caso contrário, mantenha antes o arquivo que você quer e mova ou remova o outro. Depois, execute {command} uma vez em um terminal no ambiente em que as sessões são executadas.",
   "provider.antigravity.settings_not_read": "{agent} não consegue ler o próprio arquivo de configurações {path} como configurações. Por isso, esta sessão é executada com as configurações padrão, sem as regras de permissão e as pastas confiáveis do arquivo. Corrija o arquivo e inicie a sessão novamente.",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent} não lê a pasta {rules} ou {plugins} que uma versão anterior deixou em {path}. Ele lê apenas as pastas de {current_path}. Por isso, esta sessão é executada sem o que está apenas na pasta anterior. Para manter algo da pasta anterior, mova-o para a pasta que é lida.",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent} não lê a pasta {left} que uma versão anterior deixou em {path}. Ele lê apenas a de {current_path}. Por isso, esta sessão é executada sem o que está apenas na pasta anterior. Para manter algo da pasta anterior, mova-o para a pasta que é lida.",
@@ -430,6 +444,7 @@ const ptMessages = {
   "provider.antigravity.settings_not_read.alertTitle": "Arquivo de configurações não lido",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "Pastas anteriores não lidas",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "Pasta anterior não lida",
+  "provider.antigravity.launch_setting_not_taken": "{agent} foi encerrado assim que iniciou porque não aceita a configuração {setting} com que o {appName} o inicia, então o {appName} o iniciou de novo sem essa configuração. Os demais recursos que o {appName} adiciona funcionam normalmente.",
 } as const;
 
 const ruMessages = {
@@ -453,14 +468,14 @@ const ruMessages = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "Автоматически одобрять вызовы инструментов",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "Всегда одобрять вызовы инструментов?",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "Инструменты могут изменять или удалять файлы без обычного запроса разрешения в сеансах {agent}. Правила запрета продолжают действовать.",
-  "provider.antigravity.launch_directory_flag_not_taken": "Эта версия {agent} не принимает параметр, с которым её запускает {appName}, поэтому сеанс не запущен. Версия {version} его принимает.",
+  "provider.antigravity.launch_directory_flag_not_taken": "Эта версия {agent} не принимает параметр, с которым её запускает {appName}. Версия {version} его принимает.",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "Установите версию {agent}, которая принимает этот параметр, затем запустите сеанс снова.",
-  "provider.antigravity.user_config_unusable": "Файл {agent}, {path}, не удаётся использовать, поэтому сеанс не запущен.",
+  "provider.antigravity.user_config_unusable": "Файл {agent}, {path}, не удаётся использовать.",
   "provider.antigravity.user_config_unusable.remedy": "Исправьте или удалите файл, затем запустите сеанс снова.",
   "provider.antigravity.earlier_layout_not_migrated": "Конфигурация {agent} всё ещё находится там, где её хранила предыдущая версия, и эта версия её ещё не перенесла.",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "Выполните {command} один раз в терминале в среде, где выполняются сеансы.",
-  "provider.antigravity.earlier_layout_file_in_both_places": "У {agent} два файла одной и той же конфигурации: {path} из этой версии и {earlier_path} из предыдущей версии.",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "Выполнение {command} заменит файл этой версии файлом из предыдущей версии. Сначала оставьте нужный файл, а другой переместите или удалите. Затем выполните {command} один раз в терминале в среде, где выполняются сеансы.",
+  "provider.antigravity.earlier_layout_file_in_both_places": "У {agent} два файла одной и той же конфигурации: {path} из этой версии и {earlier_path} из предыдущей версии. При самостоятельном запуске {agent} заменяет первый файл вторым, не сохраняя копии.",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "Если с тех пор {agent} запускался самостоятельно, файл этой версии теперь содержит конфигурацию предыдущей версии: восстановите нужное из резервной копии. Иначе сначала оставьте нужный файл, а другой переместите или удалите. Затем выполните {command} один раз в терминале в среде, где выполняются сеансы.",
   "provider.antigravity.settings_not_read": "{agent} не может прочитать свой файл настроек {path} как настройки, поэтому этот сеанс выполняется с настройками по умолчанию, без правил разрешений и доверенных папок из файла. Исправьте файл, затем запустите сеанс снова.",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent} не читает папку {rules} или {plugins}, которую предыдущая версия оставила в {path}. Читаются только папки из {current_path}, поэтому этот сеанс выполняется без того, что есть только в прежней папке. Чтобы сохранить что-то из прежней папки, переместите это в папку, которая читается.",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent} не читает папку {left}, которую предыдущая версия оставила в {path}. Читается только папка из {current_path}, поэтому этот сеанс выполняется без того, что есть только в прежней папке. Чтобы сохранить что-то из прежней папки, переместите это в папку, которая читается.",
@@ -468,6 +483,7 @@ const ruMessages = {
   "provider.antigravity.settings_not_read.alertTitle": "Файл настроек не прочитан",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "Прежние папки не прочитаны",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "Прежняя папка не прочитана",
+  "provider.antigravity.launch_setting_not_taken": "{agent} завершился сразу после запуска, потому что не принимает настройку {setting}, с которой его запускает {appName}, поэтому {appName} запустил его снова без этой настройки. Остальные дополнения {appName} работают как обычно.",
 } as const;
 
 const thMessages = {
@@ -491,14 +507,14 @@ const thMessages = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "อนุมัติการเรียกใช้เครื่องมือโดยอัตโนมัติ",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "อนุมัติการเรียกใช้เครื่องมือเสมอหรือไม่",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "เครื่องมือสามารถเปลี่ยนแปลงหรือลบไฟล์โดยไม่ถามสิทธิ์ตามปกติในเซสชันของ {agent} กฎการปฏิเสธยังคงมีผล",
-  "provider.antigravity.launch_directory_flag_not_taken": "{agent} เวอร์ชันนี้ไม่รับตัวเลือกที่ {appName} ใช้เปิด จึงไม่ได้เปิดเซสชัน เวอร์ชัน {version} รับตัวเลือกนี้",
+  "provider.antigravity.launch_directory_flag_not_taken": "{agent} เวอร์ชันนี้ไม่รับตัวเลือกที่ {appName} ใช้เปิด เวอร์ชัน {version} รับตัวเลือกนี้",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "ติดตั้ง {agent} เวอร์ชันที่รับตัวเลือกนี้ แล้วเปิดเซสชันอีกครั้ง",
-  "provider.antigravity.user_config_unusable": "ใช้ไฟล์ของ {agent} ที่ {path} ไม่ได้ จึงไม่ได้เปิดเซสชัน",
+  "provider.antigravity.user_config_unusable": "ใช้ไฟล์ของ {agent} ที่ {path} ไม่ได้",
   "provider.antigravity.user_config_unusable.remedy": "ให้แก้ไขหรือลบไฟล์นั้น แล้วเปิดเซสชันอีกครั้ง",
   "provider.antigravity.earlier_layout_not_migrated": "การกำหนดค่าของ {agent} ยังอยู่ในตำแหน่งที่เวอร์ชันก่อนหน้าเก็บไว้ และเวอร์ชันนี้ยังไม่ได้ย้ายการกำหนดค่านั้น",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "เรียกใช้ {command} หนึ่งครั้งในเทอร์มินัลในสภาพแวดล้อมที่เรียกใช้เซสชัน",
-  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} มีไฟล์สำหรับการกำหนดค่าเดียวกันสองไฟล์ คือ {path} จากเวอร์ชันนี้ และ {earlier_path} จากเวอร์ชันก่อนหน้า",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "การเรียกใช้ {command} จะแทนที่ไฟล์ของเวอร์ชันนี้ด้วยไฟล์จากเวอร์ชันก่อนหน้า ให้เก็บไฟล์ที่ต้องการไว้ก่อน แล้วย้ายหรือลบอีกไฟล์หนึ่ง จากนั้นเรียกใช้ {command} หนึ่งครั้งในเทอร์มินัลในสภาพแวดล้อมที่เรียกใช้เซสชัน",
+  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} มีไฟล์สำหรับการกำหนดค่าเดียวกันสองไฟล์ คือ {path} จากเวอร์ชันนี้ และ {earlier_path} จากเวอร์ชันก่อนหน้า เมื่อ {agent} ทำงานด้วยตัวเอง จะแทนที่ไฟล์แรกด้วยไฟล์ที่สองโดยไม่เก็บสำเนาไว้",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "หาก {agent} ทำงานด้วยตัวเองไปแล้วตั้งแต่นั้น ไฟล์ของเวอร์ชันนี้จะมีการกำหนดค่าของเวอร์ชันก่อนหน้าอยู่ ให้กู้คืนสิ่งที่ต้องการจากข้อมูลสำรอง หากยังไม่ได้ทำงาน ให้เก็บไฟล์ที่ต้องการไว้ก่อน แล้วย้ายหรือลบอีกไฟล์หนึ่ง จากนั้นเรียกใช้ {command} หนึ่งครั้งในเทอร์มินัลในสภาพแวดล้อมที่เรียกใช้เซสชัน",
   "provider.antigravity.settings_not_read": "{agent} อ่านไฟล์การตั้งค่าของตัวเองที่ {path} เป็นการตั้งค่าไม่ได้ เซสชันนี้จึงทำงานด้วยการตั้งค่าเริ่มต้น โดยไม่มีกฎสิทธิ์และโฟลเดอร์ที่เชื่อถือจากไฟล์นั้น ให้แก้ไขไฟล์ แล้วเปิดเซสชันอีกครั้ง",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent} ไม่อ่านโฟลเดอร์ {rules} หรือ {plugins} ที่เวอร์ชันก่อนหน้าทิ้งไว้ใน {path} แต่อ่านเฉพาะโฟลเดอร์ใน {current_path} เซสชันนี้จึงทำงานโดยไม่มีสิ่งที่อยู่ในโฟลเดอร์เดิมเท่านั้น หากต้องการเก็บสิ่งใดจากโฟลเดอร์เดิมไว้ ให้ย้ายไปยังโฟลเดอร์ที่ถูกอ่าน",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent} ไม่อ่านโฟลเดอร์ {left} ที่เวอร์ชันก่อนหน้าทิ้งไว้ใน {path} แต่อ่านเฉพาะโฟลเดอร์ใน {current_path} เซสชันนี้จึงทำงานโดยไม่มีสิ่งที่อยู่ในโฟลเดอร์เดิมเท่านั้น หากต้องการเก็บสิ่งใดจากโฟลเดอร์เดิมไว้ ให้ย้ายไปยังโฟลเดอร์ที่ถูกอ่าน",
@@ -506,6 +522,7 @@ const thMessages = {
   "provider.antigravity.settings_not_read.alertTitle": "ไม่ได้อ่านไฟล์การตั้งค่า",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "ไม่ได้อ่านโฟลเดอร์เดิม",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "ไม่ได้อ่านโฟลเดอร์เดิม",
+  "provider.antigravity.launch_setting_not_taken": "{agent} ปิดตัวทันทีที่เริ่ม เพราะไม่รับการตั้งค่า {setting} ที่ {appName} ใช้เปิด {appName} จึงเปิดใหม่โดยไม่มีการตั้งค่านั้น ส่วนเสริมอื่นของ {appName} ทำงานตามปกติ",
 } as const;
 
 const trMessages = {
@@ -529,14 +546,14 @@ const trMessages = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "Araç çağrılarını otomatik onayla",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "Araç çağrıları her zaman onaylansın mı?",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "Araçlar, {agent} oturumlarında rutin izin istemi olmadan dosyaları değiştirebilir veya silebilir. Ret kuralları geçerli olmaya devam eder.",
-  "provider.antigravity.launch_directory_flag_not_taken": "{agent} uygulamasının bu sürümü, {appName} uygulamasının onu başlatırken kullandığı seçeneği kabul etmediğinden oturum başlatılmadı. {version} sürümü bu seçeneği kabul eder.",
+  "provider.antigravity.launch_directory_flag_not_taken": "{agent} uygulamasının bu sürümü, {appName} uygulamasının onu başlatırken kullandığı seçeneği kabul etmiyor. {version} sürümü bu seçeneği kabul eder.",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "{agent} uygulamasının bu seçeneği kabul eden bir sürümünü yükleyin, ardından oturumu yeniden başlatın.",
-  "provider.antigravity.user_config_unusable": "{agent} dosyası {path} kullanılamadığından oturum başlatılmadı.",
+  "provider.antigravity.user_config_unusable": "{agent} dosyası {path} kullanılamıyor.",
   "provider.antigravity.user_config_unusable.remedy": "Dosyayı onarın veya kaldırın, ardından oturumu yeniden başlatın.",
   "provider.antigravity.earlier_layout_not_migrated": "{agent} yapılandırması hâlâ önceki bir sürümün onu sakladığı yerde duruyor ve bu sürüm yapılandırmayı henüz taşımadı.",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "Oturumların çalıştığı ortamdaki bir terminalde {command} komutunu bir kez çalıştırın.",
-  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} aynı yapılandırma için iki dosyaya sahip: bu sürüme ait {path} ve önceki bir sürümden kalan {earlier_path}.",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "{command} komutunu çalıştırmak, bu sürüme ait dosyayı önceki sürümden kalan dosyayla değiştirir. Önce istediğiniz dosyayı tutun, diğerini taşıyın veya kaldırın. Ardından oturumların çalıştığı ortamdaki bir terminalde {command} komutunu bir kez çalıştırın.",
+  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} aynı yapılandırma için iki dosyaya sahip: bu sürüme ait {path} ve önceki bir sürümden kalan {earlier_path}. {agent} kendi başına çalıştığında ilk dosyayı ikincisiyle değiştirir ve kopyasını tutmaz.",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "{agent} o zamandan beri kendi başına çalıştıysa bu sürüme ait dosya artık önceki sürümün yapılandırmasını içerir; ihtiyacınız olanı bir yedekten geri yükleyin. Aksi takdirde önce istediğiniz dosyayı tutun, diğerini taşıyın veya kaldırın. Ardından oturumların çalıştığı ortamdaki bir terminalde {command} komutunu bir kez çalıştırın.",
   "provider.antigravity.settings_not_read": "{agent}, {path} ayar dosyasını ayar olarak okuyamadığından bu oturum, dosyadaki izin kuralları ve güvenilen klasörler olmadan varsayılan ayarlarla çalışıyor. Dosyayı onarın, ardından oturumu yeniden başlatın.",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent}, önceki bir sürümün {path} konumunda bıraktığı {rules} veya {plugins} klasörünü okumaz. Yalnızca {current_path} konumundaki klasörleri okur; bu nedenle bu oturum yalnızca önceki klasörde bulunan öğeler olmadan çalışıyor. Önceki klasördeki bir öğeyi korumak için onu okunan klasöre taşıyın.",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent}, önceki bir sürümün {path} konumunda bıraktığı {left} klasörünü okumaz. Yalnızca {current_path} konumundaki klasörü okur; bu nedenle bu oturum yalnızca önceki klasörde bulunan öğeler olmadan çalışıyor. Önceki klasördeki bir öğeyi korumak için onu okunan klasöre taşıyın.",
@@ -544,6 +561,7 @@ const trMessages = {
   "provider.antigravity.settings_not_read.alertTitle": "Ayar dosyası okunmadı",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "Önceki klasörler okunmadı",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "Önceki klasör okunmadı",
+  "provider.antigravity.launch_setting_not_taken": "{agent}, {appName} uygulamasının onu başlatırken kullandığı {setting} ayarını kabul etmediği için başlar başlamaz kapandı; bu yüzden {appName} onu bu ayar olmadan yeniden başlattı. {appName} uygulamasının diğer eklemeleri her zamanki gibi çalışır.",
 } as const;
 
 const viMessages = {
@@ -567,14 +585,14 @@ const viMessages = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "Tự động phê duyệt lệnh gọi công cụ",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "Luôn phê duyệt lệnh gọi công cụ?",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "Công cụ có thể thay đổi hoặc xóa tệp mà không hỏi quyền thông thường trong phiên {agent}. Quy tắc từ chối vẫn áp dụng.",
-  "provider.antigravity.launch_directory_flag_not_taken": "Phiên bản {agent} này không nhận tùy chọn mà {appName} dùng để khởi chạy nên phiên chưa được khởi chạy. Phiên bản {version} nhận tùy chọn này.",
+  "provider.antigravity.launch_directory_flag_not_taken": "Phiên bản {agent} này không nhận tùy chọn mà {appName} dùng để khởi chạy. Phiên bản {version} nhận tùy chọn này.",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "Cài đặt một phiên bản {agent} nhận tùy chọn này, rồi khởi chạy lại phiên.",
-  "provider.antigravity.user_config_unusable": "Không thể dùng tệp của {agent} tại {path} nên phiên chưa được khởi chạy.",
+  "provider.antigravity.user_config_unusable": "Không thể dùng tệp của {agent} tại {path}.",
   "provider.antigravity.user_config_unusable.remedy": "Sửa hoặc xóa tệp đó, rồi khởi chạy lại phiên.",
   "provider.antigravity.earlier_layout_not_migrated": "Cấu hình của {agent} vẫn nằm ở nơi một phiên bản trước lưu, và phiên bản này chưa chuyển cấu hình đó.",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "Hãy chạy {command} một lần trong terminal ở môi trường chạy phiên.",
-  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} có hai tệp cho cùng một cấu hình: {path} của phiên bản này và {earlier_path} của một phiên bản trước.",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "Việc chạy {command} sẽ thay tệp của phiên bản này bằng tệp của phiên bản trước. Trước tiên, hãy giữ tệp bạn muốn rồi di chuyển hoặc xóa tệp còn lại. Sau đó, hãy chạy {command} một lần trong terminal ở môi trường chạy phiên.",
+  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} có hai tệp cho cùng một cấu hình: {path} của phiên bản này và {earlier_path} của một phiên bản trước. Khi tự chạy, {agent} sẽ thay tệp thứ nhất bằng tệp thứ hai và không giữ bản sao nào.",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "Nếu từ đó {agent} đã tự chạy, tệp của phiên bản này giờ chứa cấu hình của phiên bản trước, vì vậy hãy khôi phục những gì bạn cần từ bản sao lưu. Nếu chưa, trước tiên hãy giữ tệp bạn muốn rồi di chuyển hoặc xóa tệp còn lại. Sau đó, hãy chạy {command} một lần trong terminal ở môi trường chạy phiên.",
   "provider.antigravity.settings_not_read": "{agent} không đọc được tệp cài đặt của nó tại {path} dưới dạng cài đặt nên phiên này chạy với cài đặt mặc định, không có các quy tắc quyền và thư mục tin cậy trong tệp. Hãy sửa tệp, rồi khởi chạy lại phiên.",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent} không đọc thư mục {rules} hoặc {plugins} mà một phiên bản trước để lại trong {path}. Nó chỉ đọc các thư mục trong {current_path} nên phiên này chạy mà không có những gì chỉ nằm ở thư mục cũ. Để giữ thứ gì đó từ thư mục cũ, hãy chuyển nó vào thư mục được đọc.",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent} không đọc thư mục {left} mà một phiên bản trước để lại trong {path}. Nó chỉ đọc thư mục trong {current_path} nên phiên này chạy mà không có những gì chỉ nằm ở thư mục cũ. Để giữ thứ gì đó từ thư mục cũ, hãy chuyển nó vào thư mục được đọc.",
@@ -582,6 +600,7 @@ const viMessages = {
   "provider.antigravity.settings_not_read.alertTitle": "Chưa đọc tệp cài đặt",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "Chưa đọc các thư mục cũ",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "Chưa đọc thư mục cũ",
+  "provider.antigravity.launch_setting_not_taken": "{agent} đã thoát ngay khi khởi động vì không nhận thiết lập {setting} mà {appName} dùng để khởi chạy, nên {appName} đã khởi chạy lại mà không có thiết lập đó. Các phần bổ sung khác của {appName} vẫn hoạt động như bình thường.",
 } as const;
 
 const zhCN = {
@@ -605,14 +624,14 @@ const zhCN = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "自动批准工具调用",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "始终批准工具调用？",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "在 {agent} 的会话中，工具可能无需常规权限审批就修改或删除文件。拒绝规则仍然适用。",
-  "provider.antigravity.launch_directory_flag_not_taken": "此版本的 {agent} 不接受 {appName} 启动它时使用的选项，因此未启动此会话。版本 {version} 接受此选项。",
+  "provider.antigravity.launch_directory_flag_not_taken": "此版本的 {agent} 不接受 {appName} 启动它时使用的选项。版本 {version} 接受此选项。",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "请安装接受此选项的 {agent} 版本，然后重新启动此会话。",
-  "provider.antigravity.user_config_unusable": "{agent} 的文件 {path} 无法使用，因此未启动此会话。",
+  "provider.antigravity.user_config_unusable": "{agent} 的文件 {path} 无法使用。",
   "provider.antigravity.user_config_unusable.remedy": "请修复或删除此文件，然后重新启动此会话。",
   "provider.antigravity.earlier_layout_not_migrated": "{agent} 的配置仍在旧版本存放的位置，此版本尚未将其迁移。",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "请在会话运行环境的终端中运行一次 {command}。",
-  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} 的同一项配置有两个文件：此版本的 {path} 和旧版本的 {earlier_path}。",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "运行 {command} 会用旧版本的文件替换此版本的文件。请先保留想要的文件，并移走或删除另一个文件，然后在会话运行环境的终端中运行一次 {command}。",
+  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} 的同一项配置有两个文件：此版本的 {path} 和旧版本的 {earlier_path}。{agent} 自行运行时，会用后者替换前者，且不保留副本。",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "如果此后 {agent} 已自行运行过，此版本的文件现在存放的是旧版本的配置，请从备份中恢复需要的内容。否则，请先保留想要的文件，并移走或删除另一个文件，然后在会话运行环境的终端中运行一次 {command}。",
   "provider.antigravity.settings_not_read": "{agent} 无法将其设置文件 {path} 作为设置读取，因此此会话使用默认设置运行，文件中的权限规则和受信任的文件夹均不生效。请修复此文件，然后重新启动此会话。",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent} 不读取旧版本留在 {path} 中的 {rules} 或 {plugins} 文件夹，只读取 {current_path} 中的文件夹，因此此会话运行时不包含仅存在于旧文件夹中的内容。要保留旧文件夹中的内容，请将其移到会被读取的文件夹中。",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent} 不读取旧版本留在 {path} 中的 {left} 文件夹，只读取 {current_path} 中的文件夹，因此此会话运行时不包含仅存在于旧文件夹中的内容。要保留旧文件夹中的内容，请将其移到会被读取的文件夹中。",
@@ -620,6 +639,7 @@ const zhCN = {
   "provider.antigravity.settings_not_read.alertTitle": "未读取设置文件",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "未读取旧文件夹",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "未读取旧文件夹",
+  "provider.antigravity.launch_setting_not_taken": "{agent} 不接受 {appName} 启动它时使用的设置 {setting}，一启动就退出了，因此 {appName} 去掉这项设置后重新启动了它。{appName} 的其他附加功能照常工作。",
 } as const;
 
 const zhTWMessages = {
@@ -643,14 +663,14 @@ const zhTWMessages = {
   "provider.antigravity.setting.approval_mode.choice.skip_permissions.summary": "自動核准工具呼叫",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.title": "一律核准工具呼叫？",
   "provider.antigravity.setting.approval_mode.confirm.skip_permissions.consequence": "在 {agent} 的工作階段中，工具可能無須一般權限核准就變更或刪除檔案。拒絕規則仍然適用。",
-  "provider.antigravity.launch_directory_flag_not_taken": "此版本的 {agent} 不接受 {appName} 啟動它時使用的選項，因此未啟動此工作階段。版本 {version} 接受此選項。",
+  "provider.antigravity.launch_directory_flag_not_taken": "此版本的 {agent} 不接受 {appName} 啟動它時使用的選項。版本 {version} 接受此選項。",
   "provider.antigravity.launch_directory_flag_not_taken.remedy": "請安裝接受此選項的 {agent} 版本，然後重新啟動此工作階段。",
-  "provider.antigravity.user_config_unusable": "{agent} 的檔案 {path} 無法使用，因此未啟動此工作階段。",
+  "provider.antigravity.user_config_unusable": "{agent} 的檔案 {path} 無法使用。",
   "provider.antigravity.user_config_unusable.remedy": "請修復或刪除此檔案，然後重新啟動此工作階段。",
   "provider.antigravity.earlier_layout_not_migrated": "{agent} 的設定仍在舊版本存放的位置，此版本尚未將其遷移。",
   "provider.antigravity.earlier_layout_not_migrated.remedy": "請在工作階段執行環境的終端機中執行一次 {command}。",
-  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} 的同一項設定有兩個檔案：此版本的 {path} 和舊版本的 {earlier_path}。",
-  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "執行 {command} 會以舊版本的檔案取代此版本的檔案。請先保留想要的檔案，並移走或刪除另一個檔案，然後在工作階段執行環境的終端機中執行一次 {command}。",
+  "provider.antigravity.earlier_layout_file_in_both_places": "{agent} 的同一項設定有兩個檔案：此版本的 {path} 和舊版本的 {earlier_path}。{agent} 自行執行時，會以後者取代前者，且不保留副本。",
+  "provider.antigravity.earlier_layout_file_in_both_places.remedy": "如果此後 {agent} 已自行執行過，此版本的檔案現在存放的是舊版本的設定，請從備份中還原需要的內容。否則，請先保留想要的檔案，並移走或刪除另一個檔案，然後在工作階段執行環境的終端機中執行一次 {command}。",
   "provider.antigravity.settings_not_read": "{agent} 無法將其設定檔 {path} 當作設定讀取，因此此工作階段以預設設定執行，檔案中的權限規則和受信任的資料夾均不生效。請修復此檔案，然後重新啟動此工作階段。",
   "provider.antigravity.earlier_layout_leftovers_not_read": "{agent} 不讀取舊版本留在 {path} 中的 {rules} 或 {plugins} 資料夾，只讀取 {current_path} 中的資料夾，因此此工作階段執行時不包含僅存在於舊資料夾中的內容。若要保留舊資料夾中的內容，請將其移到會被讀取的資料夾中。",
   "provider.antigravity.earlier_layout_leftovers_not_read.one": "{agent} 不讀取舊版本留在 {path} 中的 {left} 資料夾，只讀取 {current_path} 中的資料夾，因此此工作階段執行時不包含僅存在於舊資料夾中的內容。若要保留舊資料夾中的內容，請將其移到會被讀取的資料夾中。",
@@ -658,6 +678,7 @@ const zhTWMessages = {
   "provider.antigravity.settings_not_read.alertTitle": "未讀取設定檔",
   "provider.antigravity.earlier_layout_leftovers_not_read.alertTitle": "未讀取舊資料夾",
   "provider.antigravity.earlier_layout_leftovers_not_read.one.alertTitle": "未讀取舊資料夾",
+  "provider.antigravity.launch_setting_not_taken": "{agent} 不接受 {appName} 啟動它時使用的設定 {setting}，一啟動就結束了，因此 {appName} 拿掉這項設定後重新啟動了它。{appName} 的其他附加功能照常運作。",
 } as const;
 
 /** How the notice about an earlier version's folders is worded, by which of them the daemon says is left (`left`): one
@@ -700,6 +721,7 @@ export const antigravity = {
       variants: { one: { codeParams: ["path", "current_path", "left"] }, both: { codeParams: ["path", "current_path", "rules", "plugins"] } },
       variantOf: leftoversVariant,
     },
+    "provider.antigravity.launch_setting_not_taken": { origin: "daemon", codeParams: ["setting"], uiParams: { agent: names["provider.antigravity.label"] } },
   },
   messages: {
     "ar": { ...names, ...arMessages },

@@ -3,7 +3,7 @@
 // the daemon has in effect outside Octoboard's directories (the accounts that share) with its clearing.
 import { consoleAccount, inheritedAccount } from "../accounts/accountInheritance";
 import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, servedLabel } from "./fixtureProviders";
-import { type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type Console, type Project, type QuotaWindow, type ClientRequestBody, type McpSignInState, type SharingCause, type Session } from "../protocol";
+import { type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type Console, type Project, type QuotaWindow, type ClientRequestBody, type McpSignInState, type SharingCause, type Session, type StandingNotice } from "../protocol";
 import { DEFAULT_ACCOUNT_NAME } from "../accounts/defaultAccount";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { accountDisabled } from "../accounts/choiceEntries";
@@ -187,6 +187,22 @@ export function createAccountGuards({ store, fail }: Pick<FixtureContext, "store
       message: `${name} (${servedLabel(agent)}) is not logged in. Choose another account, or log in to it in Settings → Agent accounts.`,
     });
   };
+  /** The standing notice the daemon raises on a session the user opens on an account whose last reading in the store
+   * says it is not logged in, which it opens all the same (`account_sign_in_unconfirmed`); `undefined` for an account
+   * that `refuseIfNotSignedIn` lets through. The name is the account's, as for `refuseIfDisabled`. */
+  const signInUnconfirmed = (agent: Agent, account: Account | undefined): StandingNotice | undefined => {
+    const current = store.getState();
+    const reading = accountQuotaOf(current.accountQuotas, agent, account?.id ?? null);
+    if (typeof reading !== "object" || !isNotLoggedIn(reading.unavailable)) return undefined;
+    const name = account?.name ?? current.settings.default_account_names?.[agent] ?? DEFAULT_ACCOUNT_NAME;
+    const label = servedLabel(agent);
+    return {
+      code: "account_sign_in_unconfirmed",
+      params: { agent: label, agent_id: agent, account: name, ...(account && { config_dir: account.config_dir }) },
+      message: `${name} (${label}) was last read as logged out, so this session may not be logged in. If ${label} asks for a login, log in in the terminal.`,
+      at: Date.now(),
+    };
+  };
   /** Refuses what the daemon turns away while a change of the sharing of `accountId` runs: a session opened on it, one
    * of its sessions resumed, a switch onto or away from it, a handoff from it. The default account (`null`) has no sharing. */
   const refuseIfSharingChanges = (accountId: string | null | undefined) => {
@@ -196,7 +212,7 @@ export function createAccountGuards({ store, fail }: Pick<FixtureContext, "store
     const name = current.settings.accounts.find((candidate) => candidate.id === accountId)?.name ?? accountId;
     return fail({ code: "account_sharing_in_progress", params: { account: accountId, name }, message: `a change of the sharing of account \`${name}\` is running` });
   };
-  return { launchAccount, refuseIfQuotaExhausted, refuseIfDisabled, refuseIfNotSignedIn, refuseIfSharingChanges };
+  return { launchAccount, refuseIfQuotaExhausted, refuseIfDisabled, refuseIfNotSignedIn, signInUnconfirmed, refuseIfSharingChanges };
 }
 
 /** The refusals of `createAccountGuards`. */

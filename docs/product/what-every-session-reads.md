@@ -450,7 +450,9 @@ And each record carries what tells sessions apart and what an owner decides on:
   holds the conversation, looked up in its own records under the session's account as a resume looks it up (see "When a
   conversation can no longer be resumed" in `docs/product/archiving-and-resuming-sessions.md`). `true` when it does, and
   for a session with no conversation, which a resume starts afresh; `false` when the conversation is proven gone, so
-  that `resume_session` would refuse it; `null` when that cannot be told, which `resume_session` lets through. It is
+  that `resume_session` would refuse it; `null` when that cannot be told, which `resume_session` lets through. A record
+  not found is proof, and `false`, only where the installed version of the agent's CLI was seen writing records
+  Octoboard recognises in this run of the daemon; otherwise it is `null`. It is
   read in the daemon's own environment rather than a launch's, so in rare cases a resume can find otherwise. A running
   session's record has no `resumable`.
 - `processes`, in `get_session`'s record only: for a session with a process running, the process trees its launch

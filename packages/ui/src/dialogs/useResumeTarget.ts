@@ -59,7 +59,8 @@ function useHeldElsewhere(sessionId: string | undefined): CodedError | undefined
  * The Resume tab's answer for `resumeId`: once the ID is valid the daemon is asked where the
  * conversation is held (`locate_conversation_to_resume`), which settles `target`, what the submit
  * does and on which agent and account. `idProblem` is what is wrong with the ID itself, by kind;
- * `notFound` is the answer that no conversation has the ID, which is the ID field's own error, and
+ * `notFound` is the answer that no account has a record of the ID, shown as a warning under the ID
+ * field (the session then opens on the agent and account picked below, which say whether they have it), and
  * `problem` is what else the answer says is wrong with the conversation (a session outside the project,
  * a holder no longer offered, a failed lookup), shown under the ID field as an Alert;
  * `status` is what the live region says. `looking` is true while the answer for the ID is not in. All

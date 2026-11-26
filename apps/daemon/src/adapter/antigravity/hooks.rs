@@ -24,6 +24,13 @@ use crate::records::locate::plausible_id;
 /// The event of a new conversation's first turn.
 pub(super) const SESSION_START: &str = "SessionStart";
 
+/// The event of each model request of a turn, its first one included (`invocationNum` 0), in a
+/// resumed conversation as in a new one. A resumed conversation fires no `SessionStart`, so this is
+/// the hook its first turn sends as it starts, whether or not it calls a tool or ends by itself:
+/// without it, a first turn of a resume with no tool call that ran past the hook bound, or was
+/// cancelled (no `Stop`), read as hooks absent. One more hook run per model request is the cost.
+pub(super) const PRE_INVOCATION: &str = "PreInvocation";
+
 /// The event of a turn that ended by itself, finished or failed. A cancelled turn fires none.
 pub(super) const STOP: &str = "Stop";
 
@@ -35,9 +42,16 @@ pub(super) const POST_TOOL_USE: &str = "PostToolUse";
 /// Every event something of the provider reads: this interpreter, the background work
 /// ([`super::background`]) and the pending interactions (`super::interaction`). The launch
 /// registers Octoboard's hook for each of them (`super::home`), which its test holds it to; only
-/// that test reads the list.
+/// that test reads the list. `PreInvocation` is read for what every payload carries, the
+/// conversation's id, and for its arrival, which tells the daemon the launch's hooks run.
 #[cfg(test)]
-pub(super) const EVENTS_READ: [&str; 4] = [SESSION_START, STOP, PRE_TOOL_USE, POST_TOOL_USE];
+pub(super) const EVENTS_READ: [&str; 5] = [
+    SESSION_START,
+    PRE_INVOCATION,
+    STOP,
+    PRE_TOOL_USE,
+    POST_TOOL_USE,
+];
 
 /// The tools whose calls are read by name (1.5.14): the one that runs a command, and the two that
 /// write a file, which the cross-project guard is asked about.

@@ -140,6 +140,7 @@ pub(super) async fn archive_during_relaunch(switching: bool, succeeds: bool) {
                 session,
                 agent_session_id: None,
                 notices: Vec::new(),
+                notices_at: 0,
                 first_message: None,
                 record_root: None,
             }),

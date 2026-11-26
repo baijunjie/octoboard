@@ -5,6 +5,7 @@ import { agentIconPickerOptions } from "../components/icons/AgentIcon";
 import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { errorDetails, errorRemedy } from "../components/alerts/errorParts";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
+import { ChoiceWarning } from "../components/alerts/ChoiceWarning";
 import { InlineReference } from "../i18n/InlineReference";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
@@ -22,9 +23,10 @@ import { TextInput } from "../components/form/TextInput";
 import { Spinner } from "../primitives";
 
 /** An agent and account fixed by what holds the conversation, shown as the picker pair a new session
- * has, disabled (and marked invalid with `errorMessage`, when the account cannot run a session). Each is a single option, so the field reads as the enabled one does; the account
+ * has, disabled (and marked invalid with `errorMessage`, when the account cannot run a session, or warned of with
+ * `warning`, when it can all the same). Each is a single option, so the field reads as the enabled one does; the account
  * half is there as in a new session's, unless the account has no name to show. */
-function HeldAgentAccount({ agent, accountName, errorMessage }: { agent: Agent; accountName: string | undefined; errorMessage?: React.ReactNode }): React.ReactElement {
+function HeldAgentAccount({ agent, accountName, errorMessage, warning }: { agent: Agent; accountName: string | undefined; errorMessage?: React.ReactNode; warning?: React.ComponentProps<typeof AgentAccountField>["warning"] }): React.ReactElement {
   const t = useT();
   const providers = useProviders();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
@@ -43,6 +45,7 @@ function HeldAgentAccount({ agent, accountName, errorMessage }: { agent: Agent; 
       }}
       isDisabled
       errorMessage={errorMessage}
+      warning={warning}
     />
   );
 }
@@ -53,7 +56,9 @@ function HeldAgentAccount({ agent, accountName, errorMessage }: { agent: Agent; 
  * its name (editable only while it is archived, as `name` and `onNameChange`), agent and account,
  * fixed; the launch settings are the session's own, so none are offered. An agent's record shows
  * `recordName`, the Name field of a new session, the agent and account that hold it, fixed, and
- * the launch settings (`launch`). With no target the ID alone shows.
+ * the launch settings (`launch`). An ID found nowhere is no refusal: a warning stands under the ID
+ * field, saying the agent will be asked all the same, and `nowhere` follows it, the fields of a new
+ * session whose agent and account the user picks. With no target the ID alone shows.
  *
  * `shownProblem` is the ID's own problem once the user has tried to submit, and `idFieldRef` is the
  * ID field's wrapper, for the caller to focus it. What the daemon refuses the submit for is not
@@ -73,7 +78,9 @@ export function ResumeConversationFields({
   onNameChange,
   recordName,
   launch,
+  nowhere,
   accountError,
+  accountWarning,
 }: {
   idFieldRef: React.RefObject<HTMLDivElement | null>;
   resumeId: string;
@@ -84,11 +91,18 @@ export function ResumeConversationFields({
   onNameChange: (value: string) => void;
   recordName: React.ReactNode;
   launch: ReturnType<typeof useLaunchChoice>["launch"];
+  /** The fields of a new session that resumes an ID found nowhere, on the agent and account the user picks. */
+  nowhere: React.ReactNode;
   /** Why the account that holds an agent's record cannot run a session, as that field's error text. */
   accountError?: React.ReactNode;
+  /** What opening on the account that holds an agent's record means, where it was last read as not logged in. */
+  accountWarning?: React.ComponentProps<typeof AgentAccountField>["warning"];
 }): React.ReactElement {
   const t = useT();
   const lookupAlertId = useId();
+  const notFoundWarningId = useId();
+  // An ID no account holds is still resumed, on the agent the user picks; the ID's own problem comes first.
+  const nowhereShown = notFound && !shownProblem;
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const handoff = useFocusHandoff(() => idFieldRef.current?.querySelector("input")?.focus());
@@ -104,9 +118,9 @@ export function ResumeConversationFields({
           value={resumeId}
           onChange={onResumeIdChange}
           placeholder={t("common.example", { example: EXAMPLE_CONVERSATION_ID })}
-          // The ID's text is wrong once a submit has tried it; no conversation having the ID is found out on its own.
-          errorMessage={shownProblem ? idProblems[shownProblem] : notFound ? t("dialog.session.resumeNotFound") : undefined}
-          describedBy={!shownProblem && problem ? lookupAlertId : undefined}
+          // The ID's text is wrong once a submit has tried it.
+          errorMessage={shownProblem ? idProblems[shownProblem] : undefined}
+          describedBy={nowhereShown ? notFoundWarningId : !shownProblem && problem ? lookupAlertId : undefined}
           endAdornment={looking ? <Spinner size="sm" /> : null}
           dir="ltr"
         />
@@ -124,6 +138,15 @@ export function ResumeConversationFields({
           >
             {typeof problem === "string" ? problem : <DaemonErrorMessage error={problem} part="summary" />}
           </ErrorAlert>
+        )}
+        {/* No account holding the conversation is the consequence of the ID typed, not a refusal: the
+            session opens on the agent picked below, which says whether it has the conversation. */}
+        {nowhereShown && (
+          <div className="mt-2">
+            <ChoiceWarning id={notFoundWarningId} title={t("dialog.session.resumeNotFoundTitle")} remedy={t("dialog.session.resumeNotFoundRemedy")}>
+              {t("dialog.session.resumeNotFoundReason")}
+            </ChoiceWarning>
+          </div>
         )}
         {/* Always mounted, so an outcome that appears is announced; the fields that follow it
             are what is seen. */}
@@ -145,10 +168,11 @@ export function ResumeConversationFields({
         {target?.kind === "record" && (
           <>
             {recordName}
-            <HeldAgentAccount agent={target.agent} accountName={target.accountName} errorMessage={accountError} />
+            <HeldAgentAccount agent={target.agent} accountName={target.accountName} errorMessage={accountError} warning={accountWarning} />
             <LaunchSettingsFields {...launch} note={t("dialog.session.launchInheritanceNote")} />
           </>
         )}
+        {nowhereShown && nowhere}
       </div>
     </>
   );

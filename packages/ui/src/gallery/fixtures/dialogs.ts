@@ -1054,7 +1054,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, conversation ID not valid",
-    description: "On the Resume conversation tab, a session title typed instead of an ID is marked invalid under the Session ID field once Open is pressed, with an example ID as code in the danger tone and the field focused; nothing else appears below it, the dialog stays as typed and nothing is sent. A conversation ID that no account holds marks the field the same way with its own message.",
+    description: "On the Resume conversation tab, a session title typed instead of an ID is marked invalid under the Session ID field once Open is pressed, with an example ID as code in the danger tone and the field focused; nothing else appears below it, the dialog stays as typed and nothing is sent.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
       (ui) => ui.press(ui.t("dialog.session.conversationResume")),
@@ -1121,18 +1121,13 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     state: resumeState,
-    conversationLocation: { kind: "record", agent: "claude", account: null },
-    sessionOpenError: {
-      code: "conversation_to_resume_not_found",
-      params: { agent: "Claude Code", path: "/Users/dev/.claude", id: RESUME_ID },
-      message: "no conversation `" + RESUME_ID + "` of Claude Code was found in `/Users/dev/.claude`",
-    },
-    id: "dialog-new-session-resume-not-found",
+    conversationLocation: { kind: "not_found" },
+    id: "dialog-new-session-resume-nowhere",
     group: "Sidebar sessions",
     category: "exceptional",
-    title: "Session resume, conversation gone when opened",
-    description: "The lookup found the conversation in an agent's record, but it was removed before Open was pressed: the daemon's refusal is the error alert dialog's, raised over the dialog, with the directory path set as code and the typed ID not repeated; nothing is written into the dialog itself. Behind it the Session ID is focused and the Name and Agent and Account fields stay, as the record is still on offer.",
-    steps: [...resumeLookup, (ui) => ui.confirm()],
+    title: "Session resume, conversation found in no account",
+    description: "No session or account holds the typed ID, which is no refusal: a warning Alert directly under the Session ID, titled \"Conversation not found\", says no conversation with this ID was found in any account and asks for the agent and account it was started in, as the agent will be asked to resume it and the terminal shows what it finds. Below it the Name, the enabled Agent and Account pickers, opening on the project's choice (Claude Code with its long account name), and Advanced follow, as for a new session, and the footer button reads Open, enabled.",
+    steps: resumeLookup,
   },
   {
     ...dialogFixture,

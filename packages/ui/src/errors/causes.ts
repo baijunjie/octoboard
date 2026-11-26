@@ -117,3 +117,24 @@ export type InvalidFileMaskCause = (typeof INVALID_FILE_MASK_CAUSES)[number];
 export function invalidFileMaskCause(raw: string | undefined): InvalidFileMaskCause {
   return INVALID_FILE_MASK_CAUSES.find((cause) => cause === raw) ?? "other";
 }
+
+const SHELL_ENVIRONMENT_UNAVAILABLE_CAUSES = ["earlier_capture", "daemon"] as const;
+
+/** The `cause` of a `shell_environment_unavailable`: which environment the launch ran on instead of the login shell's. */
+export type ShellEnvironmentUnavailableCause = (typeof SHELL_ENVIRONMENT_UNAVAILABLE_CAUSES)[number];
+
+/** `raw` as a `shell_environment_unavailable` cause: none, and one this client does not know, are `undefined`, worded by
+ * the code's own key. */
+export function shellEnvironmentUnavailableCause(raw: string | undefined): ShellEnvironmentUnavailableCause | undefined {
+  return SHELL_ENVIRONMENT_UNAVAILABLE_CAUSES.find((cause) => cause === raw);
+}
+
+const SESSION_GIT_HOOKS_UNAVAILABLE_CAUSES = ["git_too_old", "user_configuration", "other"] as const;
+
+/** The `cause` of a `session_git_hooks_unavailable`: why a project session was not given its git hook dispatchers. */
+export type SessionGitHooksUnavailableCause = (typeof SESSION_GIT_HOOKS_UNAVAILABLE_CAUSES)[number];
+
+/** `raw` as a `session_git_hooks_unavailable` cause: one this client does not know, or none, is `other`. */
+export function sessionGitHooksUnavailableCause(raw: string | undefined): SessionGitHooksUnavailableCause {
+  return SESSION_GIT_HOOKS_UNAVAILABLE_CAUSES.find((cause) => cause === raw) ?? "other";
+}

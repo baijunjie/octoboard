@@ -16,9 +16,10 @@ import { setAccountSwitchesQueued, type Daemon, type State } from "../store";
 import { blurOnRemoval } from "../test/blurOnRemoval";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
-import { sessionOf } from "../fixtures/builders";
+import { sessionOf, standingNoticeOf } from "../fixtures/builders";
 import { FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "../fixtures/fixtureProviders";
 import { CATALOGS, format } from "../i18n/catalog";
+import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { Language } from "../i18n/languages";
 import { MAX_AUTO_RECONNECT_ATTEMPTS, reconnectDelay } from "./reconnectPolicy";
@@ -1121,7 +1122,7 @@ it("mounts the switching and resuming statuses empty, then writes them", () => {
   expect(switching.textContent).toBe("Switching account");
   const noProcessPane = mountArchived();
   noProcessPane.show({ resuming: true });
-  expect(statusRegions(noProcessPane.container).map((region) => region.textContent)).toEqual(["", "", "", "", ""]);
+  expect(statusRegions(noProcessPane.container).map((region) => region.textContent)).toEqual(["", "", "", "", "", ""]);
   act(() => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
   expect(statusRegions(noProcessPane.container).map((region) => region.textContent)).toContain("Resuming session…");
 });
@@ -2560,5 +2561,89 @@ describe("the compact notice bar", () => {
     const button = sentence?.parentElement?.querySelector("button");
     expect(button?.getAttribute("data-size")).toBe("sm");
     expect(button?.className).not.toContain("app-button--xs");
+  });
+});
+
+describe("the standing notices' banner", () => {
+  const HOOKS = `${isolate("Claude Code")} has not reported to Octoboard, so this session's status and messages from the app may not work as usual. The terminal itself works as usual.`;
+  const hooks = standingNoticeOf("hooks_not_received", { agent: "Claude Code" }, "No hooks came.", 1);
+  const unknown = standingNoticeOf("provider.claude.from_the_future", {}, "A notice this window has no words for.", 2);
+  const banner = (container: HTMLElement) => container.querySelector<HTMLElement>("[data-region=notices]");
+  const button = (name: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find((candidate) => candidate.textContent === name || candidate.getAttribute("aria-label") === name);
+  const spoken = (container: HTMLElement, text: string) => statusRegions(container).filter((region) => region.textContent === text).length;
+
+  it("is drawn from the session's record, with no notification raised, its sentence hidden from assistive technology", () => {
+    const { container, root } = mount();
+    expect(banner(container)).toBeNull();
+    render(root, { ...session, standing_notices: [hooks] });
+    const bar = banner(container)!;
+    expect(bar.textContent).toContain(HOOKS);
+    expect(bar.querySelector("span[aria-hidden=true]")!.textContent).toContain(HOOKS);
+    expect(button("Details")).toBeDefined();
+    expect(errorAlerts.getSnapshot()).toEqual([]);
+  });
+
+  it("shows the newest notice, lists all of them under All notices, and words a code it does not know by the daemon's text", async () => {
+    const { container, root } = mount();
+    render(root, { ...session, standing_notices: [hooks, unknown] });
+    expect(banner(container)!.textContent).toContain("A notice this window has no words for.");
+    await act(async () => button("All notices")!.click());
+    const list = document.querySelector<HTMLElement>("[role=dialog][aria-label='Notices about this session']")!;
+    const entries = [...list.querySelectorAll("section")].map((entry) => entry.textContent);
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toBe("A notice this window has no words for.");
+    expect(entries[1]).toContain("Claude Code has not reported to Octoboard");
+  });
+
+  it("is dismissed in this window notice by notice, and shows a notice raised again", () => {
+    const { container, root } = mount();
+    render(root, { ...session, standing_notices: [hooks, unknown] });
+    act(() => button("Dismiss notice")!.click());
+    expect(banner(container)!.textContent).toContain(HOOKS);
+    act(() => button("Dismiss notice")!.click());
+    expect(banner(container)).toBeNull();
+    // Raised again by a later launch, it has a new time and shows again.
+    render(root, { ...session, standing_notices: [{ ...hooks, at: 5 }] });
+    expect(banner(container)!.textContent).toContain(HOOKS);
+  });
+
+  it("speaks a notice that arrives for the session on screen once, and none found as it opens or for another session", () => {
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    roots.push(root);
+    render(root, { ...session, standing_notices: [unknown] });
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 2);
+    expect(spoken(container, "A notice this window has no words for.")).toBe(0);
+
+    render(root, { ...session, standing_notices: [unknown, hooks] });
+    advance(AFTER_FOCUS_MOVE_DELAY_MS);
+    expect(spoken(container, HOOKS)).toBe(1);
+    // A record published again with the same notices says nothing more, and the region empties after its read time.
+    render(root, { ...session, title: "Renamed", standing_notices: [unknown, hooks] });
+    advance(READ_TIME_MS);
+    expect(spoken(container, HOOKS)).toBe(0);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 2);
+    expect(spoken(container, HOOKS)).toBe(0);
+
+    render(root, sessionOf("s-2", "c-1", undefined, "Other", "working", { standing_notices: [hooks] }));
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 2);
+    expect(spoken(container, HOOKS)).toBe(0);
+  });
+
+  it("holds the sentence of a notice that arrives while the pane is out of reach until it is exposed again", () => {
+    const { container, root } = mount();
+    render(root, { ...session, standing_notices: [] }, false);
+    render(root, { ...session, standing_notices: [hooks] }, false);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 2);
+    expect(spoken(container, HOOKS)).toBe(0);
+    render(root, { ...session, standing_notices: [hooks] }, true);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS);
+    expect(spoken(container, HOOKS)).toBe(1);
+  });
+
+  it("is not drawn over an archived session's history", () => {
+    const { container, root } = mount();
+    render(root, { ...session, status: "archived", standing_notices: [hooks] });
+    expect(banner(container)).toBeNull();
   });
 });

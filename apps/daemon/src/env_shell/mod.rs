@@ -16,6 +16,7 @@
 //! This file is the module's face: callers name these functions, not the files.
 
 mod cache;
+mod launch_env;
 mod proxy;
 mod resolve;
 mod session_exports;
@@ -27,6 +28,7 @@ use anyhow::Result;
 
 use crate::protocol::{error_code, CodedError};
 
+pub use launch_env::{Fallback, LaunchEnv};
 pub use proxy::{proxy_for, proxy_for_url};
 pub use resolve::{resolve_binary, resolve_program};
 #[cfg(test)]
@@ -46,6 +48,21 @@ pub fn snapshot() -> Result<HashMap<String, String>> {
 /// The environment an agent launch runs with; see [`cache::Cache::launch`].
 pub fn launch_snapshot() -> Result<HashMap<String, String>> {
     CACHE.launch(snapshot::take)
+}
+
+/// The environment an agent launch runs with, which never fails for want of a snapshot: see
+/// [`launch_env_from`].
+pub fn launch_env() -> LaunchEnv {
+    launch_env_from(launch_snapshot())
+}
+
+/// What a launch runs with given the snapshot `taken` (from [`launch_snapshot`], or a stand-in a
+/// test supplies): it, or on its failure the last capture however old, else the daemon's own
+/// environment outside any session it was started in, saying which and why. Every path that
+/// resolves something for a launch (the launch itself, a resume's checks, the default account's
+/// directory at an open) takes its environment from here, so they agree on one.
+pub fn launch_env_from(taken: Result<HashMap<String, String>>) -> LaunchEnv {
+    launch_env::with_fallback(taken, CACHE.last_capture(), snapshot::daemon_environment)
 }
 
 /// The environment for a caller paced by something other than a person, such as a periodic sweep;

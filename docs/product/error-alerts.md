@@ -30,7 +30,9 @@ presentation, with these exceptions:
   `docs/product/projects.md`).
 
 Errors never use timed toasts or a failure line inside the dialog that started the operation. Notices that are not
-errors use toasts (see `docs/product/toasts.md`), except a notice to acknowledge (see "Notices to acknowledge" below). Background states that are not reported as errors, such as the
+errors use toasts (see `docs/product/toasts.md`), except a notice to acknowledge (see "Notices to acknowledge" below)
+and a standing notice, which is shown in the banner over its session's terminal for as long as it holds (see
+`docs/product/standing-session-notices.md`). Background states that are not reported as errors, such as the
 daemon's reconnecting banner, keep their own status and recovery presentation (see "Losing the daemon connection" in
 `docs/product/application-lifecycle.md`).
 
@@ -537,7 +539,9 @@ instance, that the user's own settings, permission rules among them, are not in 
 
 - **Which notices**: only those the agent's provider marks so, on the notice's own code. A notice that is not marked is
   a toast, exactly as before, for every agent; no notice of Octoboard's own and none of Claude Code, Codex or Grok Build
-  is marked.
+  is marked. A standing notice is never shown here, even where its code is marked: it is shown in the banner over its
+  session's terminal (see `docs/product/standing-session-notices.md`). A window of an earlier build, which does not
+  know a notice as standing, still shows a marked one here.
 - **Its alert** is the error alert, with the same acknowledgement and close buttons and no dismissal by Escape, an
   outside press or time, but drawn as what it is, no failure: the warning icon in place of the danger one, and its
   acknowledgement button in the accent colour, not the danger one. It is titled "Session notice" unless the notice has a title of its own, names the

@@ -1,11 +1,13 @@
 //! Codex adapter. Configuration is injected through repeated per-invocation `-c` overrides,
 //! without changing the user's configuration files. A resume repeats them, the permission preset
-//! included. Releases from 0.166.0 on run the session with a private app server that the terminal
+//! included. Every enhanced launch runs the session with a private app server that the terminal
 //! attaches to with `--remote` ([`private_server`]): the server takes the overrides, hooks and model
 //! execution being its, and the terminal takes them as well, rendering and startup notices being
 //! its, except that a remote resume refuses permission overrides, which the server then applies to
-//! the thread before the terminal connects. Older releases, and a launch whose server fails to come
-//! up, run the terminal on its own with every override on its command line.
+//! the thread before the terminal connects. A launch whose server fails to come up runs the
+//! terminal on its own with every override on its command line. A launch that exits as it starts
+//! is started again with less ([`reduced`]): without the one setting whose value Codex refused, or
+//! without the hooks and the private server.
 //!
 //! `CODEX_HOME` must not be used to *inject* anything: it makes Codex ignore the user's entire
 //! global setup (`~/.codex/AGENTS.md`, model choice, approval policy, skills, plugins), not just add
@@ -87,6 +89,7 @@ mod native_binary;
 mod private_server;
 pub(crate) mod quota;
 pub(crate) mod records;
+mod reduced;
 mod reset_credit;
 mod rollout_files;
 pub(crate) mod rollout_watch;
@@ -112,7 +115,8 @@ use crate::session::screen::ScreenReader;
 use crate::session_tools;
 use claude_compatibility::reserved_env;
 use config::{model_migrations, project_server_names, read_config, server_names, ConfigFile};
-use private_server::{private_server_supported, PrivateServerPlan, ResumePermissions};
+use private_server::{without_overrides_of, PrivateServerPlan, ResumePermissions};
+use reduced::LeftOut;
 
 /// The permission preset held under `approval_reviewer`. Unset leaves permission selection to
 /// Codex's native launch or resume behavior.
@@ -168,6 +172,9 @@ pub(crate) fn action_required_title(title: &str) -> bool {
         Some("[ ! ] Action Required" | "[ . ] Action Required")
     )
 }
+
+/// The option that lets Octoboard's generated hooks run without Codex's hook review.
+const HOOK_TRUST_BYPASS: &str = "--dangerously-bypass-hook-trust";
 
 /// The events Octoboard's session states are derived from. `Interrupt` is included because it is
 /// mutually exclusive with `Stop` and is the only signal of a cancelled turn Claude Code, Codex or
@@ -250,6 +257,26 @@ impl AgentProvider for CodexProvider {
 
     fn has_status_integration(&self) -> bool {
         true
+    }
+
+    /// A launch that carries Octoboard's hooks takes its status from them; one whose reduced plan
+    /// left them out takes it from the reports Codex makes through OSC 7501 by itself (`idle`,
+    /// `working`, `done`; measured on 0.167.1 and 0.166.0).
+    fn launch_has_status_integration(&self, _spec: &LaunchSpec<'_>, plan: &LaunchPlan) -> bool {
+        carries_hooks(plan)
+    }
+
+    /// With its first turn, for a launch that carries Octoboard's hooks: Codex runs no hook before
+    /// its first prompt is submitted, on a new conversation (`SessionStart` with `source:
+    /// "startup"` comes with that prompt's `UserPromptSubmit`) and on a resume alike (nothing in
+    /// 12 s of an idle resumed session; measured on 0.167.1). Never for one whose reduced plan left
+    /// them out.
+    fn first_hook_due(&self, _spec: &LaunchSpec<'_>, plan: &LaunchPlan) -> super::FirstHook {
+        if carries_hooks(plan) {
+            super::FirstHook::WithFirstTurn
+        } else {
+            super::FirstHook::Never
+        }
     }
 
     fn interactions(&self) -> Option<&'static dyn crate::session::interaction::InteractionReader> {
@@ -393,256 +420,326 @@ impl AgentProvider for CodexProvider {
         typed_text(&serde_json::from_str(line).ok()?)
     }
 
-    fn plan(&self, spec: &LaunchSpec<'_>) -> anyhow::Result<LaunchPlan> {
-        let pinned = super::pinned_config_dir(spec, AgentId::CODEX)?;
-        // Unlike Claude Code, Codex refuses a `CODEX_HOME` that does not exist rather than creating
-        // it, so an account pointed at a directory the user has yet to create is created here. A
-        // resume that needs the directory's conversation has already been refused above.
-        if let Some(dir) = pinned {
-            home::create_missing(dir).map_err(|err| {
-                CodedError::raised(
-                    error_code::CONFIG_DIR_UNREACHABLE,
-                    format!(
-                        "could not create the Codex config directory `{}`: {err}",
-                        dir.display()
-                    ),
-                    &[
-                        ("agent", AgentId::CODEX.label()),
-                        ("path", &dir.to_string_lossy()),
-                    ],
-                )
-            })?;
-        }
-        let mut args = Vec::new();
+    /// Unlike Claude Code, Codex refuses a `CODEX_HOME` that does not exist rather than creating
+    /// it, so an account pointed at a directory the user has yet to create is created here, for
+    /// every tier; one that cannot be created refuses, as Codex itself would in a plain terminal.
+    /// A resume that needs the directory's conversation has already been refused
+    /// ([`super::pinned_config_dir`]).
+    fn launch_refusal(&self, spec: &LaunchSpec<'_>) -> anyhow::Result<()> {
+        let Some(dir) = super::pinned_config_dir(spec, AgentId::CODEX)? else {
+            return Ok(());
+        };
+        home::create_missing(dir).map_err(|err| {
+            CodedError::raised(
+                error_code::CONFIG_DIR_UNREACHABLE,
+                format!(
+                    "could not create the Codex config directory `{}`: {err}",
+                    dir.display()
+                ),
+                &[
+                    ("agent", AgentId::CODEX.label()),
+                    ("path", &dir.to_string_lossy()),
+                ],
+            )
+        })
+    }
 
-        // `resume` is a subcommand, so it comes before the overrides.
+    /// `resume <id>` for a resume, the model as the configuration override every version takes,
+    /// and a new conversation's task after a bare `--`.
+    fn bare_plan(&self, spec: &LaunchSpec<'_>) -> super::BarePlan {
+        let mut args = Vec::new();
         if let Some(id) = spec.resume_agent_session_id {
             args.push("resume".to_string());
             args.push(id.to_string());
         }
-        args.push("--dangerously-bypass-hook-trust".to_string());
-
-        // Codex runs the command through the host's own shell, whose language it is written in.
-        let command = shell::script_command(spec.hook_script, shell::hook_dialect());
-        // The cross-project guard blocks only from a synchronous hook, so it is a group of its
-        // own beside the asynchronous status hook of the same event.
-        let guard_command = spec
-            .guard
-            .as_ref()
-            .map(|guard| shell::script_command(guard.script, shell::hook_dialect()));
-        for event in HOOK_EVENTS {
-            let mut groups = format!(
-                "{{hooks=[{{type=\"command\",command={},timeout={},async=true}}]}}",
-                toml_string(&command),
-                hook_timeout_secs(event)
-            );
-            if let (Some(guard), "PreToolUse") = (&guard_command, *event) {
-                groups.push_str(&format!(
-                    ",{{matcher=\"apply_patch\",hooks=[{{type=\"command\",command={},timeout={}}}]}}",
-                    toml_string(guard),
-                    GUARD_HOOK_TIMEOUT_SECS
-                ));
-            }
-            args.push("-c".to_string());
-            args.push(format!("hooks.{event}=[{groups}]"));
-        }
-
-        let (mcp_command, mcp_args) = super::mcp_server_command(spec);
-        let key = session_tools::catalogue::SERVER_KEY;
-        args.push("-c".to_string());
-        args.push(format!(
-            "mcp_servers.{key}.command={}",
-            toml_string(&mcp_command)
-        ));
-        args.push("-c".to_string());
-        args.push(format!(
-            "mcp_servers.{key}.args=[{}]",
-            mcp_args
-                .iter()
-                .map(|arg| toml_string(arg))
-                .collect::<Vec<_>>()
-                .join(",")
-        ));
-        // Octoboard's own tools are not a decision to put to the user: every one of them is
-        // something the console session was told to do, and a modal for each would make
-        // orchestration unusable. `approve` is the one value that runs them unasked. `auto` leaves
-        // the decision to Codex, which asks for a tool carrying no annotations, as Octoboard's own
-        // do — and under an approval policy of `never` it does not even ask, it refuses the call
-        // outright without sending it. The key is per server, so nothing else the session may need
-        // approval for is widened.
-        args.push("-c".to_string());
-        args.push(format!(
-            "mcp_servers.{key}.default_tools_approval_mode=\"approve\""
-        ));
-        // Codex abandons a tool call at a limit of its own and sends the server nothing when it
-        // does, so a call that outlasts it never returns its result — and a call Octoboard holds
-        // for the user (`session_request::ANSWER_TIME_LIMIT`) alone outlasts Codex's default.
-        // Hence `super::MCP_TOOL_TIMEOUT_SECS`, where the reasoning for the value is.
-        args.push("-c".to_string());
-        args.push(format!(
-            "mcp_servers.{key}.tool_timeout_sec={}",
-            super::MCP_TOOL_TIMEOUT_SECS
-        ));
-        // A non-default account keeps its MCP OAuth tokens in its own home. See
-        // `MCP_FILE_CREDENTIALS_STORE` for why the default account is left alone.
-        if pinned.is_some() {
-            args.push("-c".to_string());
-            args.push(MCP_FILE_CREDENTIALS_STORE.to_string());
-        }
-
-        // Read from the launch environment rather than the daemon's: the daemon's own `CODEX_HOME`
-        // may belong to an agent session it was started from.
-        let home = super::account_dir(AgentId::CODEX, pinned, spec.shell_env);
-        let config = read_config(&home);
-        // Set only for a pinned directory; otherwise the shell snapshot's own value, if any,
-        // stands.
-        let mut env = pinned
-            .map(|dir| {
-                let (var, value) = codex::LAYOUT
-                    .config_dir_export(dir)
-                    .expect("Codex's variable names its configuration directory itself");
-                vec![(var.to_string(), value.to_string_lossy().into_owned())]
-            })
-            .unwrap_or_default();
-        // The compatibility source's MCP servers (Claude Code's), for the session's working
-        // directory. A server of the same name in the account's own `config.toml` or the project's
-        // `.codex/config.toml` stays as it is, and an unreadable one leaves nothing to compare
-        // with, so then none is added.
-        if let Some(source) = spec.compatibility_source(AgentId::CLAUDE) {
-            let project_names = project_server_names(&canonical_project(spec.cwd), &home);
-            let taken = |name: &str| {
-                project_names
-                    .as_ref()
-                    .is_none_or(|names| names.contains(name))
-                    || match &config {
-                        ConfigFile::Absent => false,
-                        ConfigFile::Unreadable => true,
-                        ConfigFile::Parsed(parsed) => server_names(parsed).contains(name),
-                    }
-            };
-            let servers = claude_mcp::codex_servers(
-                source.mcp_servers(spec.shell_env, spec.cwd),
-                spec.shell_env,
-                &env,
-                &reserved_env,
-                &taken,
-            );
-            for server_override in servers.overrides {
-                args.push("-c".to_string());
-                args.push(server_override);
-            }
-            env.extend(servers.env);
-        }
-
-        // Codex's own update prompt ("Update now / Skip") would otherwise come up before its trust
-        // screen, unrecognised and in the way of it. Off for this launch only.
-        args.push("-c".to_string());
-        args.push("check_for_update_on_startup=false".to_string());
-
-        // Codex's memories off for this launch: neither the summary injected into the
-        // instructions nor anything written under the home's `memories/` (0.167.1, measured). Off
-        // by default, but the user's `config.toml` can turn it on. Set as configuration rather
-        // than `--disable memories`, which refuses a feature name an older Codex does not know.
-        // Before the private server's plan below, which starts its server with these arguments.
-        if spec.native_memory_off {
-            args.push("-c".to_string());
-            args.push(MEMORIES_OFF.to_string());
-        }
-
-        args.push("-c".to_string());
-        args.push(format!("tui.terminal_title={TERMINAL_TITLE}"));
-        if spec.resume_agent_session_id.is_some() {
-            args.push("-c".to_string());
-            args.push("tui.resume_cwd=\"current\"".to_string());
-        }
-        args.push("-c".to_string());
-        args.push("notice.hide_rate_limit_model_nudge=true".to_string());
-        if let Some(upgrades) = model_migrations(&home) {
-            args.push("-c".to_string());
-            args.push(format!("notice.model_migrations={upgrades}"));
-        }
-
-        let mut instructions = session_tools::role::role_description(
-            spec.kind,
-            spec.owner.as_ref(),
-            AgentId::CODEX,
-            &spec.role_options(),
-        );
-        if let Some(source) = spec.compatibility_source(AgentId::CLAUDE) {
-            instructions.push_str("\n\n");
-            instructions.push_str(&source.instructions(AgentId::CODEX.label(), spec.shell_env));
-        }
-        args.push("-c".to_string());
-        args.push(format!(
-            "developer_instructions={}",
-            toml_string(&instructions)
-        ));
-
-        // Codex has no effort flag; the effort is reachable only as a config override, so the
-        // model goes the same way to keep the two consistent. Both come before the positional
-        // task, which Codex takes last, after `--`. A model that does not advertise the effort is
-        // refused by Codex itself, at launch.
         if let Some(model) = spec.model {
             args.push("-c".to_string());
             args.push(format!("model={}", toml_string(model)));
         }
-        if let Some(effort) = spec.effort {
-            args.push("-c".to_string());
-            args.push(format!("model_reasoning_effort={}", toml_string(effort)));
-        }
-
-        let preset = PermissionMode::of(spec.settings).map(PermissionMode::preset);
-        if let Some(preset) = preset {
-            // Explicit per-launch choices also replace a resumed thread's saved choices.
-            for (key, value) in [
-                ("default_permissions", preset.profile),
-                ("approval_policy", preset.approval_policy),
-                ("approvals_reviewer", preset.reviewer),
-            ] {
-                args.push("-c".to_string());
-                args.push(format!("{key}={}", toml_string(value)));
-            }
-        }
-
-        let task = spec.task.filter(|_| spec.resume_agent_session_id.is_none());
-        let private_server = private_server_supported(spec.agent_version).then(|| {
-            Box::new(PrivateServerPlan::new(
-                &args,
-                spec.cwd,
-                task,
-                command.clone(),
-                guard_command.clone(),
-                spec.resume_agent_session_id,
-                preset,
-            )) as Box<dyn crate::session::term::PrivateServer>
-        });
-        // After a bare `--`, which Codex takes only after every option: a task that starts with
-        // `-` is otherwise refused as an unexpected argument, or read as an option.
-        if let Some(task) = task {
+        if let Some(task) = spec.task.filter(|_| spec.resume_agent_session_id.is_none()) {
             args.push("--".to_string());
             args.push(task.to_string());
         }
-
-        Ok(LaunchPlan {
+        super::BarePlan {
             args,
-            private_server,
-            env,
-            resolves_approvals_itself: resolves_approvals_itself(spec, &config),
-            ..LaunchPlan::default()
-        })
+            ..super::BarePlan::default()
+        }
     }
+
+    fn plan(&self, spec: &LaunchSpec<'_>) -> anyhow::Result<LaunchPlan> {
+        planned(spec, None)
+    }
+
+    /// The enhanced plan less what the early exit says Codex did not take ([`reduced`]), with a
+    /// standing notice of it. Nothing where the exit names a key Octoboard set no override for, so
+    /// leaving nothing out would only exit again, and the launch goes bare.
+    fn reduced_plan(&self, spec: &LaunchSpec<'_>, exit: &super::EarlyExit) -> Option<LaunchPlan> {
+        let left_out = LeftOut::after(exit);
+        let mut plan = planned(spec, Some(&left_out)).ok()?;
+        plan.notice = Some(left_out.notice());
+        Some(plan)
+    }
+}
+
+/// Whether `plan` carries Octoboard's hooks, which every plan that lets them past Codex's hook
+/// review does ([`HOOK_TRUST_BYPASS`]).
+fn carries_hooks(plan: &LaunchPlan) -> bool {
+    plan.args.iter().any(|arg| arg == HOOK_TRUST_BYPASS)
+}
+
+/// The launch with Octoboard's additions, less what `left_out` names for a reduced launch. Fails
+/// for a reduced launch whose setting to leave out is not one this launch sets.
+fn planned(spec: &LaunchSpec<'_>, left_out: Option<&LeftOut>) -> anyhow::Result<LaunchPlan> {
+    let hooks = left_out != Some(&LeftOut::Hooks);
+    let pinned = super::pinned_config_dir(spec, AgentId::CODEX)?;
+    let mut args = Vec::new();
+
+    // `resume` is a subcommand, so it comes before the overrides.
+    if let Some(id) = spec.resume_agent_session_id {
+        args.push("resume".to_string());
+        args.push(id.to_string());
+    }
+    if hooks {
+        args.push(HOOK_TRUST_BYPASS.to_string());
+    }
+
+    // Codex runs the command through the host's own shell, whose language it is written in.
+    let command = shell::script_command(spec.hook_script, shell::hook_dialect());
+    // The cross-project guard blocks only from a synchronous hook, so it is a group of its
+    // own beside the asynchronous status hook of the same event.
+    let guard_command = spec
+        .guard
+        .as_ref()
+        .map(|guard| shell::script_command(guard.script, shell::hook_dialect()));
+    for event in HOOK_EVENTS.iter().filter(|_| hooks) {
+        let mut groups = format!(
+            "{{hooks=[{{type=\"command\",command={},timeout={},async=true}}]}}",
+            toml_string(&command),
+            hook_timeout_secs(event)
+        );
+        if let (Some(guard), "PreToolUse") = (&guard_command, *event) {
+            groups.push_str(&format!(
+                ",{{matcher=\"apply_patch\",hooks=[{{type=\"command\",command={},timeout={}}}]}}",
+                toml_string(guard),
+                GUARD_HOOK_TIMEOUT_SECS
+            ));
+        }
+        args.push("-c".to_string());
+        args.push(format!("hooks.{event}=[{groups}]"));
+    }
+
+    let (mcp_command, mcp_args) = super::mcp_server_command(spec);
+    let key = session_tools::catalogue::SERVER_KEY;
+    args.push("-c".to_string());
+    args.push(format!(
+        "mcp_servers.{key}.command={}",
+        toml_string(&mcp_command)
+    ));
+    args.push("-c".to_string());
+    args.push(format!(
+        "mcp_servers.{key}.args=[{}]",
+        mcp_args
+            .iter()
+            .map(|arg| toml_string(arg))
+            .collect::<Vec<_>>()
+            .join(",")
+    ));
+    // Octoboard's own tools are not a decision to put to the user: every one of them is
+    // something the console session was told to do, and a modal for each would make
+    // orchestration unusable. `approve` is the one value that runs them unasked. `auto` leaves
+    // the decision to Codex, which asks for a tool carrying no annotations, as Octoboard's own
+    // do — and under an approval policy of `never` it does not even ask, it refuses the call
+    // outright without sending it. The key is per server, so nothing else the session may need
+    // approval for is widened.
+    args.push("-c".to_string());
+    args.push(format!(
+        "mcp_servers.{key}.default_tools_approval_mode=\"approve\""
+    ));
+    // Codex abandons a tool call at a limit of its own and sends the server nothing when it
+    // does, so a call that outlasts it never returns its result — and a call Octoboard holds
+    // for the user (`session_request::ANSWER_TIME_LIMIT`) alone outlasts Codex's default.
+    // Hence `super::MCP_TOOL_TIMEOUT_SECS`, where the reasoning for the value is.
+    args.push("-c".to_string());
+    args.push(format!(
+        "mcp_servers.{key}.tool_timeout_sec={}",
+        super::MCP_TOOL_TIMEOUT_SECS
+    ));
+    // A non-default account keeps its MCP OAuth tokens in its own home. See
+    // `MCP_FILE_CREDENTIALS_STORE` for why the default account is left alone.
+    if pinned.is_some() {
+        args.push("-c".to_string());
+        args.push(MCP_FILE_CREDENTIALS_STORE.to_string());
+    }
+
+    // Read from the launch environment rather than the daemon's: the daemon's own `CODEX_HOME`
+    // may belong to an agent session it was started from.
+    let home = super::account_dir(AgentId::CODEX, pinned, spec.shell_env);
+    let config = read_config(&home);
+    // Set only for a pinned directory; otherwise the shell snapshot's own value, if any,
+    // stands.
+    let mut env = pinned
+        .map(|dir| {
+            let (var, value) = codex::LAYOUT
+                .config_dir_export(dir)
+                .expect("Codex's variable names its configuration directory itself");
+            vec![(var.to_string(), value.to_string_lossy().into_owned())]
+        })
+        .unwrap_or_default();
+    // The compatibility source's MCP servers (Claude Code's), for the session's working
+    // directory. A server of the same name in the account's own `config.toml` or the project's
+    // `.codex/config.toml` stays as it is, and an unreadable one leaves nothing to compare
+    // with, so then none is added.
+    if let Some(source) = spec.compatibility_source(AgentId::CLAUDE) {
+        let project_names = project_server_names(&canonical_project(spec.cwd), &home);
+        let taken = |name: &str| {
+            project_names
+                .as_ref()
+                .is_none_or(|names| names.contains(name))
+                || match &config {
+                    ConfigFile::Absent => false,
+                    ConfigFile::Unreadable => true,
+                    ConfigFile::Parsed(parsed) => server_names(parsed).contains(name),
+                }
+        };
+        let servers = claude_mcp::codex_servers(
+            source.mcp_servers(spec.shell_env, spec.cwd),
+            spec.shell_env,
+            &env,
+            &reserved_env,
+            &taken,
+        );
+        for server_override in servers.overrides {
+            args.push("-c".to_string());
+            args.push(server_override);
+        }
+        env.extend(servers.env);
+    }
+
+    // Codex's own update prompt ("Update now / Skip") would otherwise come up before its trust
+    // screen, unrecognised and in the way of it. Off for this launch only.
+    args.push("-c".to_string());
+    args.push("check_for_update_on_startup=false".to_string());
+
+    // Codex's memories off for this launch: neither the summary injected into the
+    // instructions nor anything written under the home's `memories/` (0.167.1, measured). Off
+    // by default, but the user's `config.toml` can turn it on. Set as configuration rather
+    // than `--disable memories`, which refuses a feature name an older Codex does not know.
+    // Before the private server's plan below, which starts its server with these arguments.
+    if spec.native_memory_off {
+        args.push("-c".to_string());
+        args.push(MEMORIES_OFF.to_string());
+    }
+
+    args.push("-c".to_string());
+    args.push(format!("tui.terminal_title={TERMINAL_TITLE}"));
+    if spec.resume_agent_session_id.is_some() {
+        args.push("-c".to_string());
+        args.push("tui.resume_cwd=\"current\"".to_string());
+    }
+    args.push("-c".to_string());
+    args.push("notice.hide_rate_limit_model_nudge=true".to_string());
+    if let Some(upgrades) = model_migrations(&home) {
+        args.push("-c".to_string());
+        args.push(format!("notice.model_migrations={upgrades}"));
+    }
+
+    let mut instructions = session_tools::role::role_description(
+        spec.kind,
+        spec.owner.as_ref(),
+        AgentId::CODEX,
+        &spec.role_options(),
+    );
+    if let Some(source) = spec.compatibility_source(AgentId::CLAUDE) {
+        instructions.push_str("\n\n");
+        instructions.push_str(&source.instructions(AgentId::CODEX.label(), spec.shell_env));
+    }
+    args.push("-c".to_string());
+    args.push(format!(
+        "developer_instructions={}",
+        toml_string(&instructions)
+    ));
+
+    // Codex has no effort flag; the effort is reachable only as a config override, so the
+    // model goes the same way to keep the two consistent. Both come before the positional
+    // task, which Codex takes last, after `--`. A model that does not advertise the effort is
+    // refused by Codex itself, at launch.
+    if let Some(model) = spec.model {
+        args.push("-c".to_string());
+        args.push(format!("model={}", toml_string(model)));
+    }
+    if let Some(effort) = spec.effort {
+        args.push("-c".to_string());
+        args.push(format!("model_reasoning_effort={}", toml_string(effort)));
+    }
+
+    let mut mode = PermissionMode::of(spec.settings);
+    if let Some(preset) = mode.map(PermissionMode::preset) {
+        // Explicit per-launch choices also replace a resumed thread's saved choices.
+        for (key, value) in [
+            ("default_permissions", preset.profile),
+            ("approval_policy", preset.approval_policy),
+            ("approvals_reviewer", preset.reviewer),
+        ] {
+            args.push("-c".to_string());
+            args.push(format!("{key}={}", toml_string(value)));
+        }
+    }
+
+    let left_keys = left_out.map(LeftOut::keys).unwrap_or_default();
+    if !left_keys.is_empty() {
+        let kept = without_overrides_of(&args, &left_keys);
+        if kept.len() == args.len() {
+            anyhow::bail!("the launch sets no override for the key Codex refused");
+        }
+        args = kept;
+    }
+    // A preset left out is neither applied to a resumed thread nor read as the user's choice.
+    if matches!(left_out, Some(LeftOut::Permissions(_))) {
+        mode = None;
+    }
+    let preset = mode.map(PermissionMode::preset);
+
+    let task = spec.task.filter(|_| spec.resume_agent_session_id.is_none());
+    // The private server runs the hooks, and a resume through it trusts them by their
+    // fingerprints, so a launch without them goes without it too; an exit that names no setting
+    // may as well be a refusal of `--remote` as of the hook-trust bypass.
+    let private_server = hooks.then(|| {
+        Box::new(PrivateServerPlan::new(
+            &args,
+            spec.cwd,
+            task,
+            command.clone(),
+            guard_command.clone(),
+            spec.resume_agent_session_id,
+            preset,
+        )) as Box<dyn crate::session::term::PrivateServer>
+    });
+    // After a bare `--`, which Codex takes only after every option: a task that starts with
+    // `-` is otherwise refused as an unexpected argument, or read as an option.
+    if let Some(task) = task {
+        args.push("--".to_string());
+        args.push(task.to_string());
+    }
+
+    Ok(LaunchPlan {
+        args,
+        private_server,
+        env,
+        resolves_approvals_itself: resolves_approvals_itself(mode, &config),
+        ..LaunchPlan::default()
+    })
 }
 
 /// Whether Codex handles permission-request hooks without asking the user.
 ///
-/// The account override takes precedence; otherwise read the user's own `config.toml`, never
-/// written to. The setting's shape is not pinned down (it has been seen as a plain value and as a
-/// table), so the whole value is searched for the
-/// auto-review marker rather than one key path being assumed. Unreadable or absent means "the user
+/// The permission preset the launch applies (`mode`) takes precedence; otherwise read the user's
+/// own `config.toml`, never written to. The setting's shape is not pinned down (it has been seen
+/// as a plain value and as a table), so the whole value is searched for the auto-review marker
+/// rather than one key path being assumed. Unreadable or absent means "the user
 /// will be asked", which is the safe way to be wrong: a hand raised needlessly is visible, while
 /// one never raised leaves a session looking busy while it waits.
-fn resolves_approvals_itself(spec: &LaunchSpec<'_>, config: &ConfigFile) -> bool {
-    if let Some(mode) = PermissionMode::of(spec.settings) {
+fn resolves_approvals_itself(mode: Option<PermissionMode>, config: &ConfigFile) -> bool {
+    if let Some(mode) = mode {
         return mode != PermissionMode::User;
     }
     const AUTO_REVIEW: &str = "auto_review";

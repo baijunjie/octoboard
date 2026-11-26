@@ -13,7 +13,8 @@ through `request_resume_session` (see `docs/product/requests-to-resume-a-convers
 
 The tab first shows the required **Session ID** field alone. The fields after it appear only once the lookup of a valid
 ID has answered, and depend on what holds the conversation (see "Finding the conversation" below). **The agent and
-account are never picked**: they are found from the ID and shown as a locked Agent field. It has no **Report to** field
+account are picked only for an ID found nowhere**: otherwise they are found from the ID and shown as a locked Agent
+field. It has no **Report to** field
 either, since a resumed session is never bound; the **New conversation** tab still shows the choice made there before.
 The ID is acted on only when the dialog is submitted from the **Resume conversation** tab; one typed there and then left
 for the **New conversation** tab is not.
@@ -42,10 +43,14 @@ reopened, one interrupted meanwhile is resumed, and one whose process starts mea
 | An interrupted session of this project | **Name**, showing the session's name, and its agent and account, all locked | **Resume** — resumes that session (see "Resuming or going to a session of this project from the tab" below) |
 | A session of this project that is starting or whose process is running | **Name**, showing the session's name, and its agent and account, all locked | **Go to session** — selects that session (see "Resuming or going to a session of this project from the tab" below) |
 | A session of another project, or a console session, in any state | none; an alert directly under the field names that session and where it is (see "Naming a session outside the project" in this section) | disabled |
-| Nowhere | none; the field's own error says under it that no conversation with that ID was found in any account, the field marked invalid | disabled |
+| Nowhere | a warning directly under the field; then **Name**, the **Agent** field with its agent and account pickers, and the Advanced section, as on the **New conversation** tab | **Open** — opens a new session resuming it on the agent and account picked (see "Opening a new session on a found conversation" below) |
 
-A conversation found nowhere is a verdict on the ID in the field, so it is the field's error, shown as the answer
-arrives without waiting for a submit, and announced as a field's error is. A lookup that fails — it could not be made,
+A conversation found nowhere is no verdict on the ID: an agent release may keep its records where Octoboard does not
+look, and the agent's own resume is what says whether it has the conversation. So it is a warning, not the field's
+error: titled that the conversation was not found, it says that no account has a record of this ID, and to choose the
+agent and account the conversation was started in, whose agent the session then asks to resume it. The field is not
+marked invalid; it is described by the warning, which shows as the answer arrives without waiting for a submit. A
+problem with the ID's own text, once a submit has tried it, takes its place. A lookup that fails — it could not be made,
 so it says nothing about the ID — shows its failure in an alert directly under the field instead, with no fields after
 it, and the submit button stays disabled. Each of these alerts — a session held elsewhere, a holder no longer offered
 (below), a failed lookup — is titled that this conversation could not be resumed, with what was found or the failure
@@ -59,17 +64,19 @@ account of it, each in the config directory a launch of that account would use: 
 default account the directory the agent defaults to under the user's login shell environment (see "Agent config
 directories" in `docs/product/consoles.md`). When several accounts hold a record of the conversation, the one whose
 record was written to last wins; for Grok Build that is judged by when its session directory last changed, so only
-approximately. A login shell environment that cannot be captured leaves the default accounts out of the search, and is
-reported as the lookup's failure only when no stored account holds the conversation either.
+approximately. When the login shell environment cannot be captured, the default accounts are searched in the
+directories the agents default to under the fallback environment a launch would use (see "The launch environment" in
+`docs/product/launching-agents.md`), so the search and the launch that resumes the conversation agree.
 
 If the agent or account holding the record is not offered, or stops being offered while the dialog is open — the agent
 is uninstalled or no longer added, or the account is removed — the fields after the ID go, an alert under the field says
 that the agent or account holding the conversation is no longer available, and the submit button is disabled; no other
 agent or account is used in its place. An account holding the record that is offered but cannot open a session — turned
-off, not logged in, or having its sharing changed — keeps the fields, and its locked Agent field says why under it,
-marked invalid, as the **Agent** field does (see "The session dialog" in `docs/product/opening-sessions.md`); the submit
-button is disabled meanwhile. An account holding the record whose quota is used up is not refused: the conversation
-opens on it, as in the **Agent** field.
+off, or having its sharing changed — keeps the fields, and its locked Agent field says why under it, marked invalid, as
+the **Agent** field does (see "The session dialog" in `docs/product/opening-sessions.md`); the submit button is disabled
+meanwhile. An account holding the record that was last read as not logged in, or whose quota is used up, is not
+refused: the conversation opens on it, as in the **Agent** field, which for one read as not logged in shows the same
+warning under the locked field.
 
 **Naming a session outside the project.** The error for a conversation held outside the project names the session that
 holds it by its displayed name (see "Displayed names" in `docs/product/session-titles.md`), and where it is: the project
@@ -102,12 +109,12 @@ field and the agent and account are locked, there is no Advanced section, and no
 
 ## Opening a new session on a found conversation
 
-Open starts a new project session that resumes the conversation, on the agent and account that hold its record, with the
-name typed and the model, reasoning effort and compatibility switches of the Advanced section, which are applied to the
+Open starts a new project session that resumes the conversation, on the agent and account that hold its record, or,
+for an ID found nowhere, on the agent and account picked, with the name typed and the model, reasoning effort and compatibility switches of the Advanced section, which are applied to the
 launch that resumes the conversation (see "Where the switches are set in the window" in
 `docs/product/compatibility-switches-in-launch-settings.md`). In the daemon protocol, `open_session` takes the ID as `resume_agent_session_id`, trimmed, blank read as
-absent, together with the session's `agent` and `account`; the dialog sends the account it found, `null` for the default
-account.
+absent, together with the session's `agent` and `account`; the dialog sends the account it found or the one picked, `null` for
+the default account.
 
 - **A resumed session is a plain, independent project session.** `open_session` refuses a request that names both a
   conversation to resume and a session to report to (`conflicting_fields`).
@@ -120,21 +127,23 @@ account.
   `session`); the error alert says only that the conversation belongs to a session outside the project, and the lookup
   the dialog then asks again names that session (see "Finding the conversation" above). The check is made again once the
   new session is recorded, so two requests for the same conversation cannot both succeed.
-- **The conversation must be in the session's account directory.** It is looked for in the config directory of the
-  account the session will use (see "Which account a session uses" in `docs/product/opening-sessions.md`), as in the
-  search above. With no record of it there, the open is refused, naming the agent and the directory but not the ID,
-  which is in the field above (`conversation_to_resume_not_found`). For the default account, a login shell environment
-  that could not be captured refuses the open as well (see "The launch environment" in
-  `docs/product/launching-agents.md`).
+- **A conversation not found in the session's account directory still opens.** It is looked for in the config
+  directory of the account the session will use (see "Which account a session uses" in
+  `docs/product/opening-sessions.md`), as in the search above. With no record of it there, the session opens all the
+  same and is launched with the agent's own resume of that ID, and its terminal's banner carries the standing notice
+  `conversation_record_not_found` (see `docs/product/standing-session-notices.md`), saying that the record was not found
+  and the agent was asked to resume the conversation anyway, what the agent finds being shown in the terminal. For the
+  default account the directory is resolved from the launch environment, a fallback one where the login shell
+  environment could not be captured (see "The launch environment" in `docs/product/launching-agents.md`).
+  `conversation_to_resume_not_found`, which refused such an open, is no longer sent; a window still words it for an
+  older daemon.
 - Every refusal comes before anything is recorded or launched: no session appears, and the reason is shown in an error
   alert, the dialog staying open with what was entered. `open_session` also refuses an ID for a console session
   (`resume_for_console_session`).
-- **The refusals about the conversation** — an ID that is not a conversation ID (`resume_id_invalid`), a conversation
-  already in a session (`conversation_in_session`, `conversation_outside_project`) and one not found
-  (`conversation_to_resume_not_found`) — are shown in an error alert like any other failure of the open; once it is
-  acknowledged, keyboard focus is back on the Session ID field. A conversation not found leaves the tab as it is, its
-  fields kept, so **Open** can be tried again. Any other of these refusals means the answer the tab holds may be stale,
-  so the lookup is asked again: while it runs the fields after the ID go and the spinner shows, and the new answer
+- **The refusals about the conversation** — an ID that is not a conversation ID (`resume_id_invalid`) and a
+  conversation already in a session (`conversation_in_session`, `conversation_outside_project`) — are shown in an error
+  alert like any other failure of the open; once it is acknowledged, keyboard focus is back on the Session ID field.
+  Either means the answer the tab holds may be stale, so the lookup is asked again: while it runs the fields after the ID go and the spinner shows, and the new answer
   decides the fields and the submit button as in "Finding the conversation" above.
 
 A session opened this way starts by resuming that conversation, and comes up at the agent's prompt like any session
@@ -162,5 +171,5 @@ description takes effect in it is in "What is injected on every launch" in `docs
 
 The search is the one described in "Finding the conversation" above. An `agent_session_id` that is not a UUID is refused
 with `resume_id_invalid` (any spelling of a UUID is taken, as `open_session` takes it), a `project` that does not exist
-with `unknown_project`; a login shell environment that cannot be captured is the error only when nothing was found. The
-request only reads what is stored and on disk.
+with `unknown_project`; a login shell environment that cannot be captured is no error, the fallback environment
+standing in for it. The request only reads what is stored and on disk.

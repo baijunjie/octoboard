@@ -57,6 +57,17 @@ it("classifies a missing git as its own remedy, and any other missing binary as 
   expect(classifyError(new CodedError("raw", "binary_not_found", { binary: "claude" }))).toEqual({ kind: "actionable", recovery: "tool" });
 });
 
+it("remedies a CLI not found on a launch's fallback environment from the snapshot failure behind it, raised or nested in a failed launch", () => {
+  const snapshot = { reason: "the shell took too long", reason_code: "shell_environment_timeout", shell: "/bin/zsh", command: "env", timeout: "10s" };
+  for (const cause of ["earlier_capture", "daemon", "newer"]) {
+    expect(classifyError(new CodedError("raw", "binary_not_found", { binary: "codex", cause, ...snapshot }))).toEqual({ kind: "actionable", recovery: "shellFallback" });
+  }
+  const launch = { title: "Hub", reason: "not found", reason_code: "binary_not_found", binary: "codex", cause: "daemon", inner_reason: snapshot.reason, inner_reason_code: snapshot.reason_code, shell: "/bin/zsh", command: "env", timeout: "10s" };
+  expect(classifyError(new CodedError("raw", "launch_failed", launch))).toEqual({ kind: "actionable", recovery: "shellFallback" });
+  // A failed launch whose CLI was not found on the environment it was given keeps the generic remedy.
+  expect(classifyError(new CodedError("raw", "launch_failed", { title: "Hub", reason: "not found", reason_code: "binary_not_found", binary: "codex" }))).toEqual({ kind: "actionable", recovery: "tool" });
+});
+
 it("remedies a removal that could not tell its leftovers for want of Git by installing it, then looking at what was left", () => {
   const params = { name: "Docs", detail: "raw", reason: "raw", reason_code: "binary_not_found", binary: "git" };
   const noGit = new CodedError("raw", "project_branches_not_determined", params);

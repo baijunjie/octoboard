@@ -80,3 +80,18 @@ From a run on 2026-11-23 of Pi 1.5.2 in a 60x30 PTY, launched with `--model stan
   The production history and feed readers replay this file. The final reply reports 179 tokens.
 - The records milestone's other probes are recorded in `docs/agent-cli-reference.md`, "Pi". They exercised the
   production extension with a stand-in channel helper and tested device authorization without completing a new login.
+
+### Exits as Pi starts, Pi 1.5.2
+
+Measured on 2026-11-26 on macOS, Pi 1.5.2 on Node 22, in a 100x30 PTY with a scratch `HOME` and
+`PI_CODING_AGENT_DIR` under `/private/tmp/pi-m10`, `PI_SKIP_VERSION_CHECK=1` and no credential. Each run's whole
+output, from the launch to the exit; each exited with status 1 within 0.3 seconds, before switching to the alternate
+screen or drawing anything.
+
+- `pi_unknown_option_1.5.2.bin`: `pi --no-such-option`: the line `Error: Unknown option: --no-such-option` in red.
+  The same bytes came for `pi --no-such-option value`.
+- `pi_extension_throws_1.5.2.bin`: `pi --extension /private/tmp/pi-m10/throws.js`, whose default export throws
+  `probe: thrown while loading`: `Error: Failed to load extension "<path>": Failed to load extension: <message>` in
+  red, then `Hint: Start without extensions using "pi -ne".` in yellow.
+- `pi_session_not_found_1.5.2.bin`, the near-miss: `pi --session <id>` for an id nothing matches: the line
+  `No session found matching '<id>'` in red, a fast exit that is no option refusal.

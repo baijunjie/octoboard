@@ -7,8 +7,9 @@
 //!
 //! - `config/hooks.json`, `config/mcp_config.json` and `GEMINI.md` are written for the launch: the
 //!   user's own content with Octoboard's hooks, server and role text added. A file of the user's
-//!   that is there and cannot be used refuses the launch, since a session started without it would
-//!   run without the user's hooks or servers and say nothing of it.
+//!   that is there and cannot be used fails the plan, since a launch of Octoboard's without it would
+//!   run without the user's hooks or servers and say nothing of it: the session starts bare, the CLI
+//!   reading the file itself as in a plain terminal, and the notice names the file.
 //! - Every other entry, `antigravity-cli` (the CLI's settings, conversations and trust) among
 //!   them, is a link to the user's own, so what the session saves is saved where the user's other
 //!   sessions find it. The two directories the CLI makes on its first run (`antigravity-cli` and
@@ -27,22 +28,26 @@
 //!   the launch's directory is gone. With the launch's own marker nothing moves and the user's
 //!   home gets no marker.
 //! - A home with no marker that still holds any of those six entries in `antigravity-cli`, as
-//!   anything but the link the migration leaves, refuses the launch ([`require_migrated_layout`]): behind the
+//!   anything but the link the migration leaves, fails the plan ([`require_migrated_layout`]): behind the
 //!   launch's own marker the session would run without those rules, hooks and servers and say
-//!   nothing of it, and a hook left out may be one that denies. The user's own run of the CLI
-//!   migrates in place, after which the launch goes through. The refusal comes first, before a
-//!   file of the user's is read, the launch's directory is made or the directory flag is probed:
-//!   it leaves nothing behind and starts no process. Of the CLI's short commands, `agy models`
+//!   nothing of it, and a hook left out may be one that denies. The session then starts bare,
+//!   against the user's own home, where the CLI migrates in place as a plain terminal run would,
+//!   after which the next launch is Octoboard's again. The check comes first, before a file of the
+//!   user's is read, the launch's directory is made or the directory flag is probed: it leaves
+//!   nothing behind and starts no process. Of the CLI's short commands, `agy models`
 //!   was measured to run the migration, in the home it is run against (where that is the user's
-//!   own home it is the user's own run, and the refusal no longer applies after it); `--version`,
+//!   own home it is the user's own run, and the check passes after it); `--version`,
 //!   `--help` and `mcp list`, the probe of the directory flag, do not. The listing of the models
 //!   (`super::models`) is never run against the home: it gets a directory of its own with its own
-//!   marker ([`write_marker`]), and asks the same question first, running nothing where a launch
-//!   would be refused.
-//! - Where the migration would also lose a file, the refusal is another: `hooks.json` or
+//!   marker ([`write_marker`]), and asks the same question first, running nothing where a launch's
+//!   plan would fail.
+//! - Where the migration would also lose a file, the failure is another: `hooks.json` or
 //!   `mcp_config.json` not yet moved while `config` has a file of that name that holds something,
-//!   which the migration replaces with the earlier one (measured). The user is told to choose
-//!   between the two first. Directories in both places are neither moved, merged nor deleted.
+//!   which the migration replaces with the earlier one, keeping no copy (measured). The session
+//!   still starts bare, and its CLI's own migration replaces the file as a plain terminal run would
+//!   (decided with the user: launch, and tell afterwards); the notice names both files. The
+//!   listing of the models runs nothing there. Directories in both places are neither moved,
+//!   merged nor deleted.
 //!
 //! Three things stay in the launch's copy and are gone with it. What a session changes in the
 //! three written files (a server added from inside it). `config/config.json`, where the CLI keeps
@@ -52,8 +57,9 @@
 //! the launch alone.
 //!
 //! Two things a launch goes on without and tells the user of, each as a notice of its own, since
-//! the CLI itself says them only in its log: the first is the launch's own notice
-//! ([`LaunchDir::notice`]), the second one of its further notices ([`leftovers_notice`]).
+//! the CLI itself says them only in its log, both among the launch's further notices, in this
+//! order ([`settings_notice`], [`leftovers_notice`]); the plan's own notice is left for a setting
+//! a reduced plan leaves out.
 //!
 //! - The CLI's own `antigravity-cli/settings.json`, where the CLI reads it as nothing (it does not
 //!   parse, or a key the CLI knows has a value it does not take): the CLI runs on its defaults for
@@ -65,7 +71,8 @@
 //!   two is left.
 //!
 //! The CLI has one account, its login being one item of the system keychain: a launch for an
-//! account with a directory of its own is refused before anything else.
+//! account with a directory of its own is refused before anything else
+//! (`super::AntigravityProvider::launch_refusal`), the one refusal a plain terminal shares.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -76,7 +83,9 @@ use anyhow::{Context, Result};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
-use super::hooks::{FILE_WRITING_TOOLS, POST_TOOL_USE, PRE_TOOL_USE, SESSION_START, STOP};
+use super::hooks::{
+    FILE_WRITING_TOOLS, POST_TOOL_USE, PRE_INVOCATION, PRE_TOOL_USE, SESSION_START, STOP,
+};
 use crate::adapter::account_cli::{self, account_dir};
 use crate::adapter::files::SMALL_FILE_LIMIT;
 use crate::adapter::user_json::{self, Takes};
@@ -86,7 +95,7 @@ use crate::adapter::{
 };
 use crate::hostfs::read_regular_text;
 use crate::hostfs::replace::{replace_beside, Permissions};
-use crate::protocol::{Code, CodedError, Notice, ProviderOperation};
+use crate::protocol::{Code, CodedError, Notice};
 use crate::providers::antigravity::{
     APP_DATA_DIR, CONFIG_DIR, EARLIER_LAYOUT_FILE_IN_BOTH_PLACES,
     EARLIER_LAYOUT_LEFTOVERS_NOT_READ, EARLIER_LAYOUT_NOT_MIGRATED, GLOBAL_RULE_FILE, HOOKS_FILE,
@@ -175,10 +184,11 @@ const LEFTOVERS_NOT_READ: [&str; 2] = ["rules", "plugins"];
 /// What the leftovers notice's `left` says where both of them are left; one alone is named.
 const LEFT_BOTH: &str = "both";
 
-/// The events Octoboard's hook is registered for as a plain entry: the two a turn is bracketed by,
-/// which carry the conversation's id (`SessionStart` only for a new conversation's first turn,
-/// `Stop` for every turn that ends by itself).
-const TURN_EVENTS: [&str; 2] = [SESSION_START, STOP];
+/// The events Octoboard's hook is registered for as a plain entry: those of a turn, which carry
+/// the conversation's id (`SessionStart` only for a new conversation's first turn,
+/// `PreInvocation` for each model request, a resumed conversation's first included, `Stop` for
+/// every turn that ends by itself).
+const TURN_EVENTS: [&str; 3] = [SESSION_START, PRE_INVOCATION, STOP];
 
 /// The events of a tool call, for which Octoboard's hook is registered for every tool: the
 /// background work and the pending interactions read the calls of all of them. A tool event runs
@@ -194,6 +204,9 @@ const EVERY_TOOL: &str = "*";
 /// the guard's stops the call whatever Octoboard's hook, which writes nothing, gave (measured: the
 /// file was not written, and a call no entry denied still drew its permission prompt).
 const GUARD_EVENT: &str = PRE_TOOL_USE;
+
+/// What a failed plan's message says was not done: the session itself starts bare.
+const LAUNCH_NOT_PREPARED: &str = "Octoboard's additions to the session were not prepared";
 
 /// How long the probe of the directory flag may take.
 const FLAG_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -217,6 +230,11 @@ const FLAG_PROBE_OUTPUT_LIMIT: usize = 64 * 1024;
 /// The file of the launch's directory that holds the launch's settings, given with `--settings`.
 /// The CLI reads nothing of that name by itself.
 const LAUNCH_SETTINGS_FILE: &str = "octoboard-launch-settings.json";
+
+/// The file of the launch's directory that keeps why the CLI does not read the user's settings
+/// file, written by [`build`] where it does not, for [`settings_notice`]: the file's path and the
+/// reason, as JSON.
+const SETTINGS_NOT_READ_FILE: &str = "octoboard-settings-not-read.json";
 
 /// The file of the launch's directory that holds the user's settings while the CLI is asked
 /// whether it takes them ([`rejected_by_cli`]). It is removed once the CLI has answered.
@@ -242,24 +260,15 @@ pub(super) struct LaunchDir {
     /// `allow` given with `--settings` takes the place of the user's list (their `deny` and `ask`
     /// lists stand as they are).
     pub(super) user_allow: Vec<Value>,
-    /// The notice of a settings file of the user's that the CLI does not read, so that the
-    /// session runs on the defaults; `None` where it reads the file.
-    pub(super) notice: Option<Notice>,
 }
 
 /// Builds the launch's directory from the default account's and returns it.
 pub(super) fn build(spec: &LaunchSpec<'_>) -> Result<LaunchDir> {
-    // The login is one item of the system keychain, whatever directory the CLI is given: an
-    // account with a directory of its own would run as the default account under another name.
-    if spec.config_dir.is_some() {
-        return Err(CodedError::provider_unsupported(
-            AgentId::ANTIGRAVITY,
-            ProviderOperation::OwnedAccounts,
-        ));
-    }
+    // An account directory of its own was refused before planning
+    // (`AntigravityProvider::launch_refusal`).
     let account = account_dir(AgentId::ANTIGRAVITY, None, spec.shell_env);
-    require_migrated_layout(&account, "the session was not started")?;
-    // Read before anything is written, so a refusal leaves nothing behind.
+    require_migrated_layout(&account, LAUNCH_NOT_PREPARED)?;
+    // Read before anything is written, so a failure leaves nothing behind.
     let hooks = with_hooks(
         user_object(
             &account.join(CONFIG_DIR).join(HOOKS_FILE),
@@ -313,23 +322,53 @@ pub(super) fn build(spec: &LaunchSpec<'_>) -> Result<LaunchDir> {
     // Asked once the directory has its marker and its files, so the CLI's answers cost the user's
     // home nothing; the directory flag first, so a CLI that does not take it is asked nothing else.
     require_directory_flag(spec, &dir)?;
-    let not_read = match user_settings {
-        UserSettings::Read { allow, settings } => match rejected_by_cli(&dir, &settings, spec) {
+    // Where the CLI does not read the file the launch repeats no rule of it; the user is told by
+    // one of the launch's further notices ([`settings_notice`]), from the reason found here, kept
+    // in the directory, so that the notice says what the rules passed were decided by.
+    let user_allow = match allow_or_why(user_settings, &dir, spec) {
+        Ok(allow) => allow,
+        Err(why) => {
+            let kept = json!({ "path": settings_path.to_string_lossy(), "why": why });
+            write_private(
+                &dir.join(SETTINGS_NOT_READ_FILE),
+                kept.to_string().as_bytes(),
+            )?;
+            Vec::new()
+        }
+    };
+
+    Ok(LaunchDir { dir, user_allow })
+}
+
+/// The user's own `permissions.allow` rules where the CLI reads their settings file, or why it
+/// does not: by [`user_settings`] alone, or by the CLI's answer ([`rejected_by_cli`]), asked in
+/// the launch's directory `dir`.
+fn allow_or_why(
+    user_settings: UserSettings,
+    dir: &Path,
+    spec: &LaunchSpec<'_>,
+) -> std::result::Result<Vec<Value>, String> {
+    match user_settings {
+        UserSettings::Read { allow, settings } => match rejected_by_cli(dir, &settings, spec) {
             Some(why) => Err(why),
             None => Ok(allow),
         },
         UserSettings::NotRead { why } => Err(why),
-    };
-    let (user_allow, notice) = match not_read {
-        Ok(allow) => (allow, None),
-        Err(why) => (Vec::new(), Some(settings_not_read(&settings_path, &why))),
-    };
+    }
+}
 
-    Ok(LaunchDir {
-        dir,
-        user_allow,
-        notice,
-    })
+/// The notice of the user's settings file the CLI does not read, for a launch of `spec` whose
+/// directory [`build`] made, one of the launch's further notices: from the reason [`build`] found
+/// and kept in the directory ([`SETTINGS_NOT_READ_FILE`]), so that neither the file nor the CLI is
+/// asked again and the notice agrees with the rules the launch passed. `None` where the CLI reads
+/// the file, and where the directory holds no reason that can be read.
+pub(super) fn settings_notice(spec: &LaunchSpec<'_>) -> Option<Notice> {
+    let kept = spec.scratch.join(LAUNCH_DIR).join(SETTINGS_NOT_READ_FILE);
+    let kept: Value =
+        serde_json::from_str(&read_regular_text(&kept, SMALL_FILE_LIMIT).ok()?).ok()?;
+    let path = kept.get("path")?.as_str()?;
+    let why = kept.get("why")?.as_str()?;
+    Some(settings_not_read(Path::new(path), why))
 }
 
 /// Writes the marker of a finished migration, empty, into `dir`, a directory of Octoboard's own
@@ -354,12 +393,14 @@ fn settings_not_read(path: &Path, why: &str) -> Notice {
         ),
         &[("path", &path.to_string_lossy())],
     )
+    // It holds for the whole launch: the CLI read the file once, as it started.
+    .standing()
 }
 
 /// What a launch of `spec` tells the user of `rules` and `plugins` left in the home's data
 /// directory ([`leftovers_not_read`]), beside the launch's own notice. Read from the home again,
 /// not kept from [`build`]: it is asked for after the plan, once per launch. None for an account
-/// with a directory of its own, whose launch is refused.
+/// with a directory of its own, whose launch is refused (`super::AntigravityProvider::launch_refusal`).
 pub(super) fn leftovers_notice(spec: &LaunchSpec<'_>) -> Option<Notice> {
     if spec.config_dir.is_some() {
         return None;
@@ -407,22 +448,25 @@ fn leftovers_not_read(account: &Path) -> Option<Notice> {
     ))
 }
 
-/// Refuses a home whose configuration the CLI has not yet moved out of an earlier layout: no
+/// Fails for a home whose configuration the CLI has not yet moved out of an earlier layout: no
 /// marker of a finished migration that the CLI would find (links followed), and one of the entries
 /// the migration moves still in the data directory as anything but the link the migration leaves
 /// behind, which leads to the entry of that name in the configuration directory: a home that was
-/// migrated and lost its marker is not refused, while a link of the user's own to somewhere else
+/// migrated and lost its marker passes, while a link of the user's own to somewhere else
 /// (a directory of dotfiles) is an entry not yet moved like any other.
 ///
-/// The narrower case is refused first, under a code of its own: one of the two files not yet moved
-/// while the configuration directory has a file of that name that holds something. The run the
-/// other refusal asks for would replace that file with the earlier one, so the user is told to
-/// choose between the two before making it. An empty file there, which a run of the CLI leaves in
-/// a home that had none, holds nothing to lose and is no such case.
+/// The narrower case is told first, under a code of its own: one of the two files not yet moved
+/// while the configuration directory has a file of that name that holds something. A run of the
+/// CLI replaces that file with the earlier one, keeping no copy, so the user is told of both files:
+/// before the run where nothing has run it yet (the listing of the models), and as the reason a
+/// launch started bare, whose own run makes that replacement as a plain terminal run would. An
+/// empty file there, which a run of the CLI leaves in a home that had none, holds nothing to lose
+/// and is no such case.
 ///
 /// Whatever would run the CLI's migration asks this first: a launch, and the listing of the
-/// models, whose command migrates the home it is run against. `refused` says what was not done,
-/// for the message.
+/// models, whose command migrates the home it is run against. A launch's plan fails on it and the
+/// session starts bare; the listing runs nothing. `refused` says what was not done, for the
+/// message.
 pub(super) fn require_migrated_layout(account: &Path, refused: &str) -> Result<()> {
     let config = account.join(CONFIG_DIR);
     if std::fs::metadata(config.join(MIGRATED_MARKER)).is_ok() {
@@ -442,9 +486,9 @@ pub(super) fn require_migrated_layout(account: &Path, refused: &str) -> Result<(
                 Code::of_provider(EARLIER_LAYOUT_FILE_IN_BOTH_PLACES),
                 format!(
                     "Antigravity CLI has `{}` and, from the layout of an earlier version, `{}`, \
-                     and its next run of its own replaces the first with the second, so {refused}: \
-                     keep the one you want and move or remove the other, then run `agy` once in \
-                     a terminal",
+                     and a run of its own replaces the first with the second, keeping no copy, so \
+                     {refused}: keep the one you want and move or remove the other, then run `agy` \
+                     once in a terminal",
                     current.display(),
                     earlier.display()
                 ),
@@ -561,10 +605,11 @@ fn probe_key(spec: &LaunchSpec<'_>) -> FlagProbeKey {
 /// of the question.
 static SETTINGS_ANSWERS: Kept<(FlagProbeKey, [u8; 32]), SettingsAnswer> = Mutex::new(Vec::new());
 
-/// Refuses a CLI that does not take the directory flag, before the session's terminal is up. An
+/// Fails the plan for a CLI that does not take the directory flag, before the session's terminal is
+/// up, so the session starts bare (the probe stays a probe: nothing is refused for it). An
 /// undefined flag ends any `agy` command at once, with status 2 and a line naming the flag on its
 /// standard error, and `mcp list` with a flag it takes reads one file and exits (1.5.14), so the
-/// probe needs no sign-in and no network. Only that status with that line refuses: the status
+/// probe needs no sign-in and no network. Only that status with that line fails: the status
 /// alone is what every error of usage gives, and a probe that could not be run, timed out or
 /// failed some other way says nothing about the flag, so the launch goes on to fail or not by
 /// itself.
@@ -582,7 +627,7 @@ fn require_directory_flag(spec: &LaunchSpec<'_>, dir: &Path) -> Result<()> {
             Code::of_provider(LAUNCH_DIRECTORY_FLAG_NOT_TAKEN),
             format!(
                 "this Antigravity CLI does not take `{DIRECTORY_FLAG}`, the option Octoboard \
-                 starts a session with ({MEASURED_VERSION} does), so the session was not started"
+                 starts a session with ({MEASURED_VERSION} does), so {LAUNCH_NOT_PREPARED}"
             ),
             &[("version", MEASURED_VERSION)],
         )),
@@ -749,7 +794,7 @@ pub(super) fn read_mcp_config(path: &Path) -> Result<Map<String, Value>> {
 
 /// What a session takes beyond JSON in the user's `hooks.json` and in its own `settings.json`: a
 /// byte order mark and nothing else (1.5.14). With a comment or a trailing comma it loads no hook
-/// of the file (`failed to parse hooks.json`, `loaded 0 named hooks`), which refuses the launch,
+/// of the file (`failed to parse hooks.json`, `loaded 0 named hooks`), which fails the plan,
 /// and runs on its default settings, which the launch does too ([`user_settings`]).
 const BYTE_ORDER_MARK_ONLY: Takes = Takes {
     byte_order_mark: true,
@@ -761,8 +806,9 @@ const BYTE_ORDER_MARK_ONLY: Takes = Takes {
 /// The JSON object the user's file at `path` holds, read as a session of the CLI reads that file
 /// (`takes`): empty for a file that is missing or holds only white space, which the CLI reads as
 /// nothing configured. Anything else that is not an object, and anything the CLI would not read,
-/// refuses the launch: the CLI itself goes on without the file and says so only in its log, and
-/// a session started so would run without the user's hooks or servers.
+/// fails the plan, so the session starts bare and the notice names the file: the CLI itself goes on
+/// without the file and says so only in its log, and a launch of Octoboard's started without it
+/// would run without the user's hooks or servers and say nothing.
 fn user_object(path: &Path, takes: Takes) -> Result<Map<String, Value>> {
     let text = match read_regular_text(path, SMALL_FILE_LIMIT) {
         Ok(text) => text,
@@ -792,8 +838,8 @@ fn unusable(path: &Path, why: &str) -> anyhow::Error {
     CodedError::raised(
         Code::of_provider(USER_CONFIG_UNUSABLE),
         format!(
-            "Antigravity CLI's `{}` cannot be used ({why}), so the session was not started \
-             without it: repair the file or remove it",
+            "Antigravity CLI's `{}` cannot be used ({why}), so {LAUNCH_NOT_PREPARED}: repair \
+             the file or remove it",
             path.display()
         ),
         &[("path", &path.to_string_lossy())],
@@ -847,7 +893,7 @@ fn with_hooks(mut user: Map<String, Value>, spec: &LaunchSpec<'_>) -> Value {
 /// after the user's. The time limit on a call, in seconds, is above Octoboard's own forwarding
 /// limit. A server of the user's under Octoboard's name is overwritten: the session's tools have
 /// to be the session's. `mcpServers` that is there and is neither an object nor `null` (which the
-/// CLI reads as no servers) refuses the launch, as the rest of an unusable file does.
+/// CLI reads as no servers) fails the plan, as the rest of an unusable file does.
 fn with_server(mut user: Map<String, Value>, path: &Path, spec: &LaunchSpec<'_>) -> Result<Value> {
     let (command, args) = mcp_server_command(spec);
     let mut servers = match user.remove("mcpServers") {
@@ -896,7 +942,7 @@ enum UserSettings {
 /// CLI cannot be asked.
 ///
 /// A file that is there and cannot be read at all (a directory in its place, no permission)
-/// still refuses the launch: what the CLI does with one was not measured.
+/// still fails the plan: what the CLI does with one was not measured.
 ///
 /// The file is read once, with no second look: the CLI, which writes it while its sessions run,
 /// writes a file beside it and renames that over it (1.5.14), so a read finds the old file or the
@@ -1066,22 +1112,52 @@ fn settings_answer(status: Option<i32>, stderr: &[u8]) -> SettingsAnswer {
         Some(SETTINGS_REFUSED_STATUS) => {}
         _ => return SettingsAnswer::Nothing,
     }
-    let stderr = String::from_utf8_lossy(stderr);
+    match settings_refused(&String::from_utf8_lossy(stderr)) {
+        Some(SettingsRefused::UnknownKey(key)) => SettingsAnswer::UnknownKey(key),
+        Some(SettingsRefused::InvalidValue(key)) => SettingsAnswer::InvalidValue(key),
+        None => SettingsAnswer::Nothing,
+    }
+}
+
+/// How the CLI refused settings given with `--settings`, by the key it named.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum SettingsRefused {
+    /// It does not know this key.
+    UnknownKey(String),
+    /// This key has a value it does not take.
+    InvalidValue(String),
+}
+
+impl SettingsRefused {
+    /// The key the CLI named.
+    pub(super) fn key(&self) -> &str {
+        match self {
+            SettingsRefused::UnknownKey(key) | SettingsRefused::InvalidValue(key) => key,
+        }
+    }
+}
+
+/// The refusal of `--settings` that `output`, what the CLI wrote, holds: a line that starts with
+/// one of the two refusal lines (1.5.14), the key after it as a quoted text. The same line ends
+/// a short run of the CLI and an interactive launch, before the launch draws anything (measured:
+/// `testdata/antigravity_exit_settings_*.bin`). `None` for output with neither line, a
+/// `--settings` file that could not be read among it.
+pub(super) fn settings_refused(output: &str) -> Option<SettingsRefused> {
     // The key is written as a quoted text, which reads as a JSON one; what follows it on the
     // line of an invalid value is the CLI's own account of the value.
     let key_after = |start: &str| {
-        let rest = stderr.lines().find_map(|line| line.strip_prefix(start))?;
+        let rest = output
+            .lines()
+            .find_map(|line| line.trim_start().strip_prefix(start))?;
         serde_json::Deserializer::from_str(rest)
             .into_iter::<String>()
             .next()?
             .ok()
     };
     if let Some(key) = key_after(SETTINGS_UNKNOWN_KEY_LINE) {
-        SettingsAnswer::UnknownKey(key)
-    } else if let Some(key) = key_after(SETTINGS_INVALID_VALUE_LINE) {
-        SettingsAnswer::InvalidValue(key)
+        Some(SettingsRefused::UnknownKey(key))
     } else {
-        SettingsAnswer::Nothing
+        key_after(SETTINGS_INVALID_VALUE_LINE).map(SettingsRefused::InvalidValue)
     }
 }
 
@@ -1216,7 +1292,13 @@ mod tests {
         let ours = hooks["octoboard-session"].as_object().expect("our hooks");
         assert_eq!(
             ours.keys().map(String::as_str).collect::<Vec<_>>(),
-            ["SessionStart", "Stop", "PreToolUse", "PostToolUse"]
+            [
+                "SessionStart",
+                "PreInvocation",
+                "Stop",
+                "PreToolUse",
+                "PostToolUse"
+            ]
         );
         let entry = |event: &str| {
             json!({
@@ -1227,7 +1309,7 @@ mod tests {
                 "timeout": COMMAND_HOOK_TIMEOUT_SECS,
             })
         };
-        for event in ["SessionStart", "Stop"] {
+        for event in ["SessionStart", "PreInvocation", "Stop"] {
             assert_eq!(ours[event], json!([entry(event)]), "{event}");
         }
         // A tool event runs only an entry with a matcher: `*` for every tool.
@@ -1624,9 +1706,8 @@ mod tests {
             let launch =
                 build(&fixture.spec()).unwrap_or_else(|err| panic!("{text:?} refused: {err}"));
             assert_eq!(launch.user_allow, Vec::<Value>::new(), "{text:?}");
-            let notice = launch
-                .notice
-                .unwrap_or_else(|| panic!("{text:?}: no notice"));
+            let notice =
+                settings_notice(&fixture.spec()).unwrap_or_else(|| panic!("{text:?}: no notice"));
             assert_eq!(
                 notice.code,
                 Code::of_provider(SETTINGS_NOT_READ),
@@ -1666,8 +1747,8 @@ mod tests {
             if let Some(text) = text {
                 user_file(&user_settings_file(&fixture), text);
             }
-            let launch = build(&fixture.spec()).expect("built");
-            assert!(launch.notice.is_none(), "{text:?}");
+            build(&fixture.spec()).expect("built");
+            assert!(settings_notice(&fixture.spec()).is_none(), "{text:?}");
         }
     }
 
@@ -1675,7 +1756,7 @@ mod tests {
     /// its marker, are told of at the launch, which goes on: the notice names the data directory
     /// and the configuration directory. An empty one, the link the migration leaves, `skills` (still
     /// loaded) and `workflows` (nothing known) are not told of, and a home with none has no notice.
-    /// It is a further notice of the launch, never the launch's own, which is the settings file's.
+    /// It is a further notice of the launch, after the settings file's.
     #[test]
     fn rules_and_plugins_left_in_the_data_directory_are_told_of_at_the_launch() {
         let migrated = || {
@@ -1689,7 +1770,7 @@ mod tests {
             let fixture = migrated();
             user_file(&data(&fixture).join(name).join("mine.md"), "mine");
             assert!(
-                build(&fixture.spec()).expect("built").notice.is_none(),
+                build(&fixture.spec()).is_ok() && settings_notice(&fixture.spec()).is_none(),
                 "{name}"
             );
             let notice =
@@ -1822,8 +1903,9 @@ mod tests {
         let launch = build(&fixture.spec()).expect("built");
 
         assert_eq!(launch.user_allow, Vec::<Value>::new());
-        let notice = launch.notice.expect("a notice");
+        let notice = settings_notice(&fixture.spec()).expect("a notice");
         assert_eq!(notice.code, Code::of_provider(SETTINGS_NOT_READ));
+        assert!(notice.standing, "the file is not read for the whole launch");
         assert_eq!(
             notice.params.get("path").map(String::as_str),
             Some(path.to_string_lossy().as_ref())
@@ -1842,6 +1924,26 @@ mod tests {
             ]
         );
         assert!(!launch.dir.join(SETTINGS_QUESTION_FILE).exists());
+
+        // The notice keeps the reason the launch found: the file repaired since is not read
+        // again, and the CLI is not asked again.
+        user_file(&path, r#"{"permissions":{"allow":["Bash(ls:*)"]}}"#);
+        let again = settings_notice(&fixture.spec()).expect("still the notice");
+        assert_eq!(again.message, notice.message);
+        assert_eq!(asked_of(&asked).len(), 2);
+    }
+
+    /// A file the launch read stays read for its notice: one broken after the launch was built
+    /// raises no notice, which would disagree with the rules the launch passed.
+    #[test]
+    fn a_settings_file_broken_after_the_launch_raises_no_notice() {
+        let fixture = isolated();
+        let path = user_settings_file(&fixture);
+        user_file(&path, r#"{"permissions":{"allow":["Bash(ls:*)"]}}"#);
+        let launch = build(&fixture.spec()).expect("built");
+        assert_eq!(launch.user_allow, [json!("Bash(ls:*)")]);
+        user_file(&path, "{ not json");
+        assert!(settings_notice(&fixture.spec()).is_none());
     }
 
     /// A settings file the CLI takes, once the keys it does not know are out of the question, is
@@ -1858,7 +1960,7 @@ mod tests {
         user_file(&user_settings_file(&fixture), text);
         let launch = build(&fixture.spec()).expect("built");
         assert_eq!(launch.user_allow, [json!("Bash(ls:*)")]);
-        assert!(launch.notice.is_none());
+        assert!(settings_notice(&fixture.spec()).is_none());
         assert_eq!(asked_of(&asked).len(), 2);
         assert!(!launch.dir.join(SETTINGS_QUESTION_FILE).exists());
 
@@ -1870,7 +1972,7 @@ mod tests {
         user_file(&user_settings_file(&fixture), text);
         let launch = build(&fixture.spec()).expect("built");
         assert_eq!(launch.user_allow, [json!("Bash(ls:*)")]);
-        assert!(launch.notice.is_none());
+        assert!(settings_notice(&fixture.spec()).is_none());
         assert!(!launch.dir.join(SETTINGS_QUESTION_FILE).exists());
 
         for text in [None, Some("{}"), Some(r#"{"agentMode":null,"mine":null}"#)] {
@@ -1879,8 +1981,8 @@ mod tests {
             if let Some(text) = text {
                 user_file(&user_settings_file(&fixture), text);
             }
-            let launch = build(&fixture.spec()).expect("built");
-            assert!(launch.notice.is_none(), "{text:?}");
+            build(&fixture.spec()).expect("built");
+            assert!(settings_notice(&fixture.spec()).is_none(), "{text:?}");
             assert_eq!(asked_of(&asked), Vec::<Value>::new(), "{text:?}");
         }
     }
@@ -1905,8 +2007,8 @@ mod tests {
         // A rejection, an unknown key among them, is kept as well, and still rejects.
         user_file(&path, r#"{"mine":1,"toolPermission":"nope"}"#);
         for _ in 0..2 {
-            let launch = build(&fixture.spec()).expect("built");
-            assert!(launch.notice.is_some());
+            build(&fixture.spec()).expect("built");
+            assert!(settings_notice(&fixture.spec()).is_some());
         }
         assert_eq!(asked_of(&asked).len(), 3);
 
@@ -2056,10 +2158,8 @@ mod tests {
             "mine",
         );
         user_file(&user_settings_file(&fixture), "{ not json");
-        let notice = build(&fixture.spec())
-            .expect("built")
-            .notice
-            .expect("a notice");
+        build(&fixture.spec()).expect("built");
+        let notice = settings_notice(&fixture.spec()).expect("a notice");
         assert_eq!(notice.code, Code::of_provider(SETTINGS_NOT_READ));
         let further = leftovers_notice(&fixture.spec()).expect("the leftovers notice");
         assert_eq!(
@@ -2072,15 +2172,18 @@ mod tests {
         );
     }
 
-    /// An account with a directory of its own is refused before anything is read or made: the CLI
-    /// has the default account only, its login being one item of the system keychain.
+    /// An account with a directory of its own is refused, by the provider's launch refusal, before
+    /// anything is read or made: the CLI has the default account only, its login being one item of
+    /// the system keychain.
     #[test]
     fn an_account_with_a_directory_of_its_own_is_refused() {
         let mut fixture = isolated();
         let account = fixture.scratch.join("account").join(".gemini");
         std::fs::create_dir_all(&account).expect("account directory");
         fixture.config_dir = Some(account.clone());
-        let err = build(&fixture.spec()).err().expect("refused");
+        let err = crate::adapter::provider(AgentId::ANTIGRAVITY)
+            .launch_refusal(&fixture.spec())
+            .expect_err("refused");
         let coded = err.downcast_ref::<CodedError>().expect("coded");
         assert_eq!(
             coded.code,
@@ -2246,7 +2349,13 @@ mod tests {
         let ours = hooks["octoboard-session"].as_object().expect("our hooks");
         assert_eq!(
             ours.keys().map(String::as_str).collect::<Vec<_>>(),
-            ["SessionStart", "Stop", "PreToolUse", "PostToolUse"]
+            [
+                "SessionStart",
+                "PreInvocation",
+                "Stop",
+                "PreToolUse",
+                "PostToolUse"
+            ]
         );
         assert!(!hooks.to_string().contains("imposter"));
 
@@ -2353,11 +2462,13 @@ mod tests {
     }
 
     /// A home with no marker that still holds an entry of the earlier layout in the CLI's data
-    /// directory refuses the launch with the provider's code, whichever of the six entries it is,
-    /// and before anything is made: no launch directory, no data or projects directory in the
-    /// home, and the entry left where it was. A marker that is a link leading nowhere is no marker.
+    /// directory makes the enhanced launch unavailable with the provider's code, whichever of the
+    /// six entries it is, and before anything is made: no launch directory, no data or projects
+    /// directory in the home, and the entry left where it was. A marker that is a link leading
+    /// nowhere is no marker.
     #[test]
-    fn an_earlier_layout_not_yet_migrated_refuses_the_launch_and_builds_nothing() {
+    fn an_earlier_layout_not_yet_migrated_makes_the_enhanced_launch_unavailable_and_builds_nothing()
+    {
         let unmigrated = |fixture: &SpecFixture, case: &str| {
             let err = build(&fixture.spec())
                 .err()
@@ -2527,9 +2638,9 @@ mod tests {
 
     /// A link among the earlier layout's entries that leads anywhere but the entry of its name in
     /// the configuration directory is the user's own (a directory of dotfiles), not what the
-    /// migration left: with no marker it refuses the launch as an entry not yet moved does, and
-    /// neither the link nor what it leads to is touched. A link the migration left whose moved
-    /// entry is gone still names it, and refuses nothing.
+    /// migration left: with no marker it makes the enhanced launch unavailable as an entry not yet
+    /// moved does, and neither the link nor what it leads to is touched. A link the migration left
+    /// whose moved entry is gone still names it, and stands in the way of nothing.
     #[test]
     fn a_link_to_somewhere_else_is_an_entry_not_yet_moved() {
         let fixture = isolated();

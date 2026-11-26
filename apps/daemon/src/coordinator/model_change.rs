@@ -166,7 +166,8 @@ pub(crate) async fn set_session_model_with(
     }
     // Held until this function returns, as a switch holds its own: nothing else launches,
     // resumes, switches or deletes the session while its process is down or being watched.
-    let claim = state.begin_switch(id)?;
+    // It watches the process it relaunches come up (`came_up_under_claim`).
+    let claim = state.begin_switch(id)?.following();
     let before = state.session_record(id)?;
     // What the session would have; what it has already, which only `reapply` carries on with.
     let (model, effort, compatibility) = match changed(&before)? {
@@ -218,7 +219,7 @@ pub(crate) async fn set_session_model_with(
         // What the records showed the process running is forgotten with the same boundary a
         // restart sets, since the values recorded are the ones its next launch takes.
         let shell_env = if record_needs_shell_env(&current) {
-            Some(tokio::task::spawn_blocking(snapshot).await??)
+            Some(env_shell::launch_env_from(tokio::task::spawn_blocking(snapshot).await?).vars)
         } else {
             None
         };
@@ -242,9 +243,12 @@ pub(crate) async fn set_session_model_with(
     }
 
     // The default account has no directory of its own: the snapshot resolves it for the record
-    // read below and for the relaunch, which must agree.
+    // read below and for the relaunch, which must agree; never refused for want of a snapshot, the
+    // relaunch telling a fallback.
     let shell_env = if record_needs_shell_env(&current) {
-        Some(tokio::task::spawn_blocking(snapshot).await??)
+        Some(env_shell::launch_env_from(
+            tokio::task::spawn_blocking(snapshot).await?,
+        ))
     } else {
         None
     };
@@ -295,7 +299,7 @@ pub(crate) async fn set_session_model_with(
                 return Err(session_archived(id));
             }
             let reading_state = state.clone();
-            let shell = shell_env.clone();
+            let shell = shell_env.as_ref().map(|env| env.vars.clone());
             let (carry_on, boundary) = tokio::task::spawn_blocking(move || {
                 let boundary = crate::records::collector::observed_boundary(
                     &reading_state,
@@ -337,7 +341,7 @@ pub(crate) async fn set_session_model_with(
                 restart::put_back_launch_overrides(state, &before);
                 return Err(err);
             }
-            if !came_up_under_claim(state, id).await {
+            if !came_up_under_claim(state, claim_held, id).await {
                 // Once the exit watcher has recorded it interrupted, so the record put back is the
                 // one every client is left with.
                 if let Err(err) = wait_until_down(state, id).await {

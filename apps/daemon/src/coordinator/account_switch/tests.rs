@@ -311,7 +311,7 @@ fn the_default_account_is_resolved_once_for_the_copy_and_the_relaunch() {
     );
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
     assert_eq!(
-        plan.shell_env.expect("kept for the relaunch")["CLAUDE_CONFIG_DIR"],
+        plan.shell_env.expect("kept for the relaunch").vars["CLAUDE_CONFIG_DIR"],
         default_dir.to_string_lossy()
     );
 
@@ -327,6 +327,32 @@ fn the_default_account_is_resolved_once_for_the_copy_and_the_relaunch() {
     let plan = prepare_switch(AgentId::CLAUDE, None, Some(&target), None, snapshot).unwrap();
     assert!(plan.shell_env.is_some() && plan.relocation.is_none());
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+}
+
+/// A snapshot that cannot be taken never refuses a switch: it is planned on a fallback
+/// environment, which the relaunch then tells (`shell_environment_unavailable`), with the
+/// snapshot's failure kept as it was.
+#[test]
+fn a_switch_whose_snapshot_fails_is_planned_on_a_fallback_environment() {
+    let dir = temp_dir("switch-prepare-fallback");
+    let target = dir.join("claude-a").to_string_lossy().into_owned();
+
+    let plan = prepare_switch(AgentId::CLAUDE, None, Some(&target), None, || {
+        Err(crate::protocol::CodedError::raised(
+            error_code::SHELL_ENVIRONMENT_TIMEOUT,
+            "the shell took too long",
+            &[("timeout", "10s")],
+        ))
+    })
+    .expect("planned");
+
+    let launch_env = plan.shell_env.expect("kept for the relaunch");
+    let fallback = launch_env
+        .fallback
+        .expect("the fallback is kept to be told");
+    assert_eq!(fallback.failure.code, error_code::SHELL_ENVIRONMENT_TIMEOUT);
+    assert!(fallback.detail().contains("the shell took too long"));
+    assert!(plan.relocation.is_none());
 }
 
 /// A Codex session whose rollout Codex has compressed is planned for the copy under its
@@ -367,7 +393,7 @@ fn a_compressed_codex_rollout_is_planned_for_a_switch() {
             agent_session_id: THREAD.to_owned(),
         })
     );
-    assert_eq!(planned.shell_env.unwrap()["CODEX_SQLITE_HOME"], "db");
+    assert_eq!(planned.shell_env.unwrap().vars["CODEX_SQLITE_HOME"], "db");
 }
 
 /// A Codex session switched onto a non-default account is relaunched keeping its MCP OAuth tokens
@@ -1010,6 +1036,7 @@ async fn a_switch_that_fails_keeps_what_the_process_started_under_its_project() 
                 session: process,
                 agent_session_id: None,
                 notices: Vec::new(),
+                notices_at: 0,
                 first_message: None,
                 record_root: None,
             })

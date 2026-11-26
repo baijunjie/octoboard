@@ -17,6 +17,11 @@ other agents, is in `docs/product/session-statuses.md`.
   it off and Octoboard does not override that. The agent's provider says so for the launch, and that session then
   takes its whole status from reports, turns opened and closed included, as a session of an agent with no integration
   does, for as long as its process lives, across a daemon restart too. Qwen Code does this when its hooks are disabled in its configuration. The launch shows a notice.
+- **A launch can also run without its hooks**: one started without Octoboard's additions, from its start, and one whose
+  hooks were due and did not arrive within 30 seconds, from then on (see `docs/product/launching-without-octoboards-additions.md`). Reports then give its whole status in the same way, from the root record as it
+  stands when the hooks are found absent; where the program has reported nothing, its terminal title stands in until
+  its first report (see "A session whose hooks are absent and whose program reports nothing" in
+  `docs/product/turns-hooks-do-not-report.md`). A hook that arrives later gives the status back to the hooks.
 - **A shell terminal of the Terminal panel** (see `docs/product/terminal-panel.md`) does not support the protocol:
   reports reach the clients as ordinary output, and so does the support query, which no client answers.
 

@@ -185,6 +185,8 @@ fn hook(state: Arc<AppState>, param: String, body: Bytes, event: Option<String>)
         session: session_id,
         launch,
     } = HookMark::parse(&param);
+    // A hook of the launch under way says its program started (`session::startup`).
+    state.note_launch_shown(&session_id, launch.as_deref());
     match state.hook_queues.push(
         &session_id,
         QueuedHook {
@@ -262,6 +264,7 @@ fn context_window(state: &AppState, session_id: &str, body: &[u8]) -> Reply {
     }
     match serde_json::from_slice::<Report>(body) {
         Ok(Report { window }) if window > 0 => {
+            state.note_launch_shown(session_id, None);
             state.context_windows.report(session_id, window);
             Reply::status(StatusCode::OK)
         }
@@ -281,6 +284,8 @@ async fn mcp(state: Arc<AppState>, token: String, body: Bytes) -> Reply {
             "error": "this session's Octoboard connection is no longer valid",
         }));
     };
+    // The token is the launch's own, issued for it alone.
+    state.note_launch_shown(&session_id, None);
 
     // Not a call: the server saying it answered a listing of its tools, which a launch whose
     // agent offers them only from then on waits for (`AppState::awaits_tool_listing`).
@@ -345,6 +350,7 @@ async fn channel(state: Arc<AppState>, session_id: String, body: Bytes) -> Reply
             StatusCode::NOT_FOUND
         });
     };
+    live.startup.note_shown();
     let transport = live.transport.clone();
     let Some(channel) = transport
         .as_deref()
@@ -712,6 +718,68 @@ mod tests {
         assert_eq!(poll().await.unwrap(), Some(503));
         drop(claim);
         assert_eq!(poll().await.unwrap(), Some(404));
+    }
+
+    /// A call of the launch's helpers to the daemon is a sign its program started
+    /// (`session::startup`): a hook naming the launch or none, the status line's context window,
+    /// a poll of the extension channel (answered `404` where the launch has none), an MCP call
+    /// under the launch's token. A hook that names another launch is no sign of this one.
+    #[tokio::test]
+    async fn a_helper_call_of_the_launch_says_its_program_started() {
+        let (state, _dir) = app_state("server-helper-call-shown");
+        let hooked = crate::test_support::idle_stand_in("hooked");
+        let hooked_unmarked = crate::test_support::idle_stand_in("hooked-unmarked");
+        let hooked_other = crate::test_support::idle_stand_in("hooked-other");
+        let windowed = crate::test_support::idle_stand_in("windowed");
+        let polled = crate::test_support::idle_stand_in("polled");
+        let called = crate::test_support::idle_stand_in("called");
+        let lives = [
+            &hooked,
+            &hooked_unmarked,
+            &hooked_other,
+            &windowed,
+            &polled,
+            &called,
+        ];
+        for live in lives {
+            state.register_live((*live).clone());
+        }
+        let token = state.issue_mcp_token("called");
+        let port = serve_state(state.clone()).await;
+        let hooked_path = crate::holder::protocol::hook_path("hooked", &hooked.launch_id);
+        let other_path = crate::holder::protocol::hook_path("hooked-other", "another-launch");
+        let calls: Vec<(String, Vec<u8>)> = vec![
+            (hooked_path, b"{}".to_vec()),
+            ("/hook/hooked-unmarked".to_string(), b"{}".to_vec()),
+            (other_path, b"{}".to_vec()),
+            (
+                "/context-window/windowed".to_string(),
+                br#"{"window":200000}"#.to_vec(),
+            ),
+            ("/channel/polled".to_string(), br#"{"wait":false}"#.to_vec()),
+            (format!("/mcp/{token}"), br#"{"listed":true}"#.to_vec()),
+        ];
+        for (path, body) in calls {
+            tokio::task::spawn_blocking(move || {
+                // The channel poll is answered `404`: only the sign matters here.
+                let _ = crate::loopback::post(port, TEST_KEY, &path, &body, PATIENCE);
+            })
+            .await
+            .expect("the post ran");
+        }
+        for id in ["hooked", "hooked-unmarked", "hooked-other"] {
+            state.hook_queues.settled(id).await;
+        }
+
+        assert!(hooked.startup.has_shown(), "a hook naming the launch");
+        assert!(hooked_unmarked.startup.has_shown(), "a hook naming none");
+        assert!(
+            !hooked_other.startup.has_shown(),
+            "a hook naming another launch"
+        );
+        assert!(windowed.startup.has_shown(), "the context window");
+        assert!(polled.startup.has_shown(), "a channel poll");
+        assert!(called.startup.has_shown(), "an MCP call");
     }
 
     /// The body `{"listed":true}` the session's MCP server posts under its token, on answering a

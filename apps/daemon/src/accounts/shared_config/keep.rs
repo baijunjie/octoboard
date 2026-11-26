@@ -48,6 +48,11 @@ pub(super) fn registries_in_default(
 /// so a session an account switch has since recorded on another account still names the one it
 /// left.
 pub(crate) async fn after_exit(state: &Arc<AppState>, session: &Session) {
+    #[cfg(test)]
+    KEPT_AFTER_EXIT
+        .lock()
+        .expect("kept after exit lock poisoned")
+        .push(session.id.clone());
     if !registries::has_registries(session.agent) {
         return;
     }
@@ -61,6 +66,12 @@ pub(crate) async fn after_exit(state: &Arc<AppState>, session: &Session) {
     };
     keep(state, &account.id).await;
 }
+
+/// The sessions [`after_exit`] was asked for, in order, for a test to tell that a path of its own
+/// reached it; shared by every test, so each looks only for its own session ids.
+#[cfg(test)]
+pub(crate) static KEPT_AFTER_EXIT: std::sync::Mutex<Vec<String>> =
+    std::sync::Mutex::new(Vec::new());
 
 /// As the daemon stops, once its sessions are ended: every account's registries are kept. The
 /// sessions' own exits may not get to it before the daemon is gone, and the user may uninstall

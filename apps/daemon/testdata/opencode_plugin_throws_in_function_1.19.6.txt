@@ -1,0 +1,15 @@
+timestamp=2026-11-26T08:21:24.050Z level=INFO run=0ff5032b message="creating instance" directory=/private/tmp/ocprobe-fn/work
+timestamp=2026-11-26T08:21:24.051Z level=INFO run=0ff5032b message=fromDirectory directory=/private/tmp/ocprobe-fn/work
+timestamp=2026-11-26T08:21:24.055Z level=INFO run=0ff5032b message=bootstrapping directory=/private/tmp/ocprobe-fn/work
+timestamp=2026-11-26T08:21:24.057Z level=INFO run=0ff5032b message=loading path=/private/tmp/ocprobe-fn/config/opencode/config.json
+timestamp=2026-11-26T08:21:24.058Z level=INFO run=0ff5032b message=loading path=/private/tmp/ocprobe-fn/config/opencode/opencode.json
+timestamp=2026-11-26T08:21:24.058Z level=INFO run=0ff5032b message=loading path=/private/tmp/ocprobe-fn/config/opencode/opencode.jsonc
+timestamp=2026-11-26T08:21:27.556Z level=ERROR run=0ff5032b message="failed to load plugin" path=file:///private/tmp/ocprobe-fn/plugins/thrower.js error="octoboard probe: thrown in the plugin function"
+timestamp=2026-11-26T08:21:27.556Z level=INFO run=0ff5032b message="all LSPs are disabled"
+timestamp=2026-11-26T08:21:27.557Z level=INFO run=0ff5032b message="all formatters are disabled"
+timestamp=2026-11-26T08:21:27.557Z level=INFO run=0ff5032b message=init
+timestamp=2026-11-26T08:21:28.143Z level=INFO run=0ff5032b message=init count=1
+timestamp=2026-11-26T08:21:28.217Z level=INFO run=0ff5032b message="watcher backend" directory=/private/tmp/ocprobe-fn/work platform=darwin backend=fs-events
+timestamp=2026-11-26T08:21:28.221Z level=INFO run=0ff5032b message="project copy refresh started" projectID=global
+timestamp=2026-11-26T08:21:28.222Z level=INFO run=0ff5032b message="project copy refresh done" projectID=global updated=[] removed=[]
+timestamp=2026-11-26T08:21:28.237Z level=INFO run=0ff5032b message="booting location services" directory=/private/tmp/ocprobe-fn/work workspaceID=undefined

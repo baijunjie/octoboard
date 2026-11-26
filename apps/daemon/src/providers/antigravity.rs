@@ -8,8 +8,8 @@ use super::{
     SessionWindowName, SettingChoice, SettingDescriptor, SettingKind,
 };
 
-/// The version every fact of this provider was measured on, named to the user where a launch is
-/// refused for the CLI not taking what that version takes.
+/// The version every fact of this provider was measured on, named to the user where a launch
+/// started bare for the CLI not taking what that version takes.
 pub(crate) const MEASURED_VERSION: &str = "1.5.14";
 
 /// Entries of the directory Antigravity CLI keeps under the home directory.
@@ -22,28 +22,33 @@ pub(crate) const GLOBAL_RULE_FILE: &str = "GEMINI.md";
 /// The CLI's settings, inside its own data directory.
 pub(crate) const SETTINGS_FILE: &str = "settings.json";
 
-/// The CLI did not take the flag that names a launch's directory, so the session could not be
-/// given Octoboard's hooks and tools and was not started. `version` is the version measured to
-/// take it.
+/// The CLI does not take the flag that names a launch's directory, through which Octoboard gives
+/// a session its hooks and tools. Raised by the plan, so it is told as the reason the session
+/// started bare (`launch_enhancements_unavailable`). `version` is the version measured to take it.
 pub const LAUNCH_DIRECTORY_FLAG_NOT_TAKEN: ProviderCode =
     ProviderCode::error("provider.antigravity.launch_directory_flag_not_taken");
 
 /// A file of the user's that a launch has to carry into its own directory (their hooks, their
-/// MCP servers or their global rule) is there and cannot be used: starting without it would drop
-/// what they set there. `path` is the file.
+/// MCP servers or their global rule) is there and cannot be used: a launch of Octoboard's without
+/// it would drop what they set there, so the session started bare, the CLI reading the file
+/// itself. Told as that reason. `path` is the file.
 pub const USER_CONFIG_UNUSABLE: ProviderCode =
     ProviderCode::error("provider.antigravity.user_config_unusable");
 
 /// The user's configuration is still in the layout of an earlier version of the CLI (entries of
 /// its data directory that this version keeps in its configuration directory) and the CLI has not
-/// yet moved it, which it does on a run of the user's own: a session started now would run without
-/// those rules, hooks and servers. No parameter.
+/// yet moved, which it does on a run of its own: a launch of Octoboard's now would run without
+/// those rules, hooks and servers, so the session started bare, its CLI migrating as it starts.
+/// Told as that reason, and as the reason the models are not listed. No parameter.
 pub const EARLIER_LAYOUT_NOT_MIGRATED: ProviderCode =
     ProviderCode::error("provider.antigravity.earlier_layout_not_migrated");
 
 /// The user's configuration is still in an earlier layout, and one of its two files is in both
-/// places: the CLI's own migration, which a run of the CLI makes, would replace the one in the
-/// configuration directory (`path`) with the earlier layout's (`earlier_path`). Nothing was run.
+/// places: the CLI's own migration, which a run of the CLI makes, replaces the one in the
+/// configuration directory (`path`) with the earlier layout's (`earlier_path`), keeping no copy.
+/// Told as the reason a session started bare, whose CLI makes that run as a plain terminal's would
+/// (decided: launch, and tell afterwards), and as the reason the models are not listed, where
+/// nothing was run.
 pub const EARLIER_LAYOUT_FILE_IN_BOTH_PLACES: ProviderCode =
     ProviderCode::error("provider.antigravity.earlier_layout_file_in_both_places");
 
@@ -59,6 +64,12 @@ pub const SETTINGS_NOT_READ: ProviderCode =
 /// says which is left: `rules`, `plugins`, or `both`.
 pub const EARLIER_LAYOUT_LEFTOVERS_NOT_READ: ProviderCode =
     ProviderCode::notice("provider.antigravity.earlier_layout_leftovers_not_read");
+
+/// The CLI exited as it started, refusing one of the settings Octoboard gives a launch with
+/// `--settings` (`setting`, the key it named), so the session was started again without that
+/// setting and runs without what it gives. A standing notice of the reduced launch.
+pub const LAUNCH_SETTING_NOT_TAKEN: ProviderCode =
+    ProviderCode::notice("provider.antigravity.launch_setting_not_taken");
 
 impl AgentId {
     pub const ANTIGRAVITY: AgentId = AgentId(DESCRIPTOR.id);
@@ -183,6 +194,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         EARLIER_LAYOUT_FILE_IN_BOTH_PLACES,
         SETTINGS_NOT_READ,
         EARLIER_LAYOUT_LEFTOVERS_NOT_READ,
+        LAUNCH_SETTING_NOT_TAKEN,
     ],
 };
 
@@ -194,10 +206,11 @@ mod tests {
     use crate::providers::ProviderCodeKind;
 
     /// What the daemon serves for this provider: the default account only, whose conversation id
-    /// the CLI gives, with the four codes it can refuse a launch with and the two it tells the
-    /// user of at one, worded by the UI under these names.
+    /// the CLI gives, with the four codes its plan fails with (each the reason a session started
+    /// bare) and the three it tells the user of at a launch that goes on, worded by the UI under
+    /// these names.
     #[test]
-    fn it_has_the_default_account_only_and_its_six_codes() {
+    fn it_has_the_default_account_only_and_its_seven_codes() {
         let descriptor = AgentId::ANTIGRAVITY.descriptor();
         assert_eq!(descriptor.id, "antigravity");
         assert!(!descriptor.capabilities.owned_accounts);
@@ -214,11 +227,13 @@ mod tests {
                 "provider.antigravity.earlier_layout_not_migrated",
                 "provider.antigravity.earlier_layout_file_in_both_places",
                 "provider.antigravity.settings_not_read",
-                "provider.antigravity.earlier_layout_leftovers_not_read"
+                "provider.antigravity.earlier_layout_leftovers_not_read",
+                "provider.antigravity.launch_setting_not_taken"
             ]
         );
-        // Told at a launch that goes on, not refusals.
+        // Told at a launch that goes on, not failures.
         assert_eq!(SETTINGS_NOT_READ.kind, ProviderCodeKind::Notice);
+        assert_eq!(LAUNCH_SETTING_NOT_TAKEN.kind, ProviderCodeKind::Notice);
         assert_eq!(
             EARLIER_LAYOUT_LEFTOVERS_NOT_READ.kind,
             ProviderCodeKind::Notice

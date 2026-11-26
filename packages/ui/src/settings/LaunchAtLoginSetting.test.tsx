@@ -75,11 +75,12 @@ it("has the row on its first render once the system's state was read ahead, and 
   expect(container.textContent).toContain("opens when you log in");
 });
 
-it("says what turning the switch on adds to the system, and that turning it off removes it, while it is off", async () => {
+it("says what turning the switch on adds to the system, while it is off", async () => {
   const container = mount(login({ status: () => Promise.resolve("disabled"), set: vi.fn() }));
   await act(async () => {});
   expect(container.textContent).toContain("Turning this on adds");
-  expect(container.textContent).toContain("to the list of apps macOS opens at login, and turning it off removes it.");
+  expect(container.textContent).toContain("to the list of apps macOS opens at login.");
+  expect(container.textContent).not.toContain("turning it off removes it");
 });
 
 it("says the app is in the system's list until the switch is turned off, while it is on", async () => {

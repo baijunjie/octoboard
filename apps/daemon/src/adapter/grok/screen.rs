@@ -2,7 +2,7 @@
 //! stash, its folder-trust confirmation, its terminal title, and its interrupt key. The
 //! measurements are in `docs/agent-cli-reference.md`, section "Grok Build".
 
-use crate::adapter::{AgentVersion, LaunchPlan, LaunchSpec};
+use crate::adapter::{LaunchPlan, LaunchSpec};
 use crate::session::dialogs::{DialogKind, DialogPattern, WrittenMessage};
 use crate::session::input_box::box_rows;
 use crate::session::screen::{Interrupt, InterruptKey, ScreenReader, TitleCancel};
@@ -18,6 +18,11 @@ const SLASH_GUARD: &str = "\u{200B}";
 impl ScreenReader for GrokScreen {
     fn dialogs(&self) -> &'static [DialogPattern] {
         DIALOGS
+    }
+
+    /// Grok's boxed composer is read wherever it sits at its prompt (`input_box_rows`).
+    fn reads_input_box(&self) -> bool {
+        true
     }
 
     fn input_box_rows(&self, screen: &str) -> Option<Vec<String>> {
@@ -65,11 +70,11 @@ impl ScreenReader for GrokScreen {
             })
     }
 
-    fn native_stash(&self, spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> bool {
-        // 1.0.70 exposes no user-remappable stash binding, so the version is all there is to
-        // check.
-        spec.agent_version
-            .is_some_and(|version| version >= STASH_MINIMUM)
+    /// Every launch: Grok Build 1.0.70 stashes with Ctrl-S and exposes no user-remappable binding
+    /// for it, and no release is known to lack it, so no version switches it off. Where Ctrl-S
+    /// draws no `Stashed` (`stash_shown`), the swap stops using the stash (`crate::session::swap`).
+    fn native_stash(&self, _spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> bool {
+        true
     }
 
     fn stash_shown(&self, screen: &str) -> bool {
@@ -102,9 +107,6 @@ impl ScreenReader for GrokScreen {
         Some(&INTERRUPT)
     }
 }
-
-/// The first version measured to stash with Ctrl-S.
-const STASH_MINIMUM: AgentVersion = (1, 0, 70);
 
 /// Grok Build ignores Esc and stops on Ctrl-C, which with text in its composer clears the text
 /// instead; Ctrl-C at an idle Grok asks to be pressed again to quit.
@@ -204,6 +206,13 @@ const DIALOGS: &[DialogPattern] = &[DialogPattern::all_of(
 mod tests {
     use crate::session::screen::ScreenReader;
     use crate::terminal::snapshot::TerminalSnapshot;
+
+    /// The reader declares that it reads its composer wherever the agent is at its prompt, so a turn
+    /// opened off the title closes only while the box is drawn (`crate::session::title_status`).
+    #[test]
+    fn the_input_box_is_read_wherever_the_agent_is_at_its_prompt() {
+        assert!(super::GrokScreen.reads_input_box());
+    }
 
     /// What a 120x40 terminal shows after `bytes`, a capture of Grok's output from its launch.
     fn replayed(bytes: &[u8]) -> String {

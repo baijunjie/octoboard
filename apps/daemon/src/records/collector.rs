@@ -398,6 +398,9 @@ struct Cursors {
     shared_titles: HashMap<(AgentId, PathBuf), SharedTitles>,
     default_efforts: DefaultEfforts,
     row_reads: RowReads,
+    /// Each running session's progress toward witnessing the version its launch started
+    /// (`crate::records::witness`), by session id.
+    witness_watches: HashMap<String, crate::records::witness::Watch>,
 }
 
 /// One blocking pass owns the cursors. Slow row queries occupy a bounded number of separate
@@ -441,6 +444,9 @@ fn collect_with(state: &AppState, cursors: &mut Cursors, locator: Locator) {
     };
     let ids: HashSet<_> = sessions.iter().map(|session| session.id.as_str()).collect();
     cursors.sessions.retain(|id, _| ids.contains(id.as_str()));
+    cursors
+        .witness_watches
+        .retain(|id, _| state.live_session(id).is_some());
     cursors.row_reads.begin_pass(&ids);
     state.retain_default_efforts(&ids);
     cursors.default_efforts.begin_pass();
@@ -502,6 +508,24 @@ fn collect_with(state: &AppState, cursors: &mut Cursors, locator: Locator) {
         let process = state.live_session(&session.id);
         let launch = process.as_ref().map(|process| process.launch_id.as_str());
         let live = launch.is_some();
+        // A running session whose record the reader finds written witnesses the version its
+        // launch started, which a record missing is judged against.
+        if let Some((process, version)) = process
+            .as_ref()
+            .and_then(|process| Some((process, process.integration().agent_version?)))
+        {
+            cursors
+                .witness_watches
+                .entry(session.id.clone())
+                .or_default()
+                .observe(
+                    &state.record_witnesses,
+                    &locator,
+                    &session,
+                    &process.launch_id,
+                    version,
+                );
+        }
         if let Some(hint) = crate::records::hinted_path(&hints, &session) {
             if cursor.path.as_ref() != Some(&hint) {
                 *cursor = Cursor {
@@ -1111,6 +1135,69 @@ mod tests {
             events.try_recv().is_err(),
             "an unchanged context emits no extra events"
         );
+    }
+
+    /// A pass over a running session whose launch says the CLI version it started witnesses that
+    /// version once a look finds the session's record written during the launch, and not before;
+    /// a session whose launch says no version witnesses nothing.
+    #[test]
+    fn a_pass_witnesses_the_version_a_running_launch_started_once_its_record_is_written() {
+        use crate::records::witness::LOOK_EVERY_OVERRIDE;
+        const VERSION: crate::adapter::AgentVersion = (2, 1, 300);
+        let (state, directory) = crate::test_support::app_state("record-collector-witness");
+        let root = directory.join("account");
+        let id = crate::records::fixtures::CLAUDE_ID;
+        let record = root.join("projects/project").join(format!("{id}.jsonl"));
+        std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+        std::fs::write(&record, "{}\n").unwrap();
+        let console = crate::test_support::console(&directory);
+        state.store.insert_console(&console).unwrap();
+        let mut session = crate::records::fixtures::session(AgentId::CLAUDE, id, Some(&root));
+        session.console_id = console.id;
+        session.kind = crate::protocol::SessionKind::Console;
+        session.status = crate::protocol::SessionStatus::Idle;
+        state.store.insert_session(&session).unwrap();
+        // Every pass looks, whatever the machine's speed.
+        let every = LOOK_EVERY_OVERRIDE.replace(Some(Duration::ZERO));
+        let pass = |cursors: &mut Cursors| {
+            collect_with(&state, cursors, Locator::with_shell(HashMap::new()))
+        };
+        let witnessed = || state.record_witnesses.holds(AgentId::CLAUDE, VERSION);
+
+        // A launch that says no version has nothing to witness.
+        let unversioned = crate::test_support::idle_stand_in("s");
+        state.register_live(unversioned.clone());
+        let mut cursors = Cursors::default();
+        pass(&mut cursors);
+        std::fs::write(&record, "{}\n{}\n").unwrap();
+        written_later(&record, 5);
+        pass(&mut cursors);
+        assert!(!witnessed());
+        state.remove_live(&unversioned);
+
+        let _version = crate::test_support::test_provider::declaring_launch_version(VERSION);
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        let mut cursors = Cursors::default();
+        // The record as it stood when the launch was first seen is no witness.
+        pass(&mut cursors);
+        pass(&mut cursors);
+        assert!(!witnessed());
+        written_later(&record, 10);
+        pass(&mut cursors);
+        assert!(witnessed());
+        LOOK_EVERY_OVERRIDE.set(every);
+    }
+
+    /// Moves `path`'s modification time `by` seconds into the future, as a write after the last
+    /// look leaves it, without waiting for the clock.
+    fn written_later(path: &std::path::Path, by: u64) {
+        std::fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() + Duration::from_secs(by))
+            .unwrap();
     }
 
     /// The window Claude Code's status line reported is stored with the transcript's size, and a

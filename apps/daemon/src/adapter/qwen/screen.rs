@@ -22,6 +22,12 @@ use crate::session::trust::{Press, Screen, StartSignal, HOOK_FALLBACK};
 pub(super) struct QwenScreen;
 
 impl ScreenReader for QwenScreen {
+    /// Qwen Code's input box is read wherever it sits at its prompt (`input_box_rows`): with either
+    /// prompt mark, YOLO mode's included, empty or showing its hint, and with attachments above it.
+    fn reads_input_box(&self) -> bool {
+        true
+    }
+
     fn input_box_rows(&self, screen: &str) -> Option<Vec<String>> {
         input_box_rows(screen)
     }
@@ -389,6 +395,14 @@ mod tests {
     use crate::session::trust::{reading_of, TrustState};
     use crate::terminal::snapshot::TerminalSnapshot;
     use crate::terminal::title::Parser;
+
+    /// The reader declares that it reads its input box wherever the agent is at its prompt, so a turn
+    /// opened off the title closes only while the box is drawn (`crate::session::title_status`);
+    /// the tests of `input_box_rows` hold it to every prompt state captured.
+    #[test]
+    fn the_input_box_is_read_wherever_the_agent_is_at_its_prompt() {
+        assert!(QwenScreen.reads_input_box());
+    }
 
     // Qwen Code 0.28.0, see `testdata/qwen-captures.md`: the bottom of the rendered screen with
     // the input box in each state, and the terminal output up to the first drawing of the trust

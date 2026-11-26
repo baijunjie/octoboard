@@ -1,7 +1,7 @@
 //! Opening a session: resolving what a request opens, recording it as starting, settling its
 //! launch, and refusing beforehand a session that could not be opened.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -59,8 +59,8 @@ pub struct OpenRequest {
     /// when a console session itself is being opened, which is never bound.
     pub bound_to: Option<String>,
     /// The agent's own id of a conversation started outside Octoboard, which this (project)
-    /// session continues instead of starting one. What is refused is in [`checked_resume_id`] and
-    /// [`locate_conversation_to_resume`].
+    /// session continues instead of starting one. What is refused is in [`checked_resume_id`]; a
+    /// record [`locate_conversation_to_resume`] does not find is told, not refused.
     pub resume_agent_session_id: Option<String>,
     /// The id to record the session under, for a caller that needs it before the session exists
     /// (a handoff names its package by it); `None` makes a new one.
@@ -87,9 +87,12 @@ struct StartingSession {
     resume_agent_session_id: Option<String>,
     /// The login-shell snapshot that conversation's record was found with, which the launch must
     /// use too (see [`term::LaunchRequest::preresolved_shell_env`]).
-    resume_shell_env: Option<HashMap<String, String>>,
+    resume_shell_env: Option<env_shell::LaunchEnv>,
     /// See [`OpenRequest::terminal_appearance`].
     terminal_appearance: Option<TerminalAppearance>,
+    /// What the opening already knows the launch has to tell (see
+    /// [`term::LaunchRequest::notices`]).
+    notices: Vec<Notice>,
 }
 
 /// Opens a session and returns it once it has launched: running, or with the launch's refusal
@@ -108,7 +111,7 @@ pub(crate) async fn open_session_with(
     request: OpenRequest,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<Session> {
-    let starting = begin_open(state, request).await?;
+    let starting = begin_open(state, request, AccountGate::NewSession).await?;
     finish_open(state, starting, launch)
         .await
         .map_err(OpenError::into_error)
@@ -119,7 +122,8 @@ pub(crate) async fn open_session_with(
 /// agent, which can take seconds on a busy machine. The launch is the returned [`Followup`]'s, to
 /// run once the session has been handed to the client; the session's `session_upserted` then says
 /// it is up, and one that could not be launched is deleted again and reported with a
-/// `launch_failed` `session_notice`.
+/// `launch_failed` `session_notice`. As the user's own request it is not refused for an account
+/// last read as logged out: the session opens and is told so (`account_sign_in_unconfirmed`).
 pub async fn open_session_detached(
     state: &Arc<AppState>,
     request: OpenRequest,
@@ -134,7 +138,7 @@ async fn open_detached_with(
     request: OpenRequest,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<(Session, Followup)> {
-    let starting = begin_open(state, request).await?;
+    let starting = begin_open(state, request, AccountGate::OwnOpen).await?;
     let opened = starting.session.clone();
     let state = state.clone();
     let runtime = tokio::runtime::Handle::current();
@@ -165,6 +169,7 @@ pub(crate) fn report_failed_launch(state: &Arc<AppState>, session: &Session, err
             code: notice_code::LAUNCH_FAILED,
             message: format!("could not start {}: {reason}", session.title),
             params,
+            standing: false,
         }
         .about(&session.id),
     );
@@ -202,10 +207,11 @@ pub(super) struct ResolvedOpen {
     config_dir: Option<String>,
 }
 
-/// Resolves what [`open_session`] opens from `request`, refusing an unknown console, project or
-/// owner, an agent that is not available or not added, an account of another agent, and a disabled
-/// account or one found not logged in. A used-up account is not refused: the user may open a
-/// session on one all the same.
+/// Resolves what an opening for someone other than the user at a window opens from `request`,
+/// refusing an unknown console, project or owner, an agent that is not available or not added, an
+/// account of another agent, and a disabled account or one found not logged in. A used-up account
+/// is not refused: a session may open on one all the same.
+#[cfg(test)]
 pub(super) fn resolve_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<ResolvedOpen> {
     resolve_open_with(state, request, AccountGate::NewSession)
 }
@@ -311,9 +317,13 @@ pub(super) fn resolve_open_with(
     })
 }
 
-/// Everything of opening a session that precedes launching its agent: the refusals, the record
-/// (`starting`) and its publication.
-async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<StartingSession> {
+/// Everything of opening a session that precedes launching its agent: the refusals of the
+/// account's states that `gate` names among them, the record (`starting`) and its publication.
+async fn begin_open(
+    state: &Arc<AppState>,
+    request: OpenRequest,
+    gate: AccountGate,
+) -> Result<StartingSession> {
     // Refused before a row is inserted or a session published: a clean-up run opens none.
     state.admit_launch()?;
     let ResolvedOpen {
@@ -328,7 +338,20 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         agent,
         account_id,
         config_dir,
-    } = resolve_open(state, &request)?;
+    } = resolve_open_with(state, &request, gate)?;
+    // What a gate that lets a signed-out account through tells the session instead: raised with
+    // the launch's own notices and kept in its terminal's meta.
+    let mut notices: Vec<Notice> = match gate {
+        AccountGate::OwnOpen => crate::accounts::choice::sign_in_unconfirmed_notice(
+            state,
+            agent,
+            account_id.as_deref(),
+            config_dir.as_deref(),
+        )?
+        .into_iter()
+        .collect(),
+        _ => Vec::new(),
+    };
     let OpenRequest {
         console_id,
         project_id,
@@ -345,7 +368,8 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
     check_compatibility(agent, &compatibility)?;
     let mut held = BTreeMap::new();
     apply_compatibility(&mut held, &compatibility);
-    let resume_shell_env = match resume_agent_session_id.clone() {
+    // A record not found is no refusal: the session opens on the agent's own resume and is told.
+    let (resume_shell_env, not_found) = match resume_agent_session_id.clone() {
         Some(id) => {
             let dir = config_dir.clone();
             tokio::task::spawn_blocking(move || {
@@ -358,8 +382,9 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
             })
             .await??
         }
-        None => None,
+        None => (None, None),
     };
+    notices.extend(not_found);
     let (model, effort) = check_launch_settings(
         state,
         agent,
@@ -398,6 +423,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         screen_inexact: false,
         holder_link: None,
         interaction: None,
+        standing_notices: Vec::new(),
         default_effort: None,
         context: None,
         observed_model: None,
@@ -489,6 +515,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         resume_agent_session_id,
         resume_shell_env,
         terminal_appearance,
+        notices,
     })
 }
 
@@ -549,6 +576,7 @@ async fn finish_open(
         resume_agent_session_id,
         resume_shell_env,
         terminal_appearance,
+        notices,
     } = starting;
     // Read inside the launch's own result: a failure here is one before anything ran, which is
     // the same as a launch that failed, and must delete the session the same way.
@@ -564,22 +592,21 @@ async fn finish_open(
         if let Some(instruction) = &queued_instruction {
             state.queue_relaunch_instruction(&session.id, instruction);
         }
+        // The snapshot the conversation to resume was found with is the one the launch must use.
+        // The notices the opening already knows go with the launch's own.
         start_process(
             state,
             &claim,
             &session,
             &cwd,
-            task.as_deref(),
-            resume_agent_session_id.as_deref(),
-            terminal_appearance,
-            resume_shell_env.clone(),
-            // The snapshot the conversation to resume was found with is the one the launch must use.
-            move |request| {
-                launch(term::LaunchRequest {
-                    preresolved_shell_env: resume_shell_env,
-                    ..request
-                })
-            },
+            crate::session::relaunch::LaunchAsked::new(
+                task.clone(),
+                resume_agent_session_id,
+                terminal_appearance,
+                resume_shell_env,
+                notices,
+            ),
+            launch,
         )
         .await
         .map(|()| None)

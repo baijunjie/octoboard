@@ -59,7 +59,7 @@ describe("the Antigravity CLI presentation module", () => {
     }
   });
 
-  it("declares its four refusals as daemon codes, each worded with a remedy in every language, naming the parameter the daemon sends", () => {
+  it("declares its four launch failures as daemon codes, each worded with a remedy in every language, naming the parameter the daemon sends", () => {
     const flag = "provider.antigravity.launch_directory_flag_not_taken";
     const flagRemedy = "provider.antigravity.launch_directory_flag_not_taken.remedy";
     const unusable = "provider.antigravity.user_config_unusable";
@@ -70,7 +70,8 @@ describe("the Antigravity CLI presentation module", () => {
     const bothPlacesRemedy = "provider.antigravity.earlier_layout_file_in_both_places.remedy";
     const settingsNotRead = "provider.antigravity.settings_not_read";
     const leftoversNotRead = "provider.antigravity.earlier_layout_leftovers_not_read";
-    expect(Object.keys(antigravity.codes)).toEqual([flag, unusable, unmigrated, bothPlaces, settingsNotRead, leftoversNotRead]);
+    const settingNotTaken = "provider.antigravity.launch_setting_not_taken";
+    expect(Object.keys(antigravity.codes)).toEqual([flag, unusable, unmigrated, bothPlaces, settingsNotRead, leftoversNotRead, settingNotTaken]);
     // The daemon names the file that would be replaced and the earlier one, each drawn as a reference.
     expect(antigravity.codes[bothPlaces]).toEqual({
       origin: "daemon",
@@ -109,10 +110,26 @@ describe("the Antigravity CLI presentation module", () => {
       // The message names the agent alone; the remedy names the command to run and nothing else.
       expect(placeholders(messages[unmigrated]), `${language} unmigrated message`).toEqual(["agent"]);
       expect(placeholders(messages[unmigratedRemedy]), `${language} unmigrated remedy`).toEqual(["command"]);
-      // The message names both files, once each. The remedy names them by version, not by path, and names only the
-      // command, twice: for what running it with both files there does, and to run.
-      expect(placeholders(messages[bothPlaces]), `${language} both places message`).toEqual(["agent", "earlier_path", "path"]);
-      expect(placeholders(messages[bothPlacesRemedy]), `${language} both places remedy`).toEqual(["command", "command"]);
+      // The message names both files, once each, and the agent twice: what it has, and what its own run does. The
+      // remedy names the files by version, not by path: the agent, for a run that has already replaced the file, and
+      // the command to run otherwise.
+      expect(placeholders(messages[bothPlaces]), `${language} both places message`).toEqual(["agent", "agent", "earlier_path", "path"]);
+      expect(placeholders(messages[bothPlacesRemedy]), `${language} both places remedy`).toEqual(["agent", "command"]);
+    }
+    // Each states the cause only: it is the reason inside the notice that the session started as in a plain terminal,
+    // so none says that the session was not launched.
+    expect(antigravity.messages.en[flag]).toBe("This version of {agent} does not take the option {appName} launches it with. Version {version} takes it.");
+    expect(antigravity.messages.en[unusable]).toBe("The {agent} file {path} cannot be used.");
+  });
+
+  // A launch started again without one setting the CLI refused tells which, for as long as it runs, with nothing to do:
+  // no remedy, no acknowledgement, the setting drawn as a reference.
+  it("declares the notice of a setting left out with the setting the daemon names, worded in every language", () => {
+    const settingNotTaken = "provider.antigravity.launch_setting_not_taken";
+    expect(antigravity.codes[settingNotTaken]).toEqual({ origin: "daemon", codeParams: ["setting"], uiParams: { agent: "Antigravity CLI" } });
+    for (const [language, messages] of Object.entries(antigravity.messages)) {
+      expect(placeholders(messages[settingNotTaken]), language).toEqual(["agent", "appName", "appName", "appName", "setting"]);
+      expect(Object.keys(messages), language).not.toContain(`${settingNotTaken}.remedy`);
     }
   });
 

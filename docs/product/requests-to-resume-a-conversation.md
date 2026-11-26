@@ -71,9 +71,9 @@ dialog shown and nothing changed:
 - a held conversation its agent no longer has (`conversation_unresumable`), judged as a resume judges it before
   relaunching anything (see "Archiving, interruption and resuming" in
   `docs/product/archiving-and-resuming-sessions.md`);
-- for a conversation only an agent's record holds, whatever opening the session would meet in the session dialog: an
-  agent determined unavailable on this machine or not added, an account that is turned off, that is not logged in or
-  whose sharing is being changed (an account whose quota is used up is not refused), a model or effort the agent does not offer (see "When the agent or the account cannot
+- for a conversation only an agent's record holds, whatever a session opened for someone other than the user at a
+  window meets: an agent determined unavailable on this machine or not added, an account that is turned off, that is
+  not logged in (which the session dialog lets the user open on all the same) or whose sharing is being changed (an account whose quota is used up is not refused), a model or effort the agent does not offer (see "When the agent or the account cannot
   open a session" in `docs/product/opening-sessions.md`).
 
 A `title` that is an archived session's current name asks for no rename.

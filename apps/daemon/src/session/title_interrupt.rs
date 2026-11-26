@@ -97,7 +97,7 @@ fn settle_override(settle: Duration) -> impl Drop {
     Reset(SETTLE_OVERRIDE.with(|value| value.replace(Some(settle))))
 }
 
-fn settle() -> Duration {
+pub(super) fn settle() -> Duration {
     #[cfg(test)]
     if let Some(value) = SETTLE_OVERRIDE.with(std::cell::Cell::get) {
         return value;
@@ -106,7 +106,7 @@ fn settle() -> Duration {
 }
 
 /// How often the watch looks at the title.
-const POLL: Duration = Duration::from_millis(250);
+pub(super) const POLL: Duration = Duration::from_millis(250);
 
 /// Runs the watch through its next polling opportunities on the runtime's controlled clock.
 #[cfg(test)]

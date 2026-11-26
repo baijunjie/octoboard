@@ -235,7 +235,7 @@ it("keeps the dialog on the file step, with the daemon's reason, for a document 
   await reviewing({ reply: refuse });
   const acknowledgement = document.body.querySelector('[role="alertdialog"]')!;
   expect(acknowledgement.textContent).toContain("This is not an Octoboard configuration file.");
-  const product = acknowledgement.querySelector("[data-inline-reference]")!;
+  const product = acknowledgement.querySelector("bdi")!;
   expect(product.textContent).toBe("Octoboard");
   expect(product.getAttribute("dir")).toBe("auto");
   expect(product.textContent).not.toMatch(/[\u2066-\u2069]/);
@@ -1513,8 +1513,9 @@ it("tells each project's result in a row of its console's card, writes a failure
   const details = document.body.querySelector('[role="dialog"][aria-label="Details"]')!;
   expect(details.querySelector("pre")!.textContent).toBe(failure.params.detail);
   expect(details.querySelector("pre")!.getAttribute("dir")).toBe("ltr");
-  const product = failedRow.querySelector("[data-inline-reference]")!;
-  expect(product.textContent).toBe("Git");
+  // Git, a product name, is plain text isolated as an element, with no chip.
+  expect(failedRow.querySelector("[data-inline-reference]")).toBeNull();
+  expect([...failedRow.querySelectorAll("bdi")].map((name) => name.textContent)).toContain("Git");
   await act(async () => void details.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   // A console that failed says why under its header, before its projects.
   expect(resultCard("Side projects").textContent).toContain("Something unexpected went wrong.");

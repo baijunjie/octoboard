@@ -1,5 +1,6 @@
 import React, { useId, useRef } from "react";
 
+import { ChoiceWarning } from "../components/alerts/ChoiceWarning";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 
 import { LabelledGroup } from "../components/form/LabelledGroup";
@@ -13,7 +14,9 @@ import { partSelector } from "../primitives";
  * choose between — it is the agent picker alone. `help` is a help tip at the end of the label's line.
  * With `placeholders` neither picker holds a value, each showing its placeholder instead, for a choice
  * that has to be made again (what was asked for is gone); any pick then reaches `onChange`. With `errorMessage` the
- * pair is marked invalid and the message stands under it (see `LabelledGroup`): why the chosen account cannot be used. */
+ * pair is marked invalid and the message stands under it (see `LabelledGroup`): why the chosen account cannot be used.
+ * With `warning` (and no `errorMessage`) a `ChoiceWarning` stands under the pair, which the pickers are described by:
+ * what choosing the account means, where it may be chosen all the same. */
 export function AgentAccountField<T extends string>({
   label,
   help,
@@ -25,6 +28,7 @@ export function AgentAccountField<T extends string>({
   isDisabled,
   description,
   errorMessage,
+  warning,
 }: {
   label: string;
   help?: React.ReactNode;
@@ -36,49 +40,55 @@ export function AgentAccountField<T extends string>({
   isDisabled?: boolean;
   description?: React.ReactNode;
   errorMessage?: React.ReactNode;
+  warning?: { title: React.ReactNode; message: React.ReactNode; remedy: React.ReactNode };
 }): React.ReactElement {
   const errorId = useId();
+  const warningId = useId();
   const controls = useRef<HTMLDivElement>(null);
-  const invalid = errorMessage ? { isInvalid: true, describedBy: errorId } : undefined;
+  const warned = !errorMessage && warning !== undefined;
+  const described = errorMessage ? { isInvalid: true, describedBy: errorId } : warned ? { describedBy: warningId } : undefined;
   const agentTrigger = () => controls.current?.querySelector<HTMLElement>(partSelector.selectTrigger);
   const focusHandoff = useFocusHandoff(() => agentTrigger()?.focus());
   return (
-    <LabelledGroup label={label} help={help} description={account ? description : undefined} isDisabled={isDisabled} errorMessage={errorMessage} errorId={errorId}>
-      <div ref={controls} {...focusHandoff} className="flex items-stretch">
-        {/* Keeping the agent picker mounted lets its popover restore focus when the next agent
+    <>
+      <LabelledGroup label={label} help={help} description={account ? description : undefined} isDisabled={isDisabled} errorMessage={errorMessage} errorId={errorId}>
+        <div ref={controls} {...focusHandoff} className="flex items-stretch">
+          {/* Keeping the agent picker mounted lets its popover restore focus when the next agent
             has no accounts to choose between. */}
-        {placeholders
-          ? (
-            <OptionSelect
-              joined={account ? "start" : undefined}
-              hideLabel
-              label={label}
-              options={options}
-              value={null}
-              placeholder={placeholders.agent}
-              onChange={(next: T | null) => next !== null && onChange(next)}
-              isDisabled={isDisabled}
-              description={account ? undefined : description}
-              {...invalid}
-            />
-          )
-          : <OptionSelect joined={account ? "start" : undefined} hideLabel label={label} options={options} value={value} onChange={onChange} isDisabled={isDisabled} description={account ? undefined : description} {...invalid} />}
-        {account && (placeholders
-          ? (
-            <OptionSelect
-              joined="end"
-              label={account.label}
-              options={account.options}
-              value={null}
-              placeholder={placeholders.account}
-              onChange={(next: string | null) => next !== null && account.onChange(next)}
-              isDisabled={isDisabled}
-              mark={account.mark}
-              {...invalid}
-            />
-          )
-          : <OptionSelect joined="end" label={account.label} options={account.options} value={account.value} onChange={account.onChange} isDisabled={isDisabled} mark={account.mark} {...invalid} />)}
-      </div>
-    </LabelledGroup>
+          {placeholders
+            ? (
+              <OptionSelect
+                joined={account ? "start" : undefined}
+                hideLabel
+                label={label}
+                options={options}
+                value={null}
+                placeholder={placeholders.agent}
+                onChange={(next: T | null) => next !== null && onChange(next)}
+                isDisabled={isDisabled}
+                description={account ? undefined : description}
+                {...described}
+              />
+            )
+            : <OptionSelect joined={account ? "start" : undefined} hideLabel label={label} options={options} value={value} onChange={onChange} isDisabled={isDisabled} description={account ? undefined : description} {...described} />}
+          {account && (placeholders
+            ? (
+              <OptionSelect
+                joined="end"
+                label={account.label}
+                options={account.options}
+                value={null}
+                placeholder={placeholders.account}
+                onChange={(next: string | null) => next !== null && account.onChange(next)}
+                isDisabled={isDisabled}
+                mark={account.mark}
+                {...described}
+              />
+            )
+            : <OptionSelect joined="end" label={account.label} options={account.options} value={account.value} onChange={account.onChange} isDisabled={isDisabled} mark={account.mark} {...described} />)}
+        </div>
+      </LabelledGroup>
+      {warned && <ChoiceWarning id={warningId} title={warning.title} remedy={warning.remedy}>{warning.message}</ChoiceWarning>}
+    </>
   );
 }

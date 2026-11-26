@@ -594,7 +594,7 @@ impl LiveSession {
     /// them back instead, what the box then shows is what is left of messages already queued
     /// again, cleared with nobody told, and never the messages themselves a second time.
     pub(crate) fn take_dropped_at_cancel(&self) -> Vec<(Option<String>, String)> {
-        if !self.cancel_drops {
+        if !self.cancel_drops() {
             return Vec::new();
         }
         let mut draft = self.draft.lock().expect("draft lock poisoned");
@@ -688,7 +688,7 @@ impl LiveSession {
     /// is cleared with nobody told, never written again nor told as a draft, since the notice
     /// already carries each one's text for the user to send again. None on any other launch.
     pub(crate) fn take_unseen_at_cancel(&self) -> Vec<(Option<String>, String)> {
-        if !self.cancel_drops_unseen {
+        if !self.cancel_drops_unseen() {
             return Vec::new();
         }
         let mut draft = self.draft.lock().expect("draft lock poisoned");

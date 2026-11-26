@@ -129,6 +129,9 @@ export function createDaemon(
       return;
     }
     if (event.type === "session_notice" && ownTrustNotices.claim(event)) return;
+    // A standing notice is drawn from the session's record, which the daemon publishes with it, as a banner in the
+    // session's terminal: the same for a window that connects later, and raised as nothing here.
+    if (event.type === "session_notice" && event.standing) return;
     // A request's own `error` reply carries its request id and is delivered to its caller as a
     // rejected promise instead — only a genuine daemon broadcast (no id) is a notification.
     if (event.type === "session_notice" || event.type === "session_notice_withdrawn" || (event.type === "error" && !event.id)) {

@@ -324,6 +324,7 @@ async fn a_model_change_whose_relaunch_does_not_come_up_keeps_the_model_it_had()
             session: (*gone).clone(),
             agent_session_id: None,
             notices: Vec::new(),
+            notices_at: 0,
             first_message: None,
             record_root: None,
         })
@@ -356,6 +357,65 @@ async fn a_model_change_whose_relaunch_does_not_come_up_keeps_the_model_it_had()
     assert_eq!((after.account_id, after.config_dir), (None, None));
     assert!(!state.is_changing_model("s"));
     assert!(state.store.observed_boundary("s").unwrap().is_some());
+}
+
+/// A snapshot of the login shell's environment that cannot be taken never refuses a model change:
+/// the relaunch is handed the fallback environment with the snapshot's failure, to tell the user.
+#[tokio::test]
+async fn a_model_change_whose_snapshot_fails_relaunches_on_a_fallback_environment() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-model-change-fallback");
+    let mut project = state.store.get_project("project-1").unwrap().unwrap();
+    project.path = dir.to_string_lossy().into_owned();
+    state.store.update_project(&project).unwrap();
+    state
+        .store
+        .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
+        .unwrap();
+    let live = idle_stand_in("s");
+    state.register_live(live.clone());
+    crate::coordinator::exit_watch::watch_exit(&state, live.clone());
+    let handed = Arc::new(std::sync::Mutex::new(None));
+    let seen = handed.clone();
+    let launch = move |request: term::LaunchRequest| {
+        *seen.lock().unwrap() = Some(request.preresolved_shell_env);
+        anyhow::bail!("fixture stops before creating a process")
+    };
+
+    let err = set_session_model_with(
+        &state,
+        "s",
+        LaunchEdit {
+            compatibility: Default::default(),
+            model: Some(Some("opus".to_string())),
+            effort: None,
+        },
+        ModelAsker::User { reapply: false },
+        None,
+        || {
+            Err(crate::protocol::CodedError::raised(
+                error_code::SHELL_ENVIRONMENT_TIMEOUT,
+                "the shell took too long",
+                &[("timeout", "10s")],
+            ))
+        },
+        launch,
+    )
+    .await
+    .expect_err("the launch fixture fails");
+
+    assert!(
+        err.downcast_ref::<crate::protocol::CodedError>()
+            .is_none_or(|coded| coded.code != error_code::SHELL_ENVIRONMENT_TIMEOUT),
+        "the snapshot's failure refused the change: {err:#}"
+    );
+    let env = handed
+        .lock()
+        .unwrap()
+        .take()
+        .expect("the change reached the launch")
+        .expect("the environment the change resolved from is handed on");
+    let fallback = env.fallback.expect("told as a fallback");
+    assert_eq!(fallback.failure.code, error_code::SHELL_ENVIRONMENT_TIMEOUT);
 }
 
 /// What the process of a session whose model is changed started is carried over to the
@@ -476,6 +536,7 @@ async fn a_model_change_that_relaunches_nothing_drops_the_queue_quietly() {
             session: (*gone).clone(),
             agent_session_id: None,
             notices: Vec::new(),
+            notices_at: 0,
             first_message: None,
             record_root: None,
         })

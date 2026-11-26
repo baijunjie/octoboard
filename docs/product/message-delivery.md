@@ -100,7 +100,8 @@ written again (it was more than text, the bound is used up, the queue did not wr
 `message_dropped_at_cancel`, with its text: a notice of its own, since the agent gave nothing back and nothing was
 cleared from an input box. A message is never written into an agent that took it: only a provider
 whose agent reports a held message it takes, as a prompt sent with its text, declares such a cancel, and a launch
-without those reports (one whose hooks the user switched off in their own settings) has nothing written again at its
+without those reports (one whose hooks the user switched off in their own settings, one started without Octoboard's
+additions, or one whose hooks never arrived; see `docs/product/launching-without-octoboards-additions.md`) has nothing written again at its
 cancel, as its provider answers for that launch: a message the turn took could not be told from one the cancel dropped,
 and would run twice. Instead every client is sent, for each message Octoboard wrote into that turn's terminal, a
 `message_maybe_dropped_at_cancel` notice with its text, shown as an error alert titled "Message may not have been
@@ -288,8 +289,10 @@ on screen and, for Claude Code, until the agent is reading its input:
   With Claude Code's default renderer bracketed paste comes on before the first hook report, so the report releases
   the queue; with its fullscreen renderer (`"tui": "fullscreen"`) the report comes first. A message written before
   Claude Code reads its input would be left unsent in its input box, or wiped when a launch prompt is submitted. A
-  Claude Code session whose hook reports never arrive, or whose terminal never has bracketed paste on at or after the
-  first one, holds its messages for as long as it runs: they are never let through on time alone;
+  Claude Code session whose hook reports never arrive is read as one without hooks 30 seconds after it starts, those
+  seconds not running while its trust confirmation is up, and is then released as below. One whose first hook report
+  has arrived but whose terminal never has bracketed paste on at or after it holds its messages for as long as it
+  runs: they are never let through on time alone;
 - for Grok Build, until its first hook report, which it too sends only once it is past the confirmation. The one
   exception: a Grok Build session that has sent none 30 seconds after its launch — a managed policy that allows only
   managed hooks keeps every hook of Octoboard's from running — has its messages let through anyway, provided its
@@ -299,8 +302,15 @@ on screen and, for Claude Code, until the agent is reading its input:
   shown — at the first terminal title Codex sets, once its session has started; when that watch ends is in "How a
   confirmation is pressed" in `docs/product/folder-trust.md`. Once a confirmation is shown, they are held until
   Octoboard's press of it succeeds, a hook report arrives, or the person's own answer in the terminal is seen to
-  replace it on screen. A Codex session that neither sets a terminal title nor sends a hook report holds its messages
-  for as long as it runs: they are never let through on time alone.
+  replace it on screen. A Codex session launched with Octoboard's hooks that neither sets a terminal title nor sends a
+  hook report holds its messages for as long as it runs: they are never let through on time alone.
+
+A session that runs without its hooks — one started without Octoboard's additions, or launched with less on a plan that
+left the agent's hooks out, from its start, and one whose hooks were due and did not arrive within 30 seconds, from
+then on (see `docs/product/launching-without-octoboards-additions.md`) — is released as a session the daemon took over
+after a restart is: once its rendered screen shows its input box with no trust confirmation up, whether or not a
+confirmation was seen and answered on the way, and whether or not the agent has set a terminal title. A confirmation
+still up keeps the hold until it is answered.
 
 These startup and trust holds do not prevent the user from answering in the terminal. The temporary retention of
 typing during native draft preservation is described in "Draft preservation has a bounded wait" in

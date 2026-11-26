@@ -144,6 +144,8 @@ fn apply_hook(
         .zip(event.as_deref())
         .is_none_or(|(interpreter, event)| interpreter.past_startup(event, &payload));
     if let Some(live) = state.live_session(session_id) {
+        // Any hook of the launch says it has hooks (`crate::session::hook_absence`).
+        crate::session::hook_absence::on_hook(state, &live);
         // Noted first, so that the hook releases at once what waits for the agent to read its
         // input when its input box is already up.
         let announces_start =

@@ -71,9 +71,11 @@ The hint stands in these places:
   `docs/product/labels-and-tooltips.md`); a turned-off account has none, as it has no badge there;
 - in the account details dialog, under the account's directory (see "The account details dialog" in
   `docs/product/agent-accounts.md`);
-- in the account field of the session dialog, the handoff dialog and the forms in which the user approves a session's
-  request, when the account chosen is not logged in: the field says the account is not logged in, so a session cannot
-  use it, followed by the hint in place of the advice to choose another account or log in;
+- in the account field of the handoff dialog and the forms in which the user approves a session's request, when the
+  account chosen is not logged in: the field says the account is not logged in, so a session cannot use it, followed by
+  the hint in place of the advice to choose another account or log in. The session dialog, which opens a session on
+  such an account all the same, warns instead that the session's agent may ask to log in, and to log in in the terminal
+  if it does (see "The session dialog" in `docs/product/opening-sessions.md`);
 - in the error alert of a switch confirmed onto an account found not logged in after the confirmation opened (see
   "Confirming a switch" in `docs/product/switching-session-accounts.md`), which says the same and offers no **Manage
   accounts** button;
@@ -133,7 +135,9 @@ another question. While an answer is being sent its button is pending and the di
 pressed again, and the dialog cannot be closed, until the daemon has replied.
 
 **A secret answer.** The dialog shows a masked text field and a button to send the answer. If the authorization page
-is known, the dialog offers a link to reopen it. The field is cleared when the answer is sent. The daemon passes the
+is known, the dialog offers a link to reopen it. While empty, the field's placeholder says the value comes from the
+login page. The field is cleared once the answer has been sent; where sending it fails, what was typed stays, to be sent
+again. The daemon passes the
 answer directly to the CLI's private terminal. It is absent from logs, saved state and updates to other windows.
 
 **Only the user answers it.** The login waits until the user chooses an answer or submits the text. Closing the

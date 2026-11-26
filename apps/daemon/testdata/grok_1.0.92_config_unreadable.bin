@@ -1,0 +1,1 @@
+Error: Failed to load config: /private/tmp/gp/grokhome/config.toml cannot be read or parsed: TOML parse error at line 1, column 5: unclosed table, expected `]`

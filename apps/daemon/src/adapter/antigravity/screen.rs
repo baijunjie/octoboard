@@ -15,6 +15,11 @@ impl ScreenReader for AntigravityScreen {
         input_box_rows(screen)
     }
 
+    /// The input box is read wherever the CLI sits at its prompt (`input_box_rows`).
+    fn reads_input_box(&self) -> bool {
+        true
+    }
+
     /// An empty box names the session's mode where it is not the default one, in grey, which is
     /// not an attribute the screen a reader is given drops ([`input_box_rows`] reads such a box as
     /// empty by itself): `Auto mode: edits & safe commands
@@ -276,6 +281,13 @@ mod tests {
     };
     use crate::terminal::queries::{Piece, Query, QueryScanner};
     use crate::terminal::snapshot::TerminalSnapshot;
+
+    /// The reader declares that it reads its input box wherever the agent is at its prompt, so a turn
+    /// opened off the title closes only while the box is drawn (`crate::session::title_status`).
+    #[test]
+    fn the_input_box_is_read_wherever_the_agent_is_at_its_prompt() {
+        assert!(AntigravityScreen.reads_input_box());
+    }
 
     // Antigravity CLI 1.5.14, `testdata/antigravity-captures.md`: the terminal output of a launch
     // in a folder not yet trusted up to the trust screen, what one Down wrote, the output from

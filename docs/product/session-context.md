@@ -49,7 +49,9 @@ use (see "The context-size chip" below):
 
 - until the first report since its launch, when none was stored for it before; Claude Code runs the status line as
   the conversation changes, so the first report comes with the session's first reply;
-- when its Claude Code is older than 2.0.0, or its version cannot be told, since no status line is injected then;
+- when its Claude Code is older than 1.0.71, the release that added the status line, since no status line is injected
+  then (one whose version cannot be told is given one), and when its launch runs without Octoboard's additions (see
+  `docs/product/launching-without-octoboards-additions.md`);
 - when a managed (policy) setting sets the status line, since that outranks Octoboard's and Octoboard's never runs;
 - whenever Claude Code runs no status line at all: in a workspace it has not been trusted with, or with
   `disableAllHooks` set.

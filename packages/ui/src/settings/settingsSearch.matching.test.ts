@@ -430,12 +430,12 @@ describe("the clean-up row", () => {
   const found = (query: string, given: SettingsSearchContext) => find("cleanup", query, given).ids.has("cleanup.uninstall");
 
   it.each([
-    { window: "the desktop app's own window", given: context({ platform: SHELL }), shown: "a single one is undone" },
+    { window: "the desktop app's own window", given: context({ platform: SHELL }), shown: "to undo just one" },
     { window: "a remote daemon's window", given: context({ platform: DESKTOP }), shown: "this window shows a remote daemon" },
     { window: "a browser on a desktop app's daemon", given: context({ applicationDaemon: true }), shown: "open settings in the app’s own window" },
     { window: "a browser on a server's daemon", given: context({ applicationDaemon: false }), shown: "run this on the server itself" },
   ])("is found in $window by the sentence shown there alone", ({ given, shown }) => {
-    const sentences = ["a single one is undone", "this window shows a remote daemon", "open settings in the app’s own window", "run this on the server itself"];
+    const sentences = ["to undo just one", "this window shows a remote daemon", "open settings in the app’s own window", "run this on the server itself"];
     for (const sentence of sentences) expect(found(sentence, given), sentence).toBe(sentence === shown);
     expect(found("clean up before uninstalling", given)).toBe(true);
   });

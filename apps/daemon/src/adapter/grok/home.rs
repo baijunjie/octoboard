@@ -18,7 +18,7 @@ const COPIED_ENTRIES: &[&str] = &[GROK_CONFIG_FILE, GROK_TRUST_STORE];
 
 /// Entries Grok's startup sandbox check wants as real files rather than symlinks; copied from the
 /// source when it has them. They are copied on every launch, although a launch that runs under the
-/// sandbox is refused: detection cannot see every source (macOS managed preferences, policy synced
+/// sandbox gets no farm and starts bare: detection cannot see every source (macOS managed preferences, policy synced
 /// from the server), and a launch it misses must still get past Grok's startup check rather than
 /// fail there. Copying unconditionally also avoids depending on detection.
 const SANDBOX_CHECKED_ENTRIES: &[&str] = &["bundled", "bundles", "hooks-paths", "sandbox.toml"];

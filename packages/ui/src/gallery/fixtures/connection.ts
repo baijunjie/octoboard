@@ -1,6 +1,6 @@
 import type { Step } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { consoleOf, failureTitle, projectOf, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
+import { consoleOf, failureTitle, projectOf, sessionOf, snapshotState, standingNoticeNotification, standingNoticeOf, switchingAccount } from "../../fixtures/builders";
 import { droppedFilesParams, type DroppedFileEntry } from "../../errors/droppedFileEntries";
 import { PROTOCOL_GENERATION } from "../../protocol";
 import { staging, homeLab } from "./remoteDaemons";
@@ -37,6 +37,33 @@ const holderLinkChanges = (session: string) => [
 ];
 
 const starting = sessionOf("s-starting", console_.id, project.id, "Just created, still launching", "starting");
+
+// The standing notices of a launch that runs without some of Octoboard's additions (`Session.standing_notices`), one of each
+// layout an entry of the banner's list takes; the newest is the one the terminal's banner shows. The enhanced launch could
+// not be prepared for the reason the agent's own failure gives (a nested reason with its path and remedy), the resume went
+// ahead on a record not found (a sentence alone), the account was last read as logged out (the account's own remedy under
+// its sentence), and the newest is of a code this window has no words for, shown by the daemon's English text.
+const ANTIGRAVITY_SETTINGS = "/Users/dev/.antigravity/settings.json";
+const degradedNotices = [
+  standingNoticeOf("launch_enhancements_unavailable", {
+    agent: "Antigravity CLI",
+    reason: `The Antigravity CLI file ${ANTIGRAVITY_SETTINGS} cannot be used.`,
+    reason_code: "provider.antigravity.user_config_unusable",
+    path: ANTIGRAVITY_SETTINGS,
+  }, "Octoboard's additions to Antigravity CLI could not be prepared, so it started as it does in a plain terminal.", 1_767_225_600_000),
+  standingNoticeOf("conversation_record_not_found", { agent: "Antigravity CLI" }, "The conversation's record was not found; it was resumed anyway.", 1_767_225_601_000),
+  standingNoticeOf("account_sign_in_unconfirmed", {
+    agent: "Antigravity CLI",
+    agent_id: "antigravity",
+    account: "Work",
+    config_dir: "/Users/dev/.antigravity-work",
+  }, "Work (Antigravity CLI) was last read as logged out, so this session may not be logged in. If Antigravity CLI asks for a login, log in in the terminal.", 1_767_225_602_000),
+  standingNoticeOf("provider.antigravity.extensions_skipped", { agent: "Antigravity CLI" }, "Antigravity CLI skipped the extensions Octoboard adds, so this session runs without them.", 1_767_225_603_000),
+];
+const degraded = sessionOf("s-degraded", console_.id, project.id, "Resume the parser rewrite", "idle", {
+  agent: "antigravity",
+  standing_notices: degradedNotices,
+});
 
 /** What the path link scenarios share: the sample output naming files, and which of them the fixture
  * daemon finds (and, for a file the viewer shows, where it reads it from). */
@@ -298,6 +325,39 @@ export const connectionScenarios: Scenario[] = [
         { name: "notes.txt" },
         { name: "budget.csv" },
       ]),
+    ],
+  },
+  {
+    id: "terminal-standing-notice",
+    group: TERMINAL,
+    category: "normal",
+    title: "A standing notice over the terminal",
+    description: "The daemon has told the window that Claude Code has not reported to Octoboard (a standing notice), so a warning bar floats at the top of the terminal instead of a toast: the warning triangle, the notice's sentence on one line, Details and an × that dismisses it in this window only. The sentence fades where it does not fit, with the whole of it in a tooltip on hover; narrow the window, or choose Arabic, to see it fade and mirror. Details opens the notice with what to do about it. F6 reaches the bar's controls just before the terminal.",
+    notifications: [standingNoticeNotification("s-working", "hooks_not_received", { agent: "Claude Code" }, "Claude Code has not reported to Octoboard.")],
+    state: connected("open"),
+    steps: [pickSession],
+  },
+  {
+    id: "terminal-standing-notices-list",
+    group: TERMINAL,
+    category: "normal",
+    title: "Several standing notices, listed",
+    description: "Four standing notices stand on the session, so the bar's button reads All notices, and it has been pressed: the list opens under it, newest first, each entry laid out as its notice needs. The newest is of a code this window has no words for, shown by the daemon's English text alone; then an account read as logged out, its sentence followed by the account's own advice on what to do; then the resume that went ahead on a record not found, a sentence alone; last the launch whose additions could not be prepared, with the agent's own failure as its reason (the file's path set as code) and that failure's remedy under it. The bar itself shows the newest notice's sentence.",
+    state: snapshotState({ consoles: [console_], projects: [project], sessions: [...sessions, degraded] }),
+    steps: [pickSessionTitled("Resume the parser rewrite"), (ui) => ui.press(ui.t("terminal.standingNotice.all"))],
+  },
+  {
+    id: "terminal-standing-notice-beside-uploads",
+    group: TERMINAL,
+    category: "normal",
+    title: "A standing notice above dropped files uploading",
+    description: "The session has a standing notice and files dropped on its terminal are uploading, so the two bars share the top of the terminal: the notice's warning bar first, the upload's progress line under it, each as wide as it needs and centred. F6 visits the notice's controls, then Cancel, before the terminal.",
+    attachmentUpload: { answeredParts: 2 },
+    notifications: [standingNoticeNotification("s-working", "hooks_not_received", { agent: "Claude Code" }, "Claude Code has not reported to Octoboard.")],
+    state: connected("open"),
+    steps: [
+      pickSession,
+      (ui) => ui.dropFilesOnTerminal([{ name: "Quarterly-review.zip", bytes: 4 * 1024 * 1024 }, { name: "notes.txt" }]),
     ],
   },
   {

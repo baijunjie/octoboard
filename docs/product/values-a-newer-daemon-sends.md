@@ -21,6 +21,8 @@ keeps working, and such a value:
   belongs to a project is listed under that project as usual.
 - **A session request** of an action or a session kind the window does not know is not offered (see "The confirmation
   dialog" in `docs/product/session-requests.md`).
+- **A standing notice** of a code the window does not know is shown in the session's banner by the daemon's own English
+  text, in that text's own direction (see "The banner" in `docs/product/standing-session-notices.md`).
 
 ## Entries left out and labels left blank
 

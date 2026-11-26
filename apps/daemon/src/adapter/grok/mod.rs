@@ -54,15 +54,16 @@
 //! Four more entries are real copies too, `bundled/`, `bundles/`, `hooks-paths` and
 //! `sandbox.toml`: Grok's startup sandbox check refuses to start when they are symlinks (it
 //! documents that it write-protects them under its sandbox). They are copied on every launch, even
-//! though a sandboxed launch is refused (see `SANDBOX_CHECKED_ENTRIES` for why). A source that is
+//! though a sandboxed launch gets no farm (see `SANDBOX_CHECKED_ENTRIES` for why). A source that is
 //! itself a symlink becomes a real file or directory in the farm, which is what Grok checks. An entry the source lacks stays absent, for Grok to create. A bundle
 //! update Grok downloads during a session lands in the copy and is lost; the next launch copies
 //! whatever the user's own `grok` has fetched since.
 //!
-//! A launch that would run under Grok's sandbox is refused up front (`require_unsandboxed`),
-//! because the sandbox lets Grok write only to its home, the working directory and temp
-//! directories, with links resolved: the farm's `sessions/` and `auth.json` links lead back into
-//! the source home, so creating a session would fail. The profile is read from the sources Grok
+//! A launch that would run under Grok's sandbox gets no farm (`require_unsandboxed`) and starts
+//! bare against the source home, as it would in a plain terminal, because the sandbox lets Grok
+//! write only to its home, the working directory and temp directories, with links resolved: the
+//! farm's `sessions/` and `auth.json` links lead back into the source home, so creating a session
+//! would fail. The profile is read from the sources Grok
 //! layers (see `sandbox_setting`); macOS managed preferences (`ai.x.grok`) are not read, a known
 //! gap that leaves such a launch to fail inside Grok. The home's own `requirements.toml` and
 //! `managed_config.toml` are not read either, because the farm excludes them and Grok never loads
@@ -72,9 +73,11 @@
 //! live in that home's `sessions/`; the farm is still what Grok runs against, so nothing changes
 //! except which directory the links and copies come from.
 //!
-//! A pinned directory must already be a real Grok home, one Grok has been run against: the farm only
-//! links entries that exist in the source, so for an empty directory Grok would create `sessions/`
-//! and `auth.json` inside the throw-away farm and lose them.
+//! A pinned directory must already be a real Grok home, one Grok has been run against, for a farm
+//! to be built over it: the farm only links entries that exist in the source, so for an empty
+//! directory Grok would create `sessions/` and `auth.json` inside the throw-away farm and lose
+//! them. A launch on one that is not starts bare against it instead, where Grok writes both into
+//! the directory itself; a switch to one is refused (`refuse_unlaunchable_account`).
 //!
 //! The copies are a snapshot: an edit the user makes while a session runs is not seen, and anything
 //! the session persists lands in Octoboard's copy. Two things are kept: a project's trust entry
@@ -113,6 +116,7 @@ pub(crate) use plugin_paths::after_exit_for_test as plugin_paths_after_exit_for_
 mod query_home;
 pub(crate) mod quota;
 pub(crate) mod records;
+mod refusal;
 mod sandbox;
 pub(crate) mod screen;
 mod shared_config;
@@ -122,6 +126,8 @@ mod writeback;
 
 #[cfg(test)]
 mod compatibility_tests;
+#[cfg(test)]
+mod degradation_tests;
 #[cfg(test)]
 mod home_tests;
 #[cfg(test)]
@@ -137,8 +143,8 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use super::{AgentProvider, LaunchPlan, LaunchSpec};
-use crate::protocol::{AgentId, Code, CodedError, SessionKind, TerminalAppearance};
+use super::{AgentProvider, EarlyExit, FirstHook, LaunchPlan, LaunchSpec};
+use crate::protocol::{AgentId, Code, CodedError, Notice, SessionKind, TerminalAppearance};
 use crate::providers::{grok, ProviderDescriptor};
 use crate::session::screen::ScreenReader;
 use crate::session_tools;
@@ -279,18 +285,107 @@ impl AgentProvider for GrokProvider {
         Some(summary.get("generated_title")?.as_str()?.to_owned())
     }
 
-    fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
-        // Grok reads the fleet-wide `managed_config.toml` and `requirements.toml` from `/etc/grok`,
-        // and from no system directory on Windows. The ones in its home are excluded from the
-        // farm, so Grok running against it never loads them.
-        let system_dir = crate::platform::policy::system_config_dir("grok");
-        plan_under(spec, system_dir.as_deref())
+    /// `--resume <id>` for a resume, `--model`, and a new conversation's task after a bare `--`,
+    /// run against the account's own home (the pinned one exported by the launch) rather than a
+    /// per-session one.
+    fn bare_plan(&self, spec: &LaunchSpec<'_>) -> super::BarePlan {
+        let mut args = Vec::new();
+        if let Some(id) = spec.resume_agent_session_id {
+            args.push("--resume".to_string());
+            args.push(id.to_string());
+        }
+        if let Some(model) = spec.model {
+            args.push("--model".to_string());
+            args.push(model.to_string());
+        }
+        args.extend(task_args(spec));
+        super::BarePlan {
+            args,
+            ..super::BarePlan::default()
+        }
     }
+
+    fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
+        plan_under(spec, system_config_dir().as_deref())
+    }
+
+    /// The enhanced launch without `--no-leader`, where Grok refused exactly that option as it
+    /// started: a release that drops the flag `grok --help` never listed. Any other early exit
+    /// gives nothing, and the launch goes bare: a refusal of another option names something the
+    /// session cannot do without (its conversation id, its role), and an exit that refused nothing
+    /// says nothing an option left out would change.
+    fn reduced_plan(&self, spec: &LaunchSpec<'_>, exit: &EarlyExit) -> Option<LaunchPlan> {
+        reduced_plan_under(spec, exit, system_config_dir().as_deref())
+    }
+
+    /// Grok fires `SessionStart` as it starts, 0.5–1.0 s after the launch on a fresh conversation
+    /// and on a resume alike, before anything is written into it (measured on 1.0.67), and every
+    /// plan, the reduced one included, carries Octoboard's hooks in the per-session home.
+    fn first_hook_due(&self, _spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> FirstHook {
+        FirstHook::AtStart
+    }
+}
+
+/// The directory of Grok's fleet-wide `managed_config.toml` and `requirements.toml`: `/etc/grok`,
+/// and none on Windows. The ones in its home are excluded from the farm, so Grok running against
+/// it never loads them.
+fn system_config_dir() -> Option<std::path::PathBuf> {
+    crate::platform::policy::system_config_dir("grok")
+}
+
+/// The flag that keeps Grok's agent in the TUI's own process, whatever its configuration says of
+/// leader mode (see `plan_with`).
+const NO_LEADER: &str = "--no-leader";
+
+/// Whether a plan passes [`NO_LEADER`].
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Leader {
+    Overridden,
+    LeftToConfiguration,
+}
+
+/// `reduced_plan` with the directory of Grok's system-wide configuration passed in, as for
+/// [`plan_under`].
+fn reduced_plan_under(
+    spec: &LaunchSpec<'_>,
+    exit: &EarlyExit,
+    system_dir: Option<&Path>,
+) -> Option<LaunchPlan> {
+    if refusal::refused_option(&exit.output)? != NO_LEADER {
+        return None;
+    }
+    let mut plan = plan_with(spec, system_dir, Leader::LeftToConfiguration).ok()?;
+    plan.notice = Some(leader_not_overridden());
+    Some(plan)
+}
+
+/// The standing notice of a launch that could not pass [`NO_LEADER`].
+fn leader_not_overridden() -> Notice {
+    Notice::new(
+        Code::of_provider(grok::LEADER_NOT_OVERRIDDEN),
+        format!(
+            "This version of Grok does not take `{NO_LEADER}`, so where its configuration turns \
+             leader mode on, stopping this session cuts off a running turn without Grok's own \
+             shutdown"
+        ),
+        &[],
+    )
+    // It holds for the whole launch.
+    .standing()
 }
 
 /// `plan` with the directory of Grok's system-wide configuration passed in, `None` on a host
 /// where Grok has none, so a test never reads the machine's own.
 fn plan_under(spec: &LaunchSpec<'_>, system_dir: Option<&Path>) -> Result<LaunchPlan> {
+    plan_with(spec, system_dir, Leader::Overridden)
+}
+
+/// `plan_under`, passing [`NO_LEADER`] or leaving leader mode to Grok's configuration.
+fn plan_with(
+    spec: &LaunchSpec<'_>,
+    system_dir: Option<&Path>,
+    leader: Leader,
+) -> Result<LaunchPlan> {
     let pinned = super::pinned_config_dir(spec, AgentId::GROK)?;
     // Unlike Claude Code and Codex, an account Grok has never been run against cannot simply be
     // created on first use: the per-session home only links what already exists in the source,
@@ -318,8 +413,12 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: Option<&Path>) -> Result<Launch
     // shutdown.
     //
     // `--no-leader`, a TUI flag `grok --help` does not list, keeps the agent in this process,
-    // which the `SIGTERM` ends gracefully, whatever the configuration says.
-    let mut args = vec!["--no-leader".to_string()];
+    // which the `SIGTERM` ends gracefully, whatever the configuration says. A release that
+    // refuses it as it starts is launched again without it (`reduced_plan`).
+    let mut args = Vec::new();
+    if leader == Leader::Overridden {
+        args.push(NO_LEADER.to_string());
+    }
     match spec.resume_agent_session_id {
         // The id is required: a bare `--resume` takes the next argument that is not a known
         // flag, such as the task, as its value.
@@ -375,15 +474,8 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: Option<&Path>) -> Result<Launch
         args.push(effort.to_string());
     }
 
-    // After a bare `--`, which ends Grok's options: a task that starts with `-` is otherwise
-    // refused as an unexpected argument, or read as an option (`-p x` runs a headless turn).
     // Everything after the `--` is the prompt, so it comes last.
-    if spec.resume_agent_session_id.is_none() {
-        if let Some(task) = spec.task {
-            args.push("--".to_string());
-            args.push(task.to_string());
-        }
-    }
+    args.extend(task_args(spec));
 
     let session_store = grok_home.join(grok::GROK_TRUST_STORE);
     let folder = canonical_cwd(spec.cwd);
@@ -554,7 +646,7 @@ const CLAUDE_COMPATIBILITY_VARS: [&str; 5] = [
     "GROK_CLAUDE_HOOKS_ENABLED",
 ];
 
-/// Refuses a pinned source home Grok has never been run against: it carries no `sessions/`
+/// Fails a pinned source home Grok has never been run against: it carries no `sessions/`
 /// directory for the per-session farm to link, so a conversation Grok writes during the session
 /// goes into the farm instead and is discarded with the process — the exact silent failure this
 /// check exists to prevent. Whether the home also holds a login (`auth.json`) says nothing either
@@ -573,4 +665,14 @@ pub(super) fn require_initialized_grok_home(dir: &Path) -> Result<()> {
         ),
         &[("path", &dir.to_string_lossy())],
     ))
+}
+
+/// A new conversation's task, the plan and the bare plan alike: after a bare `--`, which ends
+/// Grok's options, since a task that starts with `-` is otherwise refused as an unexpected
+/// argument, or read as an option (`-p x` runs a headless turn). A resume is given no task.
+fn task_args(spec: &LaunchSpec<'_>) -> Vec<String> {
+    spec.task
+        .filter(|_| spec.resume_agent_session_id.is_none())
+        .map(|task| vec!["--".to_string(), task.to_string()])
+        .unwrap_or_default()
 }

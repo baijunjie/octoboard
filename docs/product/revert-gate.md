@@ -211,7 +211,8 @@ changing them" in `docs/product/git-workflow-settings.md`.
   in any other repository are not checked. A git that does not reach the session's hook dispatchers — the cases listed
   in "Where a branch has no responsible session" in `docs/product/branch-responsible-session.md` for a git run
   without the session's environment or told to look elsewhere for hooks, and a session for which the hooks were not
-  set up (see "What attribution needs" there) — is not checked either.
+  set up (see "What attribution needs" there), whose terminal banner then says so (`session_git_hooks_unavailable`) —
+  is not checked either.
 - **After the user's own hook.** The gate is asked only once the hook the user's configuration names for
   `reference-transaction` or `pre-push` has passed; a hook that refuses has the last word.
 - **Beside a project's own gate, not instead of it.** Octoboard does not look for a gate a project installed itself;

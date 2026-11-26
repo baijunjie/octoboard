@@ -122,3 +122,18 @@ U+FE0E). Inside a turn the title goes back to the plain form for a moment betwee
   `/rename Explicit Probe Title`.
 - `qwen_record_prompt_title.json` and `qwen_record_auto_title.json` (0.28.3, 2026-11-24): title
   sidecars from the first prompt and the fast model respectively.
+
+## Early exits (0.28.3, 2026-11-26)
+
+Raw PTY output of `qwen` started with only the option shown, in a 120x40 PTY with a scratch `HOME` and working
+directory and `QWEN_CODE_NO_RELAUNCH=1`, before any account was set up; each exited before drawing anything.
+
+- `qwen_early_exit_unknown_option_0.28.3.bin`: `--octoboard-unknown-flag`, an option it does not know. Exit status 1
+  after 0.7 s. The first line is `Unknown arguments: octoboard-unknown-flag, octoboardUnknownFlag` (the option's
+  kebab and camel forms), then the whole usage text, 17 197 bytes in all: the refusal line is not in the last 4 KiB,
+  but is within the first 2 KiB, which the daemon keeps of an early exit too.
+- `qwen_early_exit_invalid_value_0.28.3.bin`: `--approval-mode bogus`, a value an option does not take. Exit status 1
+  after 0.8 s. `Invalid values:` and `  Argument: approval-mode, Given: "bogus", Choices: …`, then the usage text.
+- `qwen_early_exit_resume_not_found_0.28.3.bin`, the near-miss: `--resume` with a UUID no record has. Exit status 1
+  after 1.3 s with one line, ``No saved session found with ID <id>. Run `qwen --resume` without an ID to choose from
+  existing sessions.``, and no usage text: a fast exit that is no option refusal.

@@ -239,9 +239,12 @@ can be one of the other project's.
 - A `GIT_CONFIG_PARAMETERS` exported by the user's shell that git can read, if there is one at all; one that git
   cannot already fails every git the user runs, and the session is given nothing.
 
-Where any of these is missing the session runs as it would without attribution, and without the revert gate, and
-nothing says so. Each git and daemon executable is checked at the first launch that uses it; a check that failed is
-tried again by a launch at least ten minutes later.
+Where any of these is missing the session runs as it would without attribution, and without the revert gate, and its
+terminal's banner says so with the standing notice `session_git_hooks_unavailable`, whose `cause` tells an old git
+(`git_too_old`, naming its version), a `GIT_CONFIG_PARAMETERS` git rejects (`user_configuration`) and anything else
+(`other`) apart (see "The launch environment" in `docs/product/launching-agents.md`). Each git and daemon executable is
+checked at the first launch that uses it; a check that failed is tried again by a launch at least ten minutes later,
+and the launches between say why it failed.
 
 ## The session's git hooks
 

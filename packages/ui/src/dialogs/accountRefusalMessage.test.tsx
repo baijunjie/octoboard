@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 import { LanguageProvider } from "../i18n/react";
 import { mountHost } from "../test/mountHost";
 import { TEST_PROVIDERS, UNPRESENTED_PROVIDER } from "../test/testProviders";
-import { accountRefusalMessage } from "./accountRefusalMessage";
+import { accountRefusalMessage, signedOutWarning } from "./accountRefusalMessage";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -54,4 +54,15 @@ it("lets a name of any direction take its own, in both messages", () => {
     expect(name!.textContent).toBe("حساب العمل");
     expect(name!.getAttribute("dir")).toBe("auto");
   }
+});
+
+it("words the warning of a signed-out account that may be chosen all the same, naming it as a reference of its own direction", () => {
+  const warning = signedOutWarning("حساب العمل");
+  const title = mount(<>{warning.title}</>);
+  expect(title.textContent).toBe("Account حساب العمل was last read as logged out");
+  const [name] = chipsOf(title);
+  expect(name!.textContent).toBe("حساب العمل");
+  expect(name!.getAttribute("dir")).toBe("auto");
+  expect(mount(<>{warning.message}</>).textContent).toBe("The session opens all the same, and its agent may ask you to log in.");
+  expect(mount(<>{warning.remedy}</>).textContent).toBe("If the agent asks, log in in the terminal, or choose another account.");
 });

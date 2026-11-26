@@ -7,7 +7,7 @@ import { useRegionCycle } from "./useRegionCycle";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const SHOWN = { topbar: true, rail: false, devices: false, tasks: false, welcome: false, sidebar: false, archive: false, uploads: false, terminal: false, banner: false, update: false };
+const SHOWN = { topbar: true, rail: false, devices: false, tasks: false, welcome: false, sidebar: false, archive: false, notices: false, uploads: false, terminal: false, banner: false, update: false };
 
 function Cycle({ panel, landing = false }: { panel: boolean; landing?: boolean }) {
   useRegionCycle({ shown: SHOWN, panels: { "panel-files": panel }, focusTerminal: () => {} });
@@ -168,6 +168,57 @@ it("visits the uploads notice just before the terminal while it is shown, in bot
 
 it("skips the uploads notice where it is not shown", () => {
   const cycle = mountUploads(false);
+  document.getElementById("bar")!.focus();
+  cycle.f6();
+  expect(cycle.active()).toBe("terminal-input");
+});
+
+function NoticesCycle({ notices, uploads }: { notices: boolean; uploads: boolean }) {
+  useRegionCycle({
+    shown: { ...SHOWN, terminal: true, notices, uploads },
+    focusTerminal: () => document.getElementById("terminal-input")?.focus(),
+  });
+  return (
+    <>
+      <header data-region="topbar"><button id="bar">bar</button></header>
+      {notices && <div data-region="notices"><button id="details">Details</button><button id="dismiss">Dismiss</button></div>}
+      {uploads && <div data-region="uploads"><button id="cancel-uploads">Cancel</button></div>}
+      <section data-region="terminal"><textarea id="terminal-input" /></section>
+    </>
+  );
+}
+
+function mountNotices(notices: boolean, uploads: boolean) {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  act(() => root.render(<NoticesCycle notices={notices} uploads={uploads} />));
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const f6 = (shiftKey = false) => act(() => void window.dispatchEvent(new KeyboardEvent("keydown", { key: "F6", shiftKey, bubbles: true })));
+  return { f6, active: () => document.activeElement?.id };
+}
+
+it("visits the standing notices' banner before the uploads notice and the terminal, in both directions", () => {
+  const cycle = mountNotices(true, true);
+  document.getElementById("bar")!.focus();
+  cycle.f6();
+  expect(cycle.active()).toBe("details");
+  cycle.f6();
+  expect(cycle.active()).toBe("cancel-uploads");
+  cycle.f6();
+  expect(cycle.active()).toBe("terminal-input");
+  cycle.f6(true);
+  expect(cycle.active()).toBe("cancel-uploads");
+  cycle.f6(true);
+  expect(cycle.active()).toBe("details");
+  cycle.f6(true);
+  expect(cycle.active()).toBe("bar");
+});
+
+it("skips the standing notices' banner where it is not shown", () => {
+  const cycle = mountNotices(false, false);
   document.getElementById("bar")!.focus();
   cycle.f6();
   expect(cycle.active()).toBe("terminal-input");

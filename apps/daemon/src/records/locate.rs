@@ -18,6 +18,7 @@ use crate::hostfs::{lexical_key, lexically_normalise, lexically_within};
 use crate::protocol::{Account, AgentId, Session};
 use crate::providers::layout::layout;
 use crate::records::rows::RowAccount;
+use crate::records::witness::{InstalledVersions, Witnesses};
 use crate::records::RecordStore;
 use crate::state::AppState;
 
@@ -111,6 +112,11 @@ pub struct Locator<'a> {
     /// For a provider whose records are rows: the conversations each account holds
     /// (`RowRecords::conversations`), by agent and the account's pinned directory, listed once.
     row_listings: RefCell<RowListings>,
+    /// The versions whose records were seen recognised, without which no record missing proves
+    /// its conversation gone (`crate::records::witness`).
+    witnesses: Option<&'a Witnesses>,
+    /// The version read as installed for each account asked about, read once.
+    installed: RefCell<InstalledVersions>,
 }
 
 /// What each account of a provider whose records are rows was listed to hold, by agent and the
@@ -127,14 +133,38 @@ impl<'a> Locator<'a> {
         }
     }
 
-    pub(crate) fn with_store<'store>(self, store: &'store crate::store::Store) -> Locator<'store> {
+    pub(crate) fn with_store<'store>(self, store: &'store crate::store::Store) -> Locator<'store>
+    where
+        'a: 'store,
+    {
         Locator {
             store: Some(store),
             shell: self.shell,
             indexes: self.indexes,
             record_dirs: self.record_dirs,
             row_listings: self.row_listings,
+            witnesses: self.witnesses,
+            installed: self.installed,
         }
+    }
+
+    /// This locator, judging a record missing against `witnesses` (`crate::records::witness`):
+    /// without them no record missing proves its conversation gone.
+    pub(crate) fn with_witnesses(mut self, witnesses: &'a Witnesses) -> Self {
+        self.witnesses = Some(witnesses);
+        self
+    }
+
+    /// Whether a record of `session` missing from its account proves the conversation gone:
+    /// a record written by the CLI version installed for the account was seen recognised
+    /// (`crate::records::witness::witnessed`).
+    pub(crate) fn witnessed(&self, session: &Session) -> bool {
+        crate::records::witness::witnessed(
+            self.witnesses,
+            &mut self.installed.borrow_mut(),
+            session,
+            || self.shell_env(),
+        )
     }
 
     /// The login-shell snapshot default accounts are resolved through, taken when first asked

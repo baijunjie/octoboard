@@ -720,3 +720,57 @@ test("a guard that cannot start, or outlasts its deadline, lets the call through
     guard.close = true;
   }
 });
+
+// Copies `files` (a map of a name in the scratch directory to a source beside this test) into a
+// scratch directory of their own, as the daemon writes them, and returns the directory.
+function scratchWith(files) {
+  const dir = fs.mkdtempSync(join(tmpdir(), "octoboard-opencode-entry-"));
+  directories.push(dir);
+  fs.writeFileSync(join(dir, "package.json"), JSON.stringify({ type: "module" }));
+  for (const [name, source] of Object.entries(files)) {
+    fs.mkdirSync(dirname(join(dir, name)), { recursive: true });
+    fs.copyFileSync(join(dirname(PLUGIN), source), join(dir, name));
+  }
+  return dir;
+}
+
+test("a failure while the plugin sets itself up turns it off instead of failing OpenCode", async () => {
+  const context = {
+    get directory() {
+      throw new Error("a changed plugin interface");
+    },
+  };
+  const { hooks } = await load(launch(false), context);
+  assert.deepEqual(hooks, {});
+});
+
+test("the second generation's plugin turns itself off where OpenCode's plugin interface changed", async () => {
+  const dir = scratchWith({ "octoboard.js": "plugin.js", "plugin/index.js": "plugin-v2.js" });
+  fs.writeFileSync(join(dir, "octoboard.json"), JSON.stringify(launch(false)));
+  const plugin = (await import(pathToFileURL(join(dir, "plugin", "index.js")).href)).default;
+  const changed = {
+    location: { directory: dir },
+    tool: {
+      hook: () => {
+        throw new Error("a changed plugin interface");
+      },
+    },
+  };
+  const dispose = await plugin.setup(changed);
+  assert.equal(typeof dispose, "function");
+  dispose();
+  assert.equal(typeof (await plugin.setup({})), "function");
+});
+
+test("the TUI plugins turn themselves off where the route cannot be read, and leave nothing running", async () => {
+  const dir = scratchWith({ "tui.mjs": "tui.mjs", "tui-v2.js": "tui-v2.js" });
+  const v1 = (await import(pathToFileURL(join(dir, "tui.mjs")).href)).default;
+  const v2 = (await import(pathToFileURL(join(dir, "tui-v2.js")).href)).default;
+  await v1.tui({});
+  await v1.tui({ route: {} });
+  const dispose = v2.setup({});
+  assert.equal(typeof dispose, "function");
+  dispose();
+  // A timer left running would keep this test's process alive past the suite.
+  assert.ok(!fs.existsSync(join(dir, "attached-session")));
+});

@@ -60,6 +60,8 @@ pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
     // The record as this process runs under it: an account switch records the session on its
     // target once the process is down, and what the process left belongs to the account it ran as.
     let ran_as = state.store.get_session(&live.id).ok().flatten();
+    // Read here, on the thread that starts the watch, for the decision on an early exit.
+    let windows = super::early_exit::Windows::read();
     #[cfg(test)]
     let watched = live.clone();
     let task = tokio::spawn(async move {
@@ -75,6 +77,7 @@ pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
                 break;
             }
         }
+        let exited_at = std::time::Instant::now();
         // Saved before the live entry goes, so a terminal client attaching meanwhile finds
         // either the process or what it left, never neither.
         let saving = {
@@ -111,18 +114,24 @@ pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
         live.settle_program_status().await;
         live.end_program_status();
         live.note_input_recovery_ended();
+        // A CLI that exited as it started is started again one tier down, decided before the exit
+        // is recorded: such an exit is not recorded as interrupted, its owner is not told, and
+        // what was queued for it stays queued.
+        if super::early_exit::relaunch_if_early(&state, &live, exited_at, windows, ran_as.as_ref())
+            .await
+        {
+            live.settle_exit();
+            return;
+        }
         // Recorded while the process is still the session's: no launch can be claimed while
         // it is registered (`begin_launch`), so the row cannot belong to a relaunch yet — one
         // that reopened an archived session the moment the entry went would otherwise be made
         // interrupted by this write.
-        let exit = state
-            .live_session(&live.id)
-            .is_some_and(|current| Arc::ptr_eq(&current, &live))
-            .then(|| {
-                state.end_process_record(&live.id, |own| {
-                    state.store.record_session_exit(&live.id, now_millis(), own)
-                })
-            });
+        let exit = state.is_current(&live).then(|| {
+            state.end_process_record(&live.id, |own| {
+                state.store.record_session_exit(&live.id, now_millis(), own)
+            })
+        });
         unregister_live(&state, &live);
         match exit {
             Some(Ok(Some((before, session)))) => {

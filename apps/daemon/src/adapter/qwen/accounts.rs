@@ -1110,7 +1110,7 @@ mod tests {
     }
 
     /// The system layers are read within the size the launch reads them in, so a system file the
-    /// launch would refuse as unusable (here, over that size) is one this cannot tell either, where
+    /// launch could not use (here, over that size) is one this cannot tell either, where
     /// it would be read and found to say nothing of security if the limit were larger.
     #[test]
     fn a_system_file_over_the_launchs_size_is_unusable_here_too() {

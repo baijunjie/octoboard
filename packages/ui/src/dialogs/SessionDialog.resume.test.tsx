@@ -476,7 +476,7 @@ it("moves focus to the Session ID field when the focused record fields go", asyn
   typeResumeId(UUID);
   await settle();
   act(() => nameInput()!.focus());
-  answerRequests(daemon, heldBy("not_found"));
+  answerRequests(daemon, heldBy("outside_project", "s-unknown"));
   typeResumeId("11111111-2222-3333-4444-555555555556");
   await settle();
   expect(nameInput()).toBeUndefined();
@@ -641,8 +641,9 @@ it("asks again when the session the lookup named is not in the store, and goes b
   await settle();
   expect(locateRequests(daemon)).toHaveLength(2);
   expect(resumeStatusText()).toBe("");
-  expect(fieldError()?.textContent).toContain("No conversation with this ID was found");
-  expect(openDisabled()).toBe(true);
+  // Found nowhere, which opens on the agent the user picks.
+  expect(resumeAlert()?.textContent).toContain("No account has a record of this ID.");
+  expect(openDisabled()).toBe(false);
 });
 
 it("says the agent that holds the conversation is no longer offered, and never opens the pickers' fallback", async () => {
@@ -674,8 +675,6 @@ it("keeps the dialog open with the reason when the reopen is refused, without re
 
 it.each([
   { name: "belongs to a session outside the project", reply: heldBy("outside_project", "s-unknown"), message: "already belongs to a session outside this project", found: resumeAlert },
-  // No conversation having the ID is a verdict on the ID, so it is the field's own error.
-  { name: "is in no account", reply: heldBy("not_found"), message: "No conversation with this ID was found in any account.", found: fieldError },
 ])("says under the field that the conversation $name, and holds Open back", async ({ reply, message, found }) => {
   const { daemon } = renderForResume({}, reply);
   await chooseResume();
@@ -685,6 +684,29 @@ it.each([
   expect(openDisabled()).toBe(true);
   await submit();
   expect(sentOpenSession(daemon)).toBeUndefined();
+});
+
+// An ID no account holds is no refusal: the agent's own resume settles whether it has the conversation.
+it("warns under the field of an ID found in no account, and opens on the agent and account the user picks", async () => {
+  const { daemon } = renderForResume({ default_agent: "codex" }, heldBy("not_found"), claudeAccounts);
+  await chooseResume();
+  typeResumeId(UUID);
+  await settle();
+  const field = resumeField()!;
+  expect(fieldError()).toBeNull();
+  expect(field.getAttribute("aria-invalid")).not.toBe("true");
+  const warning = (field.getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)).find((element) => element?.querySelector('[data-slot="alert-root"]'));
+  expect(warning?.textContent).toContain("Conversation not found");
+  expect(warning?.textContent).toContain("No account has a record of this ID.");
+  expect(warning?.textContent).toContain("Choose the agent and account it was started in, and the session asks that agent to resume it.");
+  // The fields of a new session follow, its agent and account pickers enabled on the project's choice.
+  expect(nameInput()!.disabled).toBe(false);
+  expect(allDisabled(agentTriggers().slice(0, 1))).toBe(false);
+  expect(agentTriggers()[0]!.textContent).toBe("Codex");
+  expect(hasAdvanced()).toBe(true);
+  expect(openDisabled()).toBe(false);
+  await submit();
+  expect(sentOpenSession(daemon)).toMatchObject({ agent: "codex", resume_agent_session_id: UUID });
 });
 
 const otherProject = projectOf("p-2", parentConsole.id, "Billing");
@@ -764,4 +786,22 @@ it("brings back the owner choice and sends no conversation after choosing a new 
   await submit();
   expect(sentOpenSession(daemon)).toMatchObject({ bound_to: "s-hub-1" });
   expect(sentOpenSession(daemon)).not.toHaveProperty("resume_agent_session_id");
+});
+
+it("opens on a resumed record's account last read as logged out, warning of it under the held account rather than refusing", async () => {
+  const { daemon } = renderForResume({}, record("claude", "a-work"), {
+    ...claudeAccounts,
+    accountQuotas: [{
+      agent: "claude", account: "a-work", fetched_at: Date.now(), plan: null, windows: [],
+      unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" }, email: null,
+    }],
+  });
+  await chooseResume();
+  typeResumeId(UUID);
+  await settle();
+  expect(fieldError()).toBeNull();
+  expect(document.body.textContent).toContain("was last read as logged out");
+  expect(openDisabled()).toBe(false);
+  await submit();
+  expect(sentOpenSession(daemon)).toMatchObject({ agent: "claude", account: "a-work", resume_agent_session_id: UUID });
 });

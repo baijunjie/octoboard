@@ -5,7 +5,7 @@ import { walkComponents } from "../report/page/formModel";
 import { sameValue } from "../values/sameValue";
 import { isAgentAdded, isAgentUnavailable, projectSessionAgent } from "../agents/agents";
 import { servedLabel } from "./fixtureProviders";
-import { type Agent, type ConsoleSessionColour, type Session, type SessionRecordPresence, type SubmittedValue } from "../protocol";
+import { type Agent, type ConsoleSessionColour, type Session, type SessionRecordPresence, type StandingNotice, type SubmittedValue } from "../protocol";
 import { CONSOLE_SESSION_COLOURS } from "../sessions/sessionColours";
 import { childCanReport, sessionIsBusy } from "../sessions/sessionStatus";
 import { applyDaemonEvent } from "../store";
@@ -26,7 +26,7 @@ const agentNotAdded = (agent: Agent) => ({
 
 /** The replies about sessions. */
 export function createSessionReplies({ scenario, store, fail, refuseLocked }: FixtureContext, guards: AccountGuards, ledger: ProcessLedger): Handlers {
-  const { launchAccount, refuseIfSharingChanges, refuseIfDisabled, refuseIfQuotaExhausted, refuseIfNotSignedIn } = guards;
+  const { launchAccount, refuseIfSharingChanges, refuseIfDisabled, refuseIfQuotaExhausted, refuseIfNotSignedIn, signInUnconfirmed } = guards;
   const { treesOfSession, oldestFirst, keepTrees, refuseUnkeepable, unprobed, endSessions } = ledger;
   let openedSessionCount = 0;
   let pastedImageCount = 0;
@@ -370,8 +370,20 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       const account = launchAccount(owner, project, agent, body.account);
       refuseIfSharingChanges(account?.id);
       refuseIfDisabled(agent, account);
-      // A new session may be opened on an account whose quota is used up, so only a logged-out one is refused after.
-      refuseIfNotSignedIn(agent, account);
+      // A new session may be opened on an account whose quota is used up, and the user's own on one last read as logged
+      // out, which the session is told of instead.
+      const unconfirmed = signInUnconfirmed(agent, account);
+      // A conversation to resume that no account holds opens all the same, on the agent's own resume, and the session is
+      // told (`conversation_record_not_found`).
+      const resumeId = body.resume_agent_session_id?.trim() || undefined;
+      const located = scenario.conversationLocation ?? { kind: "not_found" as const };
+      const notFound: StandingNotice | undefined = resumeId && typeof located === "object" && "kind" in located && located.kind === "not_found" ? {
+        code: "conversation_record_not_found",
+        params: { agent: servedLabel(agent) },
+        message: `Octoboard could not find this conversation's record, so it asked ${servedLabel(agent)} to resume the conversation anyway. What ${servedLabel(agent)} finds is shown in the terminal.`,
+        at: Date.now(),
+      } : undefined;
+      const standing = [unconfirmed, notFound].filter((notice): notice is StandingNotice => notice !== undefined);
       const ordinal = nextConsoleOrdinals.get(owner.id) ?? 1;
       if (!project) nextConsoleOrdinals.set(owner.id, ordinal + 1);
       const session: Session = {
@@ -385,11 +397,11 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
         origin: "user",
         title: (body.title?.trim() || undefined) ?? project?.name ?? owner.name,
         status: body.task == null ? "idle" : "working",
-        has_conversation: false,
+        has_conversation: resumeId !== undefined,
         pinned: false,
         locked: false,
         started_at: Date.now(),
-        agent_session_id: null,
+        agent_session_id: resumeId ?? null,
         bound_to: project ? body.bound_to ?? null : null,
         ordinal: project ? null : ordinal,
         colour: project ? null : freshColour(owner.id),
@@ -399,6 +411,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
         ...(body.model !== undefined && { model: body.model }),
         ...(body.effort !== undefined && { effort: body.effort }),
         compatibility: applyCompatibility({}, body.compatibility),
+        ...(standing.length > 0 && { standing_notices: standing }),
       };
       store.setState({ sessions: new Map(current.sessions).set(session.id, session) });
       return { type: "session_opened", id: null, session };

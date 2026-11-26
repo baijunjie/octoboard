@@ -1217,6 +1217,34 @@ async fn a_provider_that_supplies_no_message_has_its_turn_ends_wait_for_none() {
     assert!(heard.contains("what the report said"), "{heard}");
 }
 
+/// A launch whose hooks are absent has nothing that would supply the turn's message, so its turn
+/// end does not wait for one, though its provider declares it supplies them: the report's `msg`
+/// stands and the session reads idle at once.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_turn_end_without_hooks_waits_for_no_message_nothing_supplies() {
+    let _declared = crate::test_support::test_provider::declaring_hooks(&SUPPLYING_HOOKS);
+    let (state, _dir, hub) = crate::test_support::owner_team::team_state(
+        "program-status-message-no-hooks",
+        &[("s", "hub", false, SessionStatus::Idle)],
+    );
+    let mut record = state.session_record("s").unwrap();
+    record.agent = AgentId::TEST;
+    record.has_conversation = false;
+    state.store.update_session(&record).unwrap();
+    let live = crate::test_support::bare_stand_in_of("s", AgentId::TEST, 80, 24);
+    assert!(live.hooks_absent());
+    state.register_live(live.clone());
+
+    live.on_output(b"\x1b]7501;state=working\x07");
+    live.settle_program_status().await;
+    let started = Instant::now();
+    live.on_output(&done_saying("what the report said"));
+    until_status(&state, SessionStatus::Idle).await;
+    assert!(started.elapsed() < PATIENCE / 2, "it did not wait");
+    let heard = crate::test_support::owner_team::hub_heard_of(&hub, "what the report said").await;
+    assert!(heard.contains("what the report said"), "{heard}");
+}
+
 /// An interrupted turn takes no message, and one supplied for it is not given to the next turn.
 #[tokio::test(flavor = "multi_thread")]
 async fn an_interrupted_turn_drops_the_message_supplied_for_it() {

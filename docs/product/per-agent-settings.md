@@ -143,6 +143,11 @@ new and resumed sessions, Claude Code's native rules and explicit-mode precedenc
 fallback from Auto to Ask when its native feature is unavailable. Permission grants and safeguards are explained in the
 risk confirmations.
 
+An approval mode chosen here is not applied to a launch started without Octoboard's additions, nor, for Codex, to a
+launch started again without the permission preset after Codex refused it as it started: the agent's own
+configuration then decides what the session may do, and the session's terminal banner says so (see `docs/product/launching-without-octoboards-additions.md` and "When Codex exits as it starts" in
+`docs/product/per-agent-launch-specifics.md`).
+
 Codex's choices, in menu order:
 
 - **Custom (config.toml)** passes no permission override. This is the initial choice. New sessions use the account's own

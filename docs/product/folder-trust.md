@@ -262,8 +262,12 @@ for it:
 - for Codex, which sends no hook report until its first prompt, until the first terminal title it sets or its first hook
   report, whichever comes first. Codex sets its terminal title only once its session has started — past the
   confirmation, and on an account's first launch past its sign-in screen, which comes before the confirmation — so there
-  is no limit on output or time before that either. Every launch sets the items its title shows (see "Codex" in
-  `docs/product/per-agent-launch-specifics.md`), so no configuration switches the title off.
+  is no limit on output or time before that either. Every launch with Octoboard's additions sets the items its title
+  shows (see "Codex" in `docs/product/per-agent-launch-specifics.md`), so no configuration switches the title off; a
+  plain launch, which sets none, stops looking at its input box, as below.
+
+A session that runs without its hooks, of any of these agents (see `docs/product/launching-without-octoboards-additions.md`),
+also stops looking once its input box is seen with no confirmation up.
 
 What Octoboard writes into a session while its confirmation may be up is held; see "Messages held until a session can
 take them" in `docs/product/message-delivery.md`.

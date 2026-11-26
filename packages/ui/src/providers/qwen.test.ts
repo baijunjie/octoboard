@@ -74,8 +74,10 @@ describe("the Qwen Code presentation module", () => {
   it("declares the error its descriptor does with its parameter and its remedy, and words both in every language", () => {
     const code = "provider.qwen.system_settings_unusable";
     const remedy = `${code}.remedy` as const;
-    // The message says which file, as the daemon sends it, and which agent it is the system settings of.
+    // The message says which file, as the daemon sends it, and which agent it is the system settings of. It states the
+    // cause only: it is the reason a launch started without the app's additions, never a refused launch.
     expect(qwen.codes[code]).toEqual({ origin: "daemon", recovery: remedy, codeParams: ["path"], uiParams: { agent: "Qwen Code" } });
+    expect(qwen.messages.en[code]).toBe("The {agent} system settings file {path} cannot be read as settings.");
     for (const [language, messages] of Object.entries(qwen.messages)) {
       expect(messages[code], `${language} ${code}`).toContain("{path}");
       expect(messages[code], `${language} ${code}`).toContain("{agent}");

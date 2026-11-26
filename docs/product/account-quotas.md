@@ -293,24 +293,30 @@ another directory (see "When quotas are read" in `docs/product/account-quota-rea
 launches a session opened on it even when the account is in fact not logged in, and refuses a new one only once that
 reading is held. A session opened before the reading arrives is not refused or ended when it does.
 
-An account that is not logged in is treated as clearly unusable:
+An account that is not logged in is treated as unusable wherever nobody may be at the terminal to log in, and as
+usable with a warning for a session the user opens:
 
-- **The daemon refuses to open a session on it, hand a session off to it or switch a session onto it**, by anyone, the
-  user included, with `account_not_signed_in` (see "When the agent or the account cannot open a session" in
+- **The daemon refuses to hand a session off to it, switch a session onto it, or open a session on it for anyone
+  else** (a session's `open_session` tool, an approved session request), the user's own handoff and switch included,
+  with `account_not_signed_in` (see "When the agent or the account cannot open a session" in
   `docs/product/opening-sessions.md`). A session already on it keeps running, and resuming, restarting or reopening a
   session is never refused for this.
+- **A session the user opens from a window opens on it all the same**, its terminal's banner saying that the account
+  was last read as logged out (`account_sign_in_unconfirmed`), until a later reading finds it logged in (see the same
+  section).
 - **Automatic account selection passes over it** (see "Which account a session uses" in
   `docs/product/opening-sessions.md`), and so does a session started by another session where it would otherwise run on
   its caller's own account (see "The agent and account of a session a session starts" in
   `docs/product/hub-orchestration.md`), and so does the automatic account switch (see "Which account it is switched to"
   in `docs/product/automatic-account-switch.md`).
-- **The window lists it but does not let it be chosen**: in the account pickers of the session dialog, the handoff
-  dialog and the forms in which the user approves a session's request, and in a session row's **Switch account**
-  submenu, it is listed,
+- **The window lists it but does not let it be chosen**: in the account pickers of the handoff dialog and the forms in
+  which the user approves a session's request, and in a session row's **Switch account** submenu, it is listed,
   disabled, with "Not logged in" under its name and, for assistive technology, the full reason as its description —
   that it is unavailable until it is logged in. A choice that ends on it is marked invalid with the reason that the
-  account is not logged in, so a session cannot use it, and to choose another account or log in to it. An account
-  that is turned off is described as turned off instead. The console and project dialogs' account pickers do not mark
+  account is not logged in, so a session cannot use it, and to choose another account or log in to it. The session
+  dialog lists it the same way but lets it be chosen, with a warning under the field in place of the reason (see "The
+  session dialog" in `docs/product/opening-sessions.md`). An account that is turned off is described as turned off
+  instead. The console and project dialogs' account pickers do not mark
   it, since a console's or project's account is a lasting preference.
 - **For an agent Octoboard cannot log in**, what the window says of such an account tells how to log in with the
   agent's own CLI instead of to log in to it (see "Agents Octoboard cannot log in" in

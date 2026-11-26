@@ -186,6 +186,12 @@ running, unless the agent's provider declares that they also say when it waits o
 cancelled, as Qwen Code does. Antigravity CLI and Pi take their status from OSC 7501, as does a Qwen Code launch with hooks disabled. See "Where the protocol is supported and where reports
 give the status" and "What reports can say beside an agent's hooks" in `docs/product/program-status-reports.md`.
 
+So does a session whose agent has a status integration but whose launch runs without its hooks: one started without
+Octoboard's additions, or one whose hooks were due and did not arrive within 30 seconds (see `docs/product/launching-without-octoboards-additions.md`). Where its program reports nothing either, its terminal
+title gives *working* and the prompt, never *waiting for the user*; how, and what that reading cannot tell, is in "A
+session whose hooks are absent and whose program reports nothing" in `docs/product/turns-hooks-do-not-report.md`. A
+hook that arrives later gives the session its hook-driven status again.
+
 Where an agent reports nothing, the status simply stays at its last reported value. The known cases, which are
 limitations of what the agents expose rather than of this one:
 

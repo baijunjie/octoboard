@@ -70,7 +70,8 @@ async function eventually(read, what) {
 // `server` is the stub's source, `command` what runs it and `timeout` the seconds a request of the
 // extension's own client may take.
 // `hookDelay` is how long, in seconds, the hook script takes before it keeps a payload and exits,
-// and `hookWaitMs` how long a run's prompt waits for it.
+// and `hookWaitMs` how long a run's prompt waits for it. `changed` replaces members of the fake
+// before the extension is loaded.
 async function load({
   name = "octoboard",
   users,
@@ -83,6 +84,7 @@ async function load({
   hookWaitMs = 2000,
   channel,
   reportTurnStatus = false,
+  changed = {},
 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "octoboard-pi-extension-"));
   for (const sub of ["scratch", "agent", "cwd/.pi", "hooks"]) mkdirSync(join(dir, sub), { recursive: true });
@@ -167,6 +169,8 @@ async function load({
       return files().map((file) => JSON.parse(readFileSync(join(dir, "hooks", file), "utf8")));
     },
   };
+  // What a test changes of the fake, as a Pi release with another extension interface would.
+  Object.assign(pi, changed);
   (await import(pathToFileURL(join(dir, "scratch", "octoboard-pi.js")).href)).default(pi);
   return pi;
 }
@@ -182,6 +186,28 @@ test("Pi reports its live projection at settle, rewind and compaction without an
   await pi.emit("session_compact");
   const reports = (await pi.forwarded(4)).filter((event) => event.hook_event_name === "context_usage");
   assert.deepEqual(reports.map(({ tokens, window }) => [tokens, window]), [[3485, 60000], [140, 60000], [null, 60000]]);
+  await pi.emit("session_shutdown");
+});
+
+// Pi exits as it starts on an extension that throws while loading (1.5.2, the capture
+// `pi_extension_throws_1.5.2.bin`), so a Pi whose extension interface has changed must still load
+// this one: with Octoboard's additions off, never with Pi ended.
+test("loading never throws into Pi, whatever its extension interface has lost", async () => {
+  for (const changed of [
+    { on: undefined },
+    { on: () => { throw new Error("changed"); } },
+    { registerMcpServer: undefined, registerTool: undefined },
+  ]) {
+    await load({ changed });
+  }
+});
+
+test("a handler that throws on what Pi gives it answers nothing instead of throwing into Pi", async () => {
+  const pi = await load();
+  const changed = { get aborted() { throw new Error("changed"); } };
+  const answers = await pi.answers("agent_settled", changed);
+  assert.ok(answers.length > 0);
+  assert.deepEqual(answers, answers.map(() => undefined));
   await pi.emit("session_shutdown");
 });
 

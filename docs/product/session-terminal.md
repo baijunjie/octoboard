@@ -18,7 +18,9 @@ The rest of the session terminal is described in its own docs:
 - reconnecting, the cover while the session's process cannot be reached, and the loading state:
   `docs/product/session-terminal-reconnecting-and-loading.md`;
 - the card, the history and the saved terminal preview of interrupted and archived sessions:
-  `docs/product/session-terminal-interrupted-and-archived-sessions.md`.
+  `docs/product/session-terminal-interrupted-and-archived-sessions.md`;
+- the banner over the top of the terminal that says what a running session lacks of Octoboard's additions:
+  `docs/product/standing-session-notices.md`.
 
 ## Typing and the mouse
 

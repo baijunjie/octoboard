@@ -38,7 +38,10 @@ and Grok Build's `StopFailure` hook event, or a Codex turn its rollout shows as 
 conversation record, and switches only when the record says the turn stopped on the plan's usage limit, by the same
 rules that decide whether a switch continues a turn (see "Continuing after a switch" in
 `docs/product/switching-session-accounts.md`). A failed turn that did not stop on the limit, an overload or a network
-error say, switches nothing and never shows the session as switching. The same reading decides, whether or not this
+error say, switches nothing and never shows the session as switching. Only Claude Code, Codex and Grok Build have a
+usage limit told this way, so only their sessions are ever switched: Qwen Code reports a failed turn through its own
+`StopFailure` hook too, but Octoboard has no reading of its records that tells a usage limit, and the other agents'
+failed turns are not read for one either. The same reading decides, whether or not this
 setting is on, whether Octoboard holds back what it writes into the session (see
 `docs/product/messages-held-after-a-usage-limit.md`).
 

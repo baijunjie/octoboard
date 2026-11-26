@@ -132,12 +132,14 @@ impl AppState {
         let Some(live) = self.live_session(id) else {
             return;
         };
+        // A launch whose hooks are absent reports no prompt it sends, so nothing would confirm one.
         if !live
             .agent
             .descriptor()
             .capabilities
             .delivery
             .confirms_by_reported_prompt
+            || live.hooks_absent()
         {
             return;
         }

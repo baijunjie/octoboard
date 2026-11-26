@@ -48,7 +48,8 @@
 //! Nothing is injected — and nothing is attributed — when the user's `git` is older than
 //! [`MIN_GIT`], when the user's `GIT_CONFIG_PARAMETERS` is one git rejects, or when the
 //! directory cannot be written: a session without the variables works exactly as it would without
-//! Octoboard.
+//! Octoboard, and [`session_env`] says which of these kept them ([`Unavailable`]), for the launch
+//! to tell the user (`session_git_hooks_unavailable`).
 //!
 //! The dispatchers start two modes of this executable ([`ref_mode`], `octoboardd git-ref`, and
 //! [`gate_mode`], `octoboardd gate-hook`), and the second asks the daemon what the revert gate is
@@ -80,6 +81,7 @@ use crate::platform::fs as platform;
 use crate::platform::names;
 use crate::platform::shell::{self, posix_quote};
 use crate::processes::subprocess;
+use crate::protocol::{notice_code, Notice};
 
 /// The oldest git the variables are given to: the `'key'='value'` form of a
 /// `GIT_CONFIG_PARAMETERS` entry needs 2.31 (the variable itself, with `'key=value'` entries, is as
@@ -166,25 +168,92 @@ const PROBE_LIMITS: Limits = Limits::deadline(PROBE_TIMEOUT);
 /// is gone makes git run no hook at all; a month leaves only what nothing plausibly still uses.
 const STALE_AFTER: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
+/// Why a project session could not be given the dispatchers: a closed set, the `cause` of
+/// `session_git_hooks_unavailable`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Unavailable {
+    /// The user's `git` is older than [`MIN_GIT`]; its version as `major.minor`.
+    GitTooOld { version: String },
+    /// The user's own `GIT_CONFIG_PARAMETERS` is one git rejects.
+    UserConfiguration,
+    /// Anything else: no `git` found, a daemon executable that cannot be found, a directory that
+    /// cannot be written, a probe that failed.
+    Other,
+}
+
+impl Unavailable {
+    /// Its wire name.
+    pub fn cause(&self) -> &'static str {
+        match self {
+            Self::GitTooOld { .. } => "git_too_old",
+            Self::UserConfiguration => "user_configuration",
+            Self::Other => "other",
+        }
+    }
+
+    /// The standing notice of a project session launched without the dispatchers.
+    pub fn notice(&self) -> Notice {
+        let why = match self {
+            Self::GitTooOld { version } => {
+                format!("the installed git ({version}) is older than they need")
+            }
+            Self::UserConfiguration => {
+                "the GIT_CONFIG_PARAMETERS of the user's environment is one git rejects".to_string()
+            }
+            Self::Other => "they could not be prepared".to_string(),
+        };
+        let mut pairs = vec![("cause", self.cause())];
+        if let Self::GitTooOld { version } = self {
+            pairs.push(("version", version));
+        }
+        Notice::new(
+            notice_code::SESSION_GIT_HOOKS_UNAVAILABLE,
+            format!(
+                "This session runs without Octoboard's git hooks, since {why}: the branches it \
+                 creates are not attributed to it and the revert gate does not check its git. \
+                 The terminal and git work as usual."
+            ),
+            &pairs,
+        )
+        .standing()
+    }
+}
+
+/// The failure of a git older than [`MIN_GIT`], told apart from the other failures to prepare.
+#[derive(Debug)]
+struct GitTooOld(u32, u32);
+
+impl std::fmt::Display for GitTooOld {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "git {}.{} is older than the hooks need",
+            self.0, self.1
+        )
+    }
+}
+
+impl std::error::Error for GitTooOld {}
+
 /// What making the dispatchers ready came to, by the directory they are made under, the `git` and
 /// the daemon executable they were made for, so that only the first launch with each pays for the
-/// probes: the directory, or when the attempt failed.
-type Ready = Result<PathBuf, Instant>;
+/// probes: the directory, or when the attempt failed and why.
+type Ready = Result<PathBuf, (Instant, Unavailable)>;
 type ReadyByLaunch = HashMap<(PathBuf, String, String), Ready>;
 static READY: Mutex<Option<ReadyByLaunch>> = Mutex::new(None);
 
 /// The variables a project session's agent is started with so that its git reports the branches
 /// it creates: `GIT_CONFIG_PARAMETERS` with `core.hooksPath` = the dispatchers after the user's own
 /// entries, and what a report needs, which includes `key_file`, the launch's key file. `exe` is the
-/// executable the dispatchers start: the installation's entry point (see the module header). Empty
-/// when the session cannot be given them (see the module header).
+/// executable the dispatchers start: the installation's entry point (see the module header). Why
+/// not, when the session cannot be given them (see the module header).
 pub fn session_env(
     shell_env: &HashMap<String, String>,
     exe: &str,
     session_id: &str,
     port: u16,
     key_file: &Path,
-) -> Vec<(String, String)> {
+) -> Result<Vec<(String, String)>, Unavailable> {
     session_env_under(
         &paths::data_dir().join("githooks"),
         shell_env,
@@ -204,18 +273,12 @@ pub(crate) fn session_env_under(
     session_id: &str,
     port: u16,
     key_file: &Path,
-) -> Vec<(String, String)> {
+) -> Result<Vec<(String, String)>, Unavailable> {
     let Some(user) = user_parameters(shell_env, root) else {
-        return Vec::new();
+        return Err(Unavailable::UserConfiguration);
     };
-    let dir = match ready_dir(root, shell_env, exe) {
-        Ok(dir) => dir,
-        Err(err) => {
-            tracing::debug!(%err, "branch origins: no hook dispatchers for this session");
-            return Vec::new();
-        }
-    };
-    injected(&user, &dir, session_id, port, key_file)
+    let dir = ready_dir(root, shell_env, exe)?;
+    Ok(injected(&user, &dir, session_id, port, key_file))
 }
 
 /// One entry of a `GIT_CONFIG_PARAMETERS` value: its text as it stands, and the key and value it
@@ -384,13 +447,23 @@ fn injected(
 }
 
 /// The dispatchers under `root` for the user's `git` and this daemon executable, made ready on the
-/// first call.
-fn ready_dir(root: &Path, shell_env: &HashMap<String, String>, self_exe: &str) -> Result<PathBuf> {
+/// first call, or why they cannot be.
+fn ready_dir(
+    root: &Path,
+    shell_env: &HashMap<String, String>,
+    self_exe: &str,
+) -> Result<PathBuf, Unavailable> {
+    let other = |err: anyhow::Error| {
+        tracing::debug!(%err, "branch origins: no hook dispatchers for this session");
+        Unavailable::Other
+    };
     let exe = Path::new(self_exe);
     if !exe.is_absolute() || !exe.is_file() {
-        bail!("the daemon executable `{self_exe}` cannot be found for the report");
+        return Err(other(anyhow!(
+            "the daemon executable `{self_exe}` cannot be found for the report"
+        )));
     }
-    let git = env_shell::resolve_program("git", shell_env)?;
+    let git = env_shell::resolve_program("git", shell_env).map_err(other)?;
     let key = (root.to_path_buf(), git.clone(), self_exe.to_string());
     let cached = READY
         .lock()
@@ -406,12 +479,20 @@ fn ready_dir(root: &Path, shell_env: &HashMap<String, String>, self_exe: &str) -
             mark_in_use(&dir);
             return Ok(dir);
         }
-        Some(Err(failed)) if failed.elapsed() < FAILURE_KEPT => {
-            bail!("making the hook dispatchers ready failed a moment ago");
-        }
+        Some(Err((failed, why))) if failed.elapsed() < FAILURE_KEPT => return Err(why),
         _ => {}
     }
-    let prepared = prepare(root, &git, shell_env, self_exe);
+    let prepared = prepare(root, &git, shell_env, self_exe).map_err(|err| {
+        match err.downcast_ref::<GitTooOld>() {
+            Some(GitTooOld(major, minor)) => {
+                tracing::debug!(%err, "branch origins: no hook dispatchers for this session");
+                Unavailable::GitTooOld {
+                    version: format!("{major}.{minor}"),
+                }
+            }
+            None => other(err),
+        }
+    });
     if let Ok(dir) = &prepared {
         mark_in_use(dir);
     }
@@ -419,7 +500,13 @@ fn ready_dir(root: &Path, shell_env: &HashMap<String, String>, self_exe: &str) -
         .lock()
         .expect("hook dispatcher cache poisoned")
         .get_or_insert_with(HashMap::new)
-        .insert(key, prepared.as_ref().cloned().map_err(|_| Instant::now()));
+        .insert(
+            key,
+            prepared
+                .as_ref()
+                .cloned()
+                .map_err(|why| (Instant::now(), why.clone())),
+        );
     prepared
 }
 
@@ -439,11 +526,7 @@ fn prepare(
     );
     let version = git_version(&git)?;
     if version < MIN_GIT {
-        bail!(
-            "git {}.{} is older than the hooks need",
-            version.0,
-            version.1
-        );
+        return Err(GitTooOld(version.0, version.1).into());
     }
     let exec_path = exec_path(&git)?;
     let mut names: BTreeSet<String> = BUILT_IN_HOOKS.iter().map(|name| name.to_string()).collect();

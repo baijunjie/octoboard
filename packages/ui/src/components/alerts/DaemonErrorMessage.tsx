@@ -152,7 +152,7 @@ function CodedDaemonMessage({ error, part, ownTextApart }: { error: CodedError; 
   if (parts.droppedFiles) return <RefusedFiles entries={parts.droppedFiles} part={part} />;
   const left = parts.left;
   if (left) return <LeftBranches count={left.length} items={left} part={part} />;
-  const params = daemonParams<React.ReactNode>(language, error.code, error.params, { consoles, projects, sessions, shellTerminals, accounts, providers }, (value, monospace) => <InlineReference dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineReference>);
+  const params = daemonParams<React.ReactNode>(language, error.code, error.params, { consoles, projects, sessions, shellTerminals, accounts, providers }, (value, monospace, plain) => plain ? <bdi dir="auto">{value}</bdi> : <InlineReference dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineReference>);
   if (error.code === "conversation_held_in_project" || error.code === "conversation_held_in_console") {
     const holder = sessions.get(error.params.session);
     const task = holder && sessionTask(holder);
@@ -170,7 +170,7 @@ function CodedDaemonMessage({ error, part, ownTextApart }: { error: CodedError; 
     params.sessions = joinNodes(language, running, (id, key) => <InlineReference key={key} dir={sessions.has(id) ? "auto" : "ltr"} monospace={!sessions.has(id)} wrap>{sessions.get(id)?.title ?? id}</InlineReference>);
   }
   const structuredNested = parts.nested && new CodedError(parts.nested.message, parts.nested.code, parts.nested.params);
-  if (structuredNested) params.reason = <DaemonErrorMessage error={structuredNested} part="summary" />;
+  if (structuredNested) params.reason = <DaemonErrorMessage error={structuredNested} part="summary" nested />;
   const trustReasonId = `daemon.trust_reason.${error.params.reason_code}`;
   if ((error.code === "trust_answer_failed" || error.code === "trust_not_carried_over") && isMessageKey(trustReasonId)) {
     params.reason = <Message id={trustReasonId} params={{ ...params } as never} />;
@@ -207,9 +207,9 @@ function CodedDaemonMessage({ error, part, ownTextApart }: { error: CodedError; 
   const furtherId = parts.further;
   const further = furtherId ? <span className="block"><Message id={furtherId} params={params as never} /></span> : null;
   // The nested cause's recovery is the failure's own, a launch failure having none of its own.
-  const remedy = recovery ?? (parts.nestedRemedy && structuredNested && hasErrorRemedy(structuredNested) ? <DaemonErrorMessage error={structuredNested} part="remedy" /> : null);
-  const nestedFurther = structuredNested ? <DaemonErrorMessage error={structuredNested} part="further" /> : null;
-  const nestedRaw = structuredNested ? <DaemonErrorMessage error={structuredNested} part="raw" /> : null;
+  const remedy = recovery ?? (parts.nestedRemedy && structuredNested && hasErrorRemedy(structuredNested) ? <DaemonErrorMessage error={structuredNested} part="remedy" nested /> : null);
+  const nestedFurther = structuredNested ? <DaemonErrorMessage error={structuredNested} part="further" nested /> : null;
+  const nestedRaw = structuredNested ? <DaemonErrorMessage error={structuredNested} part="raw" nested /> : null;
   const ownText = parts.ownText ? <OwnText label={parts.ownText.label} text={parts.ownText.text} /> : null;
   if (part === "own") return ownText;
   const explanation = <>{further}{reasonLines}{nestedFurther}{ownTextApart ? null : ownText}</>;
@@ -261,8 +261,10 @@ export function ShellTimeoutCommand({ params: { shell, command, timeout } }: { p
  * explanation, then the user's own text unless `ownTextApart` (a surface that shows it on its own), never the raw
  * text; a code with `noSummary` has no sentence, and its whole message is empty where nothing else remains. A failure
  * the application has no words for shows its generic sentence, and its raw message is its `details` and its `raw`
- * (with a script error's stack). */
-export function DaemonErrorMessage({ error, showTitle = true, part, ownTextApart }: { error: ErrorPresentation; showTitle?: boolean; part?: DaemonErrorPart; ownTextApart?: boolean }): React.ReactElement | null {
+ * (with a script error's stack). `nested` draws a failure another one nests (a snapshot that timed out, under a CLI not
+ * found on the launch's fallback environment), which says what follows from it in its own sentence: a timed-out
+ * snapshot leaves out what the refusal of a request that needed it would say. */
+export function DaemonErrorMessage({ error, showTitle = true, part, ownTextApart, nested = false }: { error: ErrorPresentation; showTitle?: boolean; part?: DaemonErrorPart; ownTextApart?: boolean; nested?: boolean }): React.ReactElement | null {
   const t = useT();
   if (typeof error !== "string" && isUncataloguedFailure(error)) {
     if (part === undefined || part === "summary") return <>{t(uncataloguedSummaryKey(error))}</>;
@@ -278,16 +280,17 @@ export function DaemonErrorMessage({ error, showTitle = true, part, ownTextApart
   }
   if (part === "summary") return <>{t("daemon.shell_environment_timeout.cause")}</>;
   if (part === "own") return null;
-  const consequence = <Message id="daemon.shell_environment_timeout.sessionsBlocked" />;
+  // What a request refused for want of the environment cannot do; a nested timeout's failure says what followed instead.
+  const consequence = nested ? null : <p><Message id="daemon.shell_environment_timeout.refusedConsequence" /></p>;
   if (part === "remedy") return <span className="block">{t("daemon.shell_environment_timeout.recovery")}</span>;
   if (part === "raw") return null;
-  if (part === "details" || part === "further") return <><p>{consequence}</p><ShellTimeoutCommand params={error.params} /></>;
+  if (part === "details" || part === "further") return <>{consequence}<ShellTimeoutCommand params={error.params} /></>;
   return (
     <div className="flex min-w-0 flex-col gap-2 [overflow-wrap:anywhere]">
       {showTitle && <h3 className="text-base font-semibold text-foreground"><DaemonErrorTitle /></h3>}
       <ShellTimeoutCommand params={error.params} />
       <p>{t("daemon.shell_environment_timeout.cause")}</p>
-      <p>{consequence}</p>
+      {consequence}
       <p>{t("daemon.shell_environment_timeout.recovery")}</p>
     </div>
   );

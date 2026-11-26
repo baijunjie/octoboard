@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW, GIT_WORKFLOW_ITEM_KEYS } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
-import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type AgentCliUpdate, type AttachmentLimits, type Console, type DaemonUpdateStatus, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PageContent, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Received, type RemoteAccess, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
+import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type AgentCliUpdate, type AttachmentLimits, type Console, type DaemonUpdateStatus, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PageContent, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Received, type RemoteAccess, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal, type StandingNotice } from "../protocol";
 import { type MessageParams } from "../errors/codedError";
 import type { SessionRequest, State, TrustPrompt } from "../store";
 import type { NotificationFixture } from "./fixture";
@@ -442,6 +442,15 @@ export const SAMPLE = (() => {
  * code the catalog lacks. */
 export const sessionNoticeNotification = (session: string, code: string, params: MessageParams = {}, message = ""): NotificationFixture =>
   ({ kind: "broadcast", event: { type: "session_notice", session, code, params, message } });
+
+/** A standing notice the daemon sends about a session (`session_notice` with `standing`): kept on the session's record, as
+ * the daemon keeps it, and shown as the session's terminal banner, not as a toast. */
+export const standingNoticeNotification = (session: string, code: string, params: MessageParams = {}, message = ""): NotificationFixture =>
+  ({ kind: "broadcast", event: { type: "session_notice", session, code, params, message, standing: true } });
+
+/** A standing notice as a session's record holds it (`Session.standing_notices`), for a scenario's starting state. */
+export const standingNoticeOf = (code: string, params: MessageParams = {}, message = "", at = 1_767_225_600_000): StandingNotice =>
+  ({ code, params, message, at });
 
 /** An error the daemon sends that answers no request and names no session, shown as the app shows the real one. */
 export const broadcastErrorNotification = (code: string, params: MessageParams = {}, message = ""): NotificationFixture =>

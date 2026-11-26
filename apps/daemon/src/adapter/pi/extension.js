@@ -31,6 +31,20 @@ const TOOLS_WAIT_MS = 10_000;
 // has a limit, which a message this long stays well under however it is escaped.
 const MESSAGE_LIMIT = 200_000;
 
+// Subscribes `handler` to Pi's `event` so that it never throws into Pi: a handler that throws, or
+// whose promise rejects, answers nothing, as one that has nothing to say does. What Pi does with
+// a handler that throws is not measured; an extension that throws while loading ends Pi (1.5.2).
+function on(pi, event, handler) {
+  pi.on(event, (...args) => {
+    try {
+      const answer = handler(...args);
+      return answer instanceof Promise ? answer.catch(() => undefined) : answer;
+    } catch {
+      return undefined;
+    }
+  });
+}
+
 function readData() {
   try {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -271,7 +285,7 @@ function serveTools(pi, mcp) {
     registered = register(opened).catch(() => {});
   };
   // Not while the extension loads: Pi loads extensions for runs that start no session too.
-  pi.on("session_start", () => {
+  on(pi, "session_start", () => {
     try {
       open();
     } catch {
@@ -279,12 +293,12 @@ function serveTools(pi, mcp) {
     }
   });
   // A prompt waits for the tools, so that its first request declares them, but not for ever.
-  pi.on("before_agent_start", async () => {
+  on(pi, "before_agent_start", async () => {
     let timer;
     await Promise.race([registered, new Promise((resolve) => (timer = setTimeout(resolve, TOOLS_WAIT_MS)))]);
     clearTimeout(timer);
   });
-  pi.on("session_shutdown", () => {
+  on(pi, "session_shutdown", () => {
     ended = true;
     server?.close();
   });
@@ -469,7 +483,7 @@ function serveChannel(pi, command) {
     }
   };
 
-  pi.on("session_start", (_, ctx) => {
+  on(pi, "session_start", (_, ctx) => {
     if (child) return;
     try {
       // Starting the helper directly keeps its pipes intact on Windows. A detached cmd.exe
@@ -518,7 +532,7 @@ function serveChannel(pi, command) {
     }
   });
 
-  pi.on("input", (event, ctx) => {
+  on(pi, "input", (event, ctx) => {
     const sequence = ++inputSequence;
     if (event.source !== "extension") return;
     const candidate = candidates.find((message) => !message.observed && message.text === event.text);
@@ -538,7 +552,7 @@ function serveChannel(pi, command) {
       }
     });
   });
-  pi.on("message_start", (event) => {
+  on(pi, "message_start", (event) => {
     if (event.message?.role !== "user") return;
     const text = textOf(event.message.content);
     const candidate = candidates.find((message) => message.observed && message.text === text);
@@ -547,7 +561,7 @@ function serveChannel(pi, command) {
     clearTimeout(candidate.timer);
     if (!candidate.taken) report(candidate, "taken");
   });
-  pi.on("agent_settled", (event, ctx) => {
+  on(pi, "agent_settled", (event, ctx) => {
     const interrupted = escape;
     escape = undefined;
     if (!event.aborted || !interrupted?.confirmed.length) {
@@ -575,7 +589,7 @@ function serveChannel(pi, command) {
       candidates = candidates.filter((message) => !interrupted.confirmed.includes(message));
     }
   });
-  pi.on("session_shutdown", stop);
+  on(pi, "session_shutdown", stop);
 }
 
 function reportContextUsage(pi, data) {
@@ -599,11 +613,24 @@ function reportContextUsage(pi, data) {
     }
   };
   for (const event of ["session_start", "session_tree", "session_compact", "model_select", "context", "turn_end", "agent_settled"]) {
-    pi.on(event, report);
+    on(pi, event, report);
   }
 }
 
+// Pi's entry point, which never throws: Pi 1.5.2 exits as it starts on an extension that throws
+// while loading (`Failed to load extension`), so a Pi whose extension interface has changed under
+// this file would not start at all. Whatever fails here leaves Octoboard's additions off, or those
+// set up before the failure, and Pi runs as it would without them; the daemon then finds that no
+// hook comes and tells the user.
 export default function octoboard(pi) {
+  try {
+    install(pi);
+  } catch {
+    // Silent, as a hook's failure is.
+  }
+}
+
+function install(pi) {
   const data = readData();
   if (!data) return;
   if (typeof data.channel?.command === "string" && Array.isArray(data.channel.args)) serveChannel(pi, data.channel);
@@ -611,7 +638,7 @@ export default function octoboard(pi) {
   // An image path Octoboard pasted becomes an attachment before Pi expands the text. A message
   // that names none goes on as it is. The directory is looked for at each message: Octoboard
   // makes it at the session's first pasted image.
-  pi.on("input", (event) => {
+  on(pi, "input", (event) => {
     try {
       if (typeof event?.text !== "string") return undefined;
       const pastedDir = realPath(join(dirname(fileURLToPath(import.meta.url)), data.pasted.directory));
@@ -634,7 +661,7 @@ export default function octoboard(pi) {
   // script exits within `hook_wait_ms`. Forwarded at `message_start` instead, it could arrive after
   // a turn that ended at once (a refused request, an instant Esc) was closed, and open a turn of
   // its own. A run of an extension's custom message has no prompt to forward.
-  pi.on("before_agent_start", async (event) => {
+  on(pi, "before_agent_start", async (event) => {
     try {
       openingForwarded = typeof event?.prompt === "string";
       if (!openingForwarded) return;
@@ -645,7 +672,7 @@ export default function octoboard(pi) {
   });
   // Every other prompt that enters the conversation, a steering message Pi takes into a run, as
   // the model is given it: a message Esc puts back in the input box never gets here.
-  pi.on("message_start", (event) => {
+  on(pi, "message_start", (event) => {
     try {
       if (event?.message?.role !== "user") return;
       if (openingForwarded) {
@@ -658,7 +685,7 @@ export default function octoboard(pi) {
     }
   });
   if (typeof data.guard === "string") {
-    pi.on("tool_call", async (event, ctx) => {
+    on(pi, "tool_call", async (event, ctx) => {
       try {
         const path = event?.input?.path;
         // Pi's tools that write a file, each naming it in `path`. Its shell tool can write too, as
@@ -703,28 +730,28 @@ export default function octoboard(pi) {
     return statusTail;
   };
   if (data.report_turn_status) {
-    pi.on("agent_start", () => {
+    on(pi, "agent_start", () => {
       if (running) return;
       running = true;
       return reportStatus({ hook_event_name: "agent_status", turn_status: "working" });
     });
-    pi.on("ui_prompt_start", () => {
+    on(pi, "ui_prompt_start", () => {
       if (!running || ++promptDepth !== 1) return;
       return reportStatus({ hook_event_name: "agent_status", turn_status: "blocked" });
     });
-    pi.on("ui_prompt_end", () => {
+    on(pi, "ui_prompt_end", () => {
       if (!running || promptDepth === 0 || --promptDepth !== 0) return;
       return reportStatus({ hook_event_name: "agent_status", turn_status: "working" });
     });
   }
-  pi.on("session_start", (event, ctx) => {
+  on(pi, "session_start", (event, ctx) => {
     named = storedSessionId(ctx);
     forward(data.hook, { hook_event_name: "session_start", session_id: named, reason: event?.reason });
   });
   // A session `/new` or `/fork` opens is written at its first message, after its `session_start`,
   // so its id is given once a run has ended with its file there: the same event again, which the
   // daemon reads as it reads the one after `/resume`.
-  pi.on("agent_end", (event, ctx) => {
+  on(pi, "agent_end", (event, ctx) => {
     openingForwarded = false;
     try {
       const last = (event?.messages ?? []).findLast((message) => message?.role === "assistant");
@@ -742,7 +769,7 @@ export default function octoboard(pi) {
   // as the report's message, never what the model said: the daemon takes that from here. A run
   // the user cancelled is reported `idle`, which ends its turn with nothing to say: what it said
   // is dropped, or it would go out for a later settling that follows no run, a manual `/compact`.
-  pi.on("agent_settled", (event) => {
+  on(pi, "agent_settled", (event) => {
     openingForwarded = false;
     const report = running;
     running = false;

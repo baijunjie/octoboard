@@ -1,7 +1,7 @@
 import { ActionableError } from "../../errors/actionableError";
 import { leftBranchItems, type LeftBranchItem } from "../../errors/branchCleanupItems";
 import { droppedFileEntries, type DroppedFileEntry } from "../../errors/droppedFileEntries";
-import { CodedError, type MessageParams } from "../../errors/codedError";
+import { CodedError, nestedFailureParams, type MessageParams } from "../../errors/codedError";
 import { codeRecord, messageKey } from "../../errors/codes";
 import { furtherKey, hasRichMessage, hasTrustDiagnostic, messageCode } from "../../errors/daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, uncataloguedSummaryKey, unwordedReason } from "../../errors/errorPresentation";
@@ -55,7 +55,7 @@ export type DaemonErrorParts = {
 function nestedFailure(error: { code: string; params: MessageParams }): Failure | undefined {
   const { reason_code: reason } = error.params;
   if (!codeRecord(error.code)?.nested || !reason || reason === error.code) return undefined;
-  const nested = { code: reason, params: error.params, message: error.params.reason ?? "" };
+  const nested = { code: reason, params: nestedFailureParams(reason, error.params), message: error.params.reason ?? "" };
   return hasCodeParams(nested) || hasShellTimeoutDetails(nested) ? nested : undefined;
 }
 

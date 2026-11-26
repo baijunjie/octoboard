@@ -5,14 +5,14 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use uuid::Uuid;
 
 use crate::accounts::relocate;
 use crate::adapter;
 use crate::env_shell;
 use crate::protocol::{
-    error_code, Account, AgentId, CodedError, ConversationLocation, Session, SessionKind,
+    error_code, Account, AgentId, CodedError, ConversationLocation, Notice, Session, SessionKind,
     SessionStatus, TerminalAppearance,
 };
 use crate::records;
@@ -21,7 +21,9 @@ use crate::session::term;
 use crate::state::AppState;
 use crate::text::trimmed_or_none;
 
-use super::launch::{checked_launch_overrides, relaunch_session_with, LaunchEdit, LaunchOverrides};
+use super::launch::{
+    checked_launch_overrides, relaunch_session_telling, LaunchEdit, LaunchOverrides,
+};
 use crate::accounts::choice::{account_dir, agent_can_open};
 
 /// The conversation id `requested` to resume, trimmed, or `None` for none (blank counting as
@@ -104,39 +106,36 @@ pub(super) fn refuse_if_conversation_recorded(
     })
 }
 
-/// Refuses a conversation to resume that has no record in the account directory the session will
-/// launch with: the pinned one, else the default account's, resolved from the shell snapshot.
-/// Answers that snapshot (none for a pinned account) for the launch to use, so the check and the
-/// launch cannot disagree about where the default account is. Blocking.
+/// Looks for the record of a conversation to resume in the account directory the session will
+/// launch with: the pinned one, else the default account's, resolved from the launch environment
+/// (`env_shell::launch_env_from`, a fallback where the snapshot fails). Answers that environment
+/// (none for a pinned account) for the launch to use, so the look and the launch cannot disagree
+/// about where the default account is, and, when the record was not found, the standing notice the
+/// launch tells the user with ([`records::resumability::record_not_found_notice`]): a record not
+/// found proves nothing (a CLI release may keep its records elsewhere), so the session still opens
+/// and the agent's own resume says whether the conversation is there. Blocking.
 pub(super) fn locate_conversation_to_resume(
     agent: AgentId,
     config_dir: Option<&str>,
     id: &str,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>>,
-) -> Result<Option<HashMap<String, String>>> {
+) -> Result<(Option<env_shell::LaunchEnv>, Option<Notice>)> {
     let shell_env = match config_dir {
         Some(_) => None,
-        None => Some(snapshot().context("snapshotting the user's shell environment")?),
+        None => Some(env_shell::launch_env_from(snapshot())),
     };
-    let dir = account_dir(agent, config_dir, shell_env.as_ref());
-    relocate::locate(agent, &dir, id).map_err(|err| match err.downcast::<CodedError>() {
-        Ok(coded) if coded.code == error_code::CONVERSATION_NOT_FOUND => CodedError::raised(
-            error_code::CONVERSATION_TO_RESUME_NOT_FOUND,
-            format!(
-                "no conversation `{id}` of {} was found in `{}`",
-                agent.label(),
-                dir.display()
-            ),
-            &[
-                ("agent", agent.label()),
-                ("path", &dir.to_string_lossy()),
-                ("id", id),
-            ],
-        ),
-        Ok(coded) => anyhow::Error::new(coded),
-        Err(err) => err,
-    })?;
-    Ok(shell_env)
+    let dir = account_dir(agent, config_dir, shell_env.as_ref().map(|env| &env.vars));
+    let notice = match relocate::locate(agent, &dir, id) {
+        Ok(_) => None,
+        Err(err) => match err.downcast::<CodedError>() {
+            Ok(coded) if coded.code == error_code::CONVERSATION_NOT_FOUND => {
+                Some(records::resumability::record_not_found_notice(agent))
+            }
+            Ok(coded) => return Err(anyhow::Error::new(coded)),
+            Err(err) => return Err(err),
+        },
+    };
+    Ok((shell_env, notice))
 }
 
 /// Where the conversation `agent_session_id` is held, for the project `project` asking, as the
@@ -196,8 +195,8 @@ fn held_conversation(holder: &Session, project: &str) -> ConversationLocation {
 /// [`ConversationLocation::Record`] (`None` for the default account, as in a session's own
 /// account). A record's age is the modification time of what [`relocate::locate`] names, which for
 /// Grok Build is the session's directory, so only approximately when the last write was inside it.
-/// A snapshot that fails leaves the default accounts out, so as not to hide a stored account's
-/// record, and is the error only when nothing was found anywhere. Blocking.
+/// The default accounts are resolved from the launch environment, a fallback where the snapshot
+/// fails, as the launch that resumes the conversation resolves them. Blocking.
 fn find_conversation_to_resume(
     agents: &[AgentId],
     accounts: &[Account],
@@ -206,7 +205,6 @@ fn find_conversation_to_resume(
 ) -> Result<Option<ConversationLocation>> {
     let mut snapshot = Some(snapshot);
     let mut shell_env: Option<HashMap<String, String>> = None;
-    let mut snapshot_error = None;
     let mut newest: Option<(SystemTime, ConversationLocation)> = None;
     let mut locator = crate::records::Locator::default();
     for &agent in agents {
@@ -218,16 +216,7 @@ fn find_conversation_to_resume(
         for (account, config_dir) in std::iter::once(default).chain(pinned) {
             if config_dir.is_none() {
                 if let Some(take) = snapshot.take() {
-                    match take() {
-                        Ok(env) => shell_env = Some(env),
-                        Err(err) => {
-                            snapshot_error =
-                                Some(err.context("snapshotting the user's shell environment"))
-                        }
-                    }
-                }
-                if shell_env.is_none() {
-                    continue;
+                    shell_env = Some(env_shell::launch_env_from(take()).vars);
                 }
             }
             let dir = account_dir(agent, config_dir, shell_env.as_ref());
@@ -245,11 +234,7 @@ fn find_conversation_to_resume(
             }
         }
     }
-    match (newest, snapshot_error) {
-        (Some((_, location)), _) => Ok(Some(location)),
-        (None, Some(err)) => Err(err),
-        (None, None) => Ok(None),
-    }
+    Ok(newest.map(|(_, location)| location))
 }
 
 /// Relaunches a session without a process. `instruction` is given to it here rather than by the
@@ -271,7 +256,11 @@ fn find_conversation_to_resume(
 /// Before anything is relaunched, the session and each owner about to be launched are checked for a
 /// conversation the agent can still resume ([`check_resumable`]). The session itself is refused
 /// with `conversation_unresumable` when its conversation is proven gone, with nothing changed; an
-/// owner whose conversation is proven gone is relaunched into a fresh conversation instead. A
+/// owner whose conversation is proven gone is relaunched into a fresh conversation instead. Only a
+/// record missing under a CLI version whose records were seen recognised is proof
+/// (`crate::records::witness`): one looked for whole and not found without it resumes all the
+/// same, with the agent's own resume option, and the session is told
+/// (`conversation_record_not_found`). A
 /// record that sits only where its agent archives records is brought back first
 /// ([`unarchive_record`]), the session's own before any owner is launched. An owner's leftover
 /// records of the conversation it gives up go to the Trash. The login-shell snapshot is taken once
@@ -336,7 +325,9 @@ pub(crate) async fn resume_session_with_launch(
     let claim = state.begin_launch(id)?;
     // Taken once: the checks, the unarchive and every launch of this resume see the one
     // environment, and a default account is resolved from the same shell the agent will run in.
-    let shell = tokio::task::spawn_blocking(shell_snapshot).await??;
+    // Never refused for want of a snapshot: the launches tell a fallback.
+    let shell_env = env_shell::launch_env_from(tokio::task::spawn_blocking(shell_snapshot).await?);
+    let shell = shell_env.vars.clone();
     let owners = archived_owners(state, id)?;
     // Every session this resume would launch is checked before the first is, so a target whose
     // record is gone leaves the whole group as it was instead of reopening the owners above it.
@@ -386,14 +377,15 @@ pub(crate) async fn resume_session_with_launch(
         } else {
             unarchive_record(&checked, &shell).await?;
         }
-        relaunch_session_with(
+        relaunch_session_telling(
             state,
             &owner_claim,
             &owner,
             None,
             true,
-            Some(shell.clone()),
+            Some(shell_env.clone()),
             None,
+            notices_of(&checked),
             launch.clone(),
         )
         .await?;
@@ -401,14 +393,17 @@ pub(crate) async fn resume_session_with_launch(
     if let Some(overrides) = &overrides {
         overrides.record(state, id)?;
     }
-    let relaunched = relaunch_session_with(
+    // A record looked for whole and not found proves nothing without a witness: the session is
+    // resumed with the agent's own resume option, and told.
+    let relaunched = relaunch_session_telling(
         state,
         &claim,
         id,
         instruction,
         true,
-        Some(shell),
+        Some(shell_env),
         terminal_appearance,
+        notices_of(&target),
         launch,
     )
     .await;
@@ -444,7 +439,7 @@ pub(crate) async fn check_can_resume_with(
     id: &str,
     shell_snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
 ) -> Result<Vec<String>> {
-    let shell = tokio::task::spawn_blocking(shell_snapshot).await??;
+    let shell = env_shell::launch_env_from(tokio::task::spawn_blocking(shell_snapshot).await?).vars;
     let owners = archived_owners(state, id)?;
     let target = check_resumable(state, id, &shell).await?;
     if target.judgement.resumability == records::Resumability::Unresumable {
@@ -472,21 +467,32 @@ async fn check_resumable(
     if !session.status.has_no_process() {
         return Ok(Checked {
             session,
-            judgement: records::Judgement {
-                resumability: records::Resumability::Resumable,
-                needs_unarchive: false,
-            },
+            judgement: records::Judgement::resumable(),
         });
     }
     let shell = shell.clone();
     let state = Arc::clone(state);
     tokio::task::spawn_blocking(move || {
-        let locator = records::Locator::with_shell(shell).with_store(&state.store);
+        let locator = records::Locator::with_shell(shell)
+            .with_store(&state.store)
+            .with_witnesses(&state.record_witnesses);
         let judgement = records::judge(&locator, &session);
         Checked { session, judgement }
     })
     .await
     .map_err(Into::into)
+}
+
+/// What `checked` found that the session's launch has to tell it: that its record was looked for
+/// whole and not found, though that proves nothing (`conversation_record_not_found`). Handed to
+/// the launch as what it was asked, so a launch one tier down after an early exit tells it too.
+fn notices_of(checked: &Checked) -> Vec<crate::protocol::Notice> {
+    checked
+        .judgement
+        .record_not_found
+        .then(|| records::resumability::record_not_found_notice(checked.session.agent))
+        .into_iter()
+        .collect()
 }
 
 /// The refusal of a resume whose session the agent can no longer resume: launching it would only

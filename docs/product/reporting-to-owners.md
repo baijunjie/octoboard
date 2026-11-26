@@ -151,6 +151,13 @@ Grok Build reports no turn end at all for some turns, and the backstop Octoboard
 there fires about a minute after the turn ends, so a synthesised report for one of those turns
 arrives that much later. Independent sessions are never reported on.
 
+**A session started without Octoboard's additions cannot `report`**: its launch carries no Octoboard MCP server, so
+it has none of Octoboard's tools (see "The plain launch" in `docs/product/launching-without-octoboards-additions.md`). Its owner is told
+nothing of that launch by Octoboard; only the user is, through the session's terminal banner. **No report is
+synthesised for a turn its terminal title closed**, in a session whose hooks are absent and whose program reports
+nothing: the title cannot tell a turn's end from a cancel (see "A session whose hooks are absent and whose program
+reports nothing" in `docs/product/turns-hooks-do-not-report.md`).
+
 ## Notices to an owner
 
 Besides reports, Octoboard itself writes a few notices into an owner about a session bound to it, where no report would
@@ -166,7 +173,10 @@ running for another reason once the wait there is over, is not told, then or lat
   go on. An end somebody asked for is not told: an archive, the daemon shutting down, or an operation that stops the
   process itself, such as an account switch or a change of sharing. A process that ends by itself while such an
   operation holds the session is told all the same, unless that operation started it and reports its outcome (see
-  "When the switch fails" in `docs/product/automatic-account-switch.md`).
+  "When the switch fails" in `docs/product/automatic-account-switch.md`). A process that exits as it starts and is
+  started again with less of Octoboard's additions is not told (see "When the agent exits as it starts" in
+  `docs/product/launching-without-octoboards-additions.md`); its owner is told only when the session is left interrupted, the last of those
+  launches having exited too, or the launch that followed having failed.
 - **A session is waiting for the user.** When a reporting session comes to wait for the user — at a permission prompt, a
   question, a trust confirmation, a dialog of its agent, Codex's action title or a request of its own, by whichever
   route it is seen — its owner is told that the session is waiting for the user and only they can clear it, not to

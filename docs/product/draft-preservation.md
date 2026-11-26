@@ -18,7 +18,7 @@ A plain-text message sent through Pi’s extension or OpenCode’s private serve
 On supported launches, Octoboard first tries to deliver the automatic message separately while preserving the user's
 draft, without waiting for the user to finish typing:
 
-- **Claude Code 2.1.274 or later and Grok Build 1.0.70 or later:** when Octoboard recognises a nonempty composer and
+- **Claude Code and Grok Build, any version:** when Octoboard recognises a nonempty composer and
   can safely use the agent's native stash, it saves the draft, confirms the stash and an empty composer, then sends
   the automatic message. The agent restores the draft automatically after submission; Octoboard does not toggle the
   stash a second time. An existing stash of the user's is never overwritten by another stash operation. Octoboard
@@ -31,13 +31,15 @@ draft, without waiting for the user to finish typing:
   message for a later attempt rather than have the key land on a box that may be empty.
   Claude Code additionally requires a verifiable Ctrl-S stash binding in the configuration this launch uses; an
   overridden binding or an unreadable or unrecognised keybindings file disables this path.
-- **GitHub Copilot CLI 1.0.114 or later:** Ctrl-S saves a draft. The footer marks it as `stashed`. A second Ctrl-S
+- **GitHub Copilot CLI 1.0.60 or later, or of a version Octoboard cannot read:** Ctrl-S saves a draft. The footer marks it as `stashed`. A second Ctrl-S
   restores it once the automatic message has left the composer.
-- **Codex 0.166.0 or later, on a launch with its private app server** (see "Codex's private app server" in
+- **Codex, on a launch with its private app server** (see "Codex's private app server" in
   `docs/product/per-agent-launch-specifics.md`): automatic messages go into Codex's own queue and leave the composer
   untouched, so none of the composer checks, the native stash or the three-second grace period below applies to them
   (see "Messages through Codex's own queue" in `docs/product/message-delivery.md`).
 - **Any other Codex launch:** Octoboard uses no stash of Codex's, so its automatic messages take the guarded terminal
+  delivery below.
+- **A launch of any agent started without Octoboard's additions** (see `docs/product/launching-without-octoboards-additions.md`) uses no native stash either, whatever its version, and takes the guarded terminal
   delivery below.
 
 Octoboard reads the composer off the session's screen with faint text left out, so Claude Code's hints in an empty

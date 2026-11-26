@@ -247,6 +247,21 @@ pub fn runnable_architectures() -> Vec<&'static str> {
     }
 }
 
+/// Whether `binary` is a script shim (a `.cmd`, `.bat` or `.ps1`), which the host starts through
+/// `cmd` or PowerShell: free text on its command line is read by that interpreter, which can break
+/// it at a line break or take its metacharacters, so a launch gives such text another way.
+pub fn is_script_launcher(binary: &ResolvedBinary) -> bool {
+    binary
+        .program
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            ["cmd", "bat", "ps1"]
+                .iter()
+                .any(|script| extension.eq_ignore_ascii_case(script))
+        })
+}
+
 /// What `binary` is to the package `package` (`@scope/name`): a package manager's shim of it
 /// (npm's, pnpm's, Yarn's, Bun's or Volta's), with the directory the package is installed at, a
 /// script shim whose package was found nowhere, or no shim (see `package_shims`).
@@ -944,5 +959,20 @@ mod tests {
             probe_version(&ResolvedBinary::new(dir.join("missing.exe")), &environment),
             None
         );
+    }
+
+    /// A `.cmd`, `.bat` or `.ps1` launcher, in any case, is a script shim; an executable or a
+    /// file with no extension is not.
+    #[test]
+    fn only_a_script_shim_is_a_script_launcher() {
+        for shim in ["agent.cmd", "agent.BAT", "agent.Ps1", r"C:\npm\agent.cmd"] {
+            assert!(is_script_launcher(&ResolvedBinary::new(shim)), "{shim}");
+        }
+        for binary in ["agent.exe", "agent", "agent.cmd.exe", "agent.js"] {
+            assert!(
+                !is_script_launcher(&ResolvedBinary::new(binary)),
+                "{binary}"
+            );
+        }
     }
 }

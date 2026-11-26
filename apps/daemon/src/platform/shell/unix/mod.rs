@@ -130,6 +130,13 @@ pub fn runnable_architectures() -> Vec<&'static str> {
     vec![std::env::consts::ARCH]
 }
 
+/// Whether `binary` is a script shim, which the host starts through an interpreter that cannot be
+/// trusted with free text on its command line: never here, where a launcher script runs as it is
+/// and its arguments reach it untouched.
+pub fn is_script_launcher(_binary: &ResolvedBinary) -> bool {
+    false
+}
+
 /// What `binary` is to the package `package`: never a shim here, since the host runs the
 /// package's launcher script as it is.
 pub fn shim_package(_binary: &ResolvedBinary, _package: &str) -> Shim {

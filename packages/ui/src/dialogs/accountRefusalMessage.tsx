@@ -29,3 +29,13 @@ export function accountRefusalMessage(id: "accountChoice.disabled.description" |
   }
   return <Message id={id} params={{ name: account, settingsDialog: <InlineReference dir="auto" wrap><Message id="settings.title" /></InlineReference> }} />;
 }
+
+/** The `warning` of an account field (`AgentAccountField`) whose chosen account `name` was last read as not logged in,
+ * for a session the user opens, which the daemon opens on it all the same and tells of the reading. */
+export function signedOutWarning(name: string): { title: React.ReactNode; message: React.ReactNode; remedy: React.ReactNode } {
+  return {
+    title: <Message id="accountChoice.signedOut.warningTitle" params={{ name: <InlineReference dir="auto" wrap>{name}</InlineReference> }} />,
+    message: <Message id="accountChoice.signedOut.warning" />,
+    remedy: <Message id="accountChoice.signedOut.warningRemedy" />,
+  };
+}

@@ -262,6 +262,26 @@ it("refuses a handoff onto the receiving agent's account whose quota is used up,
   expect(onHandedOff).not.toHaveBeenCalled();
 });
 
+// A handoff is not the user opening a session of their own: the daemon still refuses it onto an account last read as
+// logged out, so the dialog refuses it too rather than warning.
+it("refuses a handoff onto the receiving agent's account last read as logged out, with no warning that it would open all the same", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle");
+  const quota: AccountQuota = {
+    agent: "codex", account: null, fetched_at: Date.now(), plan: null, windows: [], email: null,
+    unavailable: { code: "quota_not_signed_in", params: { agent: "Codex" }, message: "x" },
+  };
+  const { request, onHandedOff } = mount(session, [], [], { claude: "unavailable", codex: "available", grok: "unavailable" }, null, [quota]);
+  await settle();
+  expect(document.body.querySelector('[data-slot="field-error"] [role="alert"]')?.textContent).toContain("is not logged in, so a session cannot use it");
+  expect(document.body.textContent).not.toContain("was last read as logged out");
+  const handOff = buttons().find((button) => button.textContent === "Hand off")!;
+  expect(handOff.hasAttribute("disabled") || handOff.getAttribute("aria-disabled") === "true").toBe(true);
+  await act(async () => handOff.click());
+  await settle();
+  expect(request.mock.calls.some(([body]) => body.type === "handoff_session")).toBe(false);
+  expect(onHandedOff).not.toHaveBeenCalled();
+});
+
 it("still refuses a handoff when the receiving account it would start on is kept off by something else and only a used-up one is left", async () => {
   const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle");
   const quota: AccountQuota = {

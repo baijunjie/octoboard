@@ -108,7 +108,9 @@ a session mid-turn goes to that turn's agent as described in "Messages held unti
 
 A session is offered the tools of the Octoboard that launched it, for as long as that agent process runs: a tool
 Octoboard gains later reaches a running session only once it is next launched — resumed, reopened or moved to another
-account.
+account. A launch started without Octoboard's additions is offered none of these tools, nor a role description, for as
+long as it runs; the session keeps its role and binding, which its next launch with the additions carries again (see
+"The plain launch" in `docs/product/launching-without-octoboards-additions.md`).
 
 ## Several console sessions per console
 

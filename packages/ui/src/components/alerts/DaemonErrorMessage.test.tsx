@@ -338,13 +338,15 @@ it.each([
   ["field_required", { field: "account_id" }, ["account_id"]],
   ["field_too_long", { field: "session_id", limit: "100" }, ["session_id"]],
   ["conflicting_fields", { first: "model", second: "effort" }, ["model", "effort"]],
-  ["invalid_launch_setting", { value: "xhigh", field: "effort", agent: "Codex" }, ["xhigh", "effort", "Codex"]],
-] as const)("marks schema literals and technical fallback in %s without contaminating plain text", (code, params, chips) => {
+  // The agent is a product name: isolated plain text, no chip.
+  ["invalid_launch_setting", { value: "xhigh", field: "effort", agent: "Codex" }, ["xhigh", "effort"], ["Codex"]],
+] as const)("marks schema literals and technical fallback in %s without contaminating plain text", (code, params, chips, plainNames: readonly string[] = []) => {
   const error = new CodedError("fallback", code, params);
   const container = mount(<DaemonErrorMessage error={error} />);
   expect(Array.from(container.querySelectorAll("[data-inline-reference]"), (chip) => chip.textContent)).toEqual(chips);
+  expect(Array.from(container.querySelectorAll("bdi"), (name) => name.textContent)).toEqual(expect.arrayContaining([...plainNames]));
   const plain = daemonMessage("en", code, params, error.message, createStateStore({}).getState());
-  for (const value of chips) expect(plain).toContain(`\u2068${value}\u2069`);
+  for (const value of [...chips, ...plainNames]) expect(plain).toContain(`\u2068${value}\u2069`);
   expect(plain).not.toMatch(/<\/?(?:span|code)/);
 });
 
@@ -558,7 +560,9 @@ describe("a failed automatic account switch", () => {
   it("says what happened, then why on a line of its own with the nested failure's own chips", () => {
     const daemon = testDaemon();
     const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={new CodedError("fallback", "account_switch_automatically_failed", params)} /></DaemonProvider>);
-    expect(Array.from(container.querySelectorAll("[data-inline-reference]:not(:has(code))"), (chip) => chip.textContent)).toEqual(expect.arrayContaining(["Work", "Codex", "Spare"]));
+    // The accounts are references; the agent, a product name, is plain text.
+    expect(Array.from(container.querySelectorAll("[data-inline-reference]:not(:has(code))"), (chip) => chip.textContent)).toEqual(["Work", "Spare"]);
+    expect(container.textContent).toContain("Codex");
     expect(container.querySelector("code")?.textContent).toBe("/missing/project");
     const text = container.textContent?.replace(/[\u2066-\u2069]/g, "");
     expect(text).toContain("nor bring it back up on");
@@ -597,11 +601,44 @@ describe("a failed automatic account switch", () => {
   });
 });
 
-it("uses name chips for fixed agent and product references while leaving plain messages usable", () => {
+describe("a CLI not found on a launch's fallback environment", () => {
+  const snapshot = { shell: "/bin/zsh", command: "env", timeout: "10s" };
+  const raised = new CodedError("fallback", "binary_not_found", { binary: "codex", cause: "earlier_capture", reason: "timed out", reason_code: "shell_environment_timeout", ...snapshot });
+  const launched = new CodedError("fallback", "launch_failed", { title: "Hub", reason: "not found", reason_code: "binary_not_found", binary: "codex", cause: "earlier_capture", inner_reason: "timed out", inner_reason_code: "shell_environment_timeout", ...snapshot });
+
+  it.each([["raised", raised], ["nested in a failed launch", launched]] as const)("is worded by its cause with the timed-out snapshot as its reason when %s, saying nothing a refused request would", (_, error) => {
+    const text = mount(<DaemonErrorMessage error={error} />).textContent!.replace(/[\u2066-\u2069]/g, "");
+    expect(text).toContain("in the environment captured earlier, which this launch used");
+    expect(text).toContain("did not finish within 10s");
+    expect(text).not.toContain("snapshotted shell environment");
+    expect(text).not.toContain("Sessions cannot start");
+    expect(text).not.toContain("cannot be done without");
+  });
+
+  it("is remedied from that cause", () => {
+    const remedy = mount(<RecoveryGuidance recovery="shellFallback" />).textContent!;
+    // Neutral as to why the snapshot failed: a shell that exits with an error falls back as one that times out does.
+    expect(remedy).toContain("Fix what keeps your login shell's environment from being read");
+    expect(remedy).toContain("so the app can read it");
+    expect(remedy).not.toMatch(/\{\w+\}/);
+  });
+});
+
+it("says what a request refused for a timed-out snapshot cannot do, and nothing of sessions", () => {
+  const text = mount(<DaemonErrorMessage error={new CodedError("fallback", "shell_environment_timeout", { shell: "/bin/zsh", command: "env", timeout: "10s" })} />).textContent!;
+  expect(text).toContain("This cannot be done without the login shell's environment");
+  expect(text).not.toContain("Sessions cannot start");
+});
+
+it("names agents and products as plain text with no chip while leaving plain messages usable", () => {
   const error = new CodedError("fallback", "agent_not_available", { agent: "Codex" });
   const daemon = testDaemon();
   const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
-  expect(Array.from(container.querySelectorAll("[data-inline-reference]:not(:has(code))"), (chip) => chip.textContent)).toEqual(["Codex"]);
+  expect(Array.from(container.querySelectorAll("[data-inline-reference]:not(:has(code))"), (chip) => chip.textContent)).toEqual([]);
+  // Isolated as an element, as React children are, not with the plain string's marks.
+  expect(container.textContent).not.toMatch(/[\u2066-\u2069]/);
+  const agent = [...container.querySelectorAll("bdi")].find((name) => name.textContent === "Codex")!;
+  expect(agent.getAttribute("dir")).toBe("auto");
   // The supported agents are the providers the daemon serves, each named as the daemon's registry has it, listed one
   // to an item under the sentence that introduces them.
   const list = container.querySelector("[role=list]")!;
@@ -628,7 +665,7 @@ it("names the agent of a refused operation by the label the daemon serves when i
 
 it.each([
   ["provider.codex.unarchive_failed.remedy", "Check that Codex runs in the login shell"],
-  ["provider.grok.sandbox_unsupported.remedy", "continue that one in Grok Build itself"],
+  ["provider.grok.sandbox_unsupported.remedy", "turn the sandbox off where it is set"],
 ] as const)("words the remedy %s from its provider's module, naming the provider", (remedy, text) => {
   const container = mount(<DaemonProvider value={testDaemon()}><RecoveryGuidance recovery={remedy} /></DaemonProvider>);
   expect(container.textContent).toContain(text);
@@ -652,7 +689,7 @@ it.each([
 it("retains a named quota window as a rich name and a plain isolated value", () => {
   const params = { agent: "Codex", account: "Work", window: "模型 / Model weekly" };
   const container = mount(<DaemonErrorMessage error={new CodedError("fallback", "account_quota_exhausted", params)} />);
-  expect(Array.from(container.querySelectorAll("[data-inline-reference]"), (chip) => chip.textContent)).toEqual(["Work", "Codex", params.window]);
+  expect(Array.from(container.querySelectorAll("[data-inline-reference]"), (chip) => chip.textContent)).toEqual(["Work", params.window]);
   expect(daemonMessage("en", "account_quota_exhausted", params, "fallback", createStateStore({}).getState())).toContain(`\u2068${params.window}\u2069`);
 });
 
@@ -729,20 +766,21 @@ it.each(["project", "console"])("preserves the held %s session's task and name a
   expect([...container.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent)).toEqual([session.title, "Owner"]);
 });
 
+// Git, a product name, is plain text in a remedy, as in the failure's message; the controls and literals stay references.
 it.each([
-  ["tool", ["Git", "PATH"]],
-  ["projectBranches", ["Terminal", "git worktree list", "git branch", "Git"]],
-  ["sessionBranches", ["Terminal", "Git"]],
-  ["repository", ["Git", "Git", "Terminal"]],
+  ["tool", ["PATH"]],
+  ["projectBranches", ["Terminal", "git worktree list", "git branch"]],
+  ["sessionBranches", ["Terminal"]],
+  ["repository", ["Terminal"]],
   ["noCommits", ["Terminal"]], ["shell", ["Terminal"]],
-  ["gitFailure", ["Terminal", "Git", "Git"]], ["gitSwitchFailure", ["Terminal", "Git", "Git"]], ["gitRestoreFailure", ["Terminal", "Git"]], ["gitHistory", ["Terminal"]], ["noUpstream", ["Terminal"]], ["mergeConflict", ["Terminal"]],
+  ["gitFailure", ["Terminal"]], ["gitSwitchFailure", ["Terminal"]], ["gitRestoreFailure", ["Terminal"]], ["gitHistory", ["Terminal"]], ["noUpstream", ["Terminal"]], ["mergeConflict", ["Terminal"]],
   ["unsentMessage", ["Enter"]],
 ] as const)("marks %s recovery references while preserving a matching plain companion", (recovery, englishValues) => {
   const container = mount(<RecoveryGuidance recovery={recovery} />);
   for (const language of ["en", "zh-CN"] as const) {
     act(() => setLanguage(language));
     const chips = [...container.querySelectorAll("[data-inline-reference]")];
-    const expected = language === "zh-CN" && recovery === "repository" ? ["Git", "终端", "Git"] : englishValues.map((value) => language === "zh-CN" && value === "Terminal" ? "终端" : value);
+    const expected = englishValues.map((value) => language === "zh-CN" && value === "Terminal" ? "终端" : value);
     expect(chips.map((chip) => chip.textContent)).toEqual(expected);
     for (const chip of chips) {
       const technical = ["PATH", "Enter", "git worktree list", "git branch"].includes(chip.textContent!);
@@ -780,13 +818,13 @@ it("keeps generic terminal nouns as prose rather than treating them as named con
   expect(container.querySelector("[data-inline-reference]")).toBeNull();
 });
 
-it("routes the operating-system reference in directory recovery through the shared rich/plain boundary", () => {
+it("names the operating system in directory recovery as plain text, in the rich and the plain message alike", () => {
   const params = { path: "/Volumes/مراجعة", detail: "permission denied" };
   const container = mount(<DaemonErrorMessage error={new CodedError("fallback", "directory_unreadable", params)} />);
-  const system = [...container.querySelectorAll("[data-inline-reference]")].find((chip) => chip.textContent === "macOS")!;
-  expect(system.getAttribute("dir")).toBe("auto");
-  expect(system.querySelector("code")).toBeNull();
-  expect(system.closest("span.block")?.textContent).toContain("asks for permission per volume");
+  // A product name the host supplies takes no chip; only the path is a reference.
+  expect([...container.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent)).not.toContain("macOS");
+  expect(container.textContent).toContain("macOS asks for permission per volume");
+  expect([...container.querySelectorAll("bdi")].map((name) => name.textContent)).toContain("macOS");
   // The raw text is Details' diagnostic block, and the visible sentence and remedy hold none of it.
   const summary = mount(<DaemonErrorMessage error={new CodedError("fallback", "directory_unreadable", params)} part="summary" />);
   const remedy = mount(<DaemonErrorMessage error={new CodedError("fallback", "directory_unreadable", params)} part="remedy" />);

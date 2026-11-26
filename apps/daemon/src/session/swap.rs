@@ -812,6 +812,8 @@ impl LiveSession {
             let box_before = finish.map(|_| self.input_box(&self.box_screen()));
             self.input_writes.fetch_add(1, Ordering::AcqRel);
             self.pty.write_input_locked(&input, now)?;
+            // A prompt has gone in: a hook that comes with the first turn is due.
+            self.hooks.note_due();
             if mid_turn {
                 draft.message_written_mid_turn(
                     Instant::now(),

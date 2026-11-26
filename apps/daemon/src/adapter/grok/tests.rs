@@ -566,22 +566,77 @@ fn grok_recognises_no_collapsed_paste() {
         .collapsed_paste("[Pasted text #1 +24 lines]"));
 }
 
-/// The stash is used from the first version measured to take it, and never on an unknown one.
+/// The stash is used on every launch: no release is known to lack it, and an unreadable version
+/// counts as having it.
 #[test]
-fn the_stash_is_used_only_from_the_measured_version() {
+fn the_stash_is_used_whatever_the_version() {
     let mut fixture = spec_fixture();
-    for (version, expected) in [
-        (None, false),
-        (Some((1, 0, 69)), false),
-        (Some((1, 0, 70)), true),
-    ] {
+    for version in [None, Some((1, 0, 41)), Some((1, 0, 70)), Some((9, 0, 0))] {
         fixture.agent_version = version;
-        assert_eq!(
+        assert!(
             GrokProvider
                 .screen()
                 .native_stash(&fixture.spec(), &LaunchPlan::default()),
-            expected,
             "{version:?}"
         );
     }
+}
+
+/// Grok's bare launch: `--resume`, `--model` and a new conversation's task after `--`, without
+/// `--no-leader`, the rules or a permission mode.
+#[test]
+fn its_bare_plan_names_the_conversation_the_model_and_the_task_only() {
+    let mut fixture = crate::adapter::tests::spec_fixture();
+    fixture.model = Some("model-a".to_string());
+    let bare = |resume: Option<&str>, task: Option<&str>| {
+        let mut spec = fixture.spec();
+        spec.resume_agent_session_id = resume;
+        spec.task = task;
+        GrokProvider.bare_plan(&spec)
+    };
+    assert_eq!(
+        bare(Some("c-1"), Some("ignored")).args,
+        ["--resume", "c-1", "--model", "model-a"]
+    );
+    assert_eq!(
+        bare(None, Some("do it")).args,
+        ["--model", "model-a", "--", "do it"]
+    );
+}
+
+/// A pinned home Grok has never been run against no longer refuses the launch: the CLI starts
+/// bare against that home, as it would in a plain terminal given it, and the user is told why
+/// the per-session home was not built. The switch still refuses such a home beforehand
+/// (`AgentProvider::refuse_unlaunchable_account`).
+#[test]
+fn a_pinned_home_never_run_against_starts_bare_against_it() {
+    let mut fixture = spec_fixture();
+    let home = fixture.scratch.join("never-run");
+    std::fs::create_dir_all(&home).expect("empty directory");
+    fixture.config_dir = Some(home.clone());
+    let mut spec = fixture.spec();
+    let launch = crate::session::term::plan_launch(
+        AgentId::GROK,
+        &GrokProvider,
+        &mut spec,
+        crate::adapter::LaunchTier::Enhanced,
+        None,
+        Ok(()),
+        false,
+    )
+    .expect("not refused");
+    assert_eq!(launch.tier, crate::adapter::LaunchTier::Bare);
+    let notice = launch.notice.expect("told");
+    assert_eq!(
+        notice.params["reason_code"],
+        crate::protocol::Code::of_provider(crate::providers::grok::HOME_NOT_INITIALIZED).as_str()
+    );
+    let (var, value) = grok::LAYOUT.config_dir_export(&home).expect("exportable");
+    assert!(launch
+        .plan
+        .env
+        .contains(&(var.to_string(), value.to_string_lossy().into_owned())));
+    assert!(GrokProvider
+        .refuse_unlaunchable_account(Some(&home))
+        .is_err());
 }

@@ -100,6 +100,103 @@ it("words a failed launch's reason from the failure's own code and params, keepi
   );
 });
 
+it("words a CLI not found on a launch's fallback environment by the fallback's cause, with the snapshot's failure as its reason", () => {
+  const params = {
+    binary: "codex",
+    cause: "earlier_capture",
+    reason: "the English account",
+    reason_code: "shell_environment_timeout",
+    shell: "/bin/zsh",
+    command: "env",
+    timeout: "10s",
+  };
+  const earlier = daemonMessage("en", "binary_not_found", params, "x", records);
+  expect(earlier.startsWith(`${isolate("codex")} was not found on ${isolate("PATH")} in the environment captured earlier, which this launch used`)).toBe(true);
+  expect(earlier).toContain("Reason: ");
+  expect(earlier).toContain(`${isolate("/bin/zsh -l -i -c 'env'")} did not finish within ${isolate("10s")}.`);
+  expect(earlier).not.toContain("the English account");
+  // The timed-out snapshot is the reason, not a refusal: nothing says what could not be done without the environment.
+  expect(earlier).not.toContain("cannot be done without");
+  expect(daemonMessage("en", "binary_not_found", { ...params, cause: "daemon" }, "x", records)).toContain("own environment, which this launch used");
+  // A cause this window does not know is worded as a fallback all the same.
+  expect(daemonMessage("en", "binary_not_found", { ...params, cause: "newer" }, "x", records)).toContain("in the fallback environment this launch used");
+  // Without a nested failure it is the refusal it always was, and so is the failure a failed launch nests.
+  expect(daemonMessage("en", "binary_not_found", { binary: "codex" }, "x", records)).toBe(
+    `${isolate("codex")} was not found on ${isolate("PATH")} in the snapshotted shell environment.`,
+  );
+  expect(messageCode("binary_not_found", { binary: "codex", reason_code: "binary_not_found" })).toBe("binary_not_found");
+  expect(messageCode("binary_not_found", { binary: "git" })).toBe("binary_not_found.git");
+});
+
+it("words a failed launch whose CLI was not found on its fallback environment by the fallback's cause, from the failure it nests in turn", () => {
+  // As the daemon nests it under `launch_failed`: the not-found failure is the reason, and the snapshot failure it nested
+  // is kept as the inner reason.
+  const params = {
+    title: "Hub",
+    reason: "`codex` was not found on PATH in the environment the launch fell back to",
+    reason_code: "binary_not_found",
+    binary: "codex",
+    cause: "daemon",
+    inner_reason: "the shell took too long",
+    inner_reason_code: "shell_environment_timeout",
+    shell: "/bin/zsh",
+    command: "env",
+    timeout: "10s",
+  };
+  const text = daemonMessage("en", "launch_failed", params, "x", records);
+  expect(text.startsWith(`Could not start ${isolate("Hub")}: ${isolate("codex")} was not found on ${isolate("PATH")} in `)).toBe(true);
+  expect(text).toContain("own environment, which this launch used");
+  expect(text).toContain(`Reason: ${isolate("/bin/zsh -l -i -c 'env'")} did not finish within ${isolate("10s")}.`);
+  expect(text).not.toContain("snapshotted shell environment");
+  expect(text).not.toContain("cannot be done without");
+  expect(messageCode("binary_not_found", params)).toBe("binary_not_found.daemon");
+});
+
+it("says what a request refused for a timed-out snapshot cannot do, no longer that sessions cannot start", () => {
+  const params = { shell: "/bin/zsh", command: "env", timeout: "10s" };
+  expect(messageCode("shell_environment_timeout", params)).toBe("shell_environment_timeout.refused");
+  const text = daemonMessage("en", "shell_environment_timeout", params, "x", records);
+  expect(text).toContain("This cannot be done without the login shell's environment");
+  expect(text).not.toContain("Sessions cannot start");
+});
+
+// The notices a launch that runs without the app's additions leaves on its session: each reads as a sentence of its own
+// in the window's language, the cause picking the sentence where the sentence differs by it.
+it.each([
+  ["shell_environment_unavailable", { cause: "earlier_capture" }, "captured earlier, which may be out of date"],
+  ["shell_environment_unavailable", { cause: "daemon" }, `started on ${appConfig.name}'s own environment`],
+  ["shell_environment_unavailable", {}, "started on a fallback one"],
+  ["shell_environment_unavailable", { cause: "from_a_newer_daemon" }, "started on a fallback one"],
+  ["session_git_hooks_unavailable", { cause: "git_too_old" }, "git is too old"],
+  ["session_git_hooks_unavailable", { cause: "user_configuration" }, "A git setting of yours"],
+  ["session_git_hooks_unavailable", { cause: "other" }, "could not give this session its git hooks"],
+  ["session_git_hooks_unavailable", {}, "could not give this session its git hooks"],
+  ["session_git_hooks_unavailable", { cause: "from_a_newer_daemon" }, "could not give this session its git hooks"],
+] as const)("words the standing notice %s of cause %j from its cause", (code, params, text) => {
+  expect(daemonMessage("en", code, params, "the daemon's English text", records)).toContain(text);
+});
+
+it("words the standing notices that name an agent or an account, showing the account by its name", () => {
+  expect(daemonMessage("en", "hooks_not_received", { agent: "Claude Code" }, "x", records)).toContain(`${isolate("Claude Code")} has not reported to ${appConfig.name}`);
+  expect(daemonMessage("en", "launch_retried_plain", { agent: "Codex" }, "x", records)).toContain(`${isolate("Codex")} exited right as it started`);
+  expect(daemonMessage("en", "conversation_record_not_found", { agent: "Codex" }, "x", records)).toContain("could not find this conversation's record");
+  expect(daemonMessage("en", "conversation_id_unknown", {}, "x", records)).toContain("does not know this session's conversation ID");
+  expect(daemonMessage("en", "account_sign_in_unconfirmed", { agent: "Claude Code", account: "Work" }, "x", records)).toBe(
+    `${isolate("Work")} (${isolate("Claude Code")}) was last read as logged out, so this session may not be logged in. If the agent asks you to log in, log in in the terminal.`,
+  );
+  // The default account is worded in the window's language, as for the other account refusals.
+  const toDefault = { agent: "Claude Code", account: DEFAULT_ACCOUNT_NAME };
+  expect(daemonMessage("en", "account_sign_in_unconfirmed", toDefault, "x", records)).toContain(isolate(DEFAULT_ACCOUNT_NAME));
+  expect(daemonMessage("zh-CN", "account_sign_in_unconfirmed", toDefault, "x", records)).not.toContain(isolate(DEFAULT_ACCOUNT_NAME));
+});
+
+it("words a launch that fell back to a plain terminal with the failure it nests as the reason", () => {
+  const text = daemonMessage("en", "launch_enhancements_unavailable", { agent: "Codex", reason_code: "shell_environment_timeout", shell: "/bin/zsh", command: "env -0", timeout: "10s" }, "x", records);
+  expect(text).toContain("started as it does in a plain terminal");
+  expect(text).toContain("Reason: ");
+  expect(text).toContain("did not finish within");
+});
+
 it("names the console whose avatar an import refuses, and words the same refusal of a lone console without a name", () => {
   expect(daemonMessage("en", "icon_too_large", { limit_kib: "256", console_name: "Hub" }, "x", records)).toBe(`The avatar of the console ${isolate("Hub")} is larger than ${isolate("256")} KiB.`);
   expect(daemonMessage("en", "icon_not_an_image", { console_name: "Hub" }, "x", records)).toBe(`The avatar of the console ${isolate("Hub")} is not an image.`);

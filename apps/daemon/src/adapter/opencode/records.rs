@@ -139,37 +139,55 @@ fn wait_for_v2_records(account: &RowAccount<'_>, deadline: Instant) -> io::Resul
     }
 }
 
-pub(super) fn check_resume(spec: &super::LaunchSpec<'_>, id: &str) -> anyhow::Result<()> {
+/// What OpenCode 2 answered, before a launch that resumes a conversation, about whether it still
+/// has it ([`resume_answer`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ResumeAnswer {
+    /// It has it.
+    Present,
+    /// It said it has no such conversation: the one answer that proves it gone, and the launch is
+    /// refused, since OpenCode 2 would start a new conversation under the id it was given.
+    Absent,
+    /// No answer that says either: no database where it is looked for, a query that could not run,
+    /// timed out or failed otherwise, readers busy, or an id not of OpenCode's form. The launch
+    /// goes ahead, and OpenCode's own resume says what it finds.
+    Unconfirmed,
+}
+
+impl ResumeAnswer {
+    /// The answer a lookup of the conversation came to: absent only on OpenCode's own word that it
+    /// has no such conversation ([`query_v2`]'s `NotFound`), unconfirmed on any other failure.
+    pub(super) fn of<T>(lookup: &io::Result<T>) -> Self {
+        match lookup {
+            Ok(_) => Self::Present,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Self::Absent,
+            Err(_) => Self::Unconfirmed,
+        }
+    }
+}
+
+/// Asks OpenCode 2 whether it still has the conversation `id` of the default account, through its
+/// own `api` command, for a launch that resumes it. Blocking, at most [`TIMEOUT`] and a reader's
+/// wait.
+pub(super) fn resume_answer(spec: &super::LaunchSpec<'_>, id: &str) -> ResumeAnswer {
     let account = RowAccount {
         config_dir: None,
         shell_env: spec.shell_env,
     };
-    let not_found = || {
-        crate::protocol::CodedError::raised(
-            crate::protocol::error_code::CONVERSATION_UNRESUMABLE,
-            "OpenCode no longer has this conversation",
-            &[
-                ("agent", AgentId::OPENCODE.descriptor().label),
-                ("session", spec.session_id),
-            ],
-        )
-    };
     if !OpenCodeRecords.names_conversation(id) || !database_exists(&account) {
-        return Err(not_found());
+        return ResumeAnswer::Unconfirmed;
     }
-    let _slot = Slot::acquire()?;
-    let deadline = Instant::now() + TIMEOUT;
-    wait_for_v2_records(&account, deadline)?;
-    let path = format!("/api/session/{id}");
-    match query_v2(
-        &account,
-        &["api", "--standalone", "GET", &path],
-        time_left(deadline)?,
-    ) {
-        Ok(_) => Ok(()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Err(not_found()),
-        Err(error) => Err(error.into()),
-    }
+    let lookup = Slot::acquire().and_then(|_slot| {
+        let deadline = Instant::now() + TIMEOUT;
+        wait_for_v2_records(&account, deadline)?;
+        let path = format!("/api/session/{id}");
+        query_v2(
+            &account,
+            &["api", "--standalone", "GET", &path],
+            time_left(deadline)?,
+        )
+    });
+    ResumeAnswer::of(&lookup)
 }
 
 fn v2_conversations(account: &RowAccount<'_>) -> Option<HashSet<String>> {

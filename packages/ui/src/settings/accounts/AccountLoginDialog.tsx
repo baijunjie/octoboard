@@ -79,7 +79,7 @@ function SecretQuestionDialog({ subject, question, words, url, send, close }: {
       <p>{subject}</p>
       <p><QuestionText question={question} id={words.question} /></p>
       {url && <ExternalLink href={url}>{t("settings.accounts.login.reopen")}</ExternalLink>}
-      <TextInput type="password" dir="ltr" label={t(words.field)} placeholder={t("settings.accounts.login.secret.placeholder")} value={secret} onChange={setSecret} autoFocus />
+      <TextInput type="password" dir={secret ? "ltr" : undefined} label={t(words.field)} placeholder={t("settings.accounts.login.secret.placeholder")} value={secret} onChange={setSecret} autoFocus />
     </Dialog>
   );
 }

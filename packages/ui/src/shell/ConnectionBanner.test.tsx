@@ -155,7 +155,7 @@ it("keeps a quickly recovered drop silent after a long healthy connection", () =
 function KeyboardHost({ state, menu = false }: { state: "open" | "closed" | "reconnecting"; menu?: boolean }) {
   useRegionCycle({
     shown: {
-      topbar: true, rail: false, devices: false, tasks: false, welcome: false, sidebar: false, archive: false, uploads: false,
+      topbar: true, rail: false, devices: false, tasks: false, welcome: false, sidebar: false, archive: false, notices: false, uploads: false,
       terminal: false, banner: state !== "open", update: false,
     },
     focusTerminal: () => {},

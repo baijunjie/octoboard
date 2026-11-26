@@ -146,6 +146,14 @@ it("counts one item in the singular", async () => {
   expect(container.textContent).toContain("1 item in effect");
 });
 
+it("draws the row's action as a soft danger button, the confirmation in the dialog being the strong one", async () => {
+  const { container } = mount({ shell: shellWith([LOGIN]) });
+  await settle();
+  const action = button(container, "Remove all")!;
+  expect(action.classList.contains("button--danger-soft")).toBe(true);
+  expect(action.classList.contains("button--danger")).toBe(false);
+});
+
 it("says there is nothing to remove, and holds the action disabled without a reason of its own", async () => {
   const shell = shellWith([]);
   const { container } = mount({ shell });

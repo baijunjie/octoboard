@@ -197,9 +197,15 @@ pub(crate) enum AccountGate {
     /// Turned off, used up or found logged out: an existing session moving onto the account (a
     /// switch, a handoff's receiving session).
     Full,
-    /// Turned off or found logged out: a new session, which the user may open on a used-up account
-    /// all the same.
+    /// Turned off or found logged out: a new session opened for someone other than the user at a
+    /// window (an agent's `open_session` tool, an approved session request, a scheduled run, a
+    /// handoff's receiving session), which nobody may be at to sign in. A used-up account is not
+    /// refused: a new session may open on one all the same.
     NewSession,
+    /// Turned off only: a new session the user opens from a window. An account found logged out is
+    /// not refused, since the reading may be wrong and the user is at the terminal to sign in; the
+    /// session is told instead (`account_sign_in_unconfirmed`, raised by the opening).
+    OwnOpen,
     /// Turned off only: an opening whose account the user still chooses, refused at approval.
     DisabledOnly,
 }
@@ -221,7 +227,7 @@ pub(crate) fn refuse_unless_account_usable(
     let (quota, signed_out) = match gate {
         AccountGate::Full => (true, true),
         AccountGate::NewSession => (false, true),
-        AccountGate::DisabledOnly => (false, false),
+        AccountGate::OwnOpen | AccountGate::DisabledOnly => (false, false),
     };
     if quota {
         refuse_if_account_quota_exhausted(state, agent, account_id, config_dir)?;

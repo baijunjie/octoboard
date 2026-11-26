@@ -7,16 +7,21 @@ use super::{
     SessionWindowName, SettingChoice, SettingDescriptor, SettingKind, SwitchDefault,
 };
 
-/// A Grok Build session's pinned source home exists but Grok has never been run against it, so it
-/// carries no login and no session history for the per-session home to link. `params` names
-/// `path`.
+/// A Grok Build account's directory exists but Grok has never been run against it, so it carries
+/// no login and no session history for the per-session home to link. A launch on it starts bare
+/// against that directory, the code the reason; a switch to it is refused. `params` names `path`.
 pub const HOME_NOT_INITIALIZED: ProviderCode =
     ProviderCode::error("provider.grok.home_not_initialized");
 /// A Grok Build launch would run under Grok's sandbox, which the per-session home cannot
-/// support. `params` names the `source` that sets the `profile`: an environment variable, or the
-/// file it is read from.
+/// support, so it starts bare against the account's own home, the code the reason. `params` names
+/// the `source` that sets the `profile`: an environment variable, or the file it is read from.
 pub const SANDBOX_UNSUPPORTED: ProviderCode =
     ProviderCode::error("provider.grok.sandbox_unsupported");
+/// A Grok Build launch left out `--no-leader`, which its release refused as it started, so where
+/// the user's configuration turns leader mode on, a stop cuts off a running turn without Grok's
+/// own shutdown. Standing, for the launch. No params.
+pub const LEADER_NOT_OVERRIDDEN: ProviderCode =
+    ProviderCode::notice("provider.grok.leader_not_overridden");
 
 impl AgentId {
     pub const GROK: AgentId = AgentId(DESCRIPTOR.id);
@@ -194,7 +199,11 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
             compatibility_with: Some("codex"),
         },
     ],
-    codes: &[HOME_NOT_INITIALIZED, SANDBOX_UNSUPPORTED],
+    codes: &[
+        HOME_NOT_INITIALIZED,
+        SANDBOX_UNSUPPORTED,
+        LEADER_NOT_OVERRIDDEN,
+    ],
 };
 
 #[cfg(test)]
@@ -247,14 +256,22 @@ mod tests {
 
     #[test]
     fn its_codes_are_of_the_kind_they_are_used_with() {
-        use super::super::ProviderCodeKind::Error;
+        use super::super::ProviderCodeKind::{Error, Notice};
         assert_eq!(
-            (HOME_NOT_INITIALIZED.kind, SANDBOX_UNSUPPORTED.kind),
-            (Error, Error)
+            (
+                HOME_NOT_INITIALIZED.kind,
+                SANDBOX_UNSUPPORTED.kind,
+                LEADER_NOT_OVERRIDDEN.kind
+            ),
+            (Error, Error, Notice)
         );
         assert_eq!(
             DESCRIPTOR.codes,
-            [HOME_NOT_INITIALIZED, SANDBOX_UNSUPPORTED]
+            [
+                HOME_NOT_INITIALIZED,
+                SANDBOX_UNSUPPORTED,
+                LEADER_NOT_OVERRIDDEN
+            ]
         );
     }
 }

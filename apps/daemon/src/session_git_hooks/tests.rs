@@ -157,7 +157,8 @@ fn no_variable_a_session_git_hooks_set_is_named_like_a_secret() {
         "session-1",
         7,
         &dir.join("key"),
-    );
+    )
+    .expect("the installed git is given the variables");
     assert!(!env.is_empty(), "the installed git is given the variables");
     for (name, _) in &env {
         let name = name.to_ascii_lowercase();
@@ -173,7 +174,8 @@ fn no_variable_a_session_git_hooks_set_is_named_like_a_secret() {
 /// The session works exactly as it would without Octoboard, which is to say it is given no
 /// variable at all, when the user's git is older than the hooks need, when the user's own
 /// `GIT_CONFIG_PARAMETERS` is already unreadable to git, and when the directory the dispatchers go
-/// in cannot be written. The same arguments with none of those hold give the variables.
+/// in cannot be written; each is answered with its cause, for the launch to tell the user. The
+/// same arguments with none of those hold give the variables.
 #[test]
 fn nothing_is_injected_where_the_session_would_work_better_without() {
     let dir = ScratchDir::new("githooks-skipped");
@@ -186,23 +188,27 @@ fn nothing_is_injected_where_the_session_would_work_better_without() {
         session_env_under(root, env, &exe, "session-1", 7, &key_file)
     };
     let env = isolated_git_env();
-    let control = session(&dir.join("githooks"), &env);
-    assert!(
-        !control.is_empty(),
-        "the installed git is given the variables"
-    );
+    let control =
+        session(&dir.join("githooks"), &env).expect("the installed git is given the variables");
+    assert!(!control.is_empty());
 
     let mut bogus = env.clone();
     bogus.insert(
         "GIT_CONFIG_PARAMETERS".to_string(),
         "'user.name'='unterminated".to_string(),
     );
-    assert!(session(&dir.join("githooks-bogus"), &bogus).is_empty());
+    assert_eq!(
+        session(&dir.join("githooks-bogus"), &bogus),
+        Err(Unavailable::UserConfiguration)
+    );
 
     // A file stands where the directory's parent would be.
     let blocker = dir.join("blocker");
     std::fs::write(&blocker, "a file").unwrap();
-    assert!(session(&blocker.join("githooks"), &env).is_empty());
+    assert_eq!(
+        session(&blocker.join("githooks"), &env),
+        Err(Unavailable::Other)
+    );
 
     #[cfg(unix)]
     {
@@ -213,8 +219,34 @@ fn nothing_is_injected_where_the_session_would_work_better_without() {
         crate::test_support::make_executable(&script);
         let mut old = env.clone();
         old.insert("PATH".to_string(), old_git.to_string_lossy().into_owned());
-        assert!(session(&dir.join("githooks-old"), &old).is_empty());
+        let too_old = Unavailable::GitTooOld {
+            version: "2.30".to_string(),
+        };
+        assert_eq!(
+            session(&dir.join("githooks-old"), &old),
+            Err(too_old.clone())
+        );
+        // Remembered: the next launch with that git is told the same cause without a probe.
+        std::fs::write(&script, "#!/bin/sh\nexit 1\n").unwrap();
+        assert_eq!(
+            session(&dir.join("githooks-old"), &old),
+            Err(too_old.clone())
+        );
+
+        let notice = too_old.notice();
+        assert_eq!(
+            notice.code,
+            crate::protocol::notice_code::SESSION_GIT_HOOKS_UNAVAILABLE
+        );
+        assert!(notice.standing);
+        assert_eq!(notice.params["cause"], "git_too_old");
+        assert_eq!(notice.params["version"], "2.30");
     }
+    assert_eq!(Unavailable::Other.notice().params.get("version"), None);
+    assert_eq!(
+        Unavailable::UserConfiguration.notice().params["cause"],
+        "user_configuration"
+    );
 }
 
 /// What a launch adds to the user's own `GIT_CONFIG_*` variables: the hooks path goes into
@@ -239,7 +271,8 @@ fn a_launch_adds_to_git_config_parameters_and_leaves_the_count_to_the_user() {
         "session-1",
         7,
         &dir.join("key"),
-    );
+    )
+    .expect("the installed git is given the variables");
     assert!(!vars.is_empty());
     let named = |name: &str| vars.iter().filter(|(n, _)| n == name).count();
     for name in ["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"] {
@@ -357,7 +390,8 @@ fn the_session_environment_names_the_key_file_and_holds_no_key() {
         "session-1",
         7,
         &key_file,
-    );
+    )
+    .expect("the installed git is given the variables");
     assert!(!env.is_empty(), "the installed git is given the variables");
     assert!(
         env.iter()

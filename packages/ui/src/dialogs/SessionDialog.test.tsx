@@ -423,7 +423,7 @@ it("updates the fixed owner's displayed name while the session dialog is open", 
   expect(document.body.textContent).not.toContain("First task");
 });
 
-it("opens on a usable agent automatically and retains an explicit agent pick even when it cannot open", async () => {
+it("opens on a usable agent automatically and retains an explicit agent pick on an account last read as logged out, warning of it and opening all the same", async () => {
   const { container, root, daemon } = renderDialog([], {
     settings: { ...DEFAULT_SETTINGS,
       auto_pull_repositories: false, auto_delete_unresumable_archives: true, auto_select_account: true,
@@ -437,6 +437,11 @@ it("opens on a usable agent automatically and retains an explicit agent pick eve
   await act(async () => pickerNamed("Agent").click());
   await act(async () => optionElements().find((option) => option.textContent?.includes("Claude Code"))?.click());
   expect(pickerNamed("Claude Code account")).toBeDefined();
-  expect(buttons().find((button) => button.textContent === "Open")?.disabled).toBe(true);
-  expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "open_session" }));
+  // The pick is the user's own open, which the daemon lets onto the account: a warning under the field, not a refusal.
+  expect(document.body.textContent).toContain("was last read as logged out");
+  expect(document.body.textContent).toContain("If the agent asks, log in in the terminal, or choose another account.");
+  const open = buttons().find((button) => button.textContent === "Open")!;
+  expect(open.disabled).toBe(false);
+  await act(async () => open.click());
+  expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", agent: "claude" }));
 });

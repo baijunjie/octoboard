@@ -25,10 +25,12 @@ use crate::adapter::AgentVersion;
 use crate::platform::shell::ResolvedBinary;
 use crate::protocol::AgentId;
 
-/// The first Claude Code measured with `claude agents --json` and `claude stop`. An older one, or
-/// one whose version is unknown, is not asked: an unknown subcommand may start a session instead
-/// of failing, and the launch would wait on it.
-pub(super) const BACKGROUND_SESSIONS_SINCE: AgentVersion = (2, 1, 329);
+/// The first Claude Code whose `claude agents --json` names each background session by the id
+/// `claude stop` takes: its changelog's 2.1.145 entry adds `claude agents --json`, and its 2.1.169
+/// entry the `id` field (`claude stop` is already named in 2.1.160's). An older one is not asked:
+/// before 2.1.50 `agents` is no subcommand and may start a session instead of failing, and the
+/// launch would wait on it. One whose version cannot be read is asked, as a current one is.
+pub(super) const BACKGROUND_SESSIONS_SINCE: AgentVersion = (2, 1, 169);
 
 /// How long each CLI call may take. Both answer in well under a second; the bound only keeps a
 /// stuck CLI from holding the launch.

@@ -2,7 +2,7 @@ import { isKeptForItsFolder } from "./branchCleanupItems";
 import { pathLinkRefusedCause, relocationCause, sessionDidNotStopCause, sourceUnavailableCause, storeWriteCause, type PathLinkRefusedCause, type RelocationCause, type SessionDidNotStopCause, type SourceUnavailableCause, type StoreWriteCause } from "./causes";
 import { ActionableError } from "./actionableError";
 import { CODE, codeRecord } from "./codes";
-import { CodedError } from "./codedError";
+import { CodedError, nestedFailureParams } from "./codedError";
 import { messageCode } from "./daemonMessage";
 import { isUncataloguedFailure } from "./uncataloguedFailure";
 
@@ -28,7 +28,11 @@ export type ErrorRecovery =
   | "fileBusy" | "symlink" | "notRestored" | "notRestoredAutomatic"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"
   | "diskSpaceNoRetry" | "accessNoRetry" | "appDataAccess" | "appDataDiskSpace" | "appDataAccessNoRetry" | "appDataDiskSpaceNoRetry" | "appDataOther" | "appDataOtherNoRetry" | "unlockOriginal" | "waitOriginal" | "stopSessionsNoRetry" | "archiveOriginal" | "handoffBothRunning"
+  | "shellFallback"
   | "none";
+
+/** The variants of `binary_not_found` on a launch's fallback environment (see `codes.ts`). */
+const SHELL_FALLBACK_VARIANTS: readonly string[] = ["binary_not_found.fallback", "binary_not_found.earlier_capture", "binary_not_found.daemon"];
 
 const OS_RECOVERY: Record<string, ErrorRecovery> = {
   ENOSPC: "diskSpace", EDQUOT: "diskSpace", EACCES: "access", EPERM: "access", EROFS: "access",
@@ -161,7 +165,7 @@ function isProjectBranchesWithoutGit(error: unknown): boolean {
  * own (its `reason` as the message), or its own failure when it names none. */
 function nestedFailure(error: CodedError): CodedError {
   const cause = error.params.reason_code;
-  return cause && cause !== error.code ? new CodedError(error.params.reason ?? "", cause, error.params) : error;
+  return cause && cause !== error.code ? new CodedError(error.params.reason ?? "", cause, nestedFailureParams(cause, error.params)) : error;
 }
 
 /** The code whose remedy `error` shows: the failure a `failureAndRemedy` notice nests, or its own. */
@@ -240,7 +244,12 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
     if (onlyKeptForTheirFolder(error)) return { kind: "actionable", recovery: "none" };
     // Remedied as it is worded: the variant its record names for a missing `git`. A removal that could not tell what
     // went along with its folder for want of one has nothing to try again; what it left follows (`additionalRecovery`).
-    if (code && messageCode(code, error.params) === "binary_not_found.git") return { kind: "actionable", recovery: "installGit" };
+    const worded = code ? messageCode(code, nestedFailureParams(code, error.params)) : undefined;
+    if (worded === "binary_not_found.git") return { kind: "actionable", recovery: "installGit" };
+    // A CLI not found on a launch's fallback environment: the login shell's environment, where it would be found, could not
+    // be read. The daemon falls back on any failed snapshot (a timeout, a shell that exits with an error or closes its
+    // output early), so the remedy names no one cause.
+    if (worded && SHELL_FALLBACK_VARIANTS.includes(worded)) return { kind: "actionable", recovery: "shellFallback" };
     const stopCause = code === CODE.session_did_not_stop ? sessionDidNotStopCause(error.params.cause) : undefined;
     if (stopCause) return { kind: "actionable", recovery: SESSION_DID_NOT_STOP_RECOVERY[stopCause] };
     if (isProjectBranchesWithoutGit(error)) return { kind: "actionable", recovery: "installGitNoRetry" };

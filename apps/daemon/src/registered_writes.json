@@ -61,6 +61,7 @@
     { "path": "store/settings.rs", "kind": "own", "writes": "`~/.octoboard/octoboard.db`, its backups and the copies moved aside." },
     { "path": "state/background_store.rs", "kind": "own", "writes": "`restart-screens.json` and `background-tasks.json` in `~/.octoboard`." },
     { "path": "state/restart_screens.rs", "kind": "own", "writes": "`restart-screens.json` and `background-tasks.json` in `~/.octoboard`." },
+    { "path": "state/standing_notices.rs", "kind": "own", "writes": "`withdrawn-notices.json` in a session's scratch directory." },
     { "path": "messaging/restart_outbox.rs", "kind": "own", "writes": "`~/.octoboard/restart-outbox.json`." },
     { "path": "processes/ledger/persist.rs", "kind": "own", "writes": "The process ledger in `~/.octoboard`." },
     { "path": "holder/build.rs", "kind": "own", "writes": "`builds/`, `holders/` and the quit record in `~/.octoboard`." },

@@ -29,7 +29,14 @@
 //! A new session passes `--session-id`, which opens the working directory's session of that id and
 //! creates it where there is none; a resume passes `--session`, which opens the stored one and
 //! fails, printing that no session matches, where it has gone, rather than quietly starting
-//! another. The measurements are in `docs/agent-cli-reference.md`, section "Pi".
+//! another. Where the record is in a records directory an earlier launch of the session selected
+//! through `PI_CODING_AGENT_SESSION_DIR`, the resume names that directory with `--session-dir`,
+//! where `--session` alone would not look. The measurements are in `docs/agent-cli-reference.md`,
+//! section "Pi".
+//!
+//! An option a Pi release no longer takes makes Pi exit as it starts, before it draws anything
+//! (`Error: Unknown option: …`, 1.5.2), and so does an extension that throws while loading: the
+//! launch is then started again bare, and the extension never throws into Pi.
 
 mod accounts;
 mod hooks;
@@ -163,6 +170,35 @@ impl AgentProvider for PiProvider {
         true
     }
 
+    /// The extension forwards Pi's `session_start` as Pi starts, once past the project-trust
+    /// confirmation, before anything is written into it. An extension that Pi loads but that
+    /// cannot set itself up (an extension interface changed under it) sends nothing, and the
+    /// launch is then read as one without hooks.
+    fn first_hook_due(&self, _spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> super::FirstHook {
+        super::FirstHook::AtStart
+    }
+
+    /// `--session <id>` for a resume (after `--session-dir` where the record is kept in an earlier
+    /// launch's records directory, [`resume_args`]), `--model`, and a new conversation's task as
+    /// the plan gives it ([`task_args`]).
+    fn bare_plan(&self, spec: &LaunchSpec<'_>) -> super::BarePlan {
+        let mut args = Vec::new();
+        if let Some(id) = spec.resume_agent_session_id {
+            args.extend(resume_args(spec, id));
+        }
+        if let Some(model) = spec.model {
+            args.push("--model".to_string());
+            args.push(model.to_string());
+        }
+        let (task, first_message) = task_args(spec);
+        args.extend(task);
+        super::BarePlan {
+            args,
+            shaped_prompt: None,
+            first_message,
+        }
+    }
+
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
         let agent = AgentId::PI;
         // Set only for a pinned directory; otherwise the shell snapshot's own value, if any,
@@ -175,10 +211,7 @@ impl AgentProvider for PiProvider {
             args.push("--approve".to_owned());
         }
         match spec.resume_agent_session_id {
-            Some(id) => {
-                args.push("--session".to_string());
-                args.push(id.to_string());
-            }
+            Some(id) => args.extend(resume_args(spec, id)),
             None => {
                 args.push("--session-id".to_string());
                 args.push(spec.new_agent_session_id.to_string());
@@ -213,21 +246,8 @@ impl AgentProvider for PiProvider {
         args.push("--extension".to_string());
         args.push(extension.to_string_lossy().into_owned());
 
-        // Positional messages start the first turn and stay interactive; after `--`, so a task that
-        // starts with `-` is not read as an option. One that starts with `@` is read as a file to
-        // include even there, and Pi exits where there is no such file (1.5.2), so it is queued
-        // as the session's first message instead: pasted into the input box it is taken as text.
-        let mut first_message = None;
-        if spec.resume_agent_session_id.is_none() {
-            match spec.task {
-                Some(task) if task.starts_with('@') => first_message = Some(task.to_string()),
-                Some(task) => {
-                    args.push("--".to_string());
-                    args.push(task.to_string());
-                }
-                None => {}
-            }
-        }
+        let (task, first_message) = task_args(spec);
+        args.extend(task);
 
         Ok(LaunchPlan {
             args,
@@ -236,6 +256,36 @@ impl AgentProvider for PiProvider {
             ..LaunchPlan::default()
         })
     }
+}
+
+/// How a launch gives Pi a new conversation's task, the plan and the bare plan alike: the
+/// arguments, and the session's first message where it is not one. Positional messages start the
+/// first turn and stay interactive; after `--`, so a task that starts with `-` is not read as an
+/// option. One that starts with `@` is read as a file to include even there, and Pi exits where
+/// there is no such file (1.5.2), so it is queued as the session's first message instead: pasted
+/// into the input box it is taken as text. A resume is given no task.
+fn task_args(spec: &LaunchSpec<'_>) -> (Vec<String>, Option<String>) {
+    match spec.task.filter(|_| spec.resume_agent_session_id.is_none()) {
+        Some(task) if task.starts_with('@') => (Vec::new(), Some(task.to_string())),
+        Some(task) => (vec!["--".to_string(), task.to_string()], None),
+        None => (Vec::new(), None),
+    }
+}
+
+/// How a launch resumes conversation `id`: `--session <id>`, after `--session-dir <dir>` where the
+/// record is in a records directory an earlier launch of the session selected through
+/// `PI_CODING_AGENT_SESSION_DIR` ([`records::kept_record_dir`]), since `--session` alone looks
+/// only in the directory the current environment selects (1.5.2). Where it is in none of them, the
+/// option is left out and Pi looks where a plain terminal's run would.
+fn resume_args(spec: &LaunchSpec<'_>, id: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    if let Some(dir) = records::kept_record_dir(spec.record_roots, id) {
+        args.push("--session-dir".to_string());
+        args.push(dir.to_string_lossy().into_owned());
+    }
+    args.push("--session".to_string());
+    args.push(id.to_string());
+    args
 }
 
 /// Pi's npm package.
@@ -377,6 +427,143 @@ mod tests {
     use super::*;
     use crate::adapter::tests::spec_fixture;
     use crate::protocol::{error_code, CodedError};
+
+    /// Pi's bare launch: `--session`, `--model`, and a new conversation's task after `--`, or as the
+    /// first message where it starts with `@`; no extension, role or approval flag.
+    #[test]
+    fn its_bare_plan_names_the_conversation_the_model_and_the_task_only() {
+        let mut fixture = crate::adapter::tests::spec_fixture();
+        fixture.model = Some("model-a".to_string());
+        let bare = |resume: Option<&str>, task: Option<&str>| {
+            let mut spec = fixture.spec();
+            spec.resume_agent_session_id = resume;
+            spec.task = task;
+            PiProvider.bare_plan(&spec)
+        };
+        assert_eq!(
+            bare(Some("c-1"), None).args,
+            ["--session", "c-1", "--model", "model-a"]
+        );
+        assert_eq!(
+            bare(None, Some("do it")).args,
+            ["--model", "model-a", "--", "do it"]
+        );
+        let file = bare(None, Some("@notes.md"));
+        assert_eq!(file.args, ["--model", "model-a"]);
+        assert_eq!(file.first_message.as_deref(), Some("@notes.md"));
+    }
+
+    /// The bare plan reads nothing it could fail on: over kept records directories that are gone
+    /// or not directories at all it still names the conversation, with no `--session-dir`.
+    #[test]
+    fn its_bare_plan_is_built_over_kept_directories_that_cannot_be_read() {
+        let fixture = spec_fixture();
+        let not_a_dir = fixture.scratch.join("a-file");
+        std::fs::write(&not_a_dir, "").unwrap();
+        let roots = [fixture.scratch.join("gone"), not_a_dir];
+        let mut spec = fixture.spec();
+        spec.record_roots = &roots;
+        spec.resume_agent_session_id = Some(KEPT);
+        assert_eq!(PiProvider.bare_plan(&spec).args, ["--session", KEPT]);
+    }
+
+    const KEPT: &str = "7e57ab1e-1111-4222-8333-944455556666";
+
+    /// Writes an empty record of conversation [`KEPT`] into `dir`, named as Pi names it.
+    fn keep_record(dir: &std::path::Path) {
+        put(
+            dir.join(format!("2026-11-26T05-00-00-000Z_{KEPT}.jsonl")),
+            "",
+        );
+    }
+
+    /// A resume whose record is in a records directory an earlier launch selected names that
+    /// directory with `--session-dir` before `--session`, in the plan and the bare plan alike,
+    /// since `--session` alone looks only where the current environment points (1.5.2); one whose
+    /// record is in none of them names none, and a new session never does.
+    #[test]
+    fn a_resume_names_the_kept_directory_that_holds_its_record() {
+        let mut fixture = spec_fixture();
+        fixture.new_agent_session_id = NEW.to_string();
+        let earlier = fixture.scratch.join("earlier-records");
+        let holds = fixture.scratch.join("kept-records");
+        std::fs::create_dir_all(&earlier).unwrap();
+        keep_record(&holds);
+        let roots = [earlier.clone(), holds.clone()];
+        let holds_arg = holds.to_string_lossy().into_owned();
+
+        let mut spec = fixture.spec();
+        spec.record_roots = &roots;
+        spec.resume_agent_session_id = Some(KEPT);
+        assert_eq!(
+            PiProvider.plan(&spec).expect("plan").args,
+            with_injection(
+                &fixture.scratch,
+                &["--session-dir", holds_arg.as_str(), "--session", KEPT],
+                &[]
+            )
+        );
+        assert_eq!(
+            PiProvider.bare_plan(&spec).args,
+            ["--session-dir", holds_arg.as_str(), "--session", KEPT]
+        );
+
+        // Not in any kept directory: Pi looks where the environment points, as in a terminal.
+        let elsewhere = [earlier];
+        spec.record_roots = &elsewhere;
+        assert_eq!(PiProvider.bare_plan(&spec).args, ["--session", KEPT]);
+        assert_eq!(
+            PiProvider.plan(&spec).expect("plan").args,
+            with_injection(&fixture.scratch, &["--session", KEPT], &[])
+        );
+
+        // A new session goes where the environment points, whatever is kept.
+        let mut spec = fixture.spec();
+        spec.record_roots = &roots;
+        assert!(!PiProvider
+            .plan(&spec)
+            .expect("plan")
+            .args
+            .iter()
+            .any(|arg| arg == "--session-dir"));
+        assert!(PiProvider.bare_plan(&spec).args.is_empty());
+    }
+
+    /// Pi's first hook is the extension's `session_start`, as Pi starts.
+    #[test]
+    fn its_first_hook_comes_as_pi_starts() {
+        let fixture = spec_fixture();
+        let spec = fixture.spec();
+        let plan = PiProvider.plan(&spec).expect("plan");
+        assert_eq!(
+            PiProvider.first_hook_due(&spec, &plan),
+            crate::adapter::FirstHook::AtStart
+        );
+    }
+
+    /// What Pi 1.5.2 writes when it exits as it starts: an option it does not take, an extension
+    /// that throws while loading, beside the near-miss of a resume whose record is not found. All
+    /// three are one line or two of plain output and nothing drawn, so each is an early exit by
+    /// the daemon's reading, and none leaves a conversation to name on the screen.
+    #[test]
+    fn its_early_exits_are_captured_before_anything_is_drawn() {
+        const UNKNOWN_OPTION: &[u8] =
+            include_bytes!("../../../testdata/pi_unknown_option_1.5.2.bin");
+        const EXTENSION_THROWS: &[u8] =
+            include_bytes!("../../../testdata/pi_extension_throws_1.5.2.bin");
+        const NOT_FOUND: &[u8] = include_bytes!("../../../testdata/pi_session_not_found_1.5.2.bin");
+        let text = |bytes: &[u8]| String::from_utf8(bytes.to_vec()).expect("UTF-8");
+        assert!(text(UNKNOWN_OPTION).contains("Error: Unknown option: --no-such-option"));
+        assert!(text(EXTENSION_THROWS).contains("Failed to load extension"));
+        assert!(text(NOT_FOUND).contains("No session found matching"));
+        for capture in [UNKNOWN_OPTION, EXTENSION_THROWS, NOT_FOUND] {
+            // No alternate screen, no bracketed paste, no title: nothing an interactive Pi does.
+            let capture = text(capture);
+            for drawn in ["\x1b[?1049h", "\x1b[?2004h", "\x1b]0;", "\x1b]7501"] {
+                assert!(!capture.contains(drawn), "{drawn:?} in {capture:?}");
+            }
+        }
+    }
 
     const NEW: &str = "new-agent-session";
     const RESUMED: &str = "resumed-session";

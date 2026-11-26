@@ -23,3 +23,12 @@ export class CodedError extends Error {
     this.params = params;
   }
 }
+
+/** The params of the failure `code` that another message nests, as that failure carries them itself. The nesting
+ * message's `reason` and `reason_code` are the failure's own message and code; a failure that nests one in turn (a
+ * `binary_not_found` on a launch's fallback environment, nesting why the login shell's could not be read) arrives with
+ * that one as `inner_reason` and `inner_reason_code`, which become its `reason` and `reason_code` again. */
+export function nestedFailureParams(code: string, params: MessageParams): MessageParams {
+  if (params.reason_code !== code || params.inner_reason_code === undefined) return params;
+  return { ...params, reason: params.inner_reason ?? "", reason_code: params.inner_reason_code };
+}

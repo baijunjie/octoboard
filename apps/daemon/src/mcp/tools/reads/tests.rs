@@ -152,8 +152,9 @@ async fn a_session_record_says_whether_it_is_paused_or_dormant() {
 }
 
 /// An interrupted or archived session says whether its agent still holds the conversation:
-/// proven gone is `false`, one that cannot be told `null`, one with no conversation `true`; a
-/// running session has no such field, and `list_archived_sessions` adds it only when asked.
+/// proven gone is `false` (only with a witness), one that cannot be told `null`, one with no
+/// conversation `true`; a running session has no such field, and `list_archived_sessions` adds it
+/// only when asked.
 #[tokio::test]
 async fn a_no_process_session_says_whether_it_can_be_resumed() {
     let fixture = RepoState::new("reads-resumable");
@@ -189,6 +190,9 @@ async fn a_no_process_session_says_whether_it_can_be_resumed() {
     state
         .set_session_account("kid", None, Some(&account.to_string_lossy()))
         .unwrap();
+    // A record missing proves nothing until the installed version was seen writing records.
+    assert!(get("kid").await.unwrap()["resumable"].is_null());
+    crate::records::fixtures::witness_every_agent(&state.record_witnesses);
     assert_eq!(get("kid").await.unwrap()["resumable"], false);
 
     let asked = call(

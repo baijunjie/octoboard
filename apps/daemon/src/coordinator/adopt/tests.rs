@@ -184,6 +184,188 @@ async fn a_running_sessions_terminal_is_adopted_with_its_token_scratch_directory
     assert!(scratch.is_dir());
 }
 
+/// The standing notices a launch had at its spawn, as its meta keeps them, are on the record of
+/// the session the adopting daemon serves, with the time they were raised; a meta from a build that
+/// predates them gives none.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_adopted_launch_keeps_the_standing_notices_its_meta_names() {
+    let (state, dir) = console_with_project_and_accounts("adopt-standing-notices");
+    record(&state, "s1", SessionStatus::Idle);
+    record(&state, "s2", SessionStatus::Idle);
+    let run_dir = dir.join("run");
+    let mut meta = session_meta("s1", &run_dir.join("s1"));
+    meta["standing_notices"] = json!([{
+        "code": "hooks_not_received",
+        "params": { "agent": "test" },
+        "message": "No hooks came.",
+        "at": 42,
+    }]);
+    let pids = left_behind(
+        &dir,
+        vec![
+            ("t1", meta, programs::sleep(60)),
+            (
+                "t2",
+                session_meta("s2", &run_dir.join("s2")),
+                programs::sleep(60),
+            ),
+        ],
+    );
+    let _guard = KillOnDrop(pids.clone());
+
+    let (_next, found) = found_all(&dir, 2).await;
+    adopt_in_blocking(&state, found, run_dir).await;
+
+    let kept = state
+        .wire_session(state.session_record("s1").unwrap())
+        .standing_notices;
+    assert_eq!(kept.len(), 1);
+    assert_eq!(
+        (kept[0].code.as_str(), kept[0].at),
+        ("hooks_not_received", 42)
+    );
+    assert!(state
+        .wire_session(state.session_record("s2").unwrap())
+        .standing_notices
+        .is_empty());
+}
+
+/// An adopted launch whose prompt went in on its command line under the previous daemon gets its
+/// draft back without a first hook falling due: an idle session raises no `hooks_not_received`.
+/// An adopted bare launch is noted as running no start hook, as its launch was, so a trust screen
+/// sighted after the adoption does not hold its messages for good.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_adopted_launch_prompt_makes_no_hook_due_and_a_bare_launch_runs_no_start_hook() {
+    let (state, dir) = console_with_project_and_accounts("adopt-launch-prompt");
+    record(&state, "s1", SessionStatus::Idle);
+    record(&state, "s2", SessionStatus::Idle);
+    let run_dir = dir.join("run");
+    let mut prompted = session_meta("s1", &run_dir.join("s1"));
+    prompted["launch_prompt"] = json!("the task");
+    prompted["tier"] = json!("enhanced");
+    prompted["first_hook"] = json!("with_first_turn");
+    let mut bare = session_meta("s2", &run_dir.join("s2"));
+    bare["tier"] = json!("bare");
+    let pids = left_behind(
+        &dir,
+        vec![
+            ("t1", prompted, programs::sleep(60)),
+            ("t2", bare, programs::sleep(60)),
+        ],
+    );
+    let _guard = KillOnDrop(pids.clone());
+
+    let (_next, found) = found_all(&dir, 2).await;
+    adopt_in_blocking(&state, found, run_dir).await;
+
+    let prompted = state.live_session("s1").expect("adopted");
+    assert_eq!(
+        prompted.hooks.state(),
+        crate::session::integration::Hooks::Expected
+    );
+    assert!(
+        !prompted.hooks.is_due(),
+        "the adopted prompt made no hook due"
+    );
+    assert!(!prompted.trust.start_hook_noted_absent());
+    let bare = state.live_session("s2").expect("adopted");
+    assert!(bare.trust.start_hook_noted_absent());
+}
+
+/// A standing notice the meta kept from the spawn and withdrawn since, as written down in the
+/// launch's scratch directory, is not brought back; one raised at another time under the same
+/// code, one of the same code and time with another detail, and every notice of a launch with
+/// nothing written down, are. A record written without a detail stands for a notice without one.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_notice_withdrawn_since_the_spawn_is_not_restored() {
+    let (state, dir) = console_with_project_and_accounts("adopt-notice-withdrawn");
+    record(&state, "s1", SessionStatus::Idle);
+    record(&state, "s2", SessionStatus::Idle);
+    let run_dir = dir.join("run");
+    let notices = json!([
+        {
+            "code": "conversation_id_unknown",
+            "params": { "agent": "test" },
+            "message": "The id is unknown.",
+            "at": 42,
+        },
+        {
+            "code": "account_sign_in_unconfirmed",
+            "params": { "account": "a" },
+            "message": "Signed out.",
+            "at": 43,
+        },
+        {
+            "code": "hooks_not_received",
+            "params": { "detail": "a" },
+            "message": "No hooks came.",
+            "at": 44,
+        },
+        {
+            "code": "hooks_not_received",
+            "params": { "detail": "b" },
+            "message": "No hooks came.",
+            "at": 44,
+        },
+    ]);
+    let mut metas = Vec::new();
+    for id in ["s1", "s2"] {
+        let scratch = run_dir.join(id);
+        std::fs::create_dir_all(&scratch).unwrap();
+        let mut meta = session_meta(id, &scratch);
+        meta["standing_notices"] = notices.clone();
+        metas.push(meta);
+    }
+    std::fs::write(
+        run_dir.join("s1").join("withdrawn-notices.json"),
+        json!([
+            { "code": "conversation_id_unknown", "at": 42 },
+            { "code": "account_sign_in_unconfirmed", "at": 7 },
+            { "code": "hooks_not_received", "detail": "a", "at": 44 },
+        ])
+        .to_string(),
+    )
+    .unwrap();
+    let mut metas = metas.into_iter();
+    let pids = left_behind(
+        &dir,
+        vec![
+            ("t1", metas.next().unwrap(), programs::sleep(60)),
+            ("t2", metas.next().unwrap(), programs::sleep(60)),
+        ],
+    );
+    let _guard = KillOnDrop(pids.clone());
+
+    let (_next, found) = found_all(&dir, 2).await;
+    adopt_in_blocking(&state, found, run_dir).await;
+
+    let kept = |id: &str| -> Vec<(String, Option<String>)> {
+        state
+            .wire_session(state.session_record(id).unwrap())
+            .standing_notices
+            .into_iter()
+            .map(|notice| (notice.code, notice.params.get("detail").cloned()))
+            .collect()
+    };
+    let notice = |code: &str, detail: Option<&str>| (code.to_string(), detail.map(str::to_string));
+    assert_eq!(
+        kept("s1"),
+        [
+            notice("account_sign_in_unconfirmed", None),
+            notice("hooks_not_received", Some("b")),
+        ]
+    );
+    assert_eq!(
+        kept("s2"),
+        [
+            notice("conversation_id_unknown", None),
+            notice("account_sign_in_unconfirmed", None),
+            notice("hooks_not_received", Some("a")),
+            notice("hooks_not_received", Some("b")),
+        ]
+    );
+}
+
 /// The background work the previous daemon saved comes back for the session adopted running the
 /// launch it was saved for, before the session is live, and not for one adopted running another.
 #[tokio::test(flavor = "multi_thread")]

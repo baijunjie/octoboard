@@ -115,7 +115,11 @@ by its conversation's session ID, with `request_resume_session` (see
   `docs/product/error-alerts.md`), whose next step is to archive the session if it is not archived already, delete it,
   and start a new session to carry on the work. Anything short of proof launches as before, with the launch's own
   refusals: a pinned account directory that no longer exists is still refused as in the bullet above
-  (`config_dir_unreachable`).
+  (`config_dir_unreachable`). A record that was looked for everywhere and not found, without that being proof (see
+  "When a conversation can no longer be resumed" below), resumes with the agent's own resume of the conversation, and
+  the session's terminal banner carries the standing notice `conversation_record_not_found`, saying the record was not
+  found and the agent was asked to resume anyway, what it finds being shown in the terminal (see
+  `docs/product/standing-session-notices.md`).
 - **A Codex conversation that Codex itself archived is brought back first.** When the session's rollout is only in the
   account's `archived_sessions/`, Octoboard runs `codex unarchive` for it under the session's account, then resumes it.
   If that fails, the reopen is refused with `provider.codex.unarchive_failed`, carrying Codex's own message, and the session is
@@ -134,7 +138,8 @@ by its conversation's session ID, with `request_resume_session` (see
   `claude agents --json`, changes no configuration file except in a config directory where Claude Code's first-run
   set-up or migrations are still to be done (see "Claude Code's first-run set-up" in
   `docs/product/account-quota-readings.md`). It runs only with
-  Claude Code 2.1.329 or later; with an older version, or one whose version is unknown, it is skipped. Continuing a
+  Claude Code 2.1.169 or later, the release whose listing names each background session by the id `claude stop`
+  takes, or one whose version is unknown; with an older version it is skipped. Continuing a
   conversation from Claude Code's agents view forks it under a new id, which never holds the original, so it is not
   involved. A launch that resumes no conversation runs none of this.
 - **Reopening a session whose owner is archived reopens its archived owners first, level by level from the topmost
@@ -202,23 +207,30 @@ does not count. The answer is one of three:
 
 - **Resumable**: the record is there. A session with no conversation yet (see the bullet on a session nobody ever
   typed into, above) is always resumable, since it relaunches into a fresh conversation.
-- **Unresumable**: the record is proven gone from the account.
+- **Unresumable**: the record is proven gone from the account. A record not found is proof only where this agent's
+  records, as the version of its CLI now installed for the account writes them, have been seen recognised: in this
+  daemon's run, a running session of that agent, launched on that same version, wrote a record Octoboard's search
+  found. A release that renames or moves its records leaves none recognised, so under it a record not found proves
+  nothing and the answer is unknown, as it is for a version that cannot be read and after the daemon starts, until a
+  session of that version writes again. What is in the table below is proof only with that sighting; OpenCode, whose
+  answer is OpenCode's own listing, needs none.
 
   | Agent | Unresumable when |
   |---|---|
   | Claude Code | no project directory of the account holds the transcript `<id>.jsonl`; a directory of the session's subagents' transcripts left without it does not count |
   | Codex | no rollout of the conversation, plain (`.jsonl`) or compressed (`.jsonl.zst`), is under the account's `sessions/` or `archived_sessions/`; a thread that had a turn reverted is one conversation, so any of its files (the first rollout or a later history segment) keeps it from being unresumable |
   | Grok Build | never: a session directory missing locally is unknown, since Grok Build restores sessions from its own remote registry |
-  | Pi | a complete search finds no matching record in the account's sessions tree or the alternate directory set by `PI_CODING_AGENT_SESSION_DIR` |
+  | Pi | a complete search finds no matching record in the account's sessions tree, the alternate directory set by `PI_CODING_AGENT_SESSION_DIR`, or any records directory an earlier launch of the session used (see "Pi" in `docs/product/per-agent-launch-specifics.md`) |
   | Qwen Code | a complete search finds no chat file. Title or runtime sidecars alone do not make a conversation resumable |
   | GitHub Copilot CLI | the session directory is absent from the searchable records directory. An index entry alone does not make it resumable |
   | Antigravity CLI | the per-conversation database is absent from the readable records directory |
   | OpenCode | a successful native listing of the default account omits the conversation |
 
-- **Unknown**: neither can be proven — the account directory cannot be read (missing, unmounted, permission denied),
-  or holds none of the agent's records directories at all; the default account's location cannot be determined; the
-  session's agent id is missing or is not a UUID; or the record could be behind a symbolic link or a directory that
-  cannot be searched in full.
+- **Unknown**: neither can be proven — the record was searched for in full and not found, but the installed version's
+  records were never seen recognised (above), which is the one case a resume tells the user of; the account directory
+  cannot be read (missing, unmounted, permission denied), or holds none of the agent's records directories at all; the
+  default account's location cannot be determined; the session's agent id is missing or is not a UUID; or the record
+  could be behind a symbolic link or a directory that cannot be searched in full.
 
   A session of an account whose directory shares the default configuration (see
   `docs/product/sharing-the-default-configuration.md`) reaches its records through links, so it is always judged

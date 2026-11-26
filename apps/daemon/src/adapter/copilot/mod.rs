@@ -147,9 +147,39 @@ impl AgentProvider for CopilotProvider {
         crate::records::conversation::text_of(summary, "name")
     }
 
+    /// `--resume=<id>` for a resume, `--model`, and a new conversation's task joined to
+    /// `--interactive=`.
+    fn bare_plan(&self, spec: &LaunchSpec<'_>) -> super::BarePlan {
+        let mut args = Vec::new();
+        if let Some(id) = spec.resume_agent_session_id {
+            args.push(format!("--resume={id}"));
+        }
+        if let Some(model) = spec.model {
+            args.push("--model".to_string());
+            args.push(model.to_string());
+        }
+        args.extend(task_arg(spec));
+        super::BarePlan {
+            args,
+            ..super::BarePlan::default()
+        }
+    }
+
+    /// Every planned launch loads the hooks plugin, and `sessionStart` runs with the session's
+    /// first prompt, not as Copilot starts, a resume included (1.0.114;
+    /// `docs/agent-cli-reference.md`, "GitHub Copilot CLI", "Hooks").
+    fn first_hook_due(&self, _spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> super::FirstHook {
+        super::FirstHook::WithFirstTurn
+    }
+
+    // No `reduced_plan`: an option a release does not take ends Copilot before it draws anything,
+    // with nothing that tells one of Octoboard's options from another
+    // (`testdata/copilot-captures.md`, "Exits at start"), so the launch goes to the bare one.
+
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
         let agent = AgentId::COPILOT;
-        // Refused here, before anything is written for the launch.
+        // A pinned directory that cannot be exported has refused the launch before planning
+        // (`session::term::plan_launch`); asked again here, before anything is written for it.
         let pinned = super::pinned_config_dir_export(spec, agent)?;
         let mut args = Vec::new();
         match spec.resume_agent_session_id {
@@ -183,13 +213,7 @@ impl AgentProvider for CopilotProvider {
             args.push("--reasoning-effort".to_string());
             args.push(effort.to_string());
         }
-        // Starts interactive mode on the prompt. Joined to the flag, since a task that starts with
-        // `-` given as an argument of its own is refused as an unknown option.
-        if spec.resume_agent_session_id.is_none() {
-            if let Some(task) = spec.task {
-                args.push(format!("--interactive={task}"));
-            }
-        }
+        args.extend(task_arg(spec));
 
         let mut env = Vec::new();
         // Set only for a pinned directory; otherwise the shell snapshot's own value, if any,
@@ -447,11 +471,104 @@ fn instructions_dirs(spec: &LaunchSpec<'_>, own: &Path) -> String {
     dirs
 }
 
+/// A new conversation's task, the plan and the bare plan alike: `--interactive`, which starts
+/// interactive mode on the prompt, joined to the flag, since a task that starts with `-` given as
+/// an argument of its own is refused as an unknown option. A resume is given no task.
+fn task_arg(spec: &LaunchSpec<'_>) -> Option<String> {
+    spec.task
+        .filter(|_| spec.resume_agent_session_id.is_none())
+        .map(|task| format!("--interactive={task}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::adapter::tests::spec_fixture;
     use crate::protocol::{error_code, CodedError};
+
+    /// Copilot's bare launch: `--resume=`, `--model` and a new conversation's task joined to
+    /// `--interactive=`, without the plugin, MCP configuration or tool allowance.
+    #[test]
+    fn its_bare_plan_names_the_conversation_the_model_and_the_task_only() {
+        let mut fixture = crate::adapter::tests::spec_fixture();
+        fixture.model = Some("model-a".to_string());
+        let bare = |resume: Option<&str>, task: Option<&str>| {
+            let mut spec = fixture.spec();
+            spec.resume_agent_session_id = resume;
+            spec.task = task;
+            CopilotProvider.bare_plan(&spec)
+        };
+        assert_eq!(
+            bare(Some("c-1"), Some("ignored")).args,
+            ["--resume=c-1", "--model", "model-a"]
+        );
+        assert_eq!(
+            bare(None, Some("-do it")).args,
+            ["--model", "model-a", "--interactive=-do it"]
+        );
+    }
+
+    /// The first hook of a planned launch comes with its first turn, for a new conversation and a
+    /// resumed one alike.
+    #[test]
+    fn its_first_hook_comes_with_the_first_turn() {
+        let fixture = crate::adapter::tests::spec_fixture();
+        for resume in [None, Some("c-1")] {
+            let mut spec = fixture.spec();
+            spec.resume_agent_session_id = resume;
+            let plan = CopilotProvider.plan(&spec).expect("plan");
+            assert_eq!(
+                CopilotProvider.first_hook_due(&spec, &plan),
+                crate::adapter::FirstHook::WithFirstTurn,
+                "{resume:?}"
+            );
+        }
+    }
+
+    /// What Copilot 1.0.114 wrote when it exited at start: refusing an option it does not know,
+    /// and, as a near miss, a resume of a conversation it has no record of.
+    const EXIT_UNKNOWN_OPTION: &[u8] =
+        include_bytes!("../../../testdata/copilot_exit_unknown_option.bin");
+    const EXIT_RESUME_NOT_FOUND: &[u8] =
+        include_bytes!("../../../testdata/copilot_exit_resume_not_found.bin");
+
+    /// Both exits leave nothing an interactive program shows behind them: the alternate screen
+    /// Copilot switches on as it leaves is switched off in the same write, bracketed paste is off
+    /// and no title was set, so the early-exit relaunch is not passed over. The refusal names the
+    /// option; the near miss does not.
+    #[test]
+    fn an_exit_at_start_leaves_no_sign_of_an_interactive_program() {
+        use crate::terminal::snapshot::TerminalSnapshot;
+        for (capture, refused) in [(EXIT_UNKNOWN_OPTION, true), (EXIT_RESUME_NOT_FOUND, false)] {
+            let mut screen = TerminalSnapshot::new(40, 120);
+            screen.process(capture);
+            assert!(!screen.alternate_screen_on());
+            assert!(!screen.bracketed_paste_on());
+            assert!(!screen.has_title());
+            let text = String::from_utf8_lossy(capture);
+            assert_eq!(
+                text.contains("error: unexpected argument '--octoboard-unknown-option' found"),
+                refused,
+                "{text}"
+            );
+        }
+    }
+
+    /// Copilot has no reduced launch: whatever it wrote as it exited, the launch goes to the bare
+    /// one.
+    #[test]
+    fn an_early_exit_gives_no_reduced_plan() {
+        let fixture = crate::adapter::tests::spec_fixture();
+        for capture in [EXIT_UNKNOWN_OPTION, EXIT_RESUME_NOT_FOUND] {
+            let exit = crate::adapter::EarlyExit {
+                output: String::from_utf8_lossy(capture).into_owned(),
+                status: Some(1),
+            };
+            assert!(CopilotProvider
+                .reduced_plan(&fixture.spec(), &exit)
+                .is_none());
+        }
+    }
 
     const NEW: &str = "new-agent-session";
     const RESUMED: &str = "resumed-session";
@@ -1024,5 +1141,59 @@ mod tests {
             CopilotProvider.installed_version(&path_text(&bare.join("copilot"))),
             None
         );
+    }
+
+    /// The launch's files (the plugin manifest, its hooks, the MCP configuration, the role file)
+    /// are written whole, replacing what an earlier launch of the session left, and are private to
+    /// the daemon's user.
+    #[test]
+    fn the_launch_files_are_written_whole_and_private() {
+        let fixture = spec_fixture();
+        let files = [
+            fixture.scratch.join("copilot-plugin/plugin.json"),
+            fixture.scratch.join("copilot-plugin/hooks.json"),
+            fixture.scratch.join("copilot-mcp.json"),
+            fixture
+                .scratch
+                .join("copilot-instructions/instructions/octoboard.instructions.md"),
+        ];
+        let stale = "stale content that a whole-file write leaves nothing of ".repeat(400);
+        for file in &files {
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, &stale).unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o644)).unwrap();
+            }
+        }
+        CopilotProvider.plan(&fixture.spec()).expect("plan");
+        for file in &files {
+            let written = std::fs::read_to_string(file).unwrap();
+            assert!(!written.contains("stale content"), "{}", file.display());
+            if file.extension().is_some_and(|ext| ext == "json") {
+                serde_json::from_str::<serde_json::Value>(&written)
+                    .unwrap_or_else(|err| panic!("{}: {err}", file.display()));
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mode = std::fs::metadata(file).unwrap().permissions().mode() & 0o777;
+                assert_eq!(mode, 0o600, "{}", file.display());
+            }
+            #[cfg(windows)]
+            assert!(
+                crate::platform::fs::is_private_to_user(file),
+                "{}",
+                file.display()
+            );
+            // Nothing staged is left beside the file.
+            let beside: Vec<_> = std::fs::read_dir(file.parent().unwrap())
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                .filter(|name| name.starts_with('.'))
+                .collect();
+            assert!(beside.is_empty(), "{beside:?}");
+        }
     }
 }

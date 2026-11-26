@@ -264,7 +264,7 @@ function HandoffFields({ request, onReport, console: parentConsole, project, ori
     model: request.model,
     effort: request.effort,
     compatibility: request.compatibility,
-  }, request.kind === "project", true);
+  }, request.kind === "project", { refuseUsedUp: true });
   const sessionBlock = original && handoffBlock(t, original, { switching, ownChanging, childActive });
   const accounts = useDaemonStore((state) => state.settings.accounts);
   const sharing = useDaemonStore((state) => state.accountSharing);

@@ -2,7 +2,7 @@
 //! waits for it to go down, the launch settings a session starts with, and the checks of the
 //! launch values a session is opened, switched, resumed or changed to.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -21,6 +21,7 @@ use crate::protocol::{
 };
 use crate::providers::ProviderSettings;
 use crate::session::dialogs;
+use crate::session::relaunch::{EarlyExitRelaunch, LaunchAsked};
 use crate::session::term;
 use crate::session::trust;
 use crate::session::LiveSession;
@@ -44,8 +45,37 @@ pub(crate) async fn relaunch_session_with(
     id: &str,
     instruction: Option<&str>,
     reopen: bool,
-    shell_env: Option<HashMap<String, String>>,
+    shell_env: Option<crate::env_shell::LaunchEnv>,
     terminal_appearance: Option<TerminalAppearance>,
+    launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
+) -> Result<()> {
+    relaunch_session_telling(
+        state,
+        claim,
+        id,
+        instruction,
+        reopen,
+        shell_env,
+        terminal_appearance,
+        Vec::new(),
+        launch,
+    )
+    .await
+}
+
+/// [`relaunch_session_with`], telling the session `notices` with the launch's own: what the
+/// caller found before it (a resume's record not found, say), kept with what the launch was asked
+/// so a launch one tier down after an early exit tells it too.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn relaunch_session_telling(
+    state: &Arc<AppState>,
+    claim: &crate::state::LaunchClaim,
+    id: &str,
+    instruction: Option<&str>,
+    reopen: bool,
+    shell_env: Option<crate::env_shell::LaunchEnv>,
+    terminal_appearance: Option<TerminalAppearance>,
+    notices: Vec<crate::protocol::Notice>,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<()> {
     let mut session = state.session_record(id)?;
@@ -124,22 +154,14 @@ pub(crate) async fn relaunch_session_with(
         state.queue_relaunch_instruction(&session.id, instruction);
     }
 
+    // The snapshot the caller resolved something from is the one the launch must use.
     match start_process(
         state,
         claim,
         &session,
         &cwd,
-        prompt.as_deref(),
-        resume_id.as_deref(),
-        terminal_appearance,
-        shell_env.clone(),
-        // The snapshot the caller resolved something from is the one the launch must use.
-        move |request| {
-            launch(term::LaunchRequest {
-                preresolved_shell_env: shell_env,
-                ..request
-            })
-        },
+        LaunchAsked::new(prompt, resume_id, terminal_appearance, shell_env, notices),
+        launch,
     )
     .await
     {
@@ -538,20 +560,24 @@ fn launch_git_workflow_settings(
 }
 
 /// Launches the agent for an already-stored session, through `launch` (`term::launch` outside the
-/// tests, which cannot start an agent), and starts watching it. The launch outlives this call if
-/// it is dropped before the holder has answered: see [`run_launch`].
-#[allow(clippy::too_many_arguments)]
+/// tests, which cannot start an agent), as `asked` says (the task, the conversation to resume, the
+/// terminal's appearance, the shell environment the caller resolved something from and which the
+/// launch then uses, the notices the caller knows of, and the tier and early exit the launch
+/// follows), and starts watching it. What it was asked is kept with the live session for a launch
+/// one tier down to repeat after an early exit (`super::early_exit`). The launch outlives this
+/// call if it is dropped before the holder has answered: see [`run_launch`].
 pub(super) async fn start_process(
     state: &Arc<AppState>,
     claim: &crate::state::LaunchClaim,
     session: &Session,
     cwd: &Path,
-    task: Option<&str>,
-    resume_agent_session_id: Option<&str>,
-    terminal_appearance: Option<TerminalAppearance>,
-    shell_env: Option<HashMap<String, String>>,
+    asked: LaunchAsked,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<()> {
+    let task = asked.task.as_deref();
+    let resume_agent_session_id = asked.resume_agent_session_id.as_deref();
+    let terminal_appearance = asked.terminal_appearance;
+    let shell_env = asked.shell_env.as_ref().map(|env| env.vars.clone());
     // Counted while a planned stop waits, so that it waits for the process to be registered: the
     // claim the caller holds was refused once the stop raised its handover barrier. Refused once
     // the stop has stopped waiting, as a launch claimed before the barrier and started after the
@@ -633,7 +659,7 @@ pub(super) async fn start_process(
         effort,
         terminal_appearance,
         display,
-        preresolved_shell_env: None,
+        preresolved_shell_env: asked.shell_env.clone(),
         daemon_port: state.port,
         daemon_key: state.key.clone(),
         // A copy of the running build where the daemon updates itself: an update replaces its own
@@ -645,7 +671,14 @@ pub(super) async fn start_process(
         mcp_token: state.issue_mcp_token(&session.id),
         guard,
         process_tag: pending_launch.tag().clone(),
+        notices: asked.notices.clone(),
+        highest_tier: asked.highest_tier,
+        early_exit: asked.early_exit.clone(),
+        lower_tiers: state.lower_tiers.clone(),
+        record_roots: session.record_roots.clone(),
     };
+    // Read on this thread, for a launch one tier down to wait its notices on.
+    let window = super::early_exit::early_exit_window();
 
     // The rest runs as a task of its own, not as part of the request this was asked in. A holder
     // that has not confirmed the start may have the program running, and may answer long after
@@ -659,11 +692,30 @@ pub(super) async fn start_process(
         pending_launch,
         request,
         launch,
+        Asked { asked, window },
         report,
     ));
     outcome
         .await
         .unwrap_or_else(|_| Err(anyhow::anyhow!("the launch ended without an outcome")))
+}
+
+/// What a launch was asked, kept with its live session, and the early-exit window its notices
+/// wait on when it follows an early exit.
+struct Asked {
+    asked: LaunchAsked,
+    window: Duration,
+}
+
+#[cfg(test)]
+impl Asked {
+    /// A first launch at the enhanced tier, asked nothing of its own.
+    fn plain() -> Self {
+        Self {
+            asked: LaunchAsked::new(None, None, None, None, Vec::new()),
+            window: super::early_exit::early_exit_window(),
+        }
+    }
 }
 
 /// Starts the program of `request` through `launch`, registers it as the session's live process
@@ -675,6 +727,7 @@ async fn run_launch(
     _pending_launch: PendingLaunch,
     request: term::LaunchRequest,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
+    asked: Asked,
     report: tokio::sync::oneshot::Sender<Result<()>>,
 ) {
     let session_id = request.session_id.clone();
@@ -686,7 +739,7 @@ async fn run_launch(
     };
     match launched {
         Ok(launched) => {
-            let registered = register_launched(&state, &claim, &session_id, launched);
+            let registered = register_launched(&state, &claim, &session_id, launched, asked);
             report.send(registered).ok();
         }
         Err(err) => {
@@ -711,14 +764,29 @@ fn register_launched(
     state: &Arc<AppState>,
     claim: &crate::state::LaunchClaim,
     session_id: &str,
-    launched: term::Launch,
+    mut launched: term::Launch,
+    asked: Asked,
 ) -> Result<()> {
     // Octoboard's own account switch, or the restoring of a session after one, watches the
     // process come up and reports the outcome itself.
     if claim.watches_launch() {
         launched.session.watch_under_claim();
     }
+    // An operation that watches the process come up relaunches it itself after an early exit.
+    if claim.follows_launch() {
+        launched.session.follow_under_claim();
+    }
+    let Asked { mut asked, window } = asked;
+    let follows_early_exit = asked.early_exit.is_some();
+    asked.recorded_conversation = launched.agent_session_id.clone();
+    launched.session.startup.keep_asked(asked);
 
+    tracing::info!(
+        session = %session_id,
+        tier = ?launched.tier(),
+        version = ?launched.agent_version(),
+        "the agent's CLI started"
+    );
     // The live map now says the session is running; the claim stays with `run_launch`, which
     // drops it once it is done with the launch.
     state.register_live(launched.session.clone());
@@ -733,6 +801,7 @@ fn register_launched(
     super::exit_watch::watch_exit(state, launched.session.clone());
     trust::supervise(state, &launched.session);
     dialogs::watch(state, &launched.session);
+    crate::session::hook_absence::watch(state, &launched.session, false);
     if let Some(agent_session_id) = launched.agent_session_id {
         if let Err(err) = state.set_agent_session_id(session_id, &agent_session_id) {
             // Registered already, and the caller will not watch it come up.
@@ -748,8 +817,31 @@ fn register_launched(
             return Err(err.into());
         }
     }
-    for notice in launched.notices {
-        state.broadcast(notice.about(session_id));
+    // A launch without hooks from its start (bare) that has no conversation id says so with its
+    // other notices, and as they are: once up, where it follows an early exit.
+    launched
+        .notices
+        .extend(crate::session::hook_absence::launch_notice(
+            state,
+            &launched.session,
+        ));
+    if follows_early_exit {
+        // A launch one tier down tells its notices once it is seen to stay up.
+        super::early_exit::raise_once_up(
+            state,
+            &launched.session,
+            launched.notices,
+            launched.notices_at,
+            window,
+        );
+    } else {
+        for notice in launched.notices {
+            if notice.standing {
+                state.raise_standing_notice(session_id, notice, launched.notices_at);
+            } else {
+                state.broadcast(notice.about(session_id));
+            }
+        }
     }
     // Held like any message for a session still starting, until the hold for its startup screens
     // lets it through (`trust::supervise`). That hold may have ended between the registration
@@ -763,6 +855,95 @@ fn register_launched(
         }
         if let Ok(session) = state.session_record(session_id) {
             state.spawn_flush_outbox(session_id, state.agent_status(&session));
+        }
+    }
+    Ok(())
+}
+
+/// Whether a launch one tier down can be started after an early exit: always, except under test,
+/// where only a test that installed a stand-in for it (`AppState::relauncher`) relaunches, since
+/// a test cannot start an agent and the other tests' stand-ins end as they please.
+pub(crate) fn can_relaunch(
+    #[cfg_attr(not(test), allow(unused_variables))] state: &AppState,
+) -> bool {
+    #[cfg(test)]
+    {
+        state.relauncher.lock().unwrap().is_some()
+    }
+    #[cfg(not(test))]
+    true
+}
+
+/// What starts the agent of a launch one tier down after an early exit: `term::launch`, or under
+/// test what the test installed (`AppState::relauncher`), since a test cannot start an agent.
+fn relauncher(
+    #[cfg_attr(not(test), allow(unused_variables))] state: &AppState,
+) -> term::Relauncher {
+    #[cfg(test)]
+    if let Some(relauncher) = state.relauncher.lock().unwrap().clone() {
+        return relauncher;
+    }
+    Arc::new(term::launch)
+}
+
+/// Starts the process of session `id` again one tier down after its launch exited as it started
+/// (`super::early_exit`), under `claim`, through the shared launch entry, so that `admit_launch`
+/// and every refusal apply: the same request (`relaunch.asked`), at the tier `relaunch.tier`
+/// allows, handed the early exit. The session's record, which the caller set back to starting,
+/// goes back to `relaunch.previous_status` once the process is registered. A new conversation
+/// forgets the id the exited launch recorded for it, which named a conversation that never
+/// started.
+pub(crate) async fn relaunch_after_early_exit(
+    state: &Arc<AppState>,
+    claim: &crate::state::LaunchClaim,
+    id: &str,
+    relaunch: EarlyExitRelaunch,
+) -> Result<()> {
+    let EarlyExitRelaunch {
+        mut asked,
+        exit,
+        tier,
+        previous_status,
+        ran_as: _,
+    } = relaunch;
+    let session = state.session_record(id)?;
+    if session.status == SessionStatus::Archived {
+        return Err(session_archived(id));
+    }
+    if state.live_session(id).is_some() {
+        return Err(CodedError::raised(
+            error_code::SESSION_ALREADY_RUNNING,
+            "this session is already running",
+            &[("session", id)],
+        ));
+    }
+    let cwd = session_cwd(state, &session)?;
+    if asked.resume_agent_session_id.is_none() {
+        if let Some(stale) = asked.recorded_conversation.take() {
+            state.forget_agent_session_id(id, &stale)?;
+        }
+    }
+    tracing::info!(
+        session = %id,
+        from = ?asked.highest_tier,
+        to = ?tier,
+        "relaunching the agent one tier down after it exited as it started"
+    );
+    asked.highest_tier = tier;
+    asked.early_exit = Some(exit);
+    let launch = relauncher(state);
+    start_process(state, claim, &session, &cwd, asked, move |request| {
+        launch(request)
+    })
+    .await?;
+    if previous_status != SessionStatus::Starting {
+        if let Some(restored) = state.store.update_session_lifecycle_if(
+            id,
+            SessionStatus::Starting,
+            previous_status,
+            None,
+        )? {
+            state.publish_session(&restored);
         }
     }
     Ok(())

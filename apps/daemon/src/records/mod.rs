@@ -26,11 +26,12 @@
 //!
 //! Where a record is found is [`locate`] (the hook's hint, the account directories walked), the
 //! record a switch of accounts carries and what travels with it is [`carried`], which paths a
-//! deletion removes are [`removal`], whether a conversation can be resumed is
-//! [`mod@resumability`], whether a record holds a prompt the user sent is [`user_prompt`], and
-//! whether a relaunched session is sent a prompt to carry on is [`switch_continue`]. [`store`] is
-//! the interface each provider answers them through. The rows module handles conversations kept in
-//! a database: the provider lists, reads and removes them, and they are read as lines like any record.
+//! deletion removes are [`removal`], whether a conversation can be resumed is [`mod@resumability`]
+//! (a record missing proving it gone only with a [`witness`]), whether a record holds a prompt the
+//! user sent is [`user_prompt`], and whether a relaunched session is sent a prompt to carry on is
+//! [`switch_continue`]. [`store`] is the interface each provider answers them through. The rows
+//! module handles conversations kept in a database: the provider lists, reads and removes them, and
+//! they are read as lines like any record.
 
 pub(crate) mod branch;
 pub(crate) mod carried;
@@ -53,6 +54,7 @@ pub(crate) mod switch_continue;
 pub(crate) mod titles;
 pub(crate) mod user_prompt;
 pub(crate) mod watch;
+pub(crate) mod witness;
 
 pub(crate) use locate::{
     conversation_branch, hinted_path, history_branch, on_hook, plausible_id, Branch, Hints,
@@ -61,3 +63,4 @@ pub(crate) use locate::{
 pub(crate) use removal::{conversation_files_in, removable_record_paths};
 pub(crate) use resumability::{judge, presence, resumability, Judgement, Resumability};
 pub(crate) use store::{NoRecords, RecordStore};
+pub(crate) use witness::Witnesses;

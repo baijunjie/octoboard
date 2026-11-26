@@ -16,6 +16,12 @@ impl ScreenReader for ClaudeScreen {
         DIALOGS
     }
 
+    /// Claude Code's input box is read wherever it sits at its prompt (`input_box_rows`): empty or
+    /// showing a hint, holding a draft, and under the rule labelled with a place in the history.
+    fn reads_input_box(&self) -> bool {
+        true
+    }
+
     fn input_box_rows(&self, screen: &str) -> Option<Vec<String>> {
         input_box_rows(screen)
     }
@@ -447,6 +453,14 @@ const DIALOGS: &[DialogPattern] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The reader declares that it reads its input box wherever the agent is at its prompt, so a turn
+    /// opened off the title closes only while the box is drawn (`crate::session::title_status`);
+    /// the tests of `input_box_rows` hold it to every prompt state captured.
+    #[test]
+    fn the_input_box_is_read_wherever_the_agent_is_at_its_prompt() {
+        assert!(ClaudeScreen.reads_input_box());
+    }
 
     const WIDTH: usize = 100;
 

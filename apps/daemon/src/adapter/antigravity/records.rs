@@ -481,8 +481,12 @@ mod tests {
         let paths = removable_record_paths(&hints, &mut locator(), &[], &session);
         assert_eq!(paths, [db.clone(), brain, presence, wal, shm, annotation]);
         std::fs::remove_file(db).unwrap();
+        assert_eq!(resumability(&locator(), &session), Resumability::Unknown);
         assert_eq!(
-            resumability(&locator(), &session),
+            resumability(
+                &locator().with_witnesses(crate::records::fixtures::witnessed()),
+                &session
+            ),
             Resumability::Unresumable
         );
     }

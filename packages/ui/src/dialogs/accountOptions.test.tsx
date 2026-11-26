@@ -58,6 +58,15 @@ describe("accountOption", () => {
     expect(option.detail).toBe("Unavailable until it is logged in");
   });
 
+  it("offers an account that is not logged in where it may be chosen all the same, still saying so, and keeps a disabled one or one changing its sharing unavailable", () => {
+    const option = accountOption(t, TEST_PROVIDERS, entry({ signedOut: true }), 0, false, false, true);
+    expect(option.isDisabled).toBe(false);
+    expect(option.reason).toEqual({ state: "Not logged in" });
+    expect(option.detail).toBe("Last read as logged out: a session may ask you to log in");
+    expect(accountOption(t, TEST_PROVIDERS, entry({ signedOut: true, changingSharing: true }), 0, false, false, true).isDisabled).toBe(true);
+    expect(accountOption(t, TEST_PROVIDERS, entry({ signedOut: true, disabled: true }), 0, false, false, true).isDisabled).toBe(true);
+  });
+
   it("gives the used-up quota as the reason when a sharing change runs as well", () => {
     const option = accountOption(t, TEST_PROVIDERS, usedUp({ changingSharing: true }), 0, false, true);
     expect(option.isDisabled).toBe(true);

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use super::AppState;
-use crate::protocol::{CodedError, Event, Session};
+use crate::protocol::{notice_code, CodedError, Event, Session};
 use crate::session::LiveSession;
 use crate::store::Store;
 use crate::time::now_millis;
@@ -320,6 +320,15 @@ impl AppState {
         Ok(())
     }
 
+    /// Forgets the conversation id `agent_session_id` the session holds, which its launch never
+    /// started (`Store::forget_agent_session_id`), and tells every client.
+    pub(crate) fn forget_agent_session_id(&self, id: &str, agent_session_id: &str) -> Result<()> {
+        if let Some(session) = self.store.forget_agent_session_id(id, agent_session_id)? {
+            self.publish_session(&session);
+        }
+        Ok(())
+    }
+
     pub fn set_agent_session_id(&self, id: &str, agent_session_id: &str) -> Result<()> {
         match self.store.set_agent_session_id(id, agent_session_id)? {
             Some(session) => self.publish_session(&session),
@@ -328,6 +337,8 @@ impl AppState {
                 self.session_record(id)?;
             }
         }
+        // The conversation can be resumed by its id from now on.
+        self.withdraw_standing_notice(id, notice_code::CONVERSATION_ID_UNKNOWN, None);
         Ok(())
     }
 }

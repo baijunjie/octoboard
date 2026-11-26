@@ -250,3 +250,15 @@ The working directory is `/private/tmp/nap-r5-cop/work`, as Copilot wrote it.
 | `copilot_question_wrap_120_03_ctrl_d` | Ctrl-D: nothing changes while the field holds text. |
 | `copilot_question_wrap_120_04_esc` | Esc: the field emptied, the footer ending `esc cancel` again. |
 | `copilot_question_wrap_120_05_declined` | Ctrl-D: the form declined, the turn going on (`done`), the composer back. |
+
+## Exits at start
+
+Taken on 2026-11-26 from GitHub Copilot CLI 1.0.114 (macOS, the npm package `@github/copilot`), each a launch in a
+pseudo-terminal of 40 rows and 120 columns, in an empty working directory, with `COPILOT_HOME` an empty scratch
+directory and no sign-in. Each file is every byte Copilot wrote, from its start to its end; nothing is edited. Neither
+run sent a prompt.
+
+| File | The launch, and what it wrote |
+|---|---|
+| `copilot_exit_unknown_option.bin` | `copilot --octoboard-unknown-option`: `error: unexpected argument '--octoboard-unknown-option' found`, the usage line and the hint to try `--help`, then the sequences that leave the terminal as found (the alternate screen switched on and straight off, mouse reporting, bracketed paste and focus reporting off, the cursor shown). Status 1, within 0.6 s. `--octoboard-unknown-option=1` wrote the same. |
+| `copilot_exit_resume_not_found.bin` | The near miss, a fast exit that refuses no option: `copilot --resume=<a uuid of no session>`: a `Resuming session` spinner for about 7 s, then `Error: No session, task, or name matched '<id>'.` with the ways to resume or start a session, and the same leaving sequences. Status 1. |

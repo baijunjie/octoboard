@@ -348,7 +348,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   the task per followed session that polls the conversation's files, finds them again when they move and rebuilds or
   replaces the feed; `mod.rs`'s dispatcher refuses these three, which the connection serves), `console_workdir.rs` (a console's working directory: the canonical
   `octoboard-instructions.md` content, with the console's memory index while the memory setting is on, exposed under each provider's declared instruction filename by a link, import or
-  copy, and its removal), `exit_watch.rs` (the exit watcher every launch starts, and `unregister_live`), `adopt.rs` (at
+  copy, and its removal), `exit_watch.rs` (the exit watcher every launch starts, and `unregister_live`), `early_exit.rs` (the early-exit relaunch: the exit watcher asks `relaunch_if_early` before it records an exit, and a CLI that exited by itself within a short window of its start, with no sign of an interactive program and no key typed into it by a client, is started again one tier down, once per tier, with the lower tier's notices raised once it is up and a lower tier that stayed up remembered per agent, program and version), `adopt.rs` (at
   start, matches the terminals the holders kept running with the store: a session's is adopted into a rebuilt
   `LiveSession` and watched like a launch of the daemon's own, with its messages going through the private server its
   holder kept running as the terminal's companion, where the provider's `rebuild_launch` links to it again; a shell
@@ -437,7 +437,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   work each session's agent said it left running (`background.rs`) with its copy in the data directory that survives a
   daemon restart (`background_store.rs`, `paths::background_tasks_path`), sharing status, git
   status, requests, availability, hooks to the automatic account switch, whether the host is held awake
-  (`keep_awake.rs`), forgetting a record (which also drops the session's followed conversation), the adoption gate a holder's relayed requests wait on, the sessions claimed
+  (`keep_awake.rs`), the standing notices of each session's running launch (`standing_notices.rs`: `AppState::raise_standing_notice` and `withdraw_standing_notice`, held in memory while their condition holds, served on the session's record, dropped with the launch's process, restored from the terminal's meta by a daemon that adopts the launch), forgetting a record (which also drops the session's followed conversation), the adoption gate a holder's relayed requests wait on, the sessions claimed
   for a holder that cannot be linked to (`unlinked.rs`), the per-session MCP tokens and whether the server holding a
   session's token has answered a listing of its tools (`mcp_tokens.rs`: `note_mcp_tools_listed`, and
   `awaits_tool_listing`, what holds the writes of a launch whose provider declares `AgentProvider::awaits_tool_listing`
@@ -570,7 +570,7 @@ and deadline in `adapter/copilot/models.rs`.
   `proxy.rs`, which the npm registry lookup and the update's downloads go through). A daemon started inside an agent
   session inherits that session's variables, so `session_exports.rs` lays a launch's variables over the snapshot and
   records each one it changed (and each of the descriptor's `command_environment`, which the agent's CLI sets for its
-  commands) in a marker variable; `session_environment_with` is the entry every launch's environment goes through
+  commands) in a marker variable; `launch_env.rs` is the environment a launch runs with, which never fails for want of a snapshot (the capture the policy allows, else the last capture however old, else the daemon's own environment, with the notice that says which and why); `session_environment_with` is the entry every launch's environment goes through
   (`session_environment` is its test-only short form). `snapshot.rs`'s `outside_session` is the one reading of an
   inherited environment that stands for the user's, putting the recorded variables back as the snapshot had them and
   removing the markers (the snapshot itself, the launchers of `host_open`, the shell terminals' fallback), and
@@ -672,7 +672,11 @@ and deadline in `adapter/copilot/models.rs`.
   sender, coded `message_refused`, while the queue behind it goes on, and `HeldByServer`, that of a message the server
   holds back for now; `AfterExit`, the work a launch leaves for once its process has exited: `LaunchPlan::after_exit`;
   the launch's notices, `LaunchPlan::notice` and whatever more `AgentProvider::further_launch_notices` tells of it,
-  each told in its order;
+  each told in its order; `tiers.rs` the tier decision of a launch (`plan_launch`: what stops every launch is asked
+  first, `AgentProvider::launch_refusal` and `check_launch`, then the provider's enhanced plan, and on any failure
+  there its `bare_plan` with a standing `launch_enhancements_unavailable`; a launch held at the reduced tier asks
+  `AgentProvider::reduced_plan`; and `recorded_conversation`, the conversation id a launch records) with
+  its tests in `tiers/tests.rs`;
   `before_scratch_removal`, what a launch and an adopted session both do once the process is reaped: stop the transport
   and run `AfterExit`; `launch_environment` builds the launch's environment through
   `env_shell::session_environment_with`, handing it the descriptor's `command_environment`), `draft.rs` (a mirror of the keys typed into the input, matching the prompts the agent reports
@@ -721,7 +725,7 @@ and deadline in `adapter/copilot/models.rs`.
   off the recent output, or off the parsed screen where `TermFacts::host_renders` says the output is the host's
   repaint, `TrustState::reads_screen`; there Codex's watch ends at its composer rather than its title, and Claude Code's
   readiness, otherwise its bracketed paste after the first hook, also comes with its input box drawn after
-  `SessionStart`, `on_session_start`), `interrupt/`, `title_activity.rs` (what a terminal title says about a turn),
+  `SessionStart`, `on_session_start`), `interrupt/`, `title_activity.rs` (what a terminal title says about a turn), `title_status.rs` (a session's working and idle read off its terminal title where its hooks are absent and the program reports nothing, as a second source behind the program's own reports), `integration.rs` (what a launch carries of Octoboard's integration with its agent: `Integration`, the tier, the CLI version and the provider's per-launch answers a session keeps for its life, which every generic reader goes through so that a bare launch reads as a provider with none; `LaunchAnswers`, rebuilt from the terminal's meta by a daemon that adopts the launch; and `HookPresence`, whether the launch's hooks are present, due or absent), `hook_absence.rs` (the watch on a launch's hooks: one whose hook was due and did not come within a bound is read as a launch without hooks, so that its status, trust release and notices follow the program's own reports and terminal, with the standing `hooks_not_received` and `conversation_id_unknown` notices, withdrawn when a hook or an id arrives), `startup.rs` (`StartupEvidence`, what a launch's process has shown since it started, which tells an exit at start from any other, and what the launch was asked), `relaunch.rs` (what a launch one tier down repeats and remembers: `LaunchAsked`, `EarlyExitRelaunch`, the exit watcher's handoff to the operation following the launch, and `LowerTiers`, the lower tiers that stayed up per agent, program and version),
   `turn_reading.rs` (one reading of whether the agent is in a turn, from its title or reported status, the dialog
   sighting and the hooks' status, which the interrupt key, the title's cancel watch and the draft's lone-Esc timing each
   combine their own way: `LiveSession::turn_reading`, `TurnReading`), `title_interrupt.rs` (a cancel that left no other
@@ -750,7 +754,7 @@ and deadline in `adapter/copilot/models.rs`.
   `user_action_title` is the title text a provider shows when only the user can act; `input_placeholder` the hint an
   empty input box shows; `clears_input_box_with_ctrl_u` and `collapsed_paste` what a provider's Ctrl-U does to its box
   and the placeholder it shows for a long paste; `image_placeholders` and `without_image_placeholders` how many images the box holds as attachments and the box without them, `command_completion` the slash command the agent's completion offers, `writes_lone_command_with_trailing_space` whether a lone command gets a space typed after it (once its completion is looked at) because a first Enter on `/name` only takes the completion, `leading_slash_guard` what keeps a message's leading slash from running as a command, `Interrupt` how a provider's turn is interrupted (`InterruptKey`: one Esc, Esc twice, one Ctrl-C, or Ctrl-C after clearing the box), including the wording
-  of messages left waiting in its own queue past a cancel; `input_box_screen` which `ScreenText` the box is read from, the
+  of messages left waiting in its own queue past a cancel; `reads_input_box` whether the reader reads its input box wherever the agent is at its prompt, which the title-read idle waits on, `input_box_screen` which `ScreenText` the box is read from, the
   screen with faint cells blanked or as drawn; `same_as_submitted` whether a prompt the provider reports sending is one
   recorded as submitted; `cancel_restores_held_messages` whether a cancel puts the messages the agent held back in its
   box; `cancel_drops_held_messages` whether a cancel can drop them, which the provider can answer otherwise for one
@@ -1002,7 +1006,7 @@ another process, `/proc/<pid>/exe`, on Linux alone; `image_source`, for the
   and session working directory. An absence is conclusive only when the alternate search can also be completed.
   For a layout with no
   records directory, `records_dir()` is none and the account-relative file search has nothing to walk. `removal.rs` says which
-  paths a deletion removes (the record's own, and `beside_records` for a provider that answers `removes_beside_records`), `resumability.rs` judges whether a conversation can be resumed, `user_prompt.rs` recognises prompts the user sent (`RecordStore::is_user_prompt`) to mark a conversation no hook reported and protect unused sessions whose records may contain a conversation; `carried.rs` the record a
+  paths a deletion removes (the record's own, and `beside_records` for a provider that answers `removes_beside_records`), `resumability.rs` judges whether a conversation can be resumed, `witness.rs` whether a record not found proves its conversation gone (`Witnesses`, kept in memory per agent and the version a launch started, noted by the collector when a running session's record is found written by that version's launch; without a witness nothing is refused, forgotten or deleted for a missing record), `user_prompt.rs` recognises prompts the user sent (`RecordStore::is_user_prompt`) to mark a conversation no hook reported and protect unused sessions whose records may contain a conversation; `carried.rs` the record a
   switch of accounts carries and what travels with it, `switch_continue.rs` whether a relaunched session is sent a
   prompt to carry on (its text is `messaging/texts.rs`), whether its last turn stopped on the usage limit, and
   `wait_for_usage_limit`, the wait for the record to say so, used by the automatic account switch and by `messaging/usage_limit.rs`;
@@ -1027,7 +1031,7 @@ another process, `/proc/<pid>/exe`, on Linux alone; `image_source`, for the
   calls it once the plan's environment is layered on the shell snapshot, and Claude Code's
   `claude/background_sessions.rs` stops, through `account_cli`, the background session holding a conversation being
   resumed; its fixtures are `testdata/claude_agents_*.json`, described in `testdata/claude-agents-captures.md`),
-  refusing an account that cannot be launched, the installed version, reading the titles it shows, its hook interpreter,
+  refusing a launch nothing could do, an account that cannot be launched among them (`launch_refusal()`, and `check_launch()`, which gives that refusal or what else the check found for the user at every tier), the three launch tiers a session is planned at, from the floor up (`LaunchTier`, defined in `mod.rs`: `bare_plan()`, required, the CLI as a person would start it, a `BarePlan`; `reduced_plan()`, what the provider leaves out after the enhanced launch exited as it started, from an `EarlyExit`, none by default; `plan()`, the enhanced launch, whose error degrades to the bare one and never refuses), when the first hook is due (`first_hook_due()`, `FirstHook`), the installed version, reading the titles it shows, its hook interpreter,
   its record store, its screen reader, its accounts (`accounts()`, `AccountOps`), its model catalogue (`catalogue()`,
   `ModelCatalogue`), how its CLI is installed and updated (`cli_packaging()`, `CliPackaging`, defined in `mod.rs`, with
   its installer layouts and markers, the npm packages that ship it, and the sources of its latest version, read by
@@ -1054,7 +1058,7 @@ another process, `/proc/<pid>/exe`, on Linux alone; `image_source`, for the
   per-session copy of `config.toml`; `grok/compatibility_tests.rs` is the latter's tests); `compatibility_offer.rs` is
   what those consumers share (translating a source's MCP servers, keeping literal secrets in environment variables,
   linking offered skill and prompt files); `claude/transcript_watch.rs` is the Claude Code rejection and interrupt
-  watch, `claude/status_line.rs` its `StatusLine`, `codex/native_binary.rs` the native program of a
+  watch, `claude/status_line.rs` its `StatusLine`, `codex/reduced.rs` what a reduced Codex launch leaves out, read from what Codex wrote as it exited, `codex/native_binary.rs` the native program of a
   package-manager-installed Codex that a shim launches (the one built for the machine's native architecture when it
   ships several, as on ARM64 Windows), `codex/rollout_watch.rs` the Codex failed-turn watch and `codex/rollout_files.rs`
   Codex's rollout file-name and segment-chain rules; `models.rs` is a provider's `ModelCatalogue`, and `accounts.rs` its
@@ -1063,8 +1067,8 @@ another process, `/proc/<pid>/exe`, on Linux alone; `image_source`, for the
   unarchiving of a rollout), `app_server.rs` (the app-server start and handshake every account-level use of `codex
   app-server` shares: the quota probe, reset credit, login and MCP inventory reading, which starts it with
   `CODEX_INVENTORY_APP_SERVER_ARGS`, Apps and plugins left on; a session's private server reuses only its handshake
-  messages, `initialize_params` and `initialized`), `private_server.rs` (the `PrivateServerPlan` a Codex launch of
-  0.166.0 or later carries as its `PrivateServer`: the server's overrides, the arguments of the terminal that attaches
+  messages, `initialize_params` and `initialized`), `private_server.rs` (the `PrivateServerPlan` every Codex launch
+  with Octoboard's additions carries as its `PrivateServer`, whatever the version: the server's overrides, the arguments of the terminal that attaches
   to it with `--remote`, the permission preset a resume applies) and `transport/` (its `CodexTransport`, the session's
   `MessageTransport`, in `mod.rs`: identifying the session's conversation, delivering a message to Codex's own queue (with local images, `send_with_images`),
   loading the conversation again when Codex unloaded it, starting the queue after a cancel, and the notice that messages
@@ -1076,7 +1080,7 @@ another process, `/proc/<pid>/exe`, on Linux alone; `image_source`, for the
   that applies the permission preset), `mcp_auth.rs` (its `McpServerAuth`: `codex mcp login` and `codex mcp logout`);
   Codex, Claude Code and Grok also have `mcp_inventory.rs` (their `McpInventoryReader`: Codex's over the app server,
   Claude Code's over `claude auth status` and `claude mcp list`, Grok's over `grok mcp list` and `grok mcp doctor`,
-  servers only), and Grok `trust.rs` (its `TrustCarrier`), `plugin_paths.rs` (pointing the user's plugin registry back at the source home after a session's process exits and before a launch, since Grok records a plugin under the session's own `GROK_HOME`, which is removed when the session ends) and `query_home.rs` (the directories of Octoboard's own that Grok's background runs, its quota reading, model listing and kick, are made against in place of an account's directory, since Grok writes into the home it runs in)); Antigravity's `home.rs` is the directory a
+  servers only), and Grok `trust.rs` (its `TrustCarrier`), `refusal.rs` (the option its command line refusal names, which the reduced launch leaves out; `degradation_tests.rs` are its tests from captures), `plugin_paths.rs` (pointing the user's plugin registry back at the source home after a session's process exits and before a launch, since Grok records a plugin under the session's own `GROK_HOME`, which is removed when the session ends) and `query_home.rs` (the directories of Octoboard's own that Grok's background runs, its quota reading, model listing and kick, are made against in place of an account's directory, since Grok writes into the home it runs in)); Antigravity's `home.rs` is the directory a
   launch gives its CLI in place of `~/.gemini`, Copilot's `record_watch.rs` its record watch and `login.rs` its
   device-code sign-in, Qwen's `settings.rs` and `settings_file.rs` the system settings file a launch gives it and the
   reading of a settings file, and OpenCode's `plugin.js` and Pi's `extension.js` the scripts written into a session's
@@ -1254,7 +1258,7 @@ them is `docs/README.md`, "Coding conventions".
   `src/providers/<id>.rs`, listed in that descriptor's `codes`. The UI's record and wording go in the same change (the
   UI's side: the UI structure doc). The rules, including store code's `Result`, are in
   `docs/conventions/error-codes.md`, "Daemon codes" and "Provider codes".
-- Adding or updating an agent: P10 "Terminal first" (`docs/conventions/principles.md`) applies: no version gate, enhancements degrade individually, and a launch notice tells the user what is unavailable.
+- Adding or updating an agent: P10 "Terminal first" (`docs/conventions/principles.md`) applies: no version gate, enhancements degrade individually, and a launch notice tells the user what is unavailable. In code that is: the provider's `bare_plan` (required, the CLI as a person would start it), `launch_refusal` or `check_launch` only for what a plain terminal would fail at too, `plan` returning an error (never a refusal) where an enhancement cannot be prepared, `reduced_plan` where a release may refuse part of the enhanced launch, `first_hook_due` where its hooks come, `further_launch_notices` for more to tell of one launch, and `ScreenReader::reads_input_box` where its title-read idle can rely on its box; the tier decision itself stays in `src/session/term/tiers.rs`, the early-exit relaunch in `src/coordinator/early_exit.rs`, and generic code reads a launch's answers through `src/session/integration.rs`, never the provider directly.
 - A new provider: its descriptor in `src/providers/<id>.rs` and its behavior in `src/adapter/<id>/`, plus one line in
   each registry (`REGISTRY` in `src/providers/mod.rs`, `PROVIDERS` in `src/adapter/mod.rs`); everything keyed by
   provider (`protocol::PerAgent`, the store's per-provider tables) covers the new one without a change, and the UI adds
@@ -1318,7 +1322,7 @@ them is `docs/README.md`, "Coding conventions".
   `LaunchPlan::first_message`, `AccountOps::sign_in_state` for an account with no plan quota), never a branch on the id.
   A test of that behavior takes the test provider through the switches in `src/test_support/test_provider.rs`
   (`declaring_trust_screen`, `declaring_interrupt`, `declaring_hooks`, `declaring_screen`,
-  `declaring_reported_signals`) or the capability variants in
+  `declaring_reported_signals`, and for the tiers `declaring_failing_plan`, `declaring_launch_refusal`, `declaring_reduced_plan`, `declaring_first_hook`, `declaring_launch_version` and `declaring_checked_notices`) or the capability variants in
   `src/providers/test_provider.rs` (such as `with_per_session_trust`).
 - Tests sit beside the code they test (`tests.rs`, `*_tests.rs`); shared fixtures come from `src/test_support/`
   (`mod.rs` re-exports `scratch.rs`, `app.rs`, `stand_in.rs`, `processes.rs`, `git.rs` for repositories, `sessions.rs`,

@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use anyhow::Context;
 use tokio::task::JoinSet;
 
-use super::diagnostics::{log_stop, ProbeTrace};
+use super::diagnostics::{classify, log_stop, Outcome, ProbeTrace};
 use super::email::account_email;
 use super::judgement::{is_account_state, is_failure};
 use super::kick::{kick, KICK_TIMEOUT};
@@ -529,7 +529,8 @@ async fn read_account(
     let key = claim.key.clone();
     drop(_slot);
     state.account_quotas.log_reading(&claim, &quota, &trace);
-    let _ = finish_reading(state, claim, quota);
+    let signed_in = !trace.sign_in_unknown && classify(&quota) == Outcome::SignedIn;
+    let _ = finish_reading(state, claim, quota, signed_in);
     if kicks {
         state.account_quotas.claim_kick(state, &key)
     } else {
@@ -539,13 +540,26 @@ async fn read_account(
     }
 }
 
+/// Records `quota`, the reading `claim` covered, and has what follows a newly recorded reading
+/// act on it. `signed_in` is whether the reading found the account signed in (a sign-in reading
+/// that could not tell did not), which withdraws the notice of a session opened on it while it
+/// read as signed out.
 fn finish_reading(
     state: &Arc<AppState>,
     claim: Claim,
     quota: AccountQuota,
+    signed_in: bool,
 ) -> Option<tokio::task::JoinHandle<()>> {
     let (key, started_at) = (claim.key.clone(), claim.started_at);
     if state.account_quotas.finish(state, claim, quota) {
+        if signed_in {
+            crate::accounts::choice::withdraw_sign_in_unconfirmed(
+                state,
+                key.agent,
+                key.account.as_deref(),
+                key.config_dir.as_deref(),
+            );
+        }
         let switching = state.after_quota_refresh(
             key.agent,
             key.account.clone(),
@@ -585,7 +599,8 @@ pub(crate) fn finish_probe_for_test(
             now_millis(),
         )
     };
-    finish_reading(state, claim, quota)
+    let signed_in = classify(&quota) == Outcome::SignedIn;
+    finish_reading(state, claim, quota, signed_in)
 }
 
 /// Carries a claim from a kick through the reading after it, and on to a further kick if that

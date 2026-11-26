@@ -16,6 +16,12 @@ impl ScreenReader for CopilotScreen {
         DIALOGS
     }
 
+    /// Copilot's composer is read wherever it sits at its prompt (`input_box_rows`): empty or
+    /// holding a draft, beside the sidebar too, at 80 and 120 columns.
+    fn reads_input_box(&self) -> bool {
+        true
+    }
+
     fn input_box_rows(&self, screen: &str) -> Option<Vec<String>> {
         composer(screen)
     }
@@ -37,11 +43,12 @@ impl ScreenReader for CopilotScreen {
 
     /// Ctrl-S stashes the draft and empties the composer, and Ctrl-S at an empty composer puts
     /// the stash back, as Claude Code's does (`testdata/copilot-captures.md`, "The draft
-    /// stash"). Only on a version measured to. `copilot help config` names no setting that
-    /// rebinds the key; its composer's `editorMode` of `vim` is not measured.
+    /// stash"). From the release that made Ctrl-S the stash key, and where the version cannot be
+    /// read. `copilot help config` names no setting that rebinds the key; its composer's
+    /// `editorMode` of `vim` is not measured.
     fn native_stash(&self, spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> bool {
         spec.agent_version
-            .is_some_and(|version| version >= STASH_MINIMUM)
+            .is_none_or(|version| version >= STASH_SINCE)
     }
 
     fn stash_shown(&self, screen: &str) -> bool {
@@ -87,8 +94,10 @@ impl ScreenReader for CopilotScreen {
     }
 }
 
-/// The first version measured to stash a draft with Ctrl-S.
-const STASH_MINIMUM: AgentVersion = (1, 0, 114);
+/// The first release whose Ctrl-S stashes the draft: its changelog's 1.0.60 entry reads
+/// "Repurpose ctrl+s to stash and pop the current prompt (Claude Code parity)"; before it, Ctrl-S
+/// opened the slash-command picker.
+const STASH_SINCE: AgentVersion = (1, 0, 60);
 
 /// The item of the footer that says a draft is stashed, at its right end before the model's
 /// name: `… · tab next tab   stashed · Copilot Fusion`, kept at 80 columns where the footer's
@@ -372,6 +381,14 @@ mod tests {
     use crate::protocol::AgentId;
     use crate::session::trust::{reading_of, Reading};
     use crate::terminal::snapshot::TerminalSnapshot;
+
+    /// The reader declares that it reads its composer wherever the agent is at its prompt, so a turn
+    /// opened off the title closes only while the box is drawn (`crate::session::title_status`);
+    /// the tests of `input_box_rows` hold it to every prompt state captured.
+    #[test]
+    fn the_input_box_is_read_wherever_the_agent_is_at_its_prompt() {
+        assert!(CopilotScreen.reads_input_box());
+    }
 
     fn composer_of(screen: &str) -> Option<Vec<String>> {
         CopilotScreen.input_box_rows(screen)
@@ -1273,16 +1290,17 @@ mod tests {
         assert_eq!(CopilotScreen.stash_indicator_row("no composer here"), None);
     }
 
-    /// The stash is used from the first version measured to stash, and not when the version
-    /// cannot be told.
+    /// The stash is used from the release that made Ctrl-S the stash key, and when the version
+    /// cannot be told; not before it.
     #[test]
-    fn the_stash_is_used_only_on_a_measured_version() {
+    fn the_stash_is_used_from_the_release_that_added_it() {
         use crate::adapter::tests::spec_fixture;
         use crate::adapter::LaunchPlan;
         let mut fixture = spec_fixture();
         for (version, used) in [
-            (None, false),
-            (Some((1, 0, 113)), false),
+            (None, true),
+            (Some((1, 0, 59)), false),
+            (Some((1, 0, 60)), true),
             (Some((1, 0, 114)), true),
             (Some((1, 1, 0)), true),
         ] {

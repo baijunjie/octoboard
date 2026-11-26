@@ -22,7 +22,10 @@ The edit check is set up at the launch of a project session made while the switc
 session, a resume and the relaunch of an account switch alike — and the session keeps it for as long as that launch's
 process runs. So turning the switch on reaches only sessions launched afterwards, and turning it off leaves the edit
 check in sessions launched while it was on until they are next launched. The check judges by the projects registered
-when the session launched: a project registered afterwards is not covered until the session's next launch.
+when the session launched: a project registered afterwards is not covered until the session's next launch. A launch
+started without Octoboard's additions has no edit check, the hook that makes it being one of those additions (see
+`docs/product/launching-without-octoboards-additions.md`); the git check still applies to it,
+through the session's git hooks.
 
 ### Which calls it checks
 

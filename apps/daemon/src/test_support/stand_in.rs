@@ -211,6 +211,30 @@ pub(crate) fn idle_stand_in_of(id: &str, agent: AgentId) -> StandIn {
     started(id, agent, idle_command(), None, false)
 }
 
+/// A stand-in launch of `agent` for session `id` at the bare tier, on a `cols` by `rows` terminal,
+/// that stays idle until its guard drops, with nothing reading it: its hooks are absent from the
+/// start (`crate::session::hook_absence`), and its status comes from what its program shows.
+pub(crate) fn bare_stand_in_of(id: &str, agent: AgentId, cols: u16, rows: u16) -> StandIn {
+    let command = idle_command();
+    let live = stand_in_launched(
+        id,
+        agent,
+        cols,
+        rows,
+        command.command,
+        None,
+        None,
+        None,
+        crate::adapter::LaunchTier::Bare,
+    );
+    live.trust.end_watch();
+    if matches!(command.ready, Ready::Says(_)) {
+        crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
+    }
+    command.ready.wait(&live);
+    live
+}
+
 /// A stand-in session for `id` that is registered with `state` and has its output read, so a test
 /// can wait for what was written into it with [`output_containing`].
 pub(crate) fn running(state: &Arc<AppState>, id: &str) -> StandIn {
@@ -729,10 +753,77 @@ fn launch_with(
             session: process,
             agent_session_id: None,
             notices: Vec::new(),
+            notices_at: 0,
             first_message: None,
             record_root: None,
         })
     }
+}
+
+/// What a [`tiered_stand_in_launch`] was asked for, in order: the highest tier each launch could
+/// use and the early exit it followed.
+pub(crate) type TieredLaunches = Arc<
+    std::sync::Mutex<
+        Vec<(
+            crate::adapter::LaunchTier,
+            Option<crate::adapter::EarlyExit>,
+        )>,
+    >,
+>;
+
+/// A launch, for every request it is given, of a stand-in running the Bash script `script_for`
+/// gives for the highest tier the request may use, launched at the tier the launch would reach
+/// for a provider with no reduced plan: the enhanced one, else bare. The launch carries the
+/// request's notices, and a bare launch that follows an early exit `launch_retried_plain` after
+/// them, as `term::launch` does. Each request is recorded in
+/// `launches` and each stand-in kept in `started`, its output read. Unix only, as
+/// [`stand_in_launch_running`] is.
+#[cfg(unix)]
+pub(crate) fn tiered_stand_in_launch(
+    started: &Arc<std::sync::Mutex<Vec<StandIn>>>,
+    launches: &TieredLaunches,
+    script_for: impl Fn(crate::adapter::LaunchTier) -> String + Send + Sync + 'static,
+) -> crate::session::term::Relauncher {
+    use crate::adapter::LaunchTier;
+    let (started, launches) = (started.clone(), launches.clone());
+    Arc::new(move |request: crate::session::term::LaunchRequest| {
+        let tier = match request.highest_tier {
+            LaunchTier::Enhanced => LaunchTier::Enhanced,
+            LaunchTier::Reduced | LaunchTier::Bare => LaunchTier::Bare,
+        };
+        let live = stand_in_launched(
+            &request.session_id,
+            request.agent,
+            80,
+            24,
+            bash_command(&script_for(request.highest_tier)),
+            None,
+            Some(&request.process_tag),
+            None,
+            tier,
+        );
+        live.trust.end_watch();
+        crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
+        let process = (*live).clone();
+        started.lock().unwrap().push(live);
+        // The caller's notices, then the tier's, as `term::launch` orders them.
+        let mut notices = request.notices.clone();
+        if let (Some(exit), LaunchTier::Bare) = (&request.early_exit, tier) {
+            notices.push(crate::session::term::retried_plain(request.agent, exit));
+        }
+        launches
+            .lock()
+            .unwrap()
+            .push((request.highest_tier, request.early_exit));
+        Ok(crate::session::term::Launch {
+            session: process,
+            agent_session_id: None,
+            notices,
+            notices_at: 0,
+            first_message: None,
+            record_root: None,
+        })
+    })
 }
 
 /// [`fake_live_session`] with its trust watch still looking for the agent's screen, as a freshly
@@ -808,7 +899,17 @@ fn stand_in_of(
     carried_trust: Option<std::sync::Arc<dyn crate::session::trust::TrustCarrier>>,
     tag: Option<&crate::processes::ledger::ProcessTag>,
 ) -> StandIn {
-    stand_in_launched(id, agent, cols, rows, cmd, carried_trust, tag, None)
+    stand_in_launched(
+        id,
+        agent,
+        cols,
+        rows,
+        cmd,
+        carried_trust,
+        tag,
+        None,
+        crate::adapter::LaunchTier::Enhanced,
+    )
 }
 
 fn stand_in_with_scratch(
@@ -819,7 +920,17 @@ fn stand_in_with_scratch(
     cmd: crate::platform::term::Command,
     scratch_dir: Option<std::path::PathBuf>,
 ) -> StandIn {
-    stand_in_launched(id, agent, cols, rows, cmd, None, None, scratch_dir)
+    stand_in_launched(
+        id,
+        agent,
+        cols,
+        rows,
+        cmd,
+        None,
+        None,
+        scratch_dir,
+        crate::adapter::LaunchTier::Enhanced,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -832,6 +943,7 @@ fn stand_in_launched(
     carried_trust: Option<std::sync::Arc<dyn crate::session::trust::TrustCarrier>>,
     tag: Option<&crate::processes::ledger::ProcessTag>,
     scratch_dir: Option<std::path::PathBuf>,
+    tier: crate::adapter::LaunchTier,
 ) -> StandIn {
     if let Some(tag) = tag {
         tag.containment().prepare(&mut cmd);
@@ -857,12 +969,17 @@ fn stand_in_launched(
         carried_trust,
         before_scratch_removal: None,
         display: Default::default(),
-        // A stand-in is launched as the test-only provider answers for a launch on this thread.
-        status_from_reports: super::test_provider::declares_launch_without_status_integration()
-            .then_some(true),
-        // Nor, then, can its cancel be told to drop what the turn took.
-        cancel_drops: super::test_provider::declares_launch_without_status_integration()
-            .then_some(false),
+        // A stand-in is launched as the test-only provider answers for a launch on this thread:
+        // without its status integration, its cancel cannot be told to drop what the turn took.
+        integration: crate::session::integration::Integration {
+            status_from_reports: super::test_provider::declares_launch_without_status_integration()
+                .then_some(true),
+            cancel_drops: super::test_provider::declares_launch_without_status_integration()
+                .then_some(false),
+            tier,
+            first_hook: super::test_provider::declared_first_hook().unwrap_or_default(),
+            agent_version: super::test_provider::declared_launch_version(),
+        },
         config_dir: None,
     }));
     // As the launch does with what the provider answers for it.

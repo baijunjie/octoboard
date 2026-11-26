@@ -48,26 +48,52 @@ pub(super) fn installed(env: &HashMap<String, String>) -> Result<Option<AgentVer
         }))
 }
 
-pub(super) fn at_launch(spec: &LaunchSpec<'_>) -> Result<Generation> {
+/// The first version of OpenCode's second generation: its launch (`--standalone`, `--server`), its
+/// server's `/api/…` routes, its configuration keys (`plugins`, `permissions`) and its records
+/// (`docs/agent-cli-reference.md`, "OpenCode 2"). The one floor OpenCode's launch keeps
+/// (`docs/plans/terminal-first-degradation.md`, D12), known from the releases themselves: 1.19.6,
+/// the last of the `opencode-ai` package, offers `/update to upgrade to OpenCode 2.0` on its
+/// start screen, the second generation is published from 2.0.0 on as `@opencode/cli`, and every
+/// 2.x release run (2.3.2, 2.4.0, 2.4.1) has the second generation's formats. A version below it
+/// launches as the first generation, any other as the second, the newest. A wrong pick that makes
+/// the CLI exit as it starts has the launch started again bare.
+const SECOND_GENERATION: AgentVersion = (2, 0, 0);
+
+/// The generation a launch of `version` is planned for: the second from [`SECOND_GENERATION`] on,
+/// and for a version that could not be read, which is taken for the newest.
+pub(super) fn generation_of(version: Option<AgentVersion>) -> Generation {
+    match version {
+        Some(version) if version < SECOND_GENERATION => Generation::V1,
+        _ => Generation::V2,
+    }
+}
+
+/// The generation of the launch `spec` plans: of the version the launch read, else of the one
+/// installed. A version that cannot be asked for is taken for the newest, like one that cannot be
+/// read.
+pub(super) fn at_launch(spec: &LaunchSpec<'_>) -> Generation {
     let version = match spec.agent_version {
         Some(version) => Some(version),
-        None => installed(spec.shell_env)?,
+        None => installed(spec.shell_env).ok().flatten(),
     };
-    // The major version picks the generation of the launch, server and record formats. A version
-    // nobody measured is launched as the newest generation; whatever it changed fails where the
-    // format is read. A version that cannot be read is taken for the newest too.
-    let generation = match version {
-        Some((1, _, _)) => Generation::V1,
-        _ => Generation::V2,
-    };
+    generation_of(version)
+}
+
+/// The cause of an enhanced launch of the second generation that cannot be prepared while a
+/// migration of OpenCode's own is pending (`provider.opencode.migration_required`): Octoboard's
+/// commands would run before it, so the launch is bare, and OpenCode migrates as it starts.
+pub(super) fn refuse_pending_migration(
+    spec: &LaunchSpec<'_>,
+    generation: Generation,
+) -> Result<()> {
     if generation == Generation::V2 && migration_pending(spec.shell_env) {
         return Err(CodedError::raised(
             Code::of_provider(MIGRATION_REQUIRED),
-            "OpenCode needs to migrate its own configuration before this launch",
+            "OpenCode has yet to migrate its own configuration to its new version",
             &[],
         ));
     }
-    Ok(generation)
+    Ok(())
 }
 
 pub(super) fn database(env: &HashMap<String, String>) -> PathBuf {
@@ -200,7 +226,9 @@ fn has_settings(path: &Path, keys: &[&str]) -> bool {
 // OpenCode 2 inspection commands otherwise connect to or start its persistent service.
 pub(super) fn background_v2(env: &HashMap<String, String>) -> Option<bool> {
     match installed(env) {
-        Ok(Some((2.., _, _))) => (!migration_pending(env)).then_some(true),
+        Ok(Some(version)) if version >= SECOND_GENERATION => {
+            (!migration_pending(env)).then_some(true)
+        }
         Ok(None) if migration_pending(env) => None,
         _ => Some(false),
     }

@@ -50,6 +50,12 @@ export function setRestartAwaited(store: StoreApi<State>, awaited: boolean): voi
   store.setState((state) => reducer(state, { kind: "await_restart", awaited }));
 }
 
+/** Hides a standing notice of a session (`standingNoticeKey`) in this window, until a notice of another key replaces
+ * it: the daemon keeps it, and other windows still show it. */
+export function dismissStandingNotice(store: StoreApi<State>, key: string): void {
+  store.setState((state) => reducer(state, { kind: "dismiss_standing_notice", key }));
+}
+
 /** Applies a daemon `event` to the store, as the daemon connection does for each one it receives. */
 export function applyDaemonEvent(store: StoreApi<State>, event: Event): void {
   store.setState((state) => reducer(state, { kind: "event", event }));

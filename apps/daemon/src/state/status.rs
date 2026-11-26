@@ -114,6 +114,7 @@ impl AppState {
                 None
             };
         session.terminal_title = self.resolved_title(&session, &std::cell::OnceCell::new());
+        session.standing_notices = self.standing_notices_of(&session.id);
         session
     }
 
