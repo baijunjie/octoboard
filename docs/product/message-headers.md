@@ -70,6 +70,9 @@ after a blank line (see "A change of owner told at the next launch" in `docs/pro
   a header, naming "Report from your child session", "Information from your child session", "Information from another
   session", "Copy of information shared with your child session" and "Message from Octoboard:", and that what the user
   types in its terminal has none.
+- **The guidance on the user's language**, where a session has it, says that a headed message, like the brief it was
+  started with and a tool's output, is not the user writing and does not change the language it talks to the user in
+  (see "The guidance on the user's language" in `docs/product/launching-agents.md`).
 - **The tools that send an instruction** say so too: the descriptions of `instruct_session` and of `resume_session`'s
   `text`, and the console session's instruction file, tell the caller the text arrives headed as its parent session's
   instruction, naming the caller, so the session tells it from the user's own typing.

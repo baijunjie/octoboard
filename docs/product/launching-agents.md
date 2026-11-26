@@ -397,9 +397,8 @@ session:
   gives sessions (see "Naming the sessions a session starts" in `docs/product/hub-orchestration.md`);
 - unless the user writes to it in another language or asks for one, or the project's or the user's own instructions
   say which language to use with the user;
-- that a message beginning with a header saying where it comes from (Octoboard or another session) is not the user
-  writing, and neither is a tool's output, so whatever language they are in they do not change the language it talks
-  to the user in;
+- that what Octoboard or any other session writes to it (headed, or the brief it was started with) and a tool's output
+  are not the user writing, so whatever their language they do not change the language it uses with the user;
 - that everything it writes into a project — files, code, comments, commit messages, pull requests — follows the
   project's own conventions instead.
 

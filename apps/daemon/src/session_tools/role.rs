@@ -366,7 +366,9 @@ pub(super) fn asking_guidance(agent: Option<AgentId>) -> String {
 /// user writes in and which must not be forced on someone who writes in another, nor for a tag the
 /// interface does not offer. It yields to what the user writes in and asks for, and to the
 /// project's and the user's own instructions; what a session writes into a project follows that
-/// project's conventions instead, which is why it is not the language of the files.
+/// project's conventions instead, which is why it is not the language of the files. What
+/// Octoboard and other sessions write in (headed, or the opening brief) and a tool's output are not
+/// what the user writes: they are usually English, and sessions took them for the user switching.
 pub(super) fn user_language_guidance(tag: &str) -> Option<String> {
     if crate::interface_language::is_english(tag) {
         return None;
@@ -377,12 +379,11 @@ pub(super) fn user_language_guidance(tag: &str) -> Option<String> {
          The user has set Octoboard's interface to {language}. Talk to the user in it — your \
          replies, your questions, reports and pages meant for the user, and the titles you give \
          sessions — unless the user writes to you in another language or asks for one, or the \
-         project's or the user's own instructions say which language to use with them. A message \
-         that begins with a header saying where it comes from — Octoboard or another session — is \
-         not the user writing, and neither is a tool's output: whatever language they are in, they \
-         do not change the one you talk to the user in. Everything \
-         you write into a project — files, code, comments, commit messages, pull requests — \
-         follows the project's own conventions instead."
+         project's or the user's own instructions say which language to use with them. What \
+         Octoboard or any other session writes to you (headed, or the brief you were started with) \
+         and a tool's output are not the user writing: whatever their language, they do not change \
+         the one you use with the user. Everything you write into a project — files, code, \
+         comments, commit messages, pull requests — follows the project's own conventions instead."
     ))
 }
 
@@ -1838,14 +1839,13 @@ mod tests {
                 assert!(section.contains(
                     "The user has set Octoboard's interface to Simplified Chinese (zh-CN)."
                 ));
-                // A message headed with where it comes from (Octoboard or another session) and a
+                // What Octoboard or any other session writes (headed, or the opening brief) and a
                 // tool's output are not the user writing, so they do not change the language.
                 for part in [
-                    "begins with a header saying where it comes from",
-                    "Octoboard or another session",
-                    "is not the user writing",
-                    "neither is a tool's output",
-                    "do not change the one you talk to the user in",
+                    "What Octoboard or any other session writes to you",
+                    "headed, or the brief you were started with",
+                    "a tool's output are not the user writing",
+                    "they do not change the one you use with the user",
                 ] {
                     assert!(section.contains(part), "{part}");
                 }
