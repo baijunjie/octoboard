@@ -12,6 +12,7 @@ import { useWindowShortcut } from "../shortcuts/useWindowShortcut";
 import { useUpdateStore } from "../updates/UpdatesProvider";
 import type { SettingsNavigation, SettingsSectionId } from "./sections";
 import type { OpenSettings } from "./settingsLauncher";
+import { preloadLaunchAtLogin } from "./useLaunchAtLogin";
 
 /**
  * Whether the settings dialog is open, and how to open it (on its first section, or at a given one with
@@ -50,7 +51,7 @@ export function useSettingsDialog({
   const [addAgent, setAddAgent] = useState(false);
   const [account, setAccount] = useState<string>();
   const [nonce, setNonce] = useState(0);
-  const { appMenu, statusItem } = usePlatform();
+  const { appMenu, statusItem, launchAtLogin } = usePlatform();
   const host = useHost();
   const updates = useUpdateStore();
   // Whether Settings was open as of the last commit, which the close effect below compares against.
@@ -64,6 +65,12 @@ export function useSettingsDialog({
     if (!wasOpenRef.current) opener.current = pressedControl();
     setOpen(true);
   };
+
+  // The dialog's launch-at-login row waits on the system's answer; known ahead of the first opening, it is there from
+  // the dialog's first render instead of sliding in.
+  useEffect(() => {
+    if (launchAtLogin) preloadLaunchAtLogin(launchAtLogin);
+  }, [launchAtLogin]);
 
   // Acts on closing only: not on the first render, nor on opening.
   useEffect(() => {

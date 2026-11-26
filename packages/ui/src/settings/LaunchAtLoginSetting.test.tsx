@@ -10,8 +10,10 @@ import { LanguageProvider } from "../i18n/react";
 import type { LaunchAtLoginCapability, LaunchAtLoginStatus, PlatformAdapter } from "../platform";
 import { BROWSER_HOST, MAC_HOST } from "../test/hosts";
 import { mountHost } from "../test/mountHost";
+import { flushPromises } from "../test/clock";
 import { LaunchAtLoginSetting } from "./LaunchAtLoginSetting";
 import { SettingsReadsProvider } from "./SettingsReadsProvider";
+import { preloadLaunchAtLogin } from "./useLaunchAtLogin";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -58,6 +60,19 @@ it.each<{ status: LaunchAtLoginStatus; checked: boolean; text: string }>([
   await act(async () => {});
   expect(toggleOf(container)!.checked).toBe(checked);
   expect(container.textContent).toContain(text);
+});
+
+it("has the row on its first render once the system's state was read ahead, and not before", async () => {
+  const unread = login({ status: () => Promise.resolve("enabled"), set: vi.fn() });
+  expect(toggleOf(mount(unread))).toBeNull();
+  await act(async () => {});
+  const system = login({ status: () => Promise.resolve("enabled"), set: vi.fn() });
+  preloadLaunchAtLogin(system);
+  await flushPromises();
+  // Nothing has answered the new mount's own read yet: the row is there from the state read ahead.
+  const container = mount(system);
+  expect(toggleOf(container)!.checked).toBe(true);
+  expect(container.textContent).toContain("opens when you log in");
 });
 
 it("says what turning the switch on adds to the system, and that turning it off removes it, while it is off", async () => {

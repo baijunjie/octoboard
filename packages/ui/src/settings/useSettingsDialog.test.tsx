@@ -8,7 +8,7 @@ import { framesAsTimers, settleFrames, withModality } from "../components/dialog
 import { MODAL_CLOSE_SETTLE_MS, setFocusAfterModalLoss } from "../components/focus/modalFocus";
 import { browserHost } from "../platform/host";
 import { PlatformProvider } from "../platform/react";
-import type { PlatformAdapter, UpdaterCapability } from "../platform";
+import type { LaunchAtLoginCapability, LaunchAtLoginStatus, PlatformAdapter, UpdaterCapability } from "../platform";
 import { UpdatesProvider } from "../updates/UpdatesProvider";
 import { useSettingsDialog } from "./useSettingsDialog";
 import { bindingFor, restoreAllBindings, setBinding } from "../shortcuts/store";
@@ -200,6 +200,16 @@ it("leaves alone a control the modal's restore has put focus on inside the dialo
   opener.focus();
   await settleFrames();
   expect(document.activeElement).toBe(opener);
+});
+
+it("reads the system's launch-at-login state once as the window starts, where the shell can register the app", () => {
+  const status = vi.fn(async (): Promise<LaunchAtLoginStatus> => "disabled");
+  const launchAtLogin: LaunchAtLoginCapability = { status, set: vi.fn(), openSystemSettings: vi.fn(async () => {}) };
+  const hook = mount(false, () => {}, { kind: "tauri", host: MAC_HOST, launchAtLogin });
+  expect(status).toHaveBeenCalledOnce();
+  act(() => hook().openSettingsAt("accounts"));
+  act(() => hook().closeSettings());
+  expect(status).toHaveBeenCalledOnce();
 });
 
 it("numbers each request, so an open dialog can follow a later one", () => {
