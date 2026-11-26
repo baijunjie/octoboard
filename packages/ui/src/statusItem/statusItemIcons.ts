@@ -1,5 +1,6 @@
 import { BUBBLE_SHIFT, HAND_SHIFT, shiftedTransform, type OpticalShift } from "../components/status/opticalCentring";
 import { resolveCssColour, type Appearance } from "../preferences/cssColour";
+import { markArt } from "../providers/markArt";
 import { providerColour, providerMark } from "../providers/registry";
 import type { StatusItemIcon, StatusItemMenu, StatusItemSubmenuDraftItem, StatusItemSubmenuItem } from "../platform";
 import { isSummaryStatus, type SummaryStatus } from "../sessions/sessionStatus";
@@ -69,6 +70,8 @@ function glyphOf(key: string, appearance: Appearance): { svg: string; template: 
   const [kind, name] = key.split(":");
   if (kind === "agent") {
     const mark = providerMark(name);
+    const art = markArt(mark, `agent-${name}`);
+    if (art) return { svg: art, template: false };
     const template = mark.fill === "currentColor";
     return { svg: `<path d="${mark.d}" fill="${template ? "#000" : mark.fill}" fill-rule="evenodd"/>`, template };
   }

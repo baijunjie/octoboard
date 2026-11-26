@@ -3,6 +3,7 @@ import React from "react";
 import { agentPickerOptions, agentSetupOptions } from "../../agents/agents";
 import type { Translate } from "../../i18n/catalog";
 import type { Agent, AgentAvailability, ProviderInfo } from "../../protocol";
+import { markArt } from "../../providers/markArt";
 import { providerMark } from "../../providers/registry";
 import { Tooltip } from "../../primitives";
 
@@ -22,10 +23,15 @@ export function AgentIcon({
   tooltip?: React.ReactNode;
   touchPopover?: boolean;
 }): React.ReactElement {
-  const { d, fill } = providerMark(agent);
-  const icon = (
-    <svg viewBox="0 0 24 24" className={`shrink-0 ${className}`} fill={fill} fillRule="evenodd" aria-hidden="true">
-      <path d={d} />
+  const mark = providerMark(agent);
+  // A safe CSS and SVG id, as `useId`'s colons are not.
+  const art = markArt(mark, `mark${React.useId().replace(/[^a-zA-Z0-9]/g, "")}`);
+  // The art is the provider module's own constant SVG, never text from the daemon or the user.
+  const icon = art ? (
+    <svg viewBox="0 0 24 24" className={`shrink-0 ${className}`} fill="none" aria-hidden="true" dangerouslySetInnerHTML={{ __html: art }} />
+  ) : (
+    <svg viewBox="0 0 24 24" className={`shrink-0 ${className}`} fill={mark.fill} fillRule="evenodd" aria-hidden="true">
+      <path d={mark.d} />
     </svg>
   );
   if (!tooltip) return icon;

@@ -5,10 +5,10 @@ import { served } from "./qwen.fixture";
 import { providerColour, providerMark, providerPresentation } from "./registry";
 
 describe("the Qwen Code presentation module", () => {
-  it("is the registered module of its id, and draws its mark in one path with the text colour as its fill", () => {
+  it("is the registered module of its id, and draws its mark in one path in its blue", () => {
     expect(providerPresentation("qwen")).toBe(qwen);
     expect(providerMark("qwen")).toBe(qwen.mark);
-    expect(qwen.mark.fill).toBe("currentColor");
+    expect(qwen.mark.fill).toBe("#082dff");
     expect(qwen.mark.d).toMatch(/^[MmLlHhVvCcSsQqTtAaZz0-9\s.,-]+$/);
   });
 

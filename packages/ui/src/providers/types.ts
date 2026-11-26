@@ -1,7 +1,10 @@
-/** A provider's mark as the path of a 24-unit square and its fill, `currentColor` for a mark drawn in the text colour. */
+/** A provider's mark as the path of a 24-unit square and its fill, `currentColor` for a mark drawn in the text colour.
+ * `art`, where the maker's logo has more colours than one fill carries, is that logo as SVG content of the same square,
+ * which the marks are drawn from instead (`markArt`); `d` and `fill` stay its single-colour form. */
 export interface ProviderMark {
   readonly d: string;
   readonly fill: string;
+  readonly art?: string;
 }
 
 /** A provider's colour in each appearance, as `#rrggbb`. */

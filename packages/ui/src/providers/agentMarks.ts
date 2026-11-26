@@ -3,6 +3,7 @@ import { claude } from "./claude";
 import { codex } from "./codex";
 import { copilot } from "./copilot";
 import { grok } from "./grok";
+export { markArt } from "./markArt";
 import { opencode } from "./opencode";
 import { pi } from "./pi";
 import { qwen } from "./qwen";
