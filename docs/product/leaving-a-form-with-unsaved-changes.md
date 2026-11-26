@@ -24,7 +24,7 @@ changed. **While a save of the form is under way, an action that would leave it 
   menu, the jump from the rail's Processes popover, and the other page's button (Remote devices from the Scheduled tasks
   page, and the reverse);
 - a session or a console this window opens, and a session chosen anywhere that leaves the page, such as a run's session
-  on the Scheduled tasks page or the menu bar icon's menu;
+  on the Scheduled tasks page, the menu bar icon's menu or a waiting session's notification;
 - **Back** and **Forward**, by their buttons and their shortcuts: a move declined is not made, and nothing is recorded
   (see "Moving back and forward" in `docs/product/navigation-history.md`);
 - Quote in the file viewer or the Find in files preview, which leaves the page to show the session terminal it writes

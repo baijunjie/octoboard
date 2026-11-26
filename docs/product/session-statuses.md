@@ -566,9 +566,14 @@ switch-strip chips.
   seen while Octoboard was not the frontmost application, and not while it was. A notification that cannot be shown is
   not reported as having failed — the sidebar's own marker carries the same signal. In the desktop application each
   window notifies for its own daemon's sessions, a remote window's included (see `docs/product/remote-daemons.md`), and
-  a click on the notification brings forward the window that raised it, or the main window when that one has closed
-  since; on Windows the click is seen only while the notification is on screen, not once it is in the notification
-  centre.
+  a click on the notification brings forward the window that raised it and opens that session there, as choosing it in
+  the menu bar icon's menu does (see "Choosing a session" in `docs/product/menu-bar-icon.md`): the sidebar follows it to
+  its console, whichever console was shown, a page shown in the window is left — asking first where its form holds
+  changes not saved (see `docs/product/leaving-a-form-with-unsaved-changes.md`) — and keyboard focus goes to its
+  terminal. A session gone by then only brings the window forward, and where the window that raised it has closed
+  since, the main window comes forward and nothing is opened. In a browser, the click asks the browser to focus the tab
+  and opens the session the same way. On Windows the click is seen only while the notification is on screen, not once
+  it is in the notification centre.
 - In the macOS application the Dock badge carries how many sessions are waiting, counted across every console of every
   daemon the application shows — the sum of every window's count, a closed remote window's going with it — and clears
   when none is; the Windows application puts no count on its icon. While the window is closed into the

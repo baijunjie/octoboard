@@ -271,7 +271,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
     focusTerminal,
     sidebarWithoutConsole: pageShown,
   });
-  // A run's session chosen on the page (`openRunSession`), and the terminal a quote brings back (`uncoverTerminal`, once
+  // A session chosen with a page shown (`openSessionFromElsewhere`), and the terminal a quote brings back (`uncoverTerminal`, once
   // its leave of the page has run), are given the focus once the page is gone: `focusTerminal` would otherwise find it
   // still mounted.
   const terminalFocusPending = useRef(false);
@@ -410,29 +410,6 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
     if (document.activeElement === document.body) focusTopBar();
   }, [offline]);
 
-  useWaitingNotifications(hosts !== undefined);
-  // A failed run of a scheduled task notifies; choosing the notification opens the page on that task.
-  useScheduledRunNotifications((taskId) => {
-    if (tasksShown && !tasks.adding && tasks.task === taskId) return;
-    leaveForm(() => {
-      devices.leave();
-      tasks.show();
-      chooseTask(taskId);
-    });
-  });
-  const updatesLabel = useUpdateMenuLabel();
-  useStatusItemMenu({
-    updatesLabel,
-    selectedSessionId,
-    currentConsoleId: sidebarView.currentConsole?.id,
-    ready: hosts !== undefined,
-    onSessionChosen: (session) =>
-      leavePage(() => {
-        selectSession(session);
-        focusTerminal();
-      }),
-  });
-
   // The exit flow's frontend owner: it registers with the shell on mount, which is what makes the
   // window quittable. The main app has no "Quit" control of its own; the screen for a daemon of another
   // protocol generation has a Restart button. That daemon, like one that refused the page's key, is not talked to,
@@ -524,6 +501,37 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
     projectList,
     selectedSessionId,
     leavePage,
+  });
+
+  // A session chosen outside the sidebar — in the menu bar icon's menu, from a waiting session's notification, or as a
+  // scheduled task run's session on its page — opens in whichever console, leaving a page shown even when it is the
+  // session the page shows over. Declared after `useSessionActions`: the React Compiler skips `App` when a handler
+  // reads `selectSession` before it.
+  const openSessionFromElsewhere = (session: Session) =>
+    leavePage(() => {
+      selectSession(session);
+      // With a page shown, the terminal takes focus once the page is gone: now, `focusTerminal` would find it still
+      // mounted.
+      if (pageShown) terminalFocusPending.current = true;
+      else focusTerminal();
+    });
+  useWaitingNotifications(hosts !== undefined, openSessionFromElsewhere);
+  // A failed run of a scheduled task notifies; choosing the notification opens the page on that task.
+  useScheduledRunNotifications((taskId) => {
+    if (tasksShown && !tasks.adding && tasks.task === taskId) return;
+    leaveForm(() => {
+      devices.leave();
+      tasks.show();
+      chooseTask(taskId);
+    });
+  });
+  const updatesLabel = useUpdateMenuLabel();
+  useStatusItemMenu({
+    updatesLabel,
+    selectedSessionId,
+    currentConsoleId: sidebarView.currentConsole?.id,
+    ready: hosts !== undefined,
+    onSessionChosen: openSessionFromElsewhere,
   });
 
   const quickCreateSession = useQuickCreateSession(showOpenedSession, sidebarView.currentConsole?.id, confirmLaunch);
@@ -1057,14 +1065,6 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
       {!offline && <ExitConfirmDialog exit={exit} />}
     </div>
   );
-  // A session a scheduled task's run started, chosen on the page: shown as one chosen from elsewhere in the window is,
-  // leaving the page even when it is the session the page shows over.
-  const openRunSession = (session: Session) =>
-    leavePage(() => {
-      selectSession(session);
-      // The terminal takes focus once the page is gone: now, `focusTerminal` would find the page still mounted.
-      terminalFocusPending.current = true;
-    });
   const withTasks = (
     <ScheduledTasksProvider
       tasks={tasks.tasks}
@@ -1074,7 +1074,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
       onSelect={chooseTask}
       onAdd={addTask}
       onCancelAdd={tasks.cancelAdd}
-      onOpenSession={openRunSession}
+      onOpenSession={openSessionFromElsewhere}
     >
       {screen}
     </ScheduledTasksProvider>

@@ -4,10 +4,11 @@
 // events about what the selection or the aside depends on.
 import { defaultDaemonReply } from "./test/testDaemon";
 import { act } from "react";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { byLabel, deliver, fakeDaemon, mountApp, pressElement, pressMenuItem, railConsole, row, stubWindow, topBar } from "./appTestSupport";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
+import { scheduledTaskOf } from "./fixtures/scheduledTaskBuilders";
 import { isolate } from "./i18n/isolate";
 import type { PlatformAdapter, StatusItemCapability } from "./platform";
 import type { Project, ClientRequestBody } from "./protocol";
@@ -44,6 +45,7 @@ function mountTwoConsoles(answer?: (daemon: () => Daemon, body: ClientRequestBod
 /** What the top bar says, which names the selected session. */
 const topBarText = () => document.querySelector("[data-region=topbar]")?.textContent ?? "";
 const isCurrent = (name: string) => railConsole(name)?.getAttribute("aria-current") === "true";
+const tasksPage = () => document.querySelector("[data-region=tasks]");
 const asideBrowser = () => document.querySelector("[data-browser]")?.getAttribute("data-browser");
 const agentInput = () => document.querySelector("[data-region=terminal] textarea[aria-label='Agent terminal']");
 
@@ -162,6 +164,74 @@ it("selects the session chosen in the menu bar icon's menu, in its own console, 
   await act(async () => choose(triage.id));
   expect(isCurrent(second.name)).toBe(true);
   expect(topBarText()).toContain(triage.title);
+  expect(document.activeElement).toBe(agentInput());
+});
+
+/** A platform whose notifications can be chosen: `choose` hands the target to every listener, as the shell does for each
+ * hook that raises notifications. */
+function platformWithChosenNotifications(): { platform: PlatformAdapter; choose: (target: string) => void } {
+  const listeners = new Set<(target: string) => void>();
+  const platform: PlatformAdapter = {
+    kind: "browser",
+    host: BROWSER_HOST,
+    notifications: {
+      ensurePermission: async () => true,
+      notify: async () => {},
+      onChosen: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    },
+  };
+  return { platform, choose: (target) => listeners.forEach((listener) => listener(target)) };
+}
+
+it("selects the session whose waiting notification is chosen, in its own console, and focuses its terminal", async () => {
+  const { platform, choose } = platformWithChosenNotifications();
+  const daemon = mountTwoConsoles(undefined, platform);
+  await deliver(daemon, { type: "session_upserted", session: { ...triage, status: "waiting_user" } });
+  expect(isCurrent(main.name)).toBe(true);
+  act(() => topBar("Hide sessions")!.focus());
+
+  // A target that is none of a session's opens nothing.
+  await act(async () => choose("something-else"));
+  expect(isCurrent(main.name)).toBe(true);
+  await act(async () => choose(`session:${triage.id}`));
+  expect(isCurrent(second.name)).toBe(true);
+  expect(topBarText()).toContain(triage.title);
+  expect(document.activeElement).toBe(agentInput());
+});
+
+it.each([
+  ["in the console shown", fix],
+  ["in another console", triage],
+])("leaves the Scheduled tasks page for the session, %s, whose waiting notification is chosen, and focuses its terminal", async (_, chosen) => {
+  const { platform, choose } = platformWithChosenNotifications();
+  const report = scheduledTaskOf("t-report", main.id, { launch: { title: "Morning report", compatibility: {} } });
+  stubWindow();
+  mountApp(
+    fakeDaemon({
+      ...snapshotState({ consoles: [main, second], projects: [site], sessions: [{ ...fix, status: "idle" }, { ...triage, status: "idle" }].map((session) => (session.id === chosen.id ? { ...session, status: "waiting_user" as const } : session)) }),
+      scheduledTasks: new Map([[report.id, report]]),
+      scheduledTaskRuns: new Map([[report.id, []]]),
+    }),
+    { platform },
+  );
+  await pressElement(document.querySelector<HTMLElement>("[data-region=rail] button[aria-label^='Scheduled tasks']"));
+  expect(tasksPage()?.querySelector("h1")?.textContent).toBe("Morning report");
+  // Opened from the rail, focus is in the page.
+  expect(tasksPage()!.contains(document.activeElement)).toBe(true);
+
+  // Focus handed to the page on its way out is lost when it unmounts, which a window that falls back on its own cannot
+  // tell from the terminal taking it, so what focus is given to is recorded.
+  const focus = vi.spyOn(HTMLElement.prototype, "focus");
+  onTestFinished(() => focus.mockRestore());
+  await act(async () => choose(`session:${chosen.id}`));
+  expect((focus.mock.contexts as HTMLElement[]).filter((element) => element.closest("[data-region=tasks]"))).toEqual([]);
+  expect(tasksPage()).toBeNull();
+  expect(isCurrent(chosen.console_id === second.id ? second.name : main.name)).toBe(true);
+  expect(topBarText()).toContain(chosen.title);
+  // The page's own landing is gone with it, so focus is on the terminal rather than dropped to the body.
   expect(document.activeElement).toBe(agentInput());
 });
 

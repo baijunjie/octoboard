@@ -1,10 +1,15 @@
 import { useEffect, useRef } from "react";
 
+import { useStableHandler } from "../components/hooks/useLatest";
 import { t } from "../i18n/language";
+import type { Session } from "../protocol";
 import { usePlatform } from "../platform/react";
 import { sessionWithLocation } from "../sessions/sessionLabel";
 import { useShownWaitingCount, useWaitingIds } from "../store";
 import { useDaemon } from "../store";
+
+/** The target a waiting session's notification carries, by which choosing it opens that session. */
+const TARGET_PREFIX = "session:";
 
 /**
  * Fires a system notification and keeps the Dock badge at the number of sessions currently
@@ -26,17 +31,22 @@ import { useDaemon } from "../store";
  * absent, and with the permission declined or a call failing they are swallowed rather than
  * surfaced, since the tree's own raised-hand marker already carries the same information.
  *
+ * Each notification carries its session as its target, so choosing it (where the platform hears the
+ * click) brings the window forward and opens that session through `onOpen`, whichever console it is
+ * in; a session gone from the store by then opens nothing.
+ *
  * It reads the sessions, consoles and projects from the store itself, the sessions as the ids of the
  * waiting ones, which are the same array until a session starts or stops waiting: a status event that
  * changes nothing about who waits does not render the caller.
  */
-export function useWaitingNotifications(ready: boolean): void {
+export function useWaitingNotifications(ready: boolean, onOpen: (session: Session) => void): void {
   const { notifications, badge } = usePlatform();
   const { store } = useDaemon();
   const waitingList = useWaitingIds();
   const badgeCount = useShownWaitingCount();
   const previousWaitingRef = useRef<Set<string> | undefined>(undefined);
   const lastBadgeCountRef = useRef<number | undefined>(undefined);
+  const open = useStableHandler(onOpen);
 
   useEffect(() => {
     if ((!notifications && !badge) || !ready) return;
@@ -72,6 +82,7 @@ export function useWaitingNotifications(ready: boolean): void {
           await notifications.notify({
             title: t("notification.waiting.title"),
             body: sessionWithLocation(t, session, consoles, projects),
+            target: `${TARGET_PREFIX}${session.id}`,
           });
         } catch {
           // Best-effort — see the function doc.
@@ -79,4 +90,13 @@ export function useWaitingNotifications(ready: boolean): void {
       }
     })();
   }, [waitingList, badgeCount, ready, notifications, badge]);
+
+  useEffect(() => {
+    if (!notifications?.onChosen) return;
+    return notifications.onChosen((target) => {
+      if (!target.startsWith(TARGET_PREFIX)) return;
+      const session = store.getState().sessions.get(target.slice(TARGET_PREFIX.length));
+      if (session) open(session);
+    });
+  }, [notifications, store]);
 }

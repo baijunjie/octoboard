@@ -23,9 +23,9 @@ gives the right pane what selecting the session moved to would, or leaves it as 
 
 **Every change of any of these is a visit**, whatever made it: a sidebar row, a console avatar on the rail, entering or
 leaving focus mode, a chip in a focus mode, the archive view opening or closing, a page of the window opening or
-another device or task chosen on it, the notification of a failed scheduled run, the waiting count, the menu bar icon's
-menu, a session this window opened being selected, a keyboard shortcut. A change that leaves the window where it already
-was is not recorded again.
+another device or task chosen on it, the notification of a failed scheduled run or of a waiting session, the waiting
+count, the menu bar icon's menu, a session this window opened being selected, a keyboard shortcut. A change that leaves
+the window where it already was is not recorded again.
 
 **Switching console is one visit**: the new current console together with the session it shows, the one last
 selected there or none (see "What switching console shows" in `docs/product/console-switcher.md`). Back from it returns

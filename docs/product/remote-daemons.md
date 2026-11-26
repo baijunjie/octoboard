@@ -405,7 +405,7 @@ differences:
 - **It neither quits the application nor stops its daemon.** Quitting is the main window's (see "Quitting" in
   `docs/product/application-lifecycle.md`); the remote daemon and its sessions run on whatever the application does.
 - **Its notifications and waiting count are its own daemon's**: a session waiting for the user in that daemon notifies
-  through the application, a click on the notification brings this window forward, and its waiting sessions count in
+  through the application, a click on the notification brings this window forward and opens that session, and its waiting sessions count in
   the Dock badge (see "The raised hand" in `docs/product/session-statuses.md`). The menu bar icon's menu has a tab for
   its daemon (see `docs/product/menu-bar-icon.md`).
 - On macOS, Settings… and About in the application menu open in the window focused last, so in a remote window they
