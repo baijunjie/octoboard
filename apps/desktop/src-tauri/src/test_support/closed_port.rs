@@ -120,12 +120,14 @@ mod tests {
 
     #[test]
     fn a_port_is_held_while_its_closed_port_lives_and_let_go_when_it_is_dropped() {
-        let closed = ClosedPort::new();
-        let port = closed.port();
         let held = |port: u16| HANDED_OUT.lock().unwrap().contains(&port);
-        assert!(held(port));
-        drop(closed);
-        assert!(!held(port), "a dropped ClosedPort's port stayed claimed");
+        let closed = ClosedPort::new();
+        assert!(held(closed.port()));
+        // Another test may claim a port the moment it is let go, so the release is watched on
+        // port 0, which no `ClosedPort::new` hands out.
+        HANDED_OUT.lock().unwrap().insert(0);
+        drop(ClosedPort { port: 0 });
+        assert!(!held(0), "a dropped ClosedPort's port stayed claimed");
     }
 
     #[test]
