@@ -5,7 +5,7 @@ mod invisible;
 mod tiers;
 
 use tiers::recorded_conversation;
-#[cfg(test)]
+#[cfg(all(test, unix))]
 pub(crate) use tiers::retried_plain;
 pub(crate) use tiers::{plan_launch, PlannedLaunch};
 

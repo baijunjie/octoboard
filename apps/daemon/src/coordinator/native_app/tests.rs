@@ -354,6 +354,7 @@ async fn a_refusal_that_does_not_depend_on_the_process_leaves_it_running() {
 }
 
 /// The id of the tree of session `session` whose top is process `child`, once the ledger lists it.
+#[cfg(unix)]
 async fn listed_tree_of(state: &Arc<AppState>, session: &str, child: i32) -> String {
     let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
     loop {

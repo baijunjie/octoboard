@@ -3,7 +3,7 @@
 use super::test_support::*;
 use super::*;
 use crate::protocol::RemoteAccessFailureReason;
-use crate::test_support::{app_state, ClosedPort};
+use crate::test_support::{app_state_for_sockets, ClosedPort};
 
 /// In the server form the browser port is off until the setting turns it on, while the owner
 /// key is held throughout; on, it answers the owner key and its address and the owner record
@@ -126,7 +126,7 @@ async fn the_daemons_own_port_is_refused_as_the_browser_port() {
 /// A server-form daemon with no UI or no socket offers no setting.
 #[tokio::test]
 async fn a_server_daemon_that_serves_no_browser_has_no_setting() {
-    let (state, _dir) = app_state("remote-access-server-none");
+    let (state, _dir) = app_state_for_sockets("remote-access-server-none");
     assert_eq!(state.remote_access.info(&state), None);
     let refused = state.remote_access.set_browser(&state, true).unwrap_err();
     assert_eq!(code_of(&refused), error_code::REMOTE_ACCESS_UNAVAILABLE);

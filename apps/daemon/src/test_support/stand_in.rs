@@ -762,6 +762,7 @@ fn launch_with(
 
 /// What a [`tiered_stand_in_launch`] was asked for, in order: the highest tier each launch could
 /// use and the early exit it followed.
+#[cfg(unix)]
 pub(crate) type TieredLaunches = Arc<
     std::sync::Mutex<
         Vec<(

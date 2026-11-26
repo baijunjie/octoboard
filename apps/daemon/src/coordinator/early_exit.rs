@@ -63,7 +63,7 @@ pub(crate) fn early_exit_window() -> Duration {
 }
 
 /// Sets the early-exit window for the watches this thread starts until the guard drops.
-#[cfg(test)]
+#[cfg(all(test, unix))]
 pub(crate) fn window_for_test(window: Duration) -> impl Drop {
     struct Reset(Option<Duration>);
     impl Drop for Reset {
@@ -89,7 +89,7 @@ fn claim_wait() -> Duration {
 
 /// Sets how long the exit watchers this thread starts wait for a held claim, until the guard
 /// drops.
-#[cfg(test)]
+#[cfg(all(test, unix))]
 pub(crate) fn claim_wait_for_test(wait: Duration) -> impl Drop {
     struct Reset(Option<Duration>);
     impl Drop for Reset {

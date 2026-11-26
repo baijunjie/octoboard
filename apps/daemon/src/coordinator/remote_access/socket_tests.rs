@@ -3,7 +3,7 @@
 use super::test_support::{code_of, data_dir, socket_takes};
 use super::*;
 use crate::protocol::RemoteAccessFailureReason;
-use crate::test_support::{app_state, PATIENCE};
+use crate::test_support::{app_state_for_sockets, PATIENCE};
 
 /// The setting turns the owner socket and the owner key on and off while the daemon runs:
 /// on, the socket answers with the owner key and the address carries it; off, the socket is
@@ -11,7 +11,7 @@ use crate::test_support::{app_state, PATIENCE};
 /// again, the same key opens it, so a bookmarked address keeps working.
 #[tokio::test]
 async fn the_setting_opens_and_closes_the_owner_socket_while_the_daemon_runs() {
-    let (state, dir) = app_state("remote-access-toggle");
+    let (state, dir) = app_state_for_sockets("remote-access-toggle");
     state.set_follows_application();
     let (data, private) = data_dir(&dir);
     state
@@ -97,7 +97,7 @@ async fn the_setting_opens_and_closes_the_owner_socket_while_the_daemon_runs() {
 /// Rotating the key replaces the address and refuses the old key on the socket.
 #[tokio::test]
 async fn a_rotation_replaces_the_address() {
-    let (state, dir) = app_state("remote-access-rotate");
+    let (state, dir) = app_state_for_sockets("remote-access-rotate");
     state.set_follows_application();
     let (data, private) = data_dir(&dir);
     state
@@ -127,7 +127,7 @@ async fn a_rotation_replaces_the_address() {
 /// before the daemon serves its clients, which begins the serving.
 #[tokio::test]
 async fn a_setting_left_on_is_applied_at_the_start() {
-    let (state, dir) = app_state("remote-access-start");
+    let (state, dir) = app_state_for_sockets("remote-access-start");
     state.set_follows_application();
     state.store.set_allow_remote_access(true).unwrap();
     let (data, private) = data_dir(&dir);
@@ -153,7 +153,7 @@ async fn a_setting_left_on_is_applied_at_the_start() {
 /// neither the socket nor the key is opened.
 #[tokio::test]
 async fn a_build_without_a_ui_says_so() {
-    let (state, dir) = app_state("remote-access-no-ui");
+    let (state, dir) = app_state_for_sockets("remote-access-no-ui");
     state.set_follows_application();
     let (data, _) = data_dir(&dir);
     state
@@ -174,7 +174,7 @@ async fn a_build_without_a_ui_says_so() {
 /// snapshot, and both requests refused.
 #[tokio::test]
 async fn a_daemon_on_its_own_offers_no_remote_access() {
-    let (state, _dir) = app_state("remote-access-alone");
+    let (state, _dir) = app_state_for_sockets("remote-access-alone");
     assert_eq!(state.remote_access.info(&state), None);
     let set = state.remote_access.set(&state, true).unwrap_err();
     assert_eq!(code_of(&set), error_code::REMOTE_ACCESS_UNAVAILABLE);

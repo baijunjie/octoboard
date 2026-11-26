@@ -232,7 +232,7 @@ impl LiveSession {
     }
 
     /// Whether a stash was left unconfirmed and the stash key is held back for it.
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn stash_unsettled(&self) -> bool {
         self.swap
             .lock()

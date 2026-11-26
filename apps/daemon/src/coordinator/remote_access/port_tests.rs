@@ -4,7 +4,7 @@
 use super::test_support::*;
 use super::*;
 use crate::protocol::RemoteAccessFailureReason;
-use crate::test_support::{app_state, ClosedPort, PATIENCE};
+use crate::test_support::{app_state_for_sockets, ClosedPort, PATIENCE};
 
 /// Whether the daemon whose data directory is `data` takes `key` on its owner pipe, asked as
 /// `octoboardd address --json` reaches it; an error when no pipe of its own answers.
@@ -238,7 +238,7 @@ async fn a_port_in_use_is_said_until_it_is_changed() {
 /// port while the key is taken there.
 #[tokio::test]
 async fn settings_left_on_are_applied_at_the_start() {
-    let (state, dir) = app_state("remote-access-port-start");
+    let (state, dir) = app_state_for_sockets("remote-access-port-start");
     state.set_follows_application();
     let reserved = ClosedPort::new();
     let port = reserved.port();
@@ -262,7 +262,7 @@ async fn settings_left_on_are_applied_at_the_start() {
 /// access to turn on.
 #[tokio::test]
 async fn the_socket_way_in_has_no_port() {
-    let (state, dir) = app_state("remote-access-port-socket");
+    let (state, dir) = app_state_for_sockets("remote-access-port-socket");
     state.set_follows_application();
     state
         .remote_access
@@ -278,7 +278,7 @@ async fn the_socket_way_in_has_no_port() {
         "nothing stored"
     );
     assert!(!state.store.allow_browser_access().unwrap());
-    let (alone, _dir) = app_state("remote-access-port-alone");
+    let (alone, _dir) = app_state_for_sockets("remote-access-port-alone");
     let refused = alone.remote_access.set_port(&alone, 4000).unwrap_err();
     assert_eq!(code_of(&refused), error_code::REMOTE_ACCESS_UNAVAILABLE);
 }
@@ -293,7 +293,7 @@ async fn the_connection_details_are_given_while_remote_access_serves_and_not_oth
         // Neither the user's nor the machine's name can be read here: no details are told.
         return;
     }
-    let (state, dir) = app_state("remote-access-connection");
+    let (state, dir) = app_state_for_sockets("remote-access-connection");
     state.set_follows_application();
     let (data, private) = data_dir(&dir);
     state

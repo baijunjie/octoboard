@@ -106,10 +106,12 @@ mod tests {
 
     /// A judgement that names `place` and what lies below it, and counts nothing else: the
     /// scratch folder stands in for a network place, so nothing real is read.
+    #[cfg(unix)]
     fn names(place: &Path) -> impl Fn(&Path, bool) -> bool + '_ {
         move |prefix, _| prefix.starts_with(place)
     }
 
+    #[cfg(unix)]
     fn no_volume(_: &Path) -> bool {
         false
     }

@@ -157,6 +157,7 @@ pub(super) struct HeldLooks {
 
 #[cfg(test)]
 impl HeldLooks {
+    #[cfg(unix)]
     pub fn new(paths: &[&str], projects: &[&str]) -> Arc<Self> {
         let own = |names: &[&str]| names.iter().map(|name| name.to_string()).collect();
         Arc::new(Self {
@@ -170,6 +171,7 @@ impl HeldLooks {
     }
 
     /// Lets every held look go on, now and from here on.
+    #[cfg(unix)]
     pub fn release(&self) {
         *self.released.lock().unwrap() = true;
         self.release_signal.notify_all();

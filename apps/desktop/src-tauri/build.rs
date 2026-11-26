@@ -97,7 +97,27 @@ fn main() {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         generate_native_localizations();
     }
-    tauri_build::build()
+    tauri_build::try_build(
+        tauri_build::Attributes::new()
+            .windows_attributes(tauri_build::WindowsAttributes::new_without_app_manifest()),
+    )
+    .expect("tauri_build");
+    embed_windows_manifest();
+}
+
+/// Links `windows-app-manifest.rc`, the application manifest as a resource, into every executable,
+/// the test executables included. `tauri_build` would put the manifest in a resource it links into
+/// binaries only, and a test executable without the manifest's Common Controls 6.0 dependency fails
+/// to start (`STATUS_ENTRYPOINT_NOT_FOUND`) on `TaskDialogIndirect`, which the dialog plugin imports
+/// from `comctl32.dll`.
+fn embed_windows_manifest() {
+    println!("cargo:rerun-if-changed=windows-app-manifest.xml");
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+        return;
+    }
+    embed_resource::compile_for_everything("windows-app-manifest.rc", embed_resource::NONE)
+        .manifest_required()
+        .expect("windows-app-manifest.rc");
 }
 
 fn generate_native_localizations() {

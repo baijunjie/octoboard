@@ -1169,6 +1169,7 @@ mod tests {
     /// screen and in a session, each followed by a space, and `/probecmd` run in the session by a
     /// space and one Enter (`testdata/opencode-captures.md`, "The command list and the space"),
     /// with where each screen stood in it.
+    #[cfg(unix)]
     const COMMANDS: &[u8] =
         include_bytes!("../../../testdata/opencode_screen_commands_120x40_1.19.6.bin");
     const AT_COMMAND_IDLE: usize = 39573;

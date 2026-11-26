@@ -1,8 +1,11 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-use super::resolve::{absolute_spelling, names_directory, reach, refused_as_network, Whereabouts};
+#[cfg(unix)]
+use super::resolve::refused_as_network;
+use super::resolve::{absolute_spelling, names_directory, reach, Whereabouts};
 use super::*;
+#[cfg(unix)]
 use crate::hostfs::lexically_normalise;
 use crate::protocol::PathLinkView;
 use crate::test_support::{symlink, ScratchDir};
@@ -2728,6 +2731,7 @@ fn a_link_into_a_network_place_is_refused_before_anything_is_looked_at() {
 
 /// Looks that outrun a shortened deadline: `LOOKS_OVERRIDE` holds the looks of chosen paths until
 /// the test releases them, and every deadline is as short as the test says.
+#[cfg(unix)]
 mod stalled_looks {
     use std::time::Duration;
 
