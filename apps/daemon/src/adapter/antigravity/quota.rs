@@ -134,7 +134,7 @@ mod tests {
             AgentId::ANTIGRAVITY.descriptor().binary,
             &format!(
                 r#"test "$HOME" -ef '{}' && test "$AGY_CLI_DISABLE_AUTO_UPDATE" = true || exit 2
-                   flag="${{1//\\//}}"
+                   flag=$(printf '%s' "$1" | tr '\\' /)
                    case "$flag" in
                        --gemini_dir=*/antigravity/default/.gemini) test -d "${{flag#*=}}" || exit 3 ;;
                        *) exit 4 ;;

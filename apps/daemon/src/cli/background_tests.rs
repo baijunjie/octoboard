@@ -420,7 +420,7 @@ impl Drop for Renewal {
 /// stopped once it has recorded itself, rather than left running unnamed.
 #[test]
 fn stop_waits_for_a_daemon_that_holds_the_lock_to_record_itself_and_stops_it() {
-    let home = ScratchDir::new("stop-unrecorded");
+    let home = ScratchDir::for_sockets("stop-unrecorded");
     let mut stand_in = StandIn::start(&home, HALF_WAY);
     let (code, stdout, stderr) = finished(command(&home, "stop --force"));
     assert_eq!(code, 0, "{stdout}{stderr}");
@@ -438,7 +438,7 @@ fn stop_waits_for_a_daemon_that_holds_the_lock_to_record_itself_and_stops_it() {
 /// predecessor.
 #[test]
 fn stop_waits_through_the_free_lock_of_a_handover_for_the_successor_and_stops_it() {
-    let home = ScratchDir::new("stop-handover");
+    let home = ScratchDir::for_sockets("stop-handover");
     let data = home.join(".octoboard");
     std::fs::create_dir_all(&data).unwrap();
     // This process stands in for the daemon handing over: it runs throughout.
@@ -502,7 +502,7 @@ impl Drop for HandingOver {
 fn stop_leaves_a_daemon_that_records_another_predecessor_running() {
     let other = Predecessor::Daemon(ProcessIdentity::parse("1:1").unwrap());
     for (label, recorded) in [("other", other), ("none", Predecessor::None)] {
-        let home = ScratchDir::new(&format!("stop-other-predecessor-{label}"));
+        let home = ScratchDir::for_sockets(&format!("stop-other-predecessor-{label}"));
         let data = home.join(".octoboard");
         std::fs::create_dir_all(&data).unwrap();
         let mut handing_over = HandingOver::start();
@@ -546,7 +546,7 @@ fn stop_leaves_a_daemon_that_records_another_predecessor_running() {
 /// `stop` leaves it running and says so.
 #[test]
 fn stop_leaves_a_daemon_that_is_not_the_service_managed_successor_running() {
-    let home = ScratchDir::new("stop-not-successor");
+    let home = ScratchDir::for_sockets("stop-not-successor");
     let data = home.join(".octoboard");
     std::fs::create_dir_all(&data).unwrap();
     // A daemon that has exited for its service manager to start the next one: its process is
@@ -593,7 +593,7 @@ fn stop_leaves_a_daemon_that_is_not_the_service_managed_successor_running() {
 /// it without a record: it reports the successor once that one has recorded itself.
 #[test]
 fn status_waits_through_the_free_lock_of_a_handover_for_the_successor() {
-    let home = ScratchDir::new("status-handover");
+    let home = ScratchDir::for_sockets("status-handover");
     let data = home.join(".octoboard");
     std::fs::create_dir_all(&data).unwrap();
     let handing_over = Owner::current(PORT, false, true)
@@ -633,7 +633,7 @@ fn status_waits_through_the_free_lock_of_a_handover_for_the_successor() {
 /// runs at an address not known, rather than wait out the 90 seconds.
 #[test]
 fn status_does_not_wait_on_an_unrecorded_daemon_once_the_handover_note_is_gone() {
-    let home = ScratchDir::new("status-note-gone");
+    let home = ScratchDir::for_sockets("status-note-gone");
     let data = home.join(".octoboard");
     std::fs::create_dir_all(&data).unwrap();
     let handing_over = Owner::current(PORT, false, true)
@@ -661,7 +661,7 @@ fn status_does_not_wait_on_an_unrecorded_daemon_once_the_handover_note_is_gone()
 /// record, and names it, rather than refusing with an address it does not know.
 #[test]
 fn start_names_a_daemon_that_records_itself_while_it_waits() {
-    let home = ScratchDir::new("start-unrecorded");
+    let home = ScratchDir::for_sockets("start-unrecorded");
     let stand_in = StandIn::start(&home, HALF_WAY);
     let (code, stdout, stderr) = finished(command(&home, &format!("start --port {PORT}")));
     assert_eq!(code, 1, "{stdout}{stderr}");
@@ -682,7 +682,7 @@ fn start_names_a_daemon_that_records_itself_while_it_waits() {
 /// when the clean-up is done, rather than start a successor that would follow no command.
 #[test]
 fn the_commands_name_the_daemon_of_a_clean_up_run_for_what_it_is() {
-    let home = ScratchDir::new("clean-up-run-commands");
+    let home = ScratchDir::for_sockets("clean-up-run-commands");
     let stand_in = StandIn::start_clean_up_run_on(&home, PORT);
     let pid = stand_in.pid();
 
@@ -740,14 +740,14 @@ fn the_owner_endpoint_modes_tell_apart_why_there_is_no_endpoint() {
         }
     };
 
-    let home = ScratchDir::new("endpoint-none");
+    let home = ScratchDir::for_sockets("endpoint-none");
     assert_status(&home, 3, "is not running");
 
-    let home = ScratchDir::new("endpoint-without");
+    let home = ScratchDir::for_sockets("endpoint-without");
     let _stand_in = StandIn::start_now(&home, false);
     assert_status(&home, 4, "has no owner endpoint");
 
-    let home = ScratchDir::new("endpoint-unreachable");
+    let home = ScratchDir::for_sockets("endpoint-unreachable");
     let _stand_in = StandIn::start_now(&home, true);
     assert_status(&home, 5, "cannot be reached");
 }
@@ -767,7 +767,7 @@ fn serve_endpoint(home: &Path, router: axum::Router) -> crate::browser::ServeTas
 /// daemon's owner endpoint answers it, and the command exits 0 once the daemon closes.
 #[tokio::test(flavor = "multi_thread")]
 async fn proxy_carries_a_request_and_its_answer_through_its_standard_input_and_output() {
-    let home = ScratchDir::new("proxy-process");
+    let home = ScratchDir::for_sockets("proxy-process");
     let _served = serve_endpoint(&home, crate::browser::key_check_router());
     let home_path = home.to_path_buf();
     let (code, stdout, stderr) = tokio::task::spawn_blocking(move || {
@@ -806,7 +806,7 @@ async fn address_json_prints_the_owner_key_and_the_hello_of_the_endpoint() {
     use axum::response::IntoResponse;
 
     const OWNER_KEY: &str = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
-    let home = ScratchDir::new("address-json");
+    let home = ScratchDir::for_sockets("address-json");
     let router = axum::Router::new().route(
         "/ws/control",
         axum::routing::get(
@@ -860,7 +860,7 @@ async fn address_json_prints_the_owner_key_and_the_hello_of_the_endpoint() {
 /// nothing of their own on standard output.
 #[test]
 fn the_owner_endpoint_modes_say_a_daemon_not_yet_recorded_is_status_1() {
-    let home = ScratchDir::new("endpoint-unrecorded");
+    let home = ScratchDir::for_sockets("endpoint-unrecorded");
     let _stand_in = StandIn::start_held(&home);
     for arguments in ["proxy", "address --json"] {
         let (code, stdout, stderr) = finished(command(&home, arguments));
@@ -879,7 +879,7 @@ fn the_owner_endpoint_modes_say_a_daemon_not_yet_recorded_is_status_1() {
 /// endpoint not answering, 5.
 #[test]
 fn the_application_daemon_has_an_owner_endpoint_only_while_remote_access_is_on() {
-    let home = ScratchDir::new("endpoint-application-off");
+    let home = ScratchDir::for_sockets("endpoint-application-off");
     let _stand_in = StandIn::start_application_now(&home, false);
     for arguments in ["proxy", "address --json"] {
         let (code, stdout, stderr) = finished(command(&home, arguments));
@@ -891,7 +891,7 @@ fn the_application_daemon_has_an_owner_endpoint_only_while_remote_access_is_on()
         assert_eq!(said(&stdout), "", "{arguments}");
     }
 
-    let home = ScratchDir::new("endpoint-application-on");
+    let home = ScratchDir::for_sockets("endpoint-application-on");
     let _stand_in = StandIn::start_application_now(&home, true);
     for arguments in ["proxy", "address --json"] {
         let (code, stdout, stderr) = finished(command(&home, arguments));
@@ -910,7 +910,7 @@ fn the_application_daemon_has_an_owner_endpoint_only_while_remote_access_is_on()
 #[cfg(target_os = "macos")]
 #[test]
 fn the_applications_own_copy_with_no_daemon_running_is_status_6() {
-    let home = ScratchDir::new("endpoint-application-copy");
+    let home = ScratchDir::for_sockets("endpoint-application-copy");
     let macos = home.join("Octoboard.app/Contents/MacOS");
     std::fs::create_dir_all(&macos).unwrap();
     let copy = macos.join("octoboardd");
@@ -948,7 +948,7 @@ fn the_applications_own_copy_with_no_daemon_running_is_status_6() {
 /// the endpoint answers: it has no key to ask the daemon with.
 #[tokio::test(flavor = "multi_thread")]
 async fn address_json_without_a_usable_owner_key_is_status_1() {
-    let home = ScratchDir::new("address-json-no-key");
+    let home = ScratchDir::for_sockets("address-json-no-key");
     let _served = serve_endpoint(&home, crate::browser::key_check_router());
     let home_path = home.to_path_buf();
     let results = tokio::task::spawn_blocking(move || {
@@ -1002,7 +1002,7 @@ const OWNER_KEY: &str = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9
 /// generations; a first frame that is no hello is status 1 with nothing printed.
 #[tokio::test(flavor = "multi_thread")]
 async fn address_json_reads_the_hello_of_any_generation_and_nothing_else() {
-    let home = ScratchDir::new("address-json-frames");
+    let home = ScratchDir::for_sockets("address-json-frames");
     let older = r#"{"type":"hello","generation":4,"daemon_version":"0.0.9","added_later":[1]}"#;
     let (code, stdout, stderr) = address_json_against(&home, older).await;
     assert_eq!(code, 0, "{stdout}{stderr}");
@@ -1019,7 +1019,7 @@ async fn address_json_reads_the_hello_of_any_generation_and_nothing_else() {
         1
     );
 
-    let home = ScratchDir::new("address-json-no-hello");
+    let home = ScratchDir::for_sockets("address-json-no-hello");
     let (code, stdout, stderr) =
         address_json_against(&home, r#"{"type":"snapshot","hosts":[]}"#).await;
     assert_eq!(code, 1, "{stdout}{stderr}");
@@ -1051,7 +1051,7 @@ async fn address_json_against(
 /// open, and carries what the daemon said before closing.
 #[tokio::test(flavor = "multi_thread")]
 async fn proxy_ends_with_status_0_when_the_daemon_closes_first() {
-    let home = ScratchDir::new("proxy-daemon-closes");
+    let home = ScratchDir::for_sockets("proxy-daemon-closes");
     let _served = serve_endpoint(&home, crate::browser::key_check_router());
     let home_path = home.to_path_buf();
     let (code, stdout, stderr) = tokio::task::spawn_blocking(move || {
@@ -1116,7 +1116,7 @@ fn details_line(stdout: &str) -> &str {
 /// no data directory.
 #[test]
 fn connection_prints_the_details_as_text_after_the_qr_code_and_touches_nothing() {
-    let home = ScratchDir::new("connection-process");
+    let home = ScratchDir::for_sockets("connection-process");
     let session = Some("192.0.2.9 51000 198.51.100.7 2200");
 
     let (code, stdout, stderr) =
@@ -1188,7 +1188,7 @@ fn connection_names_the_entry_after_the_machine_unless_that_is_the_host() {
         // The arguments of the child are split at spaces.
         return;
     }
-    let home = ScratchDir::new("connection-name");
+    let home = ScratchDir::for_sockets("connection-name");
     let (code, stdout, stderr) = connection_with(&home, &format!("--host {machine} --text"), None);
     assert_eq!(code, 0, "{stdout}{stderr}");
     assert!(
@@ -1206,7 +1206,7 @@ fn connection_names_the_entry_after_the_machine_unless_that_is_the_host() {
 /// later and exits 0.
 #[tokio::test(flavor = "multi_thread")]
 async fn address_for_the_application_daemon_follows_browser_access() {
-    let home = ScratchDir::new("address-application-on");
+    let home = ScratchDir::for_sockets("address-application-on");
     let _served = serve_endpoint(&home, crate::browser::key_check_router());
     let home_path = home.to_path_buf();
     let (on, off, rotated, after) = tokio::task::spawn_blocking(move || {

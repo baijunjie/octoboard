@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::*;
-use crate::test_support::{app_state, ClosedPort, ScratchDir, PATIENCE};
+use crate::test_support::{app_state_for_sockets, ClosedPort, ScratchDir, PATIENCE};
 
 pub(super) fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
     CodedError::of(err).code
@@ -47,7 +47,7 @@ pub(super) async fn port_takes(port: u16, key: &str) -> std::io::Result<bool> {
 /// A daemon on a host with both ways in (macOS), over a data directory of its own.
 #[cfg(unix)]
 pub(super) fn both_ways_daemon(label: &str) -> (Arc<AppState>, PathBuf, bool, ScratchDir) {
-    let (state, dir) = app_state(label);
+    let (state, dir) = app_state_for_sockets(label);
     state.set_follows_application();
     let (data, private) = data_dir(&dir);
     state
@@ -85,7 +85,7 @@ pub(super) fn held_port() -> (std::net::TcpListener, ClosedPort) {
 /// A daemon that follows the application, offering browser access at its port (and the owner
 /// pipe where the host has one), with its data directory, served as the daemon serves it.
 pub(super) fn port_daemon(label: &str) -> (Arc<AppState>, ScratchDir) {
-    let (state, dir) = app_state(label);
+    let (state, dir) = app_state_for_sockets(label);
     state.set_follows_application();
     state
         .remote_access
@@ -99,7 +99,7 @@ pub(super) fn port_daemon(label: &str) -> (Arc<AppState>, ScratchDir) {
 /// The server form's daemon, which holds its owner key from its start, with the browser port
 /// offered over a data directory of its own.
 pub(super) fn server_daemon(label: &str) -> (Arc<AppState>, PathBuf, ScratchDir) {
-    let (state, dir) = app_state(label);
+    let (state, dir) = app_state_for_sockets(label);
     let data = dir.join("data");
     std::fs::create_dir(&data).unwrap();
     state
@@ -287,7 +287,7 @@ pub(super) fn socket_refusing_data(dir: &Path) -> PathBuf {
 /// A daemon with both ways in whose socket cannot be opened.
 #[cfg(unix)]
 pub(super) fn socket_refusing_daemon(label: &str) -> (Arc<AppState>, PathBuf, ScratchDir) {
-    let (state, dir) = app_state(label);
+    let (state, dir) = app_state_for_sockets(label);
     state.set_follows_application();
     let data = socket_refusing_data(&dir);
     state

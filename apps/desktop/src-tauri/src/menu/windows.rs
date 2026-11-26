@@ -100,9 +100,12 @@ impl<W: Clone> JumpListWork<W> {
     }
 }
 
+/// What one jump list write is given: the UI's labels by key, and the saved remote daemons as
+/// pairs of id and name.
+type JumpListInput = (HashMap<String, String>, Vec<(String, String)>);
+
 /// The jump list's work, done on the main thread by `run_jump_list`.
-static JUMP_LIST: JumpListWork<(HashMap<String, String>, Vec<(String, String)>)> =
-    JumpListWork::new();
+static JUMP_LIST: JumpListWork<JumpListInput> = JumpListWork::new();
 
 /// The bundle's identifier, which a removal of the jump list also names, once one was asked for.
 static JUMP_LIST_APPLICATION_ID: OnceLock<String> = OnceLock::new();

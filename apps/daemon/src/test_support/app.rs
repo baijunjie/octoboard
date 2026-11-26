@@ -35,6 +35,14 @@ pub(crate) fn app_state_with_key(label: &str, key: &str) -> (Arc<AppState>, Scra
     (state, dir)
 }
 
+/// [`app_state`] in a [`ScratchDir::for_sockets`], for a daemon that binds a socket in its
+/// data directory.
+pub(crate) fn app_state_for_sockets(label: &str) -> (Arc<AppState>, ScratchDir) {
+    let mut dir = ScratchDir::for_sockets(label);
+    let state = state_in(&mut dir, TEST_KEY);
+    (state, dir)
+}
+
 /// A second `AppState` over the data directory of an [`app_state`], as a daemon started again
 /// there has it: the same store file, opened anew, with nothing carried over in memory. The
 /// earlier state may still be alive.

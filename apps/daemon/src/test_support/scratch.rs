@@ -34,8 +34,25 @@ type Writer = Weak<dyn std::any::Any + Send + Sync>;
 
 impl ScratchDir {
     pub(crate) fn new(label: &str) -> Self {
+        Self::under(&std::env::temp_dir(), label)
+    }
+
+    /// A scratch directory for a test that binds a Unix domain socket in it. A socket's path
+    /// must fit `sun_path`, 104 bytes on macOS, and the system temporary directory there
+    /// (`/var/folders/…/T/`) already takes about half of that, so the directory goes under
+    /// `/tmp` instead, which is owned by root and sticky: a data directory below it still counts
+    /// as private.
+    pub(crate) fn for_sockets(label: &str) -> Self {
+        if cfg!(unix) {
+            Self::under(Path::new("/tmp"), label)
+        } else {
+            Self::new(label)
+        }
+    }
+
+    fn under(root: &Path, label: &str) -> Self {
         static NEXT: AtomicU32 = AtomicU32::new(0);
-        let path = std::env::temp_dir().join(format!(
+        let path = root.join(format!(
             "octoboardd-{label}-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
