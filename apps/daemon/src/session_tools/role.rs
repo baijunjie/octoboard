@@ -377,7 +377,10 @@ pub(super) fn user_language_guidance(tag: &str) -> Option<String> {
          The user has set Octoboard's interface to {language}. Talk to the user in it — your \
          replies, your questions, reports and pages meant for the user, and the titles you give \
          sessions — unless the user writes to you in another language or asks for one, or the \
-         project's or the user's own instructions say which language to use with them. Everything \
+         project's or the user's own instructions say which language to use with them. A message \
+         that begins with a header saying where it comes from — Octoboard or another session — is \
+         not the user writing, and neither is a tool's output: whatever language they are in, they \
+         do not change the one you talk to the user in. Everything \
          you write into a project — files, code, comments, commit messages, pull requests — \
          follows the project's own conventions instead."
     ))
@@ -1835,6 +1838,17 @@ mod tests {
                 assert!(section.contains(
                     "The user has set Octoboard's interface to Simplified Chinese (zh-CN)."
                 ));
+                // A message headed with where it comes from (Octoboard or another session) and a
+                // tool's output are not the user writing, so they do not change the language.
+                for part in [
+                    "begins with a header saying where it comes from",
+                    "Octoboard or another session",
+                    "is not the user writing",
+                    "neither is a tool's output",
+                    "do not change the one you talk to the user in",
+                ] {
+                    assert!(section.contains(part), "{part}");
+                }
                 assert!(
                     text.find("## Asking the user").unwrap()
                         < text.find("## The user's language").unwrap()
