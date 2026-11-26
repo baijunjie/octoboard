@@ -29,6 +29,7 @@ import { useDaemon } from "../../store";
 import { useHostPaths } from "../../components/hooks/useHostPaths";
 import { ringForAutomaticFocus } from "../../input/lastInput";
 import { RECOVERED_DISPLAY_MARK_ID, RecoveredDisplayMark } from "../RecoveredDisplayMark";
+import { registerShellTerminalBody } from "./shellTerminalGrid";
 import { shellTerminalTitle } from "./shellTerminalTitle";
 import { setActiveShellTerminal, startShellTerminal, takeShellTerminalFocus, useActiveShellTerminal, useProjectShellTerminals, useShellTerminalStarting } from "./shellTerminals";
 import { closeShellTerminal, revealInScroller, TabCloseMark, TabContextMenu } from "./shellTerminalTabs";
@@ -235,6 +236,8 @@ export function ShellTerminalPanel({
   // The box of terminals is the shown tab's panel. A tab that arrives in a commit of its own renders
   // this component again (`tabNodes`).
   useTabPanelLink(bodyRef, activeTab);
+  // Where a new terminal's start size is measured (`shellTerminalStartSize`).
+  useLayoutEffect(() => (bodyRef.current ? registerShellTerminalBody(project.id, bodyRef.current) : undefined), [project.id]);
 
   const tabLabel = (terminal: ShellTerminal, title = shellTerminalTitle(terminal, style)) =>
     terminal.state === "exited" ? t("shellTerminal.tab.exited", { title: isolate(title) }) : title;

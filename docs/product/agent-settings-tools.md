@@ -76,10 +76,10 @@ that rule. What is the user's alone is never changed through these tools, by any
 
 Each of those stays the user's own, in the UI. A project's directory, source, host and remote URL are not settings of
 either kind: they are chosen when the project is associated, by the user or by `add_project`, and nobody, the user
-included, can edit them afterwards (see "Editing a project" in `docs/product/projects.md`). Nor do the tools reach what a
-window keeps for itself rather than the daemon, such as the theme, Markdown style, terminal font size, the window's own
-language, keyboard shortcuts, keeping running in the background, showing the menu bar icon and the desktop application's
-own update channel and automatic update check, nor what the system keeps, such as Launch at login.
+included, can edit them afterwards (see "Editing a project" in `docs/product/projects.md`). Nor do the tools reach what
+a window keeps for itself rather than the daemon, such as the theme, Markdown style, session terminal font size, the
+window's own language, keyboard shortcuts, keeping running in the background, showing the menu bar icon and the desktop
+application's own update channel and automatic update check, nor what the system keeps, such as Launch at login.
 
 The console session's instructions tell it that projects, its console and the application settings belong to the
 user: it changes one only when asked to, says what it changed, and treats accounts and trusted folders as read-only.

@@ -730,6 +730,18 @@ describe("the font size of a terminal opened later", () => {
     new TerminalController({ onStatusChange: () => {} }, "dark", { host: BROWSER_HOST });
     expect(FakeTerminal.last.options.fontSize).toBe(20);
   });
+
+  it("is the size the terminal was given, whatever the user chose", () => {
+    onTestFinished(resetTerminalFontSize);
+    terminalFontSize.set(20);
+    new TerminalController({ onStatusChange: () => {} }, "dark", { host: BROWSER_HOST, fontSize: 12 });
+    expect(FakeTerminal.last.options.fontSize).toBe(12);
+  });
+});
+
+it("leaves xterm's `scrollbar` option unset, as any value of it turns on xterm's overview ruler", () => {
+  new TerminalController({ onStatusChange: () => {} }, "dark", { host: BROWSER_HOST });
+  expect(FakeTerminal.last.options).not.toHaveProperty("scrollbar");
 });
 
 describe("the input's accessible name", () => {

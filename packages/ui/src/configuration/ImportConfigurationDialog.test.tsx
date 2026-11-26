@@ -840,23 +840,23 @@ describe("the settings only this client holds, and the language", () => {
     it("is reviewed against this client's size, and applied and told in the result from what the daemon says it applied", async () => {
       restoreOnFinish();
       await reviewingSettings({ text: carrying({ terminal_font_size: 18 }), reply: echoing() });
-      expect(settingLines()["Terminal font size"]).toEqual({ badge: "Set to the file's", note: "18 px (now 15 px)" });
+      expect(settingLines()["Session terminal font size"]).toEqual({ badge: "Set to the file's", note: "18 px (now 15 px)" });
       await press("Import");
       expect(terminalFontSize.get()).toBe(18);
       await openTab("Settings");
-      expect(resultSettingLines()["Terminal font size"]).toEqual({ badge: "18 px" });
+      expect(resultSettingLines()["Session terminal font size"]).toEqual({ badge: "18 px" });
     });
 
     it("says nothing changes where the file's size is this client's", async () => {
       restoreOnFinish();
       await reviewingSettings({ text: carrying({ terminal_font_size: 15 }) });
-      expect(settingLines()["Terminal font size"]).toEqual({ badge: "No change" });
+      expect(settingLines()["Session terminal font size"]).toEqual({ badge: "No change" });
     });
 
     it("is held within the range this client offers, and rounded to whole pixels", async () => {
       restoreOnFinish();
       await reviewingSettings({ text: carrying({ terminal_font_size: 99 }), reply: echoing() });
-      expect(settingLines()["Terminal font size"]).toEqual({ badge: "Set to the file's", note: "24 px (now 15 px)" });
+      expect(settingLines()["Session terminal font size"]).toEqual({ badge: "Set to the file's", note: "24 px (now 15 px)" });
       await press("Import");
       expect(terminalFontSize.get()).toBe(24);
     });
@@ -864,7 +864,7 @@ describe("the settings only this client holds, and the language", () => {
     it("is rounded to the nearest whole pixel in the review", async () => {
       restoreOnFinish();
       await reviewingSettings({ text: carrying({ terminal_font_size: 18.4 }), reply: echoing() });
-      expect(settingLines()["Terminal font size"]).toEqual({ badge: "Set to the file's", note: "18 px (now 15 px)" });
+      expect(settingLines()["Session terminal font size"]).toEqual({ badge: "Set to the file's", note: "18 px (now 15 px)" });
     });
 
     it("is shown as a value of its own, isolated from the sentence around it", async () => {
@@ -878,7 +878,7 @@ describe("the settings only this client holds, and the language", () => {
       restoreOnFinish();
       terminalFontSize.set(20);
       await reviewingSettings({ text: carrying({ terminal_font_size: size }), reply: echoing() });
-      expect(settingLines()["Terminal font size"]).toBeUndefined();
+      expect(settingLines()["Session terminal font size"]).toBeUndefined();
       await press("Import");
       expect(terminalFontSize.get()).toBe(20);
     });
@@ -887,7 +887,7 @@ describe("the settings only this client holds, and the language", () => {
       restoreOnFinish();
       terminalFontSize.set(20);
       await reviewingSettings({ text: carrying({ terminal_font_size: "big" }), reply: echoing() });
-      expect(settingLines()["Terminal font size"]).toBeUndefined();
+      expect(settingLines()["Session terminal font size"]).toBeUndefined();
       await press("Import");
       expect(terminalFontSize.get()).toBe(20);
     });
@@ -896,7 +896,7 @@ describe("the settings only this client holds, and the language", () => {
       restoreOnFinish();
       terminalFontSize.set(20);
       await reviewingSettings({ text: carrying(FILE), reply: echoing() });
-      expect(settingLines()["Terminal font size"]).toBeUndefined();
+      expect(settingLines()["Session terminal font size"]).toBeUndefined();
       await press("Import");
       expect(terminalFontSize.get()).toBe(20);
     });

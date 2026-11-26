@@ -32,12 +32,12 @@ Each of the three buttons is an icon button whose tooltip is its name (see "Tool
 ## Ways to zoom
 
 - **The keys**, anywhere in the viewer, wherever keyboard focus is inside it: **⌘+** or **⌘=** zooms in, **⌘−** zooms
-  out, and **⌘0** goes back to fitted (Ctrl instead of ⌘ off macOS). Shift may be held, as `+` needs it on many
-  layouts; with Alt held they do nothing. They step as the bar's buttons do. Actual size has no key: it is the fit
-  button and a double-click. These keys are fixed: they cannot be changed and are not listed in Settings' Keyboard
-  shortcuts section. They do not clash with the terminal font size shortcuts, which act only while a terminal has
-  keyboard focus. In a browser, while the viewer shows an image that can be zoomed, they zoom the image and not the
-  page; otherwise they are the browser's as usual.
+  out, and **⌘0** goes back to fitted (Ctrl instead of ⌘ off macOS). Shift may be held, as `+` needs it on many layouts;
+  with Alt held they do nothing. They step as the bar's buttons do. Actual size has no key: it is the fit button and a
+  double-click. These keys are fixed: they cannot be changed and are not listed in Settings' Keyboard shortcuts section.
+  They do not clash with the session terminal font size shortcuts, which act only while a session terminal has keyboard
+  focus. In a browser, while the viewer shows an image that can be zoomed, they zoom the image and not the page;
+  otherwise they are the browser's as usual.
 - **⌘ or Ctrl with the wheel, and a trackpad pinch**, over the image's area, zoom continuously, keeping the point of the
   image under the pointer where it is. In a browser they zoom the image, not the page. A wheel turned without a
   modifier scrolls, as it does anywhere else in the viewer.

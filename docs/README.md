@@ -263,8 +263,9 @@ Where to start, by question:
   recently active, how a terminal's size is decided while several clients show it, how clients are told the size, a
   client that only watches without sizing it, and where its colours come from.
 - [Terminal panel](product/terminal-panel.md) — the right pane's Terminal panel: tabs, actions and the shell terminal.
-- [Terminal font size](product/terminal-font-size.md) — the terminals' font size: the Appearance row, the shortcuts, how
-  every open terminal follows it and where it is kept.
+- [Session terminal font size](product/terminal-font-size.md) — the session terminals' font size: the Appearance row,
+  the shortcuts, how every open session terminal follows it and where it is kept (Terminal panel shells keep the code
+  text size).
 - [Shell terminals](product/shell-terminals.md) — plain shells the daemon runs for a project: ownership, title and
   closing.
 - [Opening a project terminal](product/project-terminal.md) — which system terminal Open in › System terminal opens for a

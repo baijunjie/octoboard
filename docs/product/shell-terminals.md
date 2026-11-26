@@ -73,6 +73,15 @@ profile itself as any login shell does. Either way the terminal is declared as
 `xterm-256color`, and nothing else is set over that environment: none of the variables Octoboard sets for an agent
 session (its session id, the daemon's port, the git hook path, an agent's config directory or home) is set.
 
+**Its size.** The shell's terminal starts at the grid the client that starts it says it will show the terminal at, the
+`cols` and `rows` of the start request, when both are given and lie within 2 to 1,000 columns and 1 to 500 rows; with
+neither, with only one of them, or with a size outside that range, it starts at 120 columns by 32 rows. A value that is
+not a whole number from 0 to 65535 refuses the start. Starting at the shown width matters because a shell that starts
+wider than its grid can leave the mark of its first prompt (zsh's `%`, `PROMPT_SP`) on a line of its own, which no
+later resize takes back. Once clients attach, the size follows "The terminal's size" in
+`docs/product/terminals-on-several-clients.md`. The grid Octoboard's window asks for is in "The shell terminal" in
+`docs/product/terminal-panel.md`.
+
 ## Terminal title
 
 A shell terminal's title follows the title the shell sets with OSC 0 or OSC 2, read by the same rules as a session's

@@ -35,6 +35,7 @@ use crate::state::{AppState, ExactScreen};
 use crate::terminal::backend::{self, Launching, Started};
 use crate::terminal::display::DisplaySeed;
 use crate::terminal::pty::{self, NewPty, PtyCore, PtyOwner};
+use crate::terminal::snapshot::is_supported_size;
 use crate::time::now_millis;
 
 /// How often a running shell is looked at for having exited and for whether it is busy. Neither
@@ -231,6 +232,17 @@ fn shown_title(shell_name: &str, latest: Option<&str>) -> String {
     latest.unwrap_or(shell_name).to_string()
 }
 
+/// The size a new shell terminal starts at: the grid the client asked for (`cols` and `rows` of
+/// `create_shell_terminal`) when it gave both within the supported range, else the default every
+/// terminal starts at. A shell that starts wider than the grid it is shown at leaves the mark of
+/// its first prompt (zsh's `PROMPT_SP`) on a line of its own, which no later resize takes back.
+pub fn start_size(cols: Option<u16>, rows: Option<u16>) -> term::Size {
+    match (cols, rows) {
+        (Some(cols), Some(rows)) if is_supported_size(rows, cols) => term::Size { rows, cols },
+        _ => pty::INITIAL_SIZE,
+    }
+}
+
 /// Starts a shell terminal for `project`: in its directory, or with `worktree` in its place in that
 /// worktree of its repository, resolved as browsing resolves it. A non-empty wire `path` moves the
 /// start to that folder below it, and a path that is not a folder is refused. Broadcasts the new
@@ -240,6 +252,7 @@ pub async fn create(
     project: String,
     worktree: Option<String>,
     path: String,
+    size: term::Size,
 ) -> Result<ShellTerminal> {
     let cwd = {
         let (state, project, worktree) = (state.clone(), project.clone(), worktree.clone());
@@ -288,6 +301,7 @@ pub async fn create(
                 &(tools.shell)(),
                 shell_environment(snapshot, inherited),
                 display,
+                size,
             )
         })
         .await??
@@ -346,6 +360,7 @@ fn launch(
     shell: &ShellCommand,
     env: HashMap<String, String>,
     display: DisplaySeed,
+    size: term::Size,
 ) -> Result<Arc<ShellProcess>> {
     if crate::hostfs::require_directory(cwd).is_err() {
         // The terminal backend may fall back to the home directory for a cwd that does not exist.
@@ -375,7 +390,7 @@ fn launch(
     meta.shell_name = Some(shell_name.clone());
     let spawned = backend::start(Launching {
         command,
-        size: pty::INITIAL_SIZE,
+        size,
         containment: &containment,
         instance: CONTAINMENT_INSTANCE,
         launch: &id,

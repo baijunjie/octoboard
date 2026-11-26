@@ -172,6 +172,12 @@ then sent away with its Close panel button or by moving the pointer away. In the
   the terminal's project in the place of the session's. **A file opened in the file viewer from a shell terminal hands
   keyboard focus back to that terminal** when the viewer closes, while its tab is still there and shown; otherwise focus
   goes to the agent terminal.
+- **Start size**: when this window starts a shell, it measures the project's Terminal panel and asks for the grid the
+  new terminal will be shown at, so the shell's first prompt is drawn for that width (see "Starting a shell terminal"
+  in `docs/product/shell-terminals.md`). The measure keeps one column back, as it can come out a column wider than the
+  terminal then fits, so the shell may start one column narrower than it is shown at and is widened by the terminal's
+  first fit. When the panel is not on screen within two frames of the start, or has no size, no size is asked for and
+  the shell starts at the daemon's default.
 - **Size**: whatever changes the panel's size resizes the shell's terminal, and the shell is told the new size the way
   an agent is, including holding its grid size during a resize-handle drag and fitting a changed area when the drag
   ends (see "The character grid and its size" in `docs/product/terminal-output-scrollback-and-size.md`). Output
@@ -179,7 +185,10 @@ then sent away with its Close panel button or by moving the pointer away. In the
   shown. While the panel is maximized and the docked sidebar's column eases open or closed, the shown terminal keeps its
   size, whatever else changes it meanwhile, and is fitted once, when the column comes to rest, as the agent terminal is.
 - **Drawing**: a shell terminal is drawn without GPU acceleration, so however many tabs are open none of them takes a
-  graphics context from the agent terminal. Its colours, and the minimum contrast its text is held to, follow the
+  graphics context from the agent terminal. Its text is drawn at a fixed **12 px**, the size of the code text in the
+  other panels, such as the file viewer's; it does not follow the session terminal font size, and the font size
+  shortcuts change nothing while keyboard focus is in a shell terminal (see "The size and how it is changed" in
+  `docs/product/terminal-font-size.md`). Its colours, and the minimum contrast its text is held to, follow the
   window's appearance as the agent terminal's do (see "What follows the choice" in `docs/product/appearance.md`).
 
 ## When the shell exits

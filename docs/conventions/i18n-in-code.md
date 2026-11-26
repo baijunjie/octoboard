@@ -8,8 +8,7 @@ How code produces text the user reads, in the UI and on the website. How copy is
 
 - **Every string the user reads is a catalog message, and English is the source.** Text in code ships untranslated.
 - **A sentence is one message.** Word order, particles and cases differ by language, so code never assembles one.
-- **Never rename a key for tidiness.** Delivered translations are matched by key, so a rename makes every language's
-  translation fail to match.
+- **Never rename a key for tidiness.** A rename touches every catalog and every caller for no change the user sees.
 
 ## What is translated, and where it lives
 
@@ -58,9 +57,10 @@ How code produces text the user reads, in the UI and on the website. How copy is
 
 ## Keys
 
-- **Whether a change is polish (keep the key and the old translations) or a change of meaning (a new key, the old one
-  left) is judged as the skill's "Changing existing copy" says**; when only some uses of a shared key change, move
-  those uses to a new key.
+- **A change of meaning rewrites the message under its key in every catalog in the same change**, unlike the skill's
+  "Changing existing copy" (a new key, the old one left): every catalog is in the repository and changes together, so
+  nothing outside is matched by key. Polish keeps the key too. A new key is only for the uses of a shared key that
+  change, moved to it while the other uses keep the original.
 
 ## Placeholders, numbers and plurals
 

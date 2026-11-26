@@ -23,17 +23,32 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-/** What `matchFontSizeShortcut` makes of a key pressed in `where`: a terminal's input, or the page. */
-function press(host: typeof MAC_HOST, where: "terminal" | "page", init: { code: string; key: string; shift?: boolean; alt?: boolean; other?: boolean }, kind: "tauri" | "browser" = "tauri") {
+/** An input put in the page for a key to be pressed in: a session terminal's (inside an `.xterm`), a Terminal panel
+ * shell's (the terminal inside the element that marks it), or on the page. */
+function targetIn(where: "terminal" | "shell" | "page"): HTMLTextAreaElement {
   const target = document.createElement("textarea");
-  if (where === "terminal") {
-    const terminal = document.createElement("div");
-    terminal.className = "xterm";
-    terminal.append(target);
-    document.body.append(terminal);
-  } else {
+  if (where === "page") {
     document.body.append(target);
+    return target;
   }
+  const terminal = document.createElement("div");
+  terminal.className = "xterm";
+  terminal.append(target);
+  if (where === "shell") {
+    const mount = document.createElement("div");
+    mount.setAttribute("data-shell-terminal", "");
+    mount.append(terminal);
+    document.body.append(mount);
+  } else {
+    document.body.append(terminal);
+  }
+  return target;
+}
+
+/** What `matchFontSizeShortcut` makes of a key pressed in `where`: a session terminal's input, a Terminal panel
+ * shell's (the terminal inside the element that marks it), or the page. */
+function press(host: typeof MAC_HOST, where: "terminal" | "shell" | "page", init: { code: string; key: string; shift?: boolean; alt?: boolean; other?: boolean }, kind: "tauri" | "browser" = "tauri") {
+  const target = targetIn(where);
   const apple = host.modifier === "meta";
   const event = new KeyboardEvent("keydown", {
     code: init.code,
@@ -62,6 +77,13 @@ describe.each([["macOS", MAC_HOST], ["Windows", WINDOWS_HOST]])("on %s", (_name,
     expect(press(host, "page", { code: "Equal", key: "=" })).toBeUndefined();
     expect(press(host, "page", { code: "Minus", key: "-" })).toBeUndefined();
     expect(press(host, "page", { code: "Digit0", key: "0" })).toBeUndefined();
+  });
+
+  it("leaves the keys to the page in a Terminal panel shell, which is not drawn at the terminal font size", () => {
+    expect(press(host, "shell", { code: "Equal", key: "=" })).toBeUndefined();
+    expect(press(host, "shell", { code: "Minus", key: "-" })).toBeUndefined();
+    expect(press(host, "shell", { code: "Digit0", key: "0" })).toBeUndefined();
+    expect(press(host, "shell", { code: "Backslash", key: "+" })).toBeUndefined();
   });
 
   it("takes + and - typed on another key of a layout, and no other combination of them", () => {
@@ -171,17 +193,10 @@ function Shortcuts(): null {
   return null;
 }
 
-/** Presses the modifier with `code` in a terminal's input, or on the page, and returns the event. */
-function pressKey(host: typeof MAC_HOST, where: "terminal" | "page", code: string, key: string): KeyboardEvent {
-  const target = document.createElement("textarea");
-  if (where === "terminal") {
-    const terminal = document.createElement("div");
-    terminal.className = "xterm";
-    terminal.append(target);
-    document.body.append(terminal);
-  } else {
-    document.body.append(target);
-  }
+/** Presses the modifier with `code` in a session terminal's input, a Terminal panel shell's, or on the page, and
+ * returns the event. */
+function pressKey(host: typeof MAC_HOST, where: "terminal" | "shell" | "page", code: string, key: string): KeyboardEvent {
+  const target = targetIn(where);
   const apple = host.modifier === "meta";
   const event = new KeyboardEvent("keydown", { code, key, metaKey: apple, ctrlKey: !apple, bubbles: true, cancelable: true });
   act(() => void target.dispatchEvent(event));
@@ -214,6 +229,14 @@ describe.each([["macOS", MAC_HOST], ["Windows", WINDOWS_HOST]])("useTerminalFont
     mount();
     for (const [code, key] of [["Equal", "="], ["Minus", "-"], ["Digit0", "0"]]) {
       expect(pressKey(host, "page", code, key).defaultPrevented, code).toBe(false);
+    }
+    expect(terminalFontSize.get()).toBe(DEFAULT_TERMINAL_FONT_SIZE);
+  });
+
+  it("leaves the font size alone and the event unhandled in a Terminal panel shell, which has a size of its own", () => {
+    mount();
+    for (const [code, key] of [["Equal", "="], ["Minus", "-"], ["Digit0", "0"]]) {
+      expect(pressKey(host, "shell", code, key).defaultPrevented, code).toBe(false);
     }
     expect(terminalFontSize.get()).toBe(DEFAULT_TERMINAL_FONT_SIZE);
   });

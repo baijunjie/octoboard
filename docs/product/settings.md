@@ -210,7 +210,8 @@ each group holds, where each is shown and what each does are in `docs/product/ge
 
 ## Appearance
 
-How the window looks: three rows, **Theme**, **Markdown style** and **Terminal font size**, under no group heading.
+How the window looks: three rows, **Theme**, **Markdown style** and **Session terminal font size**, under no group
+heading.
 
 ### Theme
 
@@ -225,16 +226,17 @@ How a rendered Markdown document in the project pane's file viewer looks, chosen
 names are proper names, the same in every language. What each style looks like, which one is the default and where the
 choice is kept are in `docs/product/markdown-documents.md`.
 
-### Terminal font size
+### Session terminal font size
 
-The size of the terminals' text in whole pixels, as a number field: the number centred between a **−** button before it
-and a **+** button after it, with no unit shown. The field's name is the row's, and the two buttons are named **Decrease
-terminal font size** and **Increase terminal font size**, with no tooltip; they are not reached with Tab, and each is
-unavailable at its end of the range. In the field the Up and Down arrow keys step the size by one pixel, Page Up and Page
-Down by ten, and Home and End go to the smallest and largest sizes. A size typed into the field is taken when the field
-loses focus or on `Enter`, held to the range and rounded to a whole pixel; an emptied field goes back to showing the size.
-Every change applies to the terminals as it is taken. The row's description says what the size is and that the font
-size shortcuts change it too while a terminal has focus.
+The size of the session terminals' text in whole pixels, as a number field: the number centred between a **−** button
+before it and a **+** button after it, with no unit shown. The field's name is the row's, and the two buttons are named
+**Decrease session terminal font size** and **Increase session terminal font size**, with no tooltip; they are not
+reached with Tab, and each is unavailable at its end of the range. In the field the Up and Down arrow keys step the
+size by one pixel, Page Up and Page Down by ten, and Home and End go to the smallest and largest sizes. A size typed
+into the field is taken when the field loses focus or on `Enter`, held to the range and rounded to a whole pixel; an
+emptied field goes back to showing the size. Every change applies to the session terminals as it is taken. The row's
+description says what the size is, that the font size shortcuts change it too while a session terminal has focus, and
+that the Terminal panel's terminals are drawn at the code text size of the other panels instead.
 
 Before the field stands an icon button, **Reset font size** (its tooltip and its name), which sets the size back to the
 default. It is shown only while the size is not the default; hidden, it keeps its space, so the field does not move as

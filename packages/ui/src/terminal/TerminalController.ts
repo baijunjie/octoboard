@@ -71,6 +71,9 @@ export interface TerminalControllerOptions {
    * default 80 by 24: for a terminal mounted out of sight (a hidden tab), which cannot be fitted
    * until it is shown and would otherwise send its process a size it then takes back. */
   fittedSizesOnly?: boolean;
+  /** Draws at this font size in pixels for the life of the terminal, rather than at the terminal font size setting
+   * (`terminalFontSize`), which the view then does not follow. */
+  fontSize?: number;
 }
 
 export interface TerminalControllerHandlers {
@@ -136,6 +139,12 @@ export interface TerminalControllerHandlers {
     pathStyle?: PathStyle;
   };
 }
+
+/** The width of xterm's scrollbar beside the grid, which its fit leaves out of the columns, for a shell terminal's start
+ * size (`shellTerminalGrid.ts`). A copy of xterm's own default (`ViewportConstants.DEFAULT_SCROLL_BAR_WIDTH`), to be
+ * checked again when xterm is upgraded: it is not passed to xterm, since setting `scrollbar.width` also turns on its
+ * overview ruler, which draws a line beside the scrollbar and redraws with every scroll. */
+export const XTERM_SCROLLBAR_WIDTH = 14;
 
 /** The terminal's font: a monospace stack with CJK coverage, since these agents render box-drawing
  * TUIs and sometimes CJK status text, and the default `courier-new` xterm.js falls back to has
@@ -248,11 +257,11 @@ export class TerminalController {
    * `activate`): a session the user picked does, a reconnect in the background does not. */
   private activateOnOpen = false;
 
-  private readonly options: Required<TerminalControllerOptions>;
+  private readonly options: Required<Omit<TerminalControllerOptions, "fontSize">>;
   /** Whether the terminal has been fitted to its container at least once. */
   private fitted = false;
 
-  constructor(handlers: TerminalControllerHandlers, initialColorTheme: "light" | "dark", { gpu = true, fittedSizesOnly = false, host }: TerminalControllerOptions) {
+  constructor(handlers: TerminalControllerHandlers, initialColorTheme: "light" | "dark", { gpu = true, fittedSizesOnly = false, host, fontSize }: TerminalControllerOptions) {
     this.handlers = handlers;
     this.options = { gpu, fittedSizesOnly, host };
     // A click that opens a link is not the program's (see `LinkClickReports`).
@@ -264,7 +273,7 @@ export class TerminalController {
     this.term = new Terminal({
       scrollback: SCROLLBACK_ROWS,
       fontFamily: TERMINAL_FONT_FAMILY,
-      fontSize: terminalFontSize.get(),
+      fontSize: fontSize ?? terminalFontSize.get(),
       theme: XTERM_THEMES[initialColorTheme],
       // The colours on screen are the agent's own, picked for whichever background its own theme
       // setting assumes, so on the other one some of them all but vanish (a dark theme's pale

@@ -9,6 +9,7 @@ import { createPersistedPreference } from "../../preferences/persistedPreference
 import { PREFERENCE_KEYS } from "../../preferences/preferenceKeys";
 import type { ShellTerminal } from "../../protocol";
 import { seedShellTerminal, useDaemonStore, type Daemon, type State } from "../../store";
+import { shellTerminalStartSize } from "./shellTerminalGrid";
 
 /** A project's shell terminals, oldest first: the order their tabs are in. */
 export function shellTerminalsOf(state: Pick<State, "shellTerminals">, project: string): ShellTerminal[] {
@@ -153,7 +154,9 @@ async function createShellTerminal(daemon: Pick<Daemon, "request" | "store">, pr
   setStarting(project, true);
   try {
     const { worktree, path } = place ?? { worktree: gitModeWorktree(project) };
-    const reply = await daemon.request({ type: "create_shell_terminal", project, ...(worktree !== undefined && { worktree }), ...(path !== undefined && { path }) });
+    // The shell starts at the grid its view will be shown at, so its first prompt is drawn for that width.
+    const size = await shellTerminalStartSize(project);
+    const reply = await daemon.request({ type: "create_shell_terminal", project, ...(worktree !== undefined && { worktree }), ...(path !== undefined && { path }), ...size });
     if (focus) focusRequested = { terminal: reply.shell_terminal.id, at: Date.now() };
     // The broadcast of the record can come after this reply; seeded here (a record the broadcast
     // already brought stands), the pending state never ends on a store without it.

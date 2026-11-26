@@ -35,7 +35,12 @@ const { FakeController } = vi.hoisted(() => {
     }
     fits = 0;
     inputLabel: string | undefined;
-    constructor(readonly callbacks: { onStatusChange: (status: TermStatus) => void; pasteImage?: unknown; dropFiles?: unknown }) {
+    constructor(
+      readonly callbacks: { onStatusChange: (status: TermStatus) => void; pasteImage?: unknown; dropFiles?: unknown },
+      _theme: "light" | "dark",
+      /** What the view built the controller with. */
+      readonly options: { fontSize?: number },
+    ) {
       FakeController.last = this;
     }
     mount(element: HTMLElement): void {
@@ -44,9 +49,10 @@ const { FakeController } = vi.hoisted(() => {
     setInputLabel(label: string): void {
       this.inputLabel = label;
     }
-    fontSize: number | undefined;
+    /** The sizes the view later asked the controller to redraw at. */
+    fontSizes: number[] = [];
     setFontSize(size: number): void {
-      this.fontSize = size;
+      this.fontSizes.push(size);
     }
     fit(): void {
       this.fits += 1;
@@ -356,14 +362,20 @@ it("does not fit a hidden tab as the ease ends", () => {
   expect(FakeController.last.fits).toBe(fits);
 });
 
-it("draws a shell at the chosen terminal font size as it opens, and redraws it when the size changes", () => {
+it("draws a shell at the other panels' code size as it opens, and keeps it there when the terminal font size changes", () => {
   onTestFinished(resetTerminalFontSize);
-  mount();
-  expect(FakeController.last.fontSize).toBe(15);
+  // `--text-xs`, which the code in the other panels is drawn at; a px value, so the root's font size is not in play.
+  document.documentElement.style.setProperty("--text-xs", "10px");
+  onTestFinished(() => void document.documentElement.style.removeProperty("--text-xs"));
   act(() => terminalFontSize.set(21));
-  expect(FakeController.last.fontSize).toBe(21);
   mount();
-  expect(FakeController.last.fontSize).toBe(21);
+  expect(FakeController.last.options.fontSize).toBe(10);
+  act(() => terminalFontSize.set(17));
+  expect(FakeController.last.fontSizes).toEqual([]);
+  expect(FakeController.last.options.fontSize).toBe(10);
+  mount();
+  expect(FakeController.last.options.fontSize).toBe(10);
+  expect(FakeController.last.fontSizes).toEqual([]);
 });
 
 it("names the terminal's input in the UI language, and follows a language change", () => {

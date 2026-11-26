@@ -51,7 +51,7 @@ it("shows the terminal font size as a number field named by the row, with the si
   const container = mount();
   const row = container.querySelector('[data-settings-search-id="terminal-font-size"]')!;
   const input = row.querySelector<HTMLInputElement>("input")!;
-  expect(input.getAttribute("aria-label")).toBe("Terminal font size");
+  expect(input.getAttribute("aria-label")).toBe("Session terminal font size");
   expect(input.value).toBe("15");
   expect(input.hasAttribute("aria-describedby")).toBe(false);
   expect(row.textContent).not.toContain("px");

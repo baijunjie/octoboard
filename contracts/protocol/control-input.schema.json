@@ -4046,6 +4046,18 @@
             "path": {
               "type": "string"
             },
+            "cols": {
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
+            "rows": {
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 0,
+              "maximum": 65535
+            },
             "type": {
               "type": "string",
               "const": "create_shell_terminal"
@@ -4055,7 +4067,7 @@
             "type",
             "project"
           ],
-          "description": "Starts a shell terminal in the project's directory, or with `worktree` in the project's\nplace in that worktree of its repository (the same scoped root as browsing). A non-empty\n`path`, a canonical wire path as in `reveal_project_path`, starts it in that folder below\nthere instead; a path that is not a folder is refused with `path_not_a_directory`. Answered\nwith `shell_terminal_created`, and broadcast as `shell_terminal_upserted`."
+          "description": "Starts a shell terminal in the project's directory, or with `worktree` in the project's\nplace in that worktree of its repository (the same scoped root as browsing). A non-empty\n`path`, a canonical wire path as in `reveal_project_path`, starts it in that folder below\nthere instead; a path that is not a folder is refused with `path_not_a_directory`. Answered\nwith `shell_terminal_created`, and broadcast as `shell_terminal_upserted`. `cols` and\n`rows`, given together, are the grid the client will show it at, which the shell starts\nat instead of the daemon's default; a size out of the supported range, or only one of the\ntwo, is ignored (a value outside `u16` fails to read, refusing the request)."
         },
         {
           "type": "object",

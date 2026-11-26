@@ -16,6 +16,8 @@ import { PanelFrameProvider, type PanelFrame } from "../../components/panel/Pane
 import { PlatformProvider } from "../../platform/react";
 import type { Event, Project, ClientRequestBody, ShellTerminal } from "../../protocol";
 import { applyDaemonEvent, createStateStore, DaemonProvider, seedShellTerminal } from "../../store";
+import { FAKE_FRAME_MS, fakeTimers } from "../../test/clock";
+import { stubTerminalLayout } from "./shellTerminalGridTestSupport";
 import { testDaemon } from "../../test/testDaemon";
 import { ShellTerminalPanel } from "./ShellTerminalPanel";
 import { activePreference, setActiveShellTerminal, startShellTerminal, takeShellTerminalFocus } from "./shellTerminals";
@@ -236,6 +238,13 @@ it("starts a terminal in the place given, and focuses it once shown when asked f
   await vi.waitFor(() => expect(focused).toEqual(["new"]));
 });
 
+it("starts a terminal at the grid the panel's body holds", async () => {
+  stubTerminalLayout({ width: 800, height: 400, cell: { width: 7, height: 14.5 } });
+  const panel = mount([shell("a", 1)]);
+  await act(async () => panel.container.querySelector<HTMLButtonElement>("button[aria-label='New terminal']")!.click());
+  expect(panel.request).toHaveBeenCalledWith({ type: "create_shell_terminal", project: "p", cols: 111, rows: 26 });
+});
+
 it("starts a terminal in the project's own directory for an empty place, not in the Git mode's worktree", async () => {
   const panel = mount([shell("a", 1)]);
   await act(async () => {
@@ -297,6 +306,7 @@ it("keeps a record the broadcast brought when the reply names the same terminal"
 });
 
 it("joins the earlier start still pending when the later one has already settled", async () => {
+  fakeTimers();
   const store = createStateStore({});
   const holds: Array<(reply: Event) => void> = [];
   const request = vi.fn((body: ClientRequestBody) => new Promise<Event>((resolve) => {
@@ -306,6 +316,10 @@ it("joins the earlier start still pending when the later one has already settled
   const created = (id: string) => ({ type: "shell_terminal_created", id: null, shell_terminal: shell(id, 1) }) as Event;
   const first = startShellTerminal(daemon, "p");
   const second = startShellTerminal(daemon, "p");
+  // A start measures where its terminal will be shown before it asks the daemon, and with no panel for the project
+  // gives it two frames to appear, so the requests come after them.
+  await vi.advanceTimersByTimeAsync(2 * FAKE_FRAME_MS);
+  expect(holds).toHaveLength(2);
   holds[1]!(created("second"));
   expect(await second).toBe("second");
   const joined = startShellTerminal(daemon, "p", { ifNone: true });

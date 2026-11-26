@@ -87,9 +87,9 @@ and `⌃⇧Tab` on an Apple keyboard, `Ctrl+Tab` and `Ctrl+Shift+Tab` elsewhere.
 | Navigation | **Previous region of the window** | `Shift+F6` | no | every client |
 | Focus mode | **Enter focus mode** | `Option+Cmd+→` | yes | every client |
 | Focus mode | **Leave focus mode** | `Option+Cmd+←` | yes | every client |
-| Terminal | **Increase terminal font size** | `Cmd+=` (also `Cmd++`) | yes | every client, while a terminal has focus |
-| Terminal | **Decrease terminal font size** | `Cmd+-` | yes | every client, while a terminal has focus |
-| Terminal | **Reset terminal font size** | `Cmd+0` | yes | every client, while a terminal has focus |
+| Terminal | **Increase session terminal font size** | `Cmd+=` (also `Cmd++`) | yes | every client, while a session terminal has focus |
+| Terminal | **Decrease session terminal font size** | `Cmd+-` | yes | every client, while a session terminal has focus |
+| Terminal | **Reset session terminal font size** | `Cmd+0` | yes | every client, while a session terminal has focus |
 | Application | **New session** | `Cmd+N` | yes | every client |
 | Application | **New session with defaults** | `Shift+Cmd+N` | yes | every client |
 | Application | **Find in files** | `Shift+Cmd+F` | yes | every client |
@@ -112,26 +112,28 @@ it from the keyboard are turned off there, so none of them reloads, prints, open
 that is one of Octoboard's own, such as Find's `Ctrl+F`, reaches the page as usual. Editing keys in a text
 field — select all, copy, paste and the like — are not browser keys and keep working.
 
-The terminal font size keys act only while a terminal has keyboard focus, so a browser's own page zoom keeps those keys
-everywhere else, except in the file viewer while it shows an image that can be zoomed, where the same keys zoom the
-image (see "Ways to zoom" in `docs/product/zooming-images-in-the-file-viewer.md`). They change the same size as the Terminal font size row of Settings' Appearance section (see
-`docs/product/terminal-font-size.md`). `Cmd++` is typed with whatever key the layout has for
-`+`; it and `Cmd+-` typed on another key of a layout work only while the commands keep their default keys and
+The session terminal font size keys act only while a session terminal has keyboard focus — not a shell terminal of the
+Terminal panel, which is drawn at a fixed size — so a browser's own page zoom keeps those keys everywhere else, except
+in the file viewer while it shows an image that can be zoomed, where the same keys zoom the image (see "Ways to zoom" in
+`docs/product/zooming-images-in-the-file-viewer.md`). They change the same size as the Session terminal font size row of
+Settings' Appearance section (see `docs/product/terminal-font-size.md`). `Cmd++` is typed with whatever key the layout
+has for `+`; it and `Cmd+-` typed on another key of a layout work only while the commands keep their default keys and
 the combination is not the keys of another command this client has (on a German keyboard, where `+` is the key Forward
 has, Forward keeps it in the macOS desktop app, the one client that has Forward; elsewhere it is an increase). A
-character typed on the key in the other font size command's position is never that command: `+` on a Nordic layout's
-key in the US `-` position, or `-` on Turkish Q's key in the US `=` position, is its own command while that keeps its
+character typed on the key in the other font size command's position is never that command: `+` on a Nordic layout's key
+in the US `-` position, or `-` on Turkish Q's key in the US `=` position, is its own command while that keeps its
 default keys, and nothing otherwise.
 
 What each command does: Back and Forward in "Keyboard shortcuts" in `docs/product/navigation-history.md`; the
 console-session keys in "The switch strip" in `docs/product/focus-mode.md`; the region keys in
 `docs/product/moving-focus-between-regions.md`; Enter focus mode and Leave focus mode in "The focus mode shortcuts" in
 `docs/product/focus-mode.md`; the two New session commands in "Creating sessions from the keyboard" in
-`docs/product/sidebar.md`; Find in files in "Opening it" in `docs/product/finding-in-files.md`; the three terminal font size
-commands in "The size and how it is changed" in `docs/product/terminal-font-size.md`; Open settings in "Opening
-and closing Settings" in `docs/product/settings.md`; Find, which acts only in the file viewer, where it finds in the
-file (see `docs/product/finding-in-the-file-viewer.md`), and in Settings, where it focuses the search field (see "The
-search field" in `docs/product/searching-settings.md`); and the native menu's keys in `docs/product/application-lifecycle.md`.
+`docs/product/sidebar.md`; Find in files in "Opening it" in `docs/product/finding-in-files.md`; the three session
+terminal font size commands in "The size and how it is changed" in `docs/product/terminal-font-size.md`; Open settings
+in "Opening and closing Settings" in `docs/product/settings.md`; Find, which acts only in the file viewer, where it
+finds in the file (see `docs/product/finding-in-the-file-viewer.md`), and in Settings, where it focuses the search field
+(see "The search field" in `docs/product/searching-settings.md`); and the native menu's keys in
+`docs/product/application-lifecycle.md`.
 
 ## The Keyboard shortcuts section
 

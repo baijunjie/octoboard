@@ -46,9 +46,10 @@ function matchTypedCharacter(event: KeyboardEvent, platform: ClientPlatform): Fo
 /** What `matchFontSizeShortcut` reads of the platform adapter. */
 type ClientPlatform = CapabilityPlatform & { host: ModifierHost };
 
-/** Whether `event` came from the keyboard focus being in a terminal. */
+/** Whether `event` came from the keyboard focus being in a terminal drawn at the terminal font size: not a Terminal
+ * panel shell, which is drawn at the other panels' code size (`shellTerminalFontSize`). */
 function inTerminal(event: KeyboardEvent): boolean {
-  return event.target instanceof Element && event.target.closest(".xterm") !== null;
+  return event.target instanceof Element && event.target.closest(".xterm") !== null && event.target.closest("[data-shell-terminal]") === null;
 }
 
 /** The font size command `event` is, only while a terminal has focus: elsewhere ⌘= and its kin are the browser's page

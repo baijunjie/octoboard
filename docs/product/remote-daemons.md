@@ -16,10 +16,10 @@ user, host and SSH port) are the same daemon. Each window shows only its own dae
 notifications, and is independent of the others.
 
 What a window remembers of its daemon — the selected console, the sidebar's view, the file browsers' state, the right
-pane's panels, the shell terminals' tabs — is kept per daemon, under the SSH destination for a remote one, so one
-window neither changes nor removes another's. A remote daemon's window first opens with the layout the main window has,
-and keeps its own from then on. What is the application's is shared by every window, and a change in one reaches the
-others at once: the appearance, the terminal font size and the keyboard shortcuts. The language is the daemon's: each
+pane's panels, the shell terminals' tabs — is kept per daemon, under the SSH destination for a remote one, so one window
+neither changes nor removes another's. A remote daemon's window first opens with the layout the main window has, and
+keeps its own from then on. What is the application's is shared by every window, and a change in one reaches the others
+at once: the appearance, the session terminal font size and the keyboard shortcuts. The language is the daemon's: each
 window shows the one its own daemon holds (see `docs/product/language.md`). Each window's size and position are
 remembered on their own (see "The window's size and position across launches" in
 `docs/product/window-size-and-position.md`).
@@ -386,10 +386,10 @@ differences:
   window shows, and its Settings change, the language the remote daemon holds (see "The language the daemon holds" in
   `docs/product/language.md`). What is the application's own is not offered there: Launch at login, Keep running in the
   background and Show menu bar icon in General (see `docs/product/general-settings.md`), the Permissions section, the
-  Access section, and the application's updates (below). Cleanup's Clean up before uninstalling row has no action there and
-  only says where the clean-up is done (see "Which installation it speaks for" in
-  `docs/product/clean-up-before-uninstalling.md`). Appearance, the terminal font size and the keyboard
-  shortcuts are the application's, shared with every window.
+  Access section, and the application's updates (below). Cleanup's Clean up before uninstalling row has no action there
+  and only says where the clean-up is done (see "Which installation it speaks for" in
+  `docs/product/clean-up-before-uninstalling.md`). Appearance, the session terminal font size and the keyboard shortcuts
+  are the application's, shared with every window.
 - **Nothing is opened on the remote machine, and nothing of this computer is offered for the daemon's files**: no File
   manager, Default application or System terminal under Open in (see `docs/product/sidebar-project-rows.md` and "A row's
   actions" in `docs/product/project-pane.md`), no File manager or Default application in the file viewer's header, which
@@ -405,9 +405,9 @@ differences:
 - **It neither quits the application nor stops its daemon.** Quitting is the main window's (see "Quitting" in
   `docs/product/application-lifecycle.md`); the remote daemon and its sessions run on whatever the application does.
 - **Its notifications and waiting count are its own daemon's**: a session waiting for the user in that daemon notifies
-  through the application, a click on the notification brings this window forward and opens that session, and its waiting sessions count in
-  the Dock badge (see "The raised hand" in `docs/product/session-statuses.md`). The menu bar icon's menu has a tab for
-  its daemon (see `docs/product/menu-bar-icon.md`).
+  through the application, a click on the notification brings this window forward and opens that session, and its
+  waiting sessions count in the Dock badge (see "The raised hand" in `docs/product/session-statuses.md`). The menu bar
+  icon's menu has a tab for its daemon (see `docs/product/menu-bar-icon.md`).
 - On macOS, Settings… and About in the application menu open in the window focused last, so in a remote window they
   open that window's Settings.
 

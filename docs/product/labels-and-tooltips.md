@@ -118,7 +118,8 @@ application buttons and the Keyboard shortcuts section's Cancel and Reset button
   Reopen and Delete — whose tooltip is the action's short name ("Open in Claude app", "Reopen", "Delete"), while the
   name announced for each also names the session it acts on (see `docs/product/archive-view.md`);
 - the three options of Settings' Theme row — Light, Dark and System (see "Theme" in `docs/product/settings.md`);
-- the Terminal font size row's **Reset font size** button (see "Terminal font size" in `docs/product/settings.md`);
+- the Session terminal font size row's **Reset font size** button (see "Session terminal font size" in
+  `docs/product/settings.md`);
 - the Reset button at the end of a row in Settings' Keyboard shortcuts section, whose tooltip is a short "Reset", while
   the name announced for it says that it resets the shortcut for that row's command to its default (see "The Keyboard
   shortcuts section" in `docs/product/keyboard-shortcuts.md`);
@@ -187,10 +188,10 @@ The row it sits on tints under the pointer, and a press anywhere on that row exp
 "Rows and the keyboard" in `docs/product/project-pane.md`). Assistive technology names the arrow "Expand" or
 "Collapse", followed by the row's name.
 
-The **−** and **+** buttons of a number field, such as the Terminal font size row's in Settings, are an exception too:
-they have **no tooltip**, their glyphs being the convention for stepping a number down and up. Assistive technology
-names each by what it does — "Decrease terminal font size" and "Increase terminal font size" there (see "Terminal font
-size" in `docs/product/settings.md`).
+The **−** and **+** buttons of a number field, such as the Session terminal font size row's in Settings, are an
+exception too: they have **no tooltip**, their glyphs being the convention for stepping a number down and up. Assistive
+technology names each by what it does — "Decrease session terminal font size" and "Increase session terminal font size"
+there (see "Session terminal font size" in `docs/product/settings.md`).
 
 The floating sidebar's width grip and the right pane's resize grips — its width handle and the handles between its
 panels or columns — have a tooltip too, a short "Resize" shown beside the grip only while a mouse pointer rests on

@@ -58,7 +58,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in a browser",
     description:
-      "A changeable shortcut shows only its key caps, which are themselves the edit button: they darken on hover, and pressing them records a new combination. Fixed shortcuts have a lock in the reserved trailing slot. Navigation lists only the two region keys, Focus mode lists Enter focus mode and Leave focus mode (the shortcut modifier and Alt with → and ←), Terminal lists Increase, Decrease and Reset terminal font size (the shortcut modifier with =, - and 0), Application lists New session, New session with defaults, Find in files and Open settings, in that order, and Editing lists Find. The introduction names the current browser as the scope, and Restore defaults is absent while every key is a default.",
+      "A changeable shortcut shows only its key caps, which are themselves the edit button: they darken on hover, and pressing them records a new combination. Fixed shortcuts have a lock in the reserved trailing slot. Navigation lists only the two region keys, Focus mode lists Enter focus mode and Leave focus mode (the shortcut modifier and Alt with → and ←), Terminal lists Increase, Decrease and Reset session terminal font size (the shortcut modifier with =, - and 0), Application lists New session, New session with defaults, Find in files and Open settings, in that order, and Editing lists Find. The introduction names the current browser as the scope, and Restore defaults is absent while every key is a default.",
     state,
     steps: openSection,
   },
@@ -68,7 +68,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in the desktop app",
     description:
-      "The introduction names the current desktop app as the scope. Navigation includes Back and Forward and the console-session switch, with the key caps of each changeable combination themselves the edit button. Fixed region keys align with those buttons and carry a lock in the trailing slot. Focus mode (Enter focus mode and Leave focus mode, as ⌥⌘→ and ⌥⌘←), Terminal (the three font size commands, as ⌘=, ⌘- and ⌘0) and Application (the two New session commands, Find in files, then Open settings) follow; scroll to Editing and Window to see their fixed keys with the same lock treatment.",
+      "The introduction names the current desktop app as the scope. Navigation includes Back and Forward and the console-session switch, with the key caps of each changeable combination themselves the edit button. Fixed region keys align with those buttons and carry a lock in the trailing slot. Focus mode (Enter focus mode and Leave focus mode, as ⌥⌘→ and ⌥⌘←), Terminal (the three session terminal font size commands, as ⌘=, ⌘- and ⌘0) and Application (the two New session commands, Find in files, then Open settings) follow; scroll to Editing and Window to see their fixed keys with the same lock treatment.",
     desktopApp: true,
     host: MAC_HOST,
     state,
@@ -80,7 +80,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in the Windows app",
     description:
-      "The Windows app lists the console-session switch before the fixed region keys, with no Back, Forward or native-menu commands. The key caps of each changeable combination are the edit button, written with Windows key names in Ctrl, Alt and Shift order rather than Apple glyphs. Enter focus mode and New session show changed combinations with a reset icon in the reserved trailing slot; unchanged rows leave that slot empty and fixed rows show a lock. Open settings remains changeable, Leave focus mode keeps its default, Ctrl Alt ←, the Terminal group's three font size commands follow Focus mode as the Ctrl key cap with =, - or 0, the New session commands and Find in files sit in Application above Open settings, and the introduction names the current desktop app as the scope.",
+      "The Windows app lists the console-session switch before the fixed region keys, with no Back, Forward or native-menu commands. The key caps of each changeable combination are the edit button, written with Windows key names in Ctrl, Alt and Shift order rather than Apple glyphs. Enter focus mode and New session show changed combinations with a reset icon in the reserved trailing slot; unchanged rows leave that slot empty and fixed rows show a lock. Open settings remains changeable, Leave focus mode keeps its default, Ctrl Alt ←, the Terminal group's three session terminal font size commands follow Focus mode as the Ctrl key cap with =, - or 0, the New session commands and Find in files sit in Application above Open settings, and the introduction names the current desktop app as the scope.",
     desktopApp: true,
     host: WINDOWS_HOST,
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions, ...WINDOWS_MACHINE }),

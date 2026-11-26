@@ -1554,7 +1554,10 @@ pub enum RequestBody {
     /// place in that worktree of its repository (the same scoped root as browsing). A non-empty
     /// `path`, a canonical wire path as in `reveal_project_path`, starts it in that folder below
     /// there instead; a path that is not a folder is refused with `path_not_a_directory`. Answered
-    /// with `shell_terminal_created`, and broadcast as `shell_terminal_upserted`.
+    /// with `shell_terminal_created`, and broadcast as `shell_terminal_upserted`. `cols` and
+    /// `rows`, given together, are the grid the client will show it at, which the shell starts
+    /// at instead of the daemon's default; a size out of the supported range, or only one of the
+    /// two, is ignored (a value outside `u16` fails to read, refusing the request).
     CreateShellTerminal {
         project: String,
         #[serde(default)]
@@ -1563,6 +1566,12 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable))]
         path: String,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        cols: Option<u16>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        rows: Option<u16>,
     },
     /// Renames a shell terminal; from then on the shell's own titles no longer change it. The
     /// title is stored trimmed and cannot be blank.

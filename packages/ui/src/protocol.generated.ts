@@ -5563,6 +5563,8 @@ export type Request = {
   project: string,
   worktree?: string,
   path?: string,
+  cols?: number,
+  rows?: number,
 }
   | {
   "type": "rename_shell_terminal",
@@ -6733,6 +6735,8 @@ export type RequestBody = {
   project: string,
   worktree?: string,
   path?: string,
+  cols?: number,
+  rows?: number,
 }
 | {
   "type": "rename_shell_terminal",

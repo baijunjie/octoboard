@@ -979,6 +979,22 @@ mod tests {
             RequestBody::CreateShellTerminal { path, .. } => path,
             _ => panic!("parses as create_shell_terminal"),
         };
+        let grid = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::CreateShellTerminal { cols, rows, .. } => (cols, rows),
+            _ => panic!("parses as create_shell_terminal"),
+        };
+        assert_eq!(
+            grid(r#"{"type":"create_shell_terminal","project":"p"}"#),
+            (None, None)
+        );
+        assert_eq!(
+            grid(r#"{"type":"create_shell_terminal","project":"p","cols":80,"rows":24}"#),
+            (Some(80), Some(24))
+        );
+        assert_eq!(
+            grid(r#"{"type":"create_shell_terminal","project":"p","cols":80}"#),
+            (Some(80), None)
+        );
         assert_eq!(
             path(r#"{"type":"create_shell_terminal","project":"p"}"#),
             ""

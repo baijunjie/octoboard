@@ -17,7 +17,8 @@ use crate::terminal::saved_screen::{ReplayRule, SavedScreen};
 use crate::terminal::snapshot::is_supported_size;
 use crate::terminal::title::TitleChange;
 
-/// Size the PTY starts at. The UI sends a `resize` as soon as it attaches; this only has to be
+/// Size a PTY starts at unless its owner was given the client's grid (a shell terminal's
+/// `create_shell_terminal`). The UI sends a `resize` as soon as it attaches; this only has to be
 /// something sane for the output a process produces before that.
 pub const INITIAL_SIZE: Size = Size {
     rows: 32,

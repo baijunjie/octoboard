@@ -1322,12 +1322,15 @@ async fn handle_inner(
             project,
             worktree,
             path,
+            cols,
+            rows,
         } => {
             // Refused once a planned stop raises its handover barrier, and waited for by it: a
             // terminal started while the others are handed over would be no one's.
             let _admission = state.admit_change()?;
+            let size = crate::terminal::shell::start_size(cols, rows);
             let shell_terminal =
-                crate::terminal::shell::create(state, project, worktree, path).await?;
+                crate::terminal::shell::create(state, project, worktree, path, size).await?;
             Ok(Some(Event::ShellTerminalCreated {
                 id: request_id,
                 shell_terminal,

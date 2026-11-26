@@ -156,7 +156,7 @@ it("offers a checkbox for each Settings section that carries something, named as
 it("notes under each section what it includes", () => {
   mount();
   const note = (label: string) => document.getElementById(box(label).getAttribute("aria-describedby")!)!.textContent;
-  expect(note("Appearance")).toBe("Includes the theme, Markdown style and terminal font size.");
+  expect(note("Appearance")).toBe("Includes the theme, Markdown style and session terminal font size.");
   expect(note("Git")).toContain("default clone directory");
   expect(note("Agent behavior")).toBe(
     "Includes which requests are approved automatically, whether questions are asked as choices, and whether sessions are kept to their own project.",

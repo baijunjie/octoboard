@@ -4,11 +4,13 @@ use std::time::Instant;
 
 use tokio::sync::broadcast;
 
-use super::{close, close_all, close_all_ending, create, rename, shell_environment, ShellProcess};
+use super::{
+    close, close_all, close_all_ending, create, rename, shell_environment, start_size, ShellProcess,
+};
 use crate::protocol::{error_code, Event, Request, ShellTerminal, ShellTerminalState};
 use crate::state::AppState;
 use crate::terminal::display::{DisplayFacts, DisplaySeed};
-use crate::terminal::pty::PtyCore;
+use crate::terminal::pty::{self, PtyCore};
 use crate::test_support::code_of;
 use crate::test_support::{
     app_state, assert_gone_by, console, git, insert_project, is_running, repo_with, typed, within,
@@ -47,6 +49,28 @@ fn add_project(state: &AppState, id: &str, console_id: &str, path: &std::path::P
 async fn request(state: &Arc<AppState>, json: &str) -> anyhow::Result<Option<Event>> {
     let request: Request = serde_json::from_str(json).expect(json);
     crate::coordinator::handle(state, request.id, request.body).await
+}
+
+/// Starts a terminal for `project` in its directory, at the size every terminal starts at without a grid asked for.
+async fn start(state: &Arc<AppState>, project: &str) -> anyhow::Result<ShellTerminal> {
+    start_in(state, project, None, "").await
+}
+
+/// [`start`] in `worktree`'s place of the project, below it in the wire `path` when that is not empty.
+async fn start_in(
+    state: &Arc<AppState>,
+    project: &str,
+    worktree: Option<String>,
+    path: &str,
+) -> anyhow::Result<ShellTerminal> {
+    create(
+        state,
+        project.to_string(),
+        worktree,
+        path.to_string(),
+        pty::INITIAL_SIZE,
+    )
+    .await
 }
 
 fn process(state: &AppState, terminal: &ShellTerminal) -> Arc<ShellProcess> {
@@ -150,9 +174,7 @@ async fn a_terminal_runs_a_shell_in_its_project_that_takes_input_and_ends_when_c
     let (state, _dir, project) = with_project("shell-lifecycle");
     let mut events = state.subscribe();
 
-    let created = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let created = start(&state, "p1").await.unwrap();
     let canonical = canonical(&project);
     assert_eq!(created.project_id, "p1");
     assert_eq!(created.worktree, None);
@@ -214,9 +236,7 @@ async fn a_display_a_client_reports_on_a_shell_becomes_the_daemons_fallback_for_
     let (state, _dir, _project) = with_project("shell-display-fallback");
     let before = DisplaySeed::new(state.display_fallback.clone(), None).fallback();
     assert!(before.dark(), "no report yet: the dark theme");
-    let created = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let created = start(&state, "p1").await.unwrap();
     let shell = process(&state, &created);
     let attached = shell.attach(0);
     let client = attached.answering.as_ref().expect("a live client").client;
@@ -233,9 +253,7 @@ async fn a_display_a_client_reports_on_a_shell_becomes_the_daemons_fallback_for_
 #[tokio::test(flavor = "multi_thread")]
 async fn the_title_follows_the_shell_until_the_terminal_is_renamed() {
     let (state, _dir, _project) = with_project("shell-title");
-    let created = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let created = start(&state, "p1").await.unwrap();
     let shell = process(&state, &created);
 
     shell
@@ -293,9 +311,7 @@ async fn the_title_follows_the_shell_until_the_terminal_is_renamed() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_title_the_console_host_gives_is_not_the_shells() {
     let (state, _dir, _project) = with_project("shell-title-host");
-    let created = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let created = start(&state, "p1").await.unwrap();
     let shell = process(&state, &created);
     shell
         .write(&typed(
@@ -325,9 +341,7 @@ async fn a_title_the_console_host_gives_is_not_the_shells() {
 #[tokio::test(flavor = "multi_thread")]
 async fn the_title_follows_the_shell_off_the_parsed_screen() {
     let (state, _dir, _project) = with_project("shell-title-rendered");
-    let created = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let created = start(&state, "p1").await.unwrap();
     let shell = process(&state, &created);
     shell.read_as_rendered();
 
@@ -346,9 +360,7 @@ async fn the_title_follows_the_shell_off_the_parsed_screen() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_shell_is_busy_while_it_runs_something_in_the_foreground() {
     let (state, _dir, _project) = with_project("shell-busy");
-    let created = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let created = start(&state, "p1").await.unwrap();
     let shell = process(&state, &created);
 
     shell.write(&typed(&sleeping(30), &sleeping(30))).unwrap();
@@ -364,9 +376,7 @@ async fn a_shell_is_busy_while_it_runs_something_in_the_foreground() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_stop_check_reads_whether_a_shell_is_busy_at_the_moment_it_is_asked() {
     let (state, _dir, _project) = with_project("shell-stop-busy-now");
-    let created = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let created = start(&state, "p1").await.unwrap();
     let shell = process(&state, &created);
     let stop_holders = |state: &Arc<AppState>| {
         let state = state.clone();
@@ -409,9 +419,7 @@ async fn a_stop_check_reads_whether_a_shell_is_busy_at_the_moment_it_is_asked() 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_background_child_off_the_terminal_does_not_make_a_shell_busy() {
     let (state, _dir, _project) = with_project("shell-detached-child");
-    let created = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let created = start(&state, "p1").await.unwrap();
     let shell = process(&state, &created);
 
     // A helper the prompt keeps (a git status daemon) has its streams off the terminal, so the
@@ -436,9 +444,7 @@ async fn a_background_child_off_the_terminal_does_not_make_a_shell_busy() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_background_process_keeps_a_shell_busy_until_it_ends() {
     let (state, _dir, _project) = with_project("shell-background");
-    let created = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let created = start(&state, "p1").await.unwrap();
     let shell = process(&state, &created);
 
     shell
@@ -457,9 +463,7 @@ async fn a_background_process_keeps_a_shell_busy_until_it_ends() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_shell_that_exits_leaves_its_terminal_exited_with_its_output_until_closed() {
     let (state, _dir, _project) = with_project("shell-exit");
-    let created = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let created = start(&state, "p1").await.unwrap();
     let shell = process(&state, &created);
     let attached = shell.attach(0);
     let client = attached.answering.as_ref().expect("a live client").client;
@@ -516,9 +520,7 @@ async fn a_shell_that_exits_leaves_its_terminal_exited_with_its_output_until_clo
 #[tokio::test]
 async fn the_exit_cleanup_of_a_shell_runs_off_the_runtime() {
     let (state, dir, _project) = with_project("shell-exit-cleanup-off-runtime");
-    let created = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let created = start(&state, "p1").await.unwrap();
     let shell = process(&state, &created);
     // Before the watcher's first poll, which comes after this task next yields.
     let hook = crate::test_support::HeldExitHook::install(&shell, &dir);
@@ -544,12 +546,8 @@ async fn removing_a_project_or_its_console_ends_its_terminals_and_no_other() {
     let other = ScratchDir::new("shell-removal-other");
     add_project(&state, "p2", "console-2", &other);
 
-    let removed = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
-    let kept = create(&state, "p2".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let removed = start(&state, "p1").await.unwrap();
+    let kept = start(&state, "p2").await.unwrap();
     let (removed_pid, kept_pid) = (process(&state, &removed).pid, process(&state, &kept).pid);
 
     request(&state, r#"{"type":"delete_project","project":"p1"}"#)
@@ -576,9 +574,7 @@ async fn the_daemons_exit_ends_every_terminal() {
     let (state, _dir, _project) = with_project("shell-exit-all");
     let mut pids = Vec::new();
     for _ in 0..2 {
-        let created = create(&state, "p1".to_string(), None, String::new())
-            .await
-            .unwrap();
+        let created = start(&state, "p1").await.unwrap();
         pids.push(process(&state, &created).pid);
     }
     close_all(&state).await;
@@ -593,12 +589,8 @@ async fn the_daemons_exit_ends_every_terminal() {
 #[tokio::test(flavor = "multi_thread")]
 async fn an_escalated_stop_forgets_every_terminal_and_ends_only_those_it_picks() {
     let (state, _dir, _project) = with_project("shell-exit-picked");
-    let ended = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
-    let left = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let ended = start(&state, "p1").await.unwrap();
+    let left = start(&state, "p1").await.unwrap();
     let (ended_pid, left_pid) = (process(&state, &ended).pid, process(&state, &left).pid);
     let asked = std::sync::Mutex::new(Vec::new());
     close_all_ending(&state, |shell| {
@@ -670,9 +662,7 @@ async fn a_shell_starts_when_its_environment_cannot_be_read() {
         shell_env: || anyhow::bail!("the login shell timed out"),
         ..state.host_tools.get()
     });
-    let created = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let created = start(&state, "p1").await.unwrap();
     let shell = process(&state, &created);
     shell.write(&typed("echo $((6*7))", "6*7")).unwrap();
     output_containing(&shell, "42").await;
@@ -706,30 +696,18 @@ async fn a_terminal_starts_only_in_a_worktree_of_its_own_project() {
         .find_map(|root| root.worktree.clone())
         .expect("the linked worktree is listed");
 
-    let created = create(
-        &state,
-        "p1".to_string(),
-        Some(worktree.clone()),
-        String::new(),
-    )
-    .await
-    .unwrap();
+    let created = start_in(&state, "p1", Some(worktree.clone()), "")
+        .await
+        .unwrap();
     assert_eq!(created.worktree, Some(worktree));
     assert_eq!(created.cwd, canonical(&linked).to_string_lossy());
     close(&state, &created.id).await.unwrap();
 
-    let foreign = create(
-        &state,
-        "p1".to_string(),
-        Some("not-a-worktree".to_string()),
-        String::new(),
-    )
-    .await
-    .unwrap_err();
-    assert_eq!(code_of(&foreign), error_code::WORKTREE_UNAVAILABLE);
-    let unknown = create(&state, "p9".to_string(), None, String::new())
+    let foreign = start_in(&state, "p1", Some("not-a-worktree".to_string()), "")
         .await
         .unwrap_err();
+    assert_eq!(code_of(&foreign), error_code::WORKTREE_UNAVAILABLE);
+    let unknown = start(&state, "p9").await.unwrap_err();
     assert_eq!(code_of(&unknown), error_code::UNKNOWN_PROJECT);
     assert!(state.shell_terminals.list().is_empty());
 }
@@ -740,9 +718,7 @@ async fn a_terminal_starts_in_a_folder_below_the_project_and_refuses_what_is_not
     std::fs::create_dir_all(project.join("src/a b")).unwrap();
     std::fs::write(project.join("file.txt"), "a").unwrap();
 
-    let created = create(&state, "p1".to_string(), None, "src/a b".to_string())
-        .await
-        .unwrap();
+    let created = start_in(&state, "p1", None, "src/a b").await.unwrap();
     assert_eq!(
         created.cwd,
         canonical(&project.join("src/a b")).to_string_lossy()
@@ -753,17 +729,13 @@ async fn a_terminal_starts_in_a_folder_below_the_project_and_refuses_what_is_not
         ("file.txt", error_code::PATH_NOT_A_DIRECTORY),
         ("missing", error_code::FILE_NOT_FOUND),
     ] {
-        let refused = create(&state, "p1".to_string(), None, path.to_string())
-            .await
-            .unwrap_err();
+        let refused = start_in(&state, "p1", None, path).await.unwrap_err();
         assert_eq!(code_of(&refused), code, "{path}");
     }
     assert!(state.shell_terminals.list().is_empty());
 
     crate::test_support::symlink(project.join("src/a b"), project.join("link")).unwrap();
-    let linked = create(&state, "p1".to_string(), None, "link".to_string())
-        .await
-        .unwrap();
+    let linked = start_in(&state, "p1", None, "link").await.unwrap();
     assert_eq!(
         linked.cwd,
         canonical(&project.join("src/a b")).to_string_lossy(),
@@ -794,9 +766,7 @@ async fn a_terminal_starts_in_a_folder_whose_name_is_not_valid_unicode() {
     let folder = project.join(&name);
     std::fs::create_dir(&folder).unwrap();
 
-    let created = create(&state, "p1".to_string(), None, wire.to_string())
-        .await
-        .unwrap();
+    let created = start_in(&state, "p1", None, wire).await.unwrap();
     assert_eq!(created.cwd, canonical(&folder).to_string_lossy());
     close(&state, &created.id).await.unwrap();
 }
@@ -826,9 +796,7 @@ async fn printed_pid(shell: &Arc<ShellProcess>, marker: &'static str) -> i32 {
 #[tokio::test(flavor = "multi_thread")]
 async fn closing_a_terminal_lets_it_go_whatever_still_holds_it_open() {
     let (state, _dir, _project) = with_project("shell-hang-up");
-    let created = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let created = start(&state, "p1").await.unwrap();
     let shell = process(&state, &created);
 
     // A job the shell leaves behind, as `huponexit` being off lets it, holding the PTY's other side
@@ -870,9 +838,7 @@ async fn closing_a_terminal_lets_it_go_whatever_still_holds_it_open() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_shell_is_busy_while_another_group_holds_its_terminals_foreground() {
     let (state, _dir, _project) = with_project("shell-foreground");
-    let created = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let created = start(&state, "p1").await.unwrap();
     let shell = process(&state, &created);
 
     // A process that is not the shell's child (its parent exits at once, leaving the shell with
@@ -943,9 +909,7 @@ fn holder_started_elsewhere() -> String {
 #[tokio::test(flavor = "multi_thread")]
 async fn idle_only_close_checks_the_process_even_when_the_record_says_idle() {
     let (state, _dir, _project) = with_project("shell-close-idle-busy");
-    let created = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let created = start(&state, "p1").await.unwrap();
     let shell = process(&state, &created);
     shell.write(&typed(&sleeping(30), &sleeping(30))).unwrap();
     record_where(&state, &created.id, |record| record.busy).await;
@@ -961,9 +925,7 @@ async fn idle_only_close_checks_the_process_even_when_the_record_says_idle() {
 #[tokio::test(flavor = "multi_thread")]
 async fn idle_only_close_removes_idle_and_exited_terminals_and_is_idempotent() {
     let (state, _dir, _project) = with_project("shell-close-idle");
-    let idle = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let idle = start(&state, "p1").await.unwrap();
     let shell = process(&state, &idle);
     shell.write(&typed("printf 'ready\\n'", "'ready'")).unwrap();
     output_containing(&shell, "ready\r\n").await;
@@ -972,9 +934,7 @@ async fn idle_only_close_removes_idle_and_exited_terminals_and_is_idempotent() {
     assert!(state.shell_terminals.process(&idle.id).is_none());
     super::close_if_idle(&state, &idle.id).await;
 
-    let exited = create(&state, "p1".to_string(), None, String::new())
-        .await
-        .unwrap();
+    let exited = start(&state, "p1").await.unwrap();
     process(&state, &exited).write(b"exit\r").unwrap();
     record_where(&state, &exited.id, |record| {
         record.state == ShellTerminalState::Exited
@@ -988,4 +948,72 @@ async fn idle_only_close_removes_idle_and_exited_terminals_and_is_idempotent() {
     )
     .await
     .unwrap();
+}
+
+#[test]
+fn a_shell_starts_at_the_grid_the_client_gave_when_both_sides_are_supported() {
+    let default = (pty::INITIAL_SIZE.rows, pty::INITIAL_SIZE.cols);
+    for (cols, rows, expected, why) in [
+        (Some(60), Some(20), (20, 60), "a grid within the range"),
+        (Some(2), Some(1), (1, 2), "the smallest supported grid"),
+        (
+            Some(1000),
+            Some(500),
+            (500, 1000),
+            "the largest supported grid",
+        ),
+        (None, None, default, "no grid given"),
+        (Some(60), None, default, "only the columns given"),
+        (None, Some(20), default, "only the rows given"),
+        (Some(1), Some(20), default, "one column is below the range"),
+        (Some(0), Some(0), default, "an empty grid"),
+        (Some(60), Some(0), default, "no rows"),
+        (Some(1001), Some(20), default, "too many columns"),
+        (Some(60), Some(501), default, "too many rows"),
+    ] {
+        let size = start_size(cols, rows);
+        assert_eq!((size.rows, size.cols), expected, "{why}");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_shell_started_with_a_grid_runs_at_it_and_one_without_runs_at_the_default() {
+    let (state, _dir, _project) = with_project("shell-start-size");
+    let default = format!("{} {}", pty::INITIAL_SIZE.rows, pty::INITIAL_SIZE.cols);
+    for (body, expected) in [
+        (
+            r#"{"type":"create_shell_terminal","project":"p1","cols":91,"rows":37}"#,
+            "37 91",
+        ),
+        (
+            r#"{"type":"create_shell_terminal","project":"p1"}"#,
+            &default,
+        ),
+        (
+            r#"{"type":"create_shell_terminal","project":"p1","cols":91}"#,
+            &default,
+        ),
+        (
+            r#"{"type":"create_shell_terminal","project":"p1","cols":5000,"rows":37}"#,
+            &default,
+        ),
+    ] {
+        let Some(Event::ShellTerminalCreated { shell_terminal, .. }) =
+            request(&state, body).await.unwrap()
+        else {
+            panic!("{body} is answered with shell_terminal_created");
+        };
+        let shell = process(&state, &shell_terminal);
+        // Asked of the shell itself, never resized by this test, so what it prints is the size it
+        // was started at. The typed command line does not hold the answer, so only the output
+        // can satisfy the wait.
+        shell
+            .write(&typed(
+                "echo \"size:$(stty size)\"",
+                "\"size:$($Host.UI.RawUI.WindowSize.Height) $($Host.UI.RawUI.WindowSize.Width)\"",
+            ))
+            .unwrap();
+        output_containing(&shell, &format!("size:{expected}")).await;
+        close(&state, &shell_terminal.id).await.unwrap();
+    }
 }

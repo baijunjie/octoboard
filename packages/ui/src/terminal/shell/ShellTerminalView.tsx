@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 
 import "@xterm/xterm/css/xterm.css";
 import type { ViewedFile } from "../../viewer/viewedFile";
@@ -22,6 +22,7 @@ import { useAnnouncedWhilePending } from "../useAnnouncedWhilePending";
 import { usePendingFocus } from "../usePendingFocus";
 import { useTerminalReconnect } from "../useTerminalReconnect";
 import type { HoveredTerminalLink } from "../links/terminalLinks";
+import { SHELL_TERMINAL_PADDING, shellTerminalFontSize } from "./shellTerminalGrid";
 
 export interface ShellTerminalViewHandle {
   /** Puts keyboard focus on the terminal, or on the cover's Reconnect while it offers one, or on the
@@ -34,14 +35,17 @@ export interface ShellTerminalViewHandle {
 // has let go of until it is garbage collected, then takes the context away from the terminal that
 // drew least recently, which can be the agent terminal's. So a shell keeps the DOM renderer, which
 // costs nothing while its tab is hidden. A hidden tab cannot be fitted, so the shell is told no size
-// until the tab has been shown.
-const SHELL_CONTROLLER_OPTIONS: Omit<TerminalControllerOptions, "host"> = { gpu: false, fittedSizesOnly: true };
+// until the tab has been shown. It is drawn at the other panels' code size (`shellTerminalFontSize`),
+// not at the session terminal's font size setting.
+function shellControllerOptions(): Omit<TerminalControllerOptions, "host"> {
+  return { gpu: false, fittedSizesOnly: true, fontSize: shellTerminalFontSize() };
+}
 
 /**
  * One shell terminal of the Terminal panel: its own `TerminalController`, attached to the
  * terminal's socket for as long as the tab exists, shown or not, so a hidden tab keeps its screen
  * and its connection. It draws with xterm's DOM renderer, never on the GPU (see
- * `SHELL_CONTROLLER_OPTIONS`).
+ * `shellControllerOptions`).
  *
  * It is a shell's view, not a session's: there is no saved output to load (no `detach` with one), as
  * the daemon keeps the terminal's output for as long as the terminal exists. What to do about a
@@ -87,6 +91,8 @@ export function ShellTerminalView({
   // nothing, while the daemon retries. Its state stays `running`.
   const pending = running && terminal.holder_link === "pending";
   const pendingRef = useLatest(pending);
+  // Read once, as the controller is.
+  const [controllerOptions] = useState(shellControllerOptions);
 
   // Reached through the handle and from the file viewer's close, which can come after this view has gone.
   const focus = () => {
@@ -148,7 +154,7 @@ export function ShellTerminalView({
     inputHeld: pending,
     project: terminal.project_id,
     viewFile: onViewFile && ((file) => onViewFile(file, focus)),
-    options: SHELL_CONTROLLER_OPTIONS,
+    options: controllerOptions,
   });
   // One attachment for the life of the tab, which is keyed by the terminal; none while pending, the
   // attach then being the one `useTerminalReconnect` makes when it ends.
@@ -193,7 +199,7 @@ export function ShellTerminalView({
       className={`absolute inset-0 flex-col ${shown ? "flex" : "hidden"}`}
       containerRef={containerRef}
       setLinkRef={setLinkRef}
-      padding="ps-(--pane-inset) pe-2 py-2"
+      padding={SHELL_TERMINAL_PADDING}
       mountMarker="data-shell-terminal"
       inert={pending}
       covered={Boolean(trouble) || pending}

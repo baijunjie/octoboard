@@ -26,7 +26,8 @@ import { useTerminalFileDrop } from "./useTerminalFileDrop";
  * The one `TerminalController` of a terminal view, built when the view mounts into `containerRef` and
  * disposed when it goes, with what keeps it in step with the view: links, clipboard and path links
  * (read from the latest render, as the controller is built once), a fit when the container resizes,
- * a single fit when `resizing` ends, the input's label in the UI language, the colour theme and the font size.
+ * a single fit when `resizing` ends, the input's label in the UI language, the colour theme and the font size
+ * (unless `options` fixes one).
  *
  * `controllerRef` is the caller's, so that `useTerminalReconnect` can read the controller before
  * this hook has built it (that hook makes the `onStatusChange` this one needs). Attaching is the
@@ -200,8 +201,9 @@ export function useTerminalController({
   }, [colorTheme]);
 
   // Redraws the running terminal at the user's font size, fitting it anew; a size the controller already has (the one
-  // it was built with) changes nothing.
+  // it was built with) changes nothing. A view built at a fixed size (`options.fontSize`) does not follow it.
+  const fixedFontSize = options?.fontSize !== undefined;
   useEffect(() => {
-    controllerRef.current?.setFontSize(fontSize);
+    if (!fixedFontSize) controllerRef.current?.setFontSize(fontSize);
   }, [fontSize]);
 }

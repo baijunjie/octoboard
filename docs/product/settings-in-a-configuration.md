@@ -73,7 +73,7 @@ language only when the daemon holds one; every other one is in every document wh
 - **Theme**, under `appearance`: `light`, `dark` or `system` (see `docs/product/appearance.md`).
 - **Markdown style**, under `markdown_style`: `tailwind`, `github`, `newsprint` or `latex` (see
   `docs/product/markdown-documents.md`).
-- **Terminal font size**, under `terminal_font_size`: the terminals' font size in whole pixels (see
+- **Session terminal font size**, under `terminal_font_size`: the session terminals' font size in whole pixels (see
   `docs/product/terminal-font-size.md`). A number with a fraction is read rounded to the nearest whole pixel; a negative
   number, one too large for the daemon to hold (above 4294967295), or a value that is not a number is read as absent, so
   an import leaves the client's own size as it is. The importing client holds a size outside its range of 10 to 24 to
@@ -171,24 +171,23 @@ holds:
 
 ## The settings a client holds
 
-The theme, the Markdown style, the terminal font size, the sorting, keeping running in the background, showing the
-menu bar icon and the keyboard shortcuts are each client's own, kept in that client rather than by the daemon. So the
-client adds them to the document it saves, for the sections chosen alone — for General the sorting and, where it has
+The theme, the Markdown style, the session terminal font size, the sorting, keeping running in the background, showing
+the menu bar icon and the keyboard shortcuts are each client's own, kept in that client rather than by the daemon. So
+the client adds them to the document it saves, for the sections chosen alone — for General the sorting and, where it has
 those settings, keeping running in the background and showing the menu bar icon; for Appearance the theme, the Markdown
-style and the terminal font size; for Keyboard shortcuts its changed shortcuts — and the daemon builds none of them and
-applies none of them. A document with
-application settings asked of the daemon by any other program therefore has none of them. A remote window of the
-desktop application has neither keeping running in the background nor showing the menu bar icon, which are the main
-window's (see "The remote window" in `docs/product/remote-daemons.md`). The language and Prevent sleep with When
-to prevent sleep are not among them: they are the daemon's, which builds them into the document and
-applies them on import.
+style and the session terminal font size; for Keyboard shortcuts its changed shortcuts — and the daemon builds none of
+them and applies none of them. A document with application settings asked of the daemon by any other program therefore
+has none of them. A remote window of the desktop application has neither keeping running in the background nor showing
+the menu bar icon, which are the main window's (see "The remote window" in `docs/product/remote-daemons.md`). The
+language and Prevent sleep with When to prevent sleep are not among them: they are the daemon's, which builds them into
+the document and applies them on import.
 
 On import they are applied by the client that runs the import, to itself alone, and only once the daemon reports the
 application settings applied, from what the daemon passes back as applied — the keys of the sections applied alone, as
-the document had them but for the terminal font size, which comes back rounded as described above;
-when the settings could not be applied, neither are these. Other clients — another browser, or the desktop app — keep their own. A value the importing client
-does not know, or a setting its platform does not have (keeping running in the background or showing the menu bar
-icon, in a browser), is ignored and leaves the client's own as it is.
+the document had them but for the session terminal font size, which comes back rounded as described above; when the
+settings could not be applied, neither are these. Other clients — another browser, or the desktop app — keep their own.
+A value the importing client does not know, or a setting its platform does not have (keeping running in the background
+or showing the menu bar icon, in a browser), is ignored and leaves the client's own as it is.
 
 ## Application settings are left alone unless they are asked for
 
