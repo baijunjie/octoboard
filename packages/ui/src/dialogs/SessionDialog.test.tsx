@@ -39,10 +39,10 @@ async function openWith(
 ): Promise<{ request: Record<string, unknown>; options: string[]; text: string }> {
   const { container, root, daemon } = renderDialog(sessions, {}, {}, binding);
   vi.mocked(daemon.request).mockResolvedValue({ type: "ack", id: null } as never);
-  // The owner select is the one trigger showing its default, "none".
-  const ownerTrigger = buttons().find((b) => b.textContent?.includes("No console session"));
+  const ownerTrigger = pickerNamed("Report to");
   let options: string[] = [];
   if (ownerTrigger) {
+    expect(ownerTrigger.textContent).toBe("Me");
     await act(async () => ownerTrigger.click());
     options = optionElements().map((o) => o.textContent ?? "");
     if (choose) await act(async () => optionElements().find((o) => o.textContent === choose)?.click());
@@ -66,8 +66,8 @@ it("opens with focus in the Name field, so Enter submits at once", () => {
 });
 
 it.each([
-  { name: "defaults to none and offers every live console session", sessions: [hub1, hub2, hubArchived], pick: undefined, binding: choose, options: ["No console session", "Hub 2", "Hub"], boundTo: undefined },
-  { name: "binds to the console session chosen", sessions: [hub1, hub2, hubArchived], pick: "Hub", binding: choose, options: ["No console session", "Hub 2", "Hub"], boundTo: "s-hub-1" },
+  { name: "defaults to reporting directly to the user and offers every live console session", sessions: [hub1, hub2, hubArchived], pick: undefined, binding: choose, options: ["Me", "Hub 2", "Hub"], boundTo: undefined },
+  { name: "binds to the console session chosen", sessions: [hub1, hub2, hubArchived], pick: "Hub", binding: choose, options: ["Me", "Hub 2", "Hub"], boundTo: "s-hub-1" },
   { name: "offers no choice with no live console session", sessions: [hubArchived], pick: undefined, binding: choose, options: [], boundTo: undefined },
   { name: "offers no choice and sends no binding when unbound", sessions: [hub1, hub2], pick: undefined, binding: { kind: "unbound" } as const, options: [], boundTo: undefined },
   { name: "binds to the fixed owner without offering a choice", sessions: [hub1, hub2], pick: undefined, binding: { kind: "bound", to: hub1 } as const, options: [], boundTo: "s-hub-1", fixedLine: "Reports to Hub" },
@@ -127,7 +127,7 @@ it("says only the owner's loss when both the fixed owner and every agent are una
 it("keeps the owner select, back on none, when the chosen console session is archived under it", async () => {
   const { container, root, daemon, onClose } = renderDialog([hub1]);
   vi.mocked(daemon.request).mockResolvedValue({ type: "ack", id: null } as never);
-  await act(async () => buttons().find((b) => b.textContent?.includes("No console session"))?.click());
+  await act(async () => pickerNamed("Report to")?.click());
   await act(async () => optionElements().find((o) => o.textContent === "Hub")?.click());
   expect(buttons().some((b) => b.textContent === "Hub")).toBe(true);
 
@@ -148,10 +148,10 @@ it("keeps the owner select, back on none, when the chosen console session is arc
   );
   expect(onClose).not.toHaveBeenCalled();
   expect(errorAlerts.getSnapshot()).toEqual([]);
-  const ownerTrigger = buttons().find((b) => b.textContent?.includes("No console session"));
-  expect(ownerTrigger).toBeDefined();
+  const ownerTrigger = pickerNamed("Report to");
+  expect(ownerTrigger?.textContent).toBe("Me");
   await act(async () => ownerTrigger?.click());
-  expect(optionElements().map((o) => o.textContent)).toEqual(["No console session"]);
+  expect(optionElements().map((o) => o.textContent)).toEqual(["Me"]);
 
   await act(async () => buttons().find((b) => b.textContent === "Open")?.click());
   expect(vi.mocked(daemon.request).mock.calls[0][0]).toMatchObject({ type: "open_session", bound_to: undefined });

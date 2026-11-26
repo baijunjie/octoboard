@@ -1765,6 +1765,7 @@ export const hi: Translation<"one" | "other"> = {
   "dialog.session.resumeRequired": "फिर से शुरू करने वाली बातचीत की सेशन ID डालें।",
   "dialog.session.owner": "किसे रिपोर्ट करे",
   "dialog.session.ownerNone": "कोई कंसोल सेशन नहीं",
+  "dialog.session.reportDirectlyToUser": "मुझे",
   "dialog.session.ownerFixed": "{name} को रिपोर्ट करता है",
   "dialog.session.noAgent": "सेशन खोलने के लिए कोई एजेंट उपलब्ध नहीं है।",
   "dialog.session.blockedTitle": "सेशन नहीं खोल सकते",

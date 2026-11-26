@@ -1766,6 +1766,7 @@ export const id: Translation<"other"> = {
   "dialog.session.resumeRequired": "Masukkan ID sesi percakapan yang ingin dilanjutkan.",
   "dialog.session.owner": "Melapor kepada",
   "dialog.session.ownerNone": "Tidak ada sesi konsol",
+  "dialog.session.reportDirectlyToUser": "Saya",
   "dialog.session.ownerFixed": "Melapor kepada {name}",
   "dialog.session.noAgent": "Tidak ada agen yang tersedia untuk membuka sesi.",
   "dialog.session.blockedTitle": "Tidak dapat membuka sesi",

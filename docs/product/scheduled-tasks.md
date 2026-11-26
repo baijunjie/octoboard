@@ -16,9 +16,9 @@ contract is "Scheduled tasks" in `apps/daemon/PROTOCOL.md`.
   and an agent, account, model or effort the task does not name comes from the project, else the console, at the time
   of the run (see "Which agent a session uses", "Which account a session uses" and "Which model and reasoning effort a
   session uses" in `docs/product/opening-sessions.md`).
-- **Report to**, for a project task only: a console session of the task's console that each session it starts reports
-  to, as a session opened with a console session as its Report to choice does (see "Coordinators with a parent session"
-  in `docs/product/hub-orchestration.md`). None by default.
+- **Report to**, for a project task only: by default, each session the task starts reports directly to the user. Choosing
+  a console session of the task's console directs reports to that session (see "Coordinators with a parent session" in
+  `docs/product/hub-orchestration.md`).
 - **The prompt**, required: what each session it starts is handed as its opening task, so the session comes up working
   on it.
 - **The schedule** (below).
@@ -79,8 +79,8 @@ failed run (below) and is never an error alert in a window.
 - **A task stored with a prompt that saving now refuses** — nothing but whitespace once its control and invisible
   characters are ignored, saved before that was checked — starts no session: the run fails for the missing prompt, as
   saving such a prompt is refused (see "Saving a task" below).
-- **A Report to session that cannot take a session at that moment** — archived, deleted or still starting — does not
-  fail the run: the session starts independent, reporting to no one, and the run's record says so.
+- If the chosen **Report to** session is archived, deleted or still starting, the run starts an independent session
+  that reports directly to the user. The run record notes that it started independently.
 - **While the daemon is stopping**, nothing is started (see "Quitting" in `docs/product/application-lifecycle.md`): a
   Run now asked for then is refused, and one the stop overtakes once it was accepted is recorded as a failed run.
 
@@ -195,8 +195,8 @@ and `time_zone`, the IANA name of the zone schedules are read in (the daemon mac
 above), most recent first, each with its `id`, `task_id`, `ran_at` (epoch milliseconds), `due_at` (the occurrence of
 the schedule it stands for; `null` for a Run now), `trigger` (`scheduled`, `catch_up` or `run_now`) and `outcome`:
 `{kind: "started", session, started_independent}` for a run that started the session `session`, where
-`started_independent` is true when the session started reporting to no one because its Report to session could not
-take it, or `{kind: "failed", code, params, message}` for a run that started none.
+`started_independent` is true when the chosen Report to session could not take it and the new session reports directly
+to the user, or `{kind: "failed", code, params, message}` for a run that started none.
 
 Neither read asks the user.
 

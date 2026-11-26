@@ -11,7 +11,7 @@ import { isolate } from "../i18n/isolate";
 import type { Session } from "../protocol";
 import { accountOf, type ProjectExtra, projectOf, sessionOf } from "../fixtures/builders";
 import type { Daemon, State } from "../store";
-import { LOCATE_DELAY_MS, parentConsole, project, renderDialog, hub1, buttons, optionElements, choose } from "./sessionDialogTestSupport";
+import { LOCATE_DELAY_MS, parentConsole, project, renderDialog, hub1, buttons, optionElements, choose, pickerNamed } from "./sessionDialogTestSupport";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { fakeTimers } from "../test/clock";
@@ -754,7 +754,7 @@ it("drops the answer for an ID since changed, and asks again for the new one", a
 
 it("brings back the owner choice and sends no conversation after choosing a new one again", async () => {
   const { daemon } = renderForResume();
-  await act(async () => buttons().find((b) => b.textContent?.includes("No console session"))!.click());
+  await act(async () => pickerNamed("Report to")!.click());
   await act(async () => optionElements().find((o) => o.textContent === "Hub")!.click());
   await chooseResume();
   typeResumeId(UUID);

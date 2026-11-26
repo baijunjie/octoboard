@@ -1999,6 +1999,7 @@ export const en = {
   "dialog.session.resumeRequired": "Enter the session ID of the conversation to resume.",
   "dialog.session.owner": "Report to",
   "dialog.session.ownerNone": "No console session",
+  "dialog.session.reportDirectlyToUser": "Me",
   "dialog.session.ownerFixed": "Reports to {name}",
   "dialog.session.noAgent": "No agent is available to open a session.",
   "dialog.session.blockedTitle": "Cannot open a session",

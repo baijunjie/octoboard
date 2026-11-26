@@ -1811,6 +1811,7 @@ export const ja: Translation<"other"> = {
   "dialog.session.resumeRequired": "再開する会話のセッション ID を入力してください。",
   "dialog.session.owner": "報告先",
   "dialog.session.ownerNone": "コンソールセッションなし",
+  "dialog.session.reportDirectlyToUser": "私",
   "dialog.session.ownerFixed": "{name} に報告",
   "dialog.session.noAgent": "セッションを開けるエージェントがありません。",
   "dialog.session.blockedTitle": "セッションを開けません",

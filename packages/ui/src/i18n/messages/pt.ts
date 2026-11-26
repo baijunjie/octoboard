@@ -1765,6 +1765,7 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "dialog.session.resumeRequired": "Digite o ID da sessão da conversa a retomar.",
   "dialog.session.owner": "Reportar a",
   "dialog.session.ownerNone": "Nenhuma sessão de console",
+  "dialog.session.reportDirectlyToUser": "Mim",
   "dialog.session.ownerFixed": "Reporta a {name}",
   "dialog.session.noAgent": "Nenhum agente está disponível para abrir uma sessão.",
   "dialog.session.blockedTitle": "Não é possível abrir uma sessão",

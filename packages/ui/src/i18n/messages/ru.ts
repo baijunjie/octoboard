@@ -1766,6 +1766,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "dialog.session.resumeRequired": "Введите ID сеанса разговора, который нужно возобновить.",
   "dialog.session.owner": "Подчиняется",
   "dialog.session.ownerNone": "Без сеанса консоли",
+  "dialog.session.reportDirectlyToUser": "Мне",
   "dialog.session.ownerFixed": "Подчинён {name}",
   "dialog.session.noAgent": "Нет доступного агента для открытия сеанса.",
   "dialog.session.blockedTitle": "Нельзя открыть сеанс",

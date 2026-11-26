@@ -1812,6 +1812,7 @@ export const ko: Translation<"other"> = {
   "dialog.session.resumeRequired": "재개할 대화의 세션 ID를 입력해 주세요.",
   "dialog.session.owner": "보고 대상",
   "dialog.session.ownerNone": "콘솔 세션 없음",
+  "dialog.session.reportDirectlyToUser": "나",
   "dialog.session.ownerFixed": "{name}에 보고",
   "dialog.session.noAgent": "세션을 열 수 있는 에이전트가 없습니다.",
   "dialog.session.blockedTitle": "세션을 열 수 없습니다",

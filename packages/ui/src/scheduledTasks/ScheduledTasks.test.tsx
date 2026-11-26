@@ -565,17 +565,17 @@ it("shows and enters times in the daemon's zone, naming it where the window's ow
   expect(lastSent("update_scheduled_task")).toMatchObject({ schedule: { kind: "once", run_at: Date.UTC(2027, 10, 20, 18, 15) } });
 });
 
-it("offers Report to for a project task only, none by default, among the console's live console sessions, and saves the one chosen", async () => {
+it("defaults a project task to reporting directly to the user and saves the console session chosen", async () => {
   const { container } = await mount();
   await press(named(sidebar(container), "New scheduled task"));
   expect(pickerNamed("Report to")).toBeUndefined();
   await choose("Project", "Website");
   const picker = pickerNamed("Report to");
-  expect(withoutIsolates(picker.textContent)).toContain("No console session");
+  expect(withoutIsolates(picker.textContent)).toBe("Me");
   await press(picker);
   const options = optionElements().map((one) => withoutIsolates(one.textContent) ?? "");
   expect(options).toHaveLength(2);
-  expect(options[0]).toContain("No console session");
+  expect(options[0]).toBe("Me");
   expect(options[1]).toContain("Hub");
   await press(optionElements()[1]);
   type(prompt(container), "Tidy the backlog");
@@ -1130,7 +1130,7 @@ it("never blocks a task that leaves the account to its target, whatever accounts
 it("shows a console session to report to that no longer exists as none, leaves the form clean, and does not send it with a change of the name", async () => {
   held = [{ ...REPORT, project_id: site.id, launch: { title: "Morning report", bound_to: "s-gone", compatibility: {} } }];
   const { container } = await mount();
-  expect(withoutIsolates(pickerNamed("Report to").textContent)).toContain("No console session");
+  expect(withoutIsolates(pickerNamed("Report to").textContent)).toBe("Me");
   expect(isDisabled(saveButton(container))).toBe(true);
   type(nameField(container), "Renamed");
   await press(saveButton(container));
@@ -1397,7 +1397,7 @@ it.each([
 it("shows a session to report to that is not a console session of the task's console as none, and does not save it", async () => {
   held = [taskOf("t-other-owner", { project_id: site.id, launch: { title: "Owner", bound_to: fixSession.id, compatibility: {} } })];
   const { container } = await mount();
-  expect(withoutIsolates(pickerNamed("Report to").textContent)).toContain("No console session");
+  expect(withoutIsolates(pickerNamed("Report to").textContent)).toBe("Me");
   expect(isDisabled(saveButton(container))).toBe(true);
   type(nameField(container), "Renamed");
   await press(saveButton(container));

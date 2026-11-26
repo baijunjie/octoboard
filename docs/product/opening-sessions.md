@@ -78,12 +78,12 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   If a remembered account is removed while the dialog is open and its agent can still be picked, that agent stays
   selected and its account falls back to the account the field would open on for that agent (see "Which account a session uses" below); with its last named
   account removed, the picker stays, offering the default account. Switching agents returns focus to the Agent picker.
-- **Report to** (project sessions only; a choice, "No console session" by default) — one of the console's console
-  sessions that are neither archived nor still *starting*, the most recently started first, each shown beside its
-  colour, the same one the session's binding badge will carry (see "The binding badge" in
-  `docs/product/sidebar-session-rows.md`), or none. A chosen console session receives this session's reports, instead of
-  the session answering directly to the user. A console with no such console session shows no choice at all, and the
-  session is an independent project coordinator. A session still starting is not offered because its launch may yet fail
+- **Report to** (project sessions only) — by default, the session reports directly to the user. The other choices are
+  the console's console sessions that are neither archived nor still *starting*, the most recently started first, each
+  shown beside its colour, the same one the session's binding badge will carry (see "The binding badge" in
+  `docs/product/sidebar-session-rows.md`). The chosen console session receives this session's reports. With no eligible
+  console session, the dialog omits the field and starts an independent project coordinator. A session still starting is not
+  offered because its launch may yet fail
   and remove it; `open_session` refuses one named as the owner (`unknown_session`), as it does an archived one, which
   the dialog does not offer either. A binding can change afterwards — the owner hands the session to another, an
   independent project coordinator sets one as its parent or the user binds it to one, or the owner or the user
@@ -98,7 +98,7 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   opened, and the dialog turns into a failure modal titled that a session cannot be opened, which identifies the
   unavailable owner, with its name set apart as a chip, and offers only its acknowledgement, which closes the dialog
   (see "The failure modal" in `docs/product/error-alerts.md`). A console session chosen in the optional Report to picker
-  becoming unavailable instead returns that choice to no console session, keeping the form open. The **Resume
+  becoming unavailable returns the field to its default of reporting directly to the user, keeping the form open. The **Resume
   conversation** tab has no such field, since a resumed session is never bound (see
   `docs/product/resuming-a-conversation-by-its-session-id.md`).
 
@@ -307,9 +307,8 @@ The session opened is the one the dialog would open if submitted untouched:
   sent as the session's own choice;
 - no model, reasoning effort or compatibility switch of its own, so all follow the parent;
 - a new conversation, never a resumed one;
-- **an independent project coordinator** — from the project list too, where the dialog's **Report to** starts on no
-  console session — except in a console session's focus mode, where it is bound to that console session, as the dialog
-  opened there binds it.
+- **an independent project coordinator** that reports directly to the user. In a console session's focus mode, the
+  session reports to that console session, as it does when opened from the dialog there.
 
 It is listed as *starting* and selected, as a session opened from the dialog is, and a launch failure is reported the
 same way (see above). A refusal is shown in an error alert titled "Could not open a session". When the console session

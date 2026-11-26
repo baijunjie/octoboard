@@ -268,7 +268,7 @@ export function SessionDialog({
           value={owner?.id ?? NO_OWNER}
           onChange={setPickedOwner}
           options={[
-            { value: NO_OWNER, label: t("dialog.session.ownerNone") },
+            { value: NO_OWNER, label: t("dialog.session.reportDirectlyToUser") },
             ...owners.map((s) => ({ value: s.id, label: sessionChoiceTitle(t, s), labelContent: sessionDisplayTitle(t, s), icon: <BindingBadge owner={s} decorative /> })),
           ]}
         />

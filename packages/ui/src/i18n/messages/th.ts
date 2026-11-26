@@ -1810,6 +1810,7 @@ export const th: Translation<"other"> = {
   "dialog.session.resumeRequired": "ป้อน ID เซสชันของการสนทนาที่จะดำเนินต่อ",
   "dialog.session.owner": "รายงานต่อ",
   "dialog.session.ownerNone": "ไม่มีเซสชันคอนโซล",
+  "dialog.session.reportDirectlyToUser": "ฉัน",
   "dialog.session.ownerFixed": "รายงานต่อ {name}",
   "dialog.session.noAgent": "ไม่มีเอเจนต์พร้อมเปิดเซสชัน",
   "dialog.session.blockedTitle": "เปิดเซสชันไม่ได้",

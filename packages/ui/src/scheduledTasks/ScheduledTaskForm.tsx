@@ -268,9 +268,8 @@ function ReportToField({ consoleId, value, onChange }: { consoleId: string; valu
       label={t("scheduledTasks.form.reportTo")}
       value={listed.some((one) => one.id === value) ? value : NO_OWNER}
       onChange={onChange}
-      description={t("scheduledTasks.form.reportTo.description")}
       options={[
-        { value: NO_OWNER, label: t("dialog.session.ownerNone") },
+        { value: NO_OWNER, label: t("dialog.session.reportDirectlyToUser") },
         ...listed.map((session) => ({ value: session.id, label: sessionChoiceTitle(t, session), labelContent: sessionDisplayTitle(t, session), badge: session.status === "archived" ? t("session.status.archived") : undefined, icon: <BindingBadge owner={session} decorative /> })),
       ]}
     />

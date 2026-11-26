@@ -1859,6 +1859,7 @@ export const zhCN: Translation<"other"> = {
   "dialog.session.resumeRequired": "请输入要接续的对话的会话 ID。",
   "dialog.session.owner": "汇报给",
   "dialog.session.ownerNone": "不汇报",
+  "dialog.session.reportDirectlyToUser": "我",
   "dialog.session.ownerFixed": "汇报给 {name}",
   "dialog.session.noAgent": "没有可用的智能体，无法打开会话。",
   "dialog.session.blockedTitle": "无法打开会话",

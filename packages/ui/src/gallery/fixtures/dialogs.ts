@@ -1200,7 +1200,7 @@ export const dialogScenarios: Scenario[] = [
     description: "Short and long owner names appear together below the joined agent and account field. Hover the long option to read it as a marquee; the selected long account label uses the same fade.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
-      (ui) => ui.press(ui.t("dialog.session.ownerNone")),
+      (ui) => ui.press(ui.t("dialog.session.reportDirectlyToUser")),
     ],
   },
   {

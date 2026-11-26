@@ -393,7 +393,7 @@ task with room for it (see "Choosing the session a task goes to" below). A sessi
 approved, is bound to nobody: it reports to the user, and neither the session that asked for it nor that session's owner
 drives it (see `docs/product/session-requests.md`). A session **the user opens by hand is independent**, unless they
 choose a console session under "Report to" in the session dialog (see "The session dialog" in
-`docs/product/opening-sessions.md`); the choice is none by default and offers console sessions only. A binding changes
+`docs/product/opening-sessions.md`). By default the session reports directly to the user. A binding changes
 afterwards only when its owner transfers the session, when an independent session binds itself or the user binds it,
 when its owner is handed off to another agent and the session moves to the one that takes the owner's place, or when its
 owner or the user releases the session, which leaves it independent (see `docs/product/changing-session-owners.md`). A session the user

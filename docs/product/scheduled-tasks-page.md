@@ -165,8 +165,9 @@ they stay in view while the form scrolls.
 
 - **Session**: **Console** and **Project**, side by side where the card is wide enough; Project lists **None (console
   session)**, which makes a console task, then the chosen console's projects; changing the console sets Project back to
-  None (console session) and Report to back to none. Then **Name**, whose empty field previews the session's default name, saying it names the task and the sessions
-  it starts; **Agent** with its account picker; **Report to**, for a project task only (see below); **Prompt**, required,
+  None (console session) and resets the reporting choice to direct reporting to the user. Then **Name**, whose empty
+  field previews the session's default name, saying it names the task and the sessions it starts; **Agent** with its
+  account picker; **Report to**, for a project task only (see below); **Prompt**, required,
   with an example as its placeholder and saying it is handed to each session as its opening task; and the **Advanced**
   section of the session dialog, with its note on what is inherited (see "The session dialog" in
   `docs/product/opening-sessions.md`).
@@ -178,10 +179,11 @@ they stay in view while the form scrolls.
   `docs/product/report-page-components.md`). Then **Enabled**, a switch, saying the task runs on its schedule, or will
   once turned on.
 
-**Report to** offers **No console session**, the default, then the console's console sessions that are not archived,
-each with its colour. A saved choice that is no longer among them stays listed while it is the value, so an untouched form does not
-change it; an archived one is marked Archived, since a run cannot report to it and starts independent. A choice the
-window does not hold shows as No console session.
+**Report to** defaults to direct reporting to the user and lists the console's console sessions that are neither archived
+nor still starting, each with its colour. A saved console session outside that list remains visible while selected, and
+an untouched form preserves the choice. An archived session carries the Archived badge, and a run with that choice starts
+an independent session that reports directly to the user. The field displays the default when the window has no record
+of the saved console session.
 
 - **Save** is available whenever the form would save something other than what is saved — always, for a new task — and
   is disabled only then or while a save is under way. Only the parts changed are sent, so a change made elsewhere to

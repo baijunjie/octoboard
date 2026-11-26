@@ -1793,6 +1793,7 @@ export const de: Translation<"one" | "other"> = {
   "dialog.session.resumeRequired": "Gib die Sitzungs-ID des fortzusetzenden Gesprächs ein.",
   "dialog.session.owner": "Berichten an",
   "dialog.session.ownerNone": "Keine Konsolensitzung",
+  "dialog.session.reportDirectlyToUser": "Mich",
   "dialog.session.ownerFixed": "Berichtet an {name}",
   "dialog.session.noAgent": "Kein Agent ist zum Öffnen einer Sitzung verfügbar.",
   "dialog.session.blockedTitle": "Sitzung kann nicht geöffnet werden",

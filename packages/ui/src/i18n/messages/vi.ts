@@ -1765,6 +1765,7 @@ export const vi: Translation<"other"> = {
   "dialog.session.resumeRequired": "Nhập ID phiên của hội thoại cần tiếp tục.",
   "dialog.session.owner": "Báo cáo cho",
   "dialog.session.ownerNone": "Không có phiên bảng điều khiển",
+  "dialog.session.reportDirectlyToUser": "Tôi",
   "dialog.session.ownerFixed": "Báo cáo cho {name}",
   "dialog.session.noAgent": "Không có tác tử khả dụng để mở phiên.",
   "dialog.session.blockedTitle": "Không thể mở phiên",

@@ -1766,6 +1766,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "dialog.session.resumeRequired": "أدخل معرّف جلسة المحادثة المراد استئنافها.",
   "dialog.session.owner": "التبعية",
   "dialog.session.ownerNone": "دون جلسة وحدة تحكم",
+  "dialog.session.reportDirectlyToUser": "أنا",
   "dialog.session.ownerFixed": "تتبع {name}",
   "dialog.session.noAgent": "لا يوجد وكيل متاح لفتح جلسة.",
   "dialog.session.blockedTitle": "لا يمكن فتح جلسة",

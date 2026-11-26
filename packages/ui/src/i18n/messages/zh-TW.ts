@@ -1812,6 +1812,7 @@ export const zhTW: Translation<"other"> = {
   "dialog.session.resumeRequired": "請輸入要接續的對話的工作階段 ID。",
   "dialog.session.owner": "彙報給",
   "dialog.session.ownerNone": "不彙報",
+  "dialog.session.reportDirectlyToUser": "我",
   "dialog.session.ownerFixed": "彙報給 {name}",
   "dialog.session.noAgent": "沒有可用的代理程式，無法開啟工作階段。",
   "dialog.session.blockedTitle": "無法開啟工作階段",
