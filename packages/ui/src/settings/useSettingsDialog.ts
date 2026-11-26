@@ -13,6 +13,7 @@ import { useUpdateStore } from "../updates/UpdatesProvider";
 import type { SettingsNavigation, SettingsSectionId } from "./sections";
 import type { OpenSettings } from "./settingsLauncher";
 import { preloadLaunchAtLogin } from "./useLaunchAtLogin";
+import { preloadMacosPermissions } from "./useMacosPermissions";
 
 /**
  * Whether the settings dialog is open, and how to open it (on its first section, or at a given one with
@@ -51,7 +52,7 @@ export function useSettingsDialog({
   const [addAgent, setAddAgent] = useState(false);
   const [account, setAccount] = useState<string>();
   const [nonce, setNonce] = useState(0);
-  const { appMenu, statusItem, launchAtLogin } = usePlatform();
+  const { appMenu, statusItem, launchAtLogin, macosPermissions } = usePlatform();
   const host = useHost();
   const updates = useUpdateStore();
   // Whether Settings was open as of the last commit, which the close effect below compares against.
@@ -66,11 +67,14 @@ export function useSettingsDialog({
     setOpen(true);
   };
 
-  // The dialog's launch-at-login row waits on the system's answer; known ahead of the first opening, it is there from
-  // the dialog's first render instead of sliding in.
+  // The dialog's launch-at-login row and permission rows wait on the system's answers; known ahead of the first opening,
+  // they are there from the dialog's first render instead of sliding in.
   useEffect(() => {
     if (launchAtLogin) preloadLaunchAtLogin(launchAtLogin);
   }, [launchAtLogin]);
+  useEffect(() => {
+    if (macosPermissions) preloadMacosPermissions(macosPermissions);
+  }, [macosPermissions]);
 
   // Acts on closing only: not on the first render, nor on opening.
   useEffect(() => {

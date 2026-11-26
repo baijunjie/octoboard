@@ -13,7 +13,8 @@ import { PlatformProvider } from "../platform/react";
 import { PermissionsSection } from "./PermissionsSection";
 import { SettingsReadsProvider } from "./SettingsReadsProvider";
 import { BROWSER_HOST } from "../test/hosts";
-import { fakeTimers } from "../test/clock";
+import { fakeTimers, flushPromises } from "../test/clock";
+import { preloadMacosPermissions } from "./useMacosPermissions";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -336,4 +337,63 @@ it("says only the latest of readings that follow one another within the wait, an
   await refocus();
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS);
   expect(writes).toEqual(["Screen Recording is granted. Accessibility is granted."]);
+});
+
+// The rows are there on the section's first render, not after a read answers: rows that arrive later slide in as added
+// rows each time Settings opens.
+it("has its rows on the first render when the grants were preloaded, before this opening's read answers", async () => {
+  const capability = {
+    status: vi.fn(() => Promise.resolve<MacosPermissionsStatus | undefined>(SCREEN_RECORDING_MISSING)),
+    request: vi.fn(() => Promise.resolve(false)),
+    openSystemSettings: vi.fn(() => Promise.resolve()),
+  } satisfies MacosPermissionsCapability;
+  preloadMacosPermissions(capability);
+  await flushPromises();
+  capability.status.mockImplementation(() => new Promise<MacosPermissionsStatus | undefined>(() => {}));
+  const platform: PlatformAdapter = { kind: "tauri", host: BROWSER_HOST, macosPermissions: capability };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  act(() => {
+    root.render(
+      <PlatformProvider value={platform}>
+        <SettingsReadsProvider>
+          <PermissionsSection />
+        </SettingsReadsProvider>
+      </PlatformProvider>,
+    );
+  });
+  // No act that waits: this is what the first commit holds.
+  expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Grant"]);
+  expect(container.textContent).not.toContain("Could not read the permissions");
+});
+
+it("has no rows on the first render of a shell never read, and shows them once it answers", async () => {
+  const capability = {
+    status: vi.fn(() => Promise.resolve<MacosPermissionsStatus | undefined>(SCREEN_RECORDING_MISSING)),
+    request: vi.fn(() => Promise.resolve(false)),
+    openSystemSettings: vi.fn(() => Promise.resolve()),
+  } satisfies MacosPermissionsCapability;
+  const platform: PlatformAdapter = { kind: "tauri", host: BROWSER_HOST, macosPermissions: capability };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  act(() => {
+    root.render(
+      <PlatformProvider value={platform}>
+        <SettingsReadsProvider>
+          <PermissionsSection />
+        </SettingsReadsProvider>
+      </PlatformProvider>,
+    );
+  });
+  expect(container.querySelectorAll("button")).toHaveLength(0);
+  await flushPromises();
+  expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Grant"]);
 });

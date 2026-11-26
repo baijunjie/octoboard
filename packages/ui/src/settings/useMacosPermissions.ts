@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { onWindowFocusReturn } from "../components/hooks/windowFocus";
-import type { MacosPermissionKind, MacosPermissionsStatus } from "../platform";
+import type { MacosPermissionKind, MacosPermissionsCapability, MacosPermissionsStatus } from "../platform";
 import { usePlatform } from "../platform/react";
 import { useSettingsReads } from "./settingsReads";
 
@@ -9,10 +9,11 @@ type PerKind = Partial<Record<MacosPermissionKind, boolean>>;
 
 /** What the shell reports of the macOS privacy permissions, as `useMacosPermissionsRead` holds it. */
 export interface MacosPermissionsRead {
-  /** `undefined` until the first read is in, and where there is nothing to report: no capability, or a shell that is
+  /** `undefined` until a report is known (see `useMacosPermissionsRead`), and where there is nothing to report: no capability, or a shell that is
    * not on macOS. */
   status: MacosPermissionsStatus | undefined;
-  /** The first read has come back, whatever it said, so `undefined` can be told from a read still in flight. */
+  /** A read has come back, in this opening or as the last report kept from before it, whatever it said, so `undefined`
+   * can be told from a read still in flight. */
   loaded: boolean;
   /** The permission rows are on screen: a read has reported the grants. The rows and the search both go by this. */
   shown: boolean;
@@ -27,19 +28,44 @@ export interface MacosPermissionsRead {
   follow: () => () => void;
 }
 
+/** The last report each shell gave of the grants (`undefined` where it has nothing to report), kept across openings of
+ * the Settings dialog: the dialog starts from it, so the permission rows are there from its first render. Rows that came
+ * in once a read answered would arrive after the section's list motion began watching, and slide in as added rows each
+ * time. A failed read clears it, since the section then shows the failure in place of the rows, and the next opening
+ * starts from that rather than from rows the failure replaced. */
+const lastReported = new WeakMap<MacosPermissionsCapability, { status: MacosPermissionsStatus | undefined }>();
+// The capabilities a preload has been started for, so that it reads once, even while its first read is unanswered.
+const preloading = new WeakSet<MacosPermissionsCapability>();
+
+/** Reads the grants once, ahead of the first opening of the Settings dialog (`useSettingsDialog` calls it as the window
+ * starts), so that opening finds them already known. A report the dialog has meanwhile replaced is dropped; a failure
+ * leaves nothing, and the dialog then reads as it opens. */
+export function preloadMacosPermissions(macosPermissions: MacosPermissionsCapability): void {
+  if (preloading.has(macosPermissions) || lastReported.has(macosPermissions)) return;
+  preloading.add(macosPermissions);
+  // Started inside a promise chain, so a platform method that throws synchronously fails the read like a rejection.
+  void Promise.resolve().then(() => macosPermissions.status()).then(
+    (status) => {
+      if (!lastReported.has(macosPermissions)) lastReported.set(macosPermissions, { status });
+    },
+    () => {},
+  );
+}
+
 /**
  * The macOS privacy permissions as the shell reports them. The grant can change entirely outside the app, so it is read
  * on mount and, while something follows it (`follow`), whenever the window regains focus (the user flips the switch in
  * System Settings and comes back, which is the only way Accessibility is ever granted); `refresh` reads it again after
- * an action (`useMacosPermissions`). A read starts a process that can take seconds, so the focus read is made only for
+ * an action (`useMacosPermissions`). Until the read on mount answers, the dialog shows the last report the shell gave
+ * (`lastReported`), and a read that finds the grants changed moves the rows. A read starts a process that can take seconds, so the focus read is made only for
  * a reader that would show the answer: the section, or a search with words in it. Held by the Settings dialog
- * (`SettingsReadsProvider`), not by the section, because the search counts the permission rows only once this has
- * answered, and a section the search takes out of the list is not mounted to ask.
+ * (`SettingsReadsProvider`), not by the section, because the search counts the permission rows only once a report is
+ * known, and a section the search takes out of the list is not mounted to ask.
  */
 export function useMacosPermissionsRead(): MacosPermissionsRead {
   const { macosPermissions } = usePlatform();
-  const [status, setStatus] = useState<MacosPermissionsStatus | undefined>();
-  const [loaded, setLoaded] = useState(false);
+  const [status, setStatus] = useState<MacosPermissionsStatus | undefined>(() => (macosPermissions ? lastReported.get(macosPermissions)?.status : undefined));
+  const [loaded, setLoaded] = useState(() => macosPermissions !== undefined && lastReported.has(macosPermissions));
   const [unreadable, setUnreadable] = useState(false);
   const mounted = useRef(true);
   const followers = useRef(0);
@@ -62,6 +88,10 @@ export function useMacosPermissionsRead(): MacosPermissionsRead {
       failed = true;
     }
     if (!mounted.current || read !== reads.current) return;
+    if (macosPermissions) {
+      if (failed) lastReported.delete(macosPermissions);
+      else lastReported.set(macosPermissions, { status: next });
+    }
     setUnreadable(failed);
     setStatus(next);
     setLoaded(true);

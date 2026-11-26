@@ -8,13 +8,13 @@ import { framesAsTimers, settleFrames, withModality } from "../components/dialog
 import { MODAL_CLOSE_SETTLE_MS, setFocusAfterModalLoss } from "../components/focus/modalFocus";
 import { browserHost } from "../platform/host";
 import { PlatformProvider } from "../platform/react";
-import type { LaunchAtLoginCapability, LaunchAtLoginStatus, PlatformAdapter, UpdaterCapability } from "../platform";
+import type { LaunchAtLoginCapability, LaunchAtLoginStatus, MacosPermissionsCapability, PlatformAdapter, UpdaterCapability } from "../platform";
 import { UpdatesProvider } from "../updates/UpdatesProvider";
 import { useSettingsDialog } from "./useSettingsDialog";
 import { bindingFor, restoreAllBindings, setBinding } from "../shortcuts/store";
 import { eventKey, type Binding } from "../shortcuts/binding";
 import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
-import { fakeTimers } from "../test/clock";
+import { fakeTimers, flushPromises } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -206,6 +206,17 @@ it("reads the system's launch-at-login state once as the window starts, where th
   const status = vi.fn(async (): Promise<LaunchAtLoginStatus> => "disabled");
   const launchAtLogin: LaunchAtLoginCapability = { status, set: vi.fn(), openSystemSettings: vi.fn(async () => {}) };
   const hook = mount(false, () => {}, { kind: "tauri", host: MAC_HOST, launchAtLogin });
+  expect(status).toHaveBeenCalledOnce();
+  act(() => hook().openSettingsAt("accounts"));
+  act(() => hook().closeSettings());
+  expect(status).toHaveBeenCalledOnce();
+});
+
+it("reads the macOS permissions once as the window starts, where the shell can report them", async () => {
+  const status = vi.fn(async () => ({ screenRecording: true, accessibility: true }));
+  const macosPermissions: MacosPermissionsCapability = { status, request: vi.fn(async () => true), openSystemSettings: vi.fn(async () => {}) };
+  const hook = mount(false, () => {}, { kind: "tauri", host: MAC_HOST, macosPermissions });
+  await flushPromises();
   expect(status).toHaveBeenCalledOnce();
   act(() => hook().openSettingsAt("accounts"));
   act(() => hook().closeSettings());

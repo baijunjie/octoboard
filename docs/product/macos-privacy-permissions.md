@@ -50,8 +50,9 @@ regains focus (below). Both permissions are in practice switched on in System Se
 raises the system's dialog asking to let Octoboard control the computer, whose effect is that Octoboard appears in
 System Settings' own list, so the user only flips a switch there instead of adding the application by hand.
 
-**A change made outside Octoboard is picked up when the window comes back.** The grants are read once when Settings
-opens, whichever section it opens on, and again every time the window regains focus while this section is on screen or
+**A change made outside Octoboard is picked up when the window comes back.** The grants are first read as the window
+starts, and the last report is kept while the window is open, so the rows are there as Settings opens rather than
+appearing after it; a read that fails clears what was kept. They are read once when Settings opens, whichever section it opens on, and again every time the window regains focus while this section is on screen or
 the Settings search field holds words to search for (see `docs/product/searching-settings.md`). A return of focus at any
 other time reads nothing then; instead the grants are read once when this section is next shown or a search next starts.
 Switching to this section with no return of focus since the last read reads nothing. So one granted or revoked in System
