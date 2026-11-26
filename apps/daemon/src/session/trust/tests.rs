@@ -1350,6 +1350,22 @@ async fn screen_printed(live: &StandIn) {
     );
 }
 
+/// Waits until a stand-in whose script starts by printing `ready` has printed it, which it does
+/// once it reads raw ([`stand_in`]). A Windows console takes what is written into it before then as
+/// typed keys, a paste's markers lost, so a message the test lets through has to wait for this:
+/// written in that window, it would never reach the stand-in as sent.
+async fn stand_in_ready(live: &StandIn) {
+    let ready = Arc::clone(live);
+    assert!(
+        tokio::task::spawn_blocking(move || wait_for(PATIENCE, || {
+            printed(&ready, WINDOW).starts_with(b"ready")
+        }))
+        .await
+        .unwrap(),
+        "the stand-in never became ready"
+    );
+}
+
 /// Waits until the stand-in has been sent the Down and the Enter and has printed the screen
 /// that replaces the trust screen. A test that ended at the Enter would drop the stand-in
 /// while an answer running in the background was still waiting for that screen, and the
@@ -2798,6 +2814,7 @@ async fn a_message_for_codex_is_let_through_at_its_first_title_with_no_screen() 
         take_message("'%RECEIVED%'", "hello")
     );
     let (live, received) = start(&state, &dir, record, &script);
+    stand_in_ready(&live).await;
     supervise(&state, &live);
 
     let delivery = crate::messaging::delivery::write_message(
@@ -3353,15 +3370,7 @@ async fn grok_messages_are_let_through_when_no_hook_comes_within_the_bound() {
         take(message.len(), "'%RECEIVED%'")
     );
     let (live, received) = start(&state, &dir, record, &script);
-    let ready = Arc::clone(&live);
-    assert!(
-        tokio::task::spawn_blocking(move || wait_for(PATIENCE, || {
-            printed(&ready, WINDOW).starts_with(b"ready")
-        }))
-        .await
-        .unwrap(),
-        "the stand-in never became ready"
-    );
+    stand_in_ready(&live).await;
     tokio::time::pause();
     release_when_no_hook_comes(&state, &live, Duration::from_millis(600));
 
@@ -3604,6 +3613,7 @@ async fn claude_messages_wait_for_bracketed_paste_after_the_first_hook() {
         take(message.len(), "'%RECEIVED%'")
     );
     let (live, received) = start(&state, &dir, record, &script);
+    stand_in_ready(&live).await;
     release_when_paste_mode_comes(&state, &live);
 
     let delivery = crate::messaging::delivery::write_message(
@@ -3691,6 +3701,7 @@ async fn claude_messages_are_not_released_by_the_start_probes_bracketed_paste() 
         take(message.len(), "'%RECEIVED%'")
     );
     let (live, received) = start(&state, &dir, record, &script);
+    stand_in_ready(&live).await;
     release_when_paste_mode_comes(&state, &live);
 
     let delivery = crate::messaging::delivery::write_message(

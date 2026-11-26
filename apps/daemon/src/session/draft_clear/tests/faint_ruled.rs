@@ -1208,10 +1208,12 @@ async fn a_cancel_the_declared_signals_report_queues_the_dropped_messages_again(
     fixture.hold(&["first", "second"]);
     fixture.reports("working").await;
     fixture.reports("idle").await;
-    let state = fixture.state.clone();
+    // The cancel queues the messages again before it closes the turn, so the test waits for it to
+    // have done both rather than for the queue alone.
+    let live = fixture.live();
     assert!(
-        crate::test_support::within(PATIENCE, move || state.queued_count("s") == 2).await,
-        "the declared cancel queued nothing again"
+        crate::test_support::within(PATIENCE, move || live.signals.cancels_settled() == 1).await,
+        "the declared cancel was never acted on"
     );
     assert!(!fixture.state.turn_is_open("s"));
     assert_eq!(fixture.state.take_queued("s"), ["first", "second"]);
