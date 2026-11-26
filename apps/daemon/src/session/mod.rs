@@ -37,6 +37,7 @@ mod output_pace;
 mod paste_apart;
 pub(crate) mod pasted_image;
 mod program_status;
+pub(crate) mod queued_files;
 pub(crate) mod relaunch;
 pub(crate) mod scratch;
 pub(crate) mod screen;

@@ -1,3 +1,4 @@
+import { sessionComposerEnabled } from "../composer/composerSetting";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import type { ThemeChoice } from "../preferences/theme";
 import { runInBackground } from "../lifecycle/runInBackground";
@@ -18,6 +19,7 @@ export interface ClientSettings {
   terminal_font_size?: number;
   run_in_background?: boolean;
   show_menu_bar_icon?: boolean;
+  session_composer?: boolean;
   /** The parts of the session order the document carries that this client knows. */
   session_order?: Partial<SessionOrder>;
 }
@@ -52,8 +54,8 @@ const THEME_LABEL: Record<ThemeChoice, PlainMessageKey> = {
 };
 
 /** The values this client adds to a document it saves, for the Settings `sections` the document carries: for General
- * the session order (all three parts), whether it runs in the background and whether it shows its menu bar icon (each of
- * the last two only where the platform has that); for Appearance the theme, the Markdown style and the terminal font size. */
+ * the session order (all three parts), whether the message composer shows, whether it runs in the background and whether it
+ * shows its menu bar icon (each of the last two only where the platform has that); for Appearance the theme, the Markdown style and the terminal font size. */
 export function heldClientSettings(
   current: { appearance: ThemeChoice },
   platform: ClientSettingsPlatform,
@@ -63,6 +65,7 @@ export function heldClientSettings(
   return {
     ...(sections.includes("general") && {
       session_order: { sessions: order.sessions, active_projects: order.activeProjects, inactive_projects: order.inactiveProjects },
+      session_composer: sessionComposerEnabled.get(),
       ...(platform.backgroundRun && { run_in_background: runInBackground.get() }),
       ...(platform.menuBarIcon && { show_menu_bar_icon: showMenuBarIcon.get() }),
     }),
@@ -82,7 +85,7 @@ export function documentClientSettings(document: unknown, platform: ClientSettin
 /** The client settings `settings` (a document's, or an import's reply) carries that this client can stand behind. */
 export function clientSettingsOf(settings: unknown, platform: ClientSettingsPlatform): ClientSettings {
   if (typeof settings !== "object" || settings === null) return {};
-  const { appearance, markdown_style, terminal_font_size, run_in_background, show_menu_bar_icon, session_order } = settings as Record<string, unknown>;
+  const { appearance, markdown_style, terminal_font_size, run_in_background, show_menu_bar_icon, session_composer, session_order } = settings as Record<string, unknown>;
   const order = sessionOrderOf(session_order);
   const pixelSize = pixelSizeOf(terminal_font_size);
   return {
@@ -91,6 +94,7 @@ export function clientSettingsOf(settings: unknown, platform: ClientSettingsPlat
     ...(pixelSize !== undefined && { terminal_font_size: clampTerminalFontSize(pixelSize) }),
     ...(platform.backgroundRun && typeof run_in_background === "boolean" && { run_in_background }),
     ...(platform.menuBarIcon && typeof show_menu_bar_icon === "boolean" && { show_menu_bar_icon }),
+    ...(typeof session_composer === "boolean" && { session_composer }),
     ...(Object.keys(order).length > 0 && { session_order: order }),
   };
 }
@@ -127,6 +131,7 @@ export function applyClientSettings(values: ClientSettings, setAppearance: (choi
   if (values.terminal_font_size !== undefined) terminalFontSize.set(values.terminal_font_size);
   if (values.run_in_background !== undefined) runInBackground.set(values.run_in_background);
   if (values.show_menu_bar_icon !== undefined) showMenuBarIcon.set(values.show_menu_bar_icon);
+  if (values.session_composer !== undefined) sessionComposerEnabled.set(values.session_composer);
   if (values.session_order !== undefined) sessionOrderPreference.set({ ...sessionOrderPreference.get(), ...values.session_order });
 }
 
@@ -159,6 +164,7 @@ export function clientSettingValues(
     terminal_font_size: ["settings.terminalFontSize.label", (value) => t("configuration.import.value.pixels", { size: value })],
     run_in_background: ["settings.background.label", onOff],
     show_menu_bar_icon: ["settings.menuBarIcon.label", onOff],
+    session_composer: ["settings.composer.label", onOff],
   };
   return (Object.keys(words) as ScalarClientField[]).flatMap((field) => {
     const [label, word, language] = words[field] as [PlainMessageKey, (value: unknown) => string, ((value: unknown) => string)?];

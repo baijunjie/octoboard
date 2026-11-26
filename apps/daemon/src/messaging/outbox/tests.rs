@@ -2171,3 +2171,249 @@ fn a_dropped_message_is_put_back_a_bounded_number_of_times() {
         );
     }
 }
+
+/// An agent at its prompt, as `expects` and `elsewhere` say, that records what the outbox tells
+/// it of the composer's messages.
+#[derive(Default)]
+struct ComposerWatch {
+    expects: bool,
+    elsewhere: bool,
+    told: std::cell::RefCell<Vec<(Ticket, ComposerLeft)>>,
+}
+
+impl PromptSignal for ComposerWatch {
+    fn sent(&self) -> u64 {
+        0
+    }
+    fn expects_send(&self) -> bool {
+        self.expects
+    }
+    fn wait_past(&self, _before: u64) -> bool {
+        false
+    }
+    fn mark_unsent(&self, _before: u64) {}
+    fn mark_not_submitted(&self, _before: u64) {}
+    fn unsent_waiting(&self) -> bool {
+        false
+    }
+    fn sighting(&self) -> Sighting {
+        Sighting::default()
+    }
+    fn watch_screen(&self, _on: bool) {}
+    fn trust_holds_writes(&self) -> bool {
+        false
+    }
+    fn write_went_elsewhere(&self) -> bool {
+        self.elsewhere
+    }
+    fn composer_outcome(&self, ticket: Ticket, left: ComposerLeft) {
+        self.told.borrow_mut().push((ticket, left));
+    }
+}
+
+/// What became of a message handed over from the composer's queue is told once, as it is known,
+/// for each way a drain leaves a message; a message nobody marked is told of to no one.
+#[test]
+fn a_composers_message_is_told_as_written_unsent_or_gone_elsewhere() {
+    let cases: [(&str, ComposerWatch, Route, ComposerLeft); 4] = [
+        (
+            "terminal",
+            ComposerWatch::default(),
+            Route::Terminal,
+            ComposerLeft::Written,
+        ),
+        (
+            "queued",
+            ComposerWatch {
+                expects: true,
+                ..Default::default()
+            },
+            Route::Queued,
+            ComposerLeft::Written,
+        ),
+        (
+            "unsent",
+            ComposerWatch {
+                expects: true,
+                ..Default::default()
+            },
+            Route::Terminal,
+            ComposerLeft::Unsent,
+        ),
+        (
+            "elsewhere",
+            ComposerWatch {
+                expects: true,
+                elsewhere: true,
+                ..Default::default()
+            },
+            Route::Terminal,
+            ComposerLeft::WentElsewhere("hello".to_string()),
+        ),
+    ];
+    for (name, watch, route, left) in cases {
+        let outbox = Outbox::default();
+        let ticket = outbox.push("s", "hello").expect("accepted");
+        outbox.mark_composer(ticket);
+        outbox.drain_with("s", &mut |_, _, _| Ok(route), &watch);
+        assert_eq!(*watch.told.borrow(), [(ticket, left)], "{name}");
+        assert!(!outbox.holds_composer("s", ticket), "{name}: written");
+    }
+
+    // A message nobody marked is told of to no one.
+    let outbox = Outbox::default();
+    outbox.push("s", "plain").expect("accepted");
+    let watch = ComposerWatch::default();
+    outbox.drain_with("s", &mut |_, _, _| Ok(Route::Terminal), &watch);
+    assert!(watch.told.borrow().is_empty());
+}
+
+/// A message the agent's own queue refuses is told as refused, with the reason and who refused.
+#[test]
+fn a_composers_message_the_agent_refused_is_told_as_refused() {
+    let outbox = Outbox::default();
+    let ticket = outbox.push("s", "too long").expect("accepted");
+    outbox.mark_composer(ticket);
+    let watch = ComposerWatch::default();
+    outbox.drain_with(
+        "s",
+        &mut |_, _, _| {
+            Err(PartialWrite {
+                written: 0,
+                error: std::io::Error::other(crate::session::term::RefusedByAgent(
+                    "input too long".into(),
+                )),
+            })
+        },
+        &watch,
+    );
+    let told = watch.told.borrow();
+    assert_eq!(told.len(), 1);
+    let ComposerLeft::Refused(refused) = &told[0].1 else {
+        panic!("not told as refused: {told:?}");
+    };
+    assert_eq!(told[0].0, ticket);
+    assert_eq!(refused.kind, RefusalKind::Agent);
+    assert!(
+        refused.reason.contains("input too long"),
+        "{}",
+        refused.reason
+    );
+}
+
+/// A message of the composer's still in the queue can be pulled out alone: the messages around
+/// it stay, in order; one a drain has taken to write cannot, and is still the composer's until
+/// the drain is done with it.
+#[test]
+fn a_composers_message_is_withdrawn_alone_until_a_drain_takes_it() {
+    let outbox = Outbox::default();
+    outbox.push("s", "a").expect("accepted");
+    let b = outbox.push("s", "b").expect("accepted");
+    outbox.push("s", "c").expect("accepted");
+    outbox.mark_composer(b);
+    assert!(
+        !outbox.withdraw_queued("other", b),
+        "another session's queue"
+    );
+    assert!(outbox.holds_composer("s", b));
+    assert!(outbox.withdraw_queued("s", b));
+    assert!(!outbox.withdraw_queued("s", b), "once");
+    assert!(!outbox.holds_composer("s", b));
+    assert_eq!(outbox.len("s"), 2);
+
+    let d = outbox.push("s", "d").expect("accepted");
+    outbox.mark_composer(d);
+    let mut written = Vec::new();
+    outbox.drain_with(
+        "s",
+        &mut |ticket, text, _| {
+            written.push(text.to_string());
+            if ticket == d {
+                assert!(!outbox.withdraw_queued("s", d), "taken to be written");
+                assert!(outbox.holds_composer("s", d), "still being written");
+            }
+            Ok(Route::Terminal)
+        },
+        &MidTurn,
+    );
+    assert_eq!(written, ["a", "c", "d"]);
+    assert!(!outbox.holds_composer("s", d));
+}
+
+/// A composer's message is never carried elsewhere as text: a planned stop's seal and a hold's
+/// take leave it out (the composer queue keeps it), and the messages around it are carried as
+/// they were; the take does not count it among the messages that were more than text.
+#[test]
+fn a_composers_message_is_left_out_of_what_is_carried_elsewhere() {
+    let outbox = Outbox::default();
+    outbox.push("s", "one").expect("accepted");
+    let composer = outbox.push("s", "from the composer").expect("accepted");
+    outbox.mark_composer(composer);
+    outbox.push("s", "two").expect("accepted");
+    let sealed = outbox.seal(Duration::ZERO);
+    let texts: Vec<&str> = sealed[0]
+        .1
+        .iter()
+        .map(|(_, text, _)| text.as_str())
+        .collect();
+    assert_eq!(texts, ["one", "two"]);
+
+    let outbox = Outbox::default();
+    outbox.push("s", "one").expect("accepted");
+    let composer = outbox.push("s", "from the composer").expect("accepted");
+    outbox.mark_composer(composer);
+    outbox.push("s", "two").expect("accepted");
+    let (taken, shaped) = outbox.take_counting_shaped("s");
+    let texts: Vec<String> = taken.into_iter().map(|(text, _)| text).collect();
+    assert_eq!(texts, ["one", "two"]);
+    assert_eq!(shaped, 0);
+    assert_eq!(outbox.len("s"), 0);
+}
+
+/// A message queued as the composer's is marked in the same step, so a drain tells its outcome
+/// with no mark added after; while the drain writes it, it is held as the composer's, from the
+/// moment it is taken off the queue.
+#[test]
+fn a_message_pushed_as_the_composers_is_marked_and_held_while_written() {
+    let outbox = Outbox::default();
+    let ticket = outbox
+        .push_composer("s", "hello", None, false)
+        .expect("accepted");
+    assert!(outbox.holds_composer("s", ticket));
+    let watch = ComposerWatch::default();
+    let mut held_while_written = false;
+    outbox.drain_with(
+        "s",
+        &mut |_, _, _| {
+            held_while_written = outbox.holds_composer("s", ticket);
+            Ok(Route::Terminal)
+        },
+        &watch,
+    );
+    assert!(held_while_written, "held while the drain writes it");
+    assert_eq!(*watch.told.borrow(), [(ticket, ComposerLeft::Written)]);
+    assert!(!outbox.holds_composer("s", ticket));
+}
+
+/// A composer's message a drain could not write yet and put back stays the queue's throughout:
+/// it is found on the queue once back, and told of to no one.
+#[test]
+fn a_composers_message_put_back_by_a_drain_stays_held() {
+    let outbox = Outbox::default();
+    let ticket = outbox
+        .push_composer("s", "later", None, false)
+        .expect("accepted");
+    let watch = ComposerWatch::default();
+    outbox.drain_with(
+        "s",
+        &mut |_, _, _| {
+            Err(PartialWrite {
+                written: 0,
+                error: std::io::Error::from(std::io::ErrorKind::WouldBlock),
+            })
+        },
+        &watch,
+    );
+    assert!(outbox.holds_composer("s", ticket));
+    assert!(watch.told.borrow().is_empty());
+}

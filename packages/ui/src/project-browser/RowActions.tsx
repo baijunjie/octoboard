@@ -1,7 +1,11 @@
-import { Copy, FolderOpen, SquareArrowOutUpRight, SquareTerminal, TextSearch } from "lucide-react";
+import { Copy, FolderOpen, MessageSquarePlus, SquareArrowOutUpRight, SquareTerminal, TextSearch } from "lucide-react";
 import React, { createContext, useContext } from "react";
 
+import { raiseError } from "../components/alerts/raiseError";
+import { useQuoteTarget } from "../components/host/quoteTarget";
 import { ActionMenu } from "../components/menus/ActionMenu";
+import { ActionableError } from "../errors/actionableError";
+import { displayWirePath } from "../format/wirePath";
 import type { ActionMenuEntry } from "../components/menus/menuEntries";
 import { RowControls } from "../components/controls/RowControls";
 import { useResolveAbsolutePath } from "../components/host/useResolveAbsolutePath";
@@ -27,6 +31,11 @@ export const OpenShellTerminal = createContext<((folder: HostPath) => void) | un
  * whose rows are the project's live files. Where none is provided a folder offers no Find in folder. */
 export const FindInDirectory = createContext<((directory: string) => void) | undefined>(undefined);
 
+/** Whether rows offer Add as context, which writes a row's path into the input of the session the window shows
+ * (`QuoteTarget.addContext`); provided by the Files mode, whose rows are the project's live files. It is offered while
+ * that session is one of the row's project. */
+export const AddAsContextOffered = createContext(false);
+
 /** The row's button and right-click share the same actions and focus handling. */
 export function RowActions({ path, name, directory = false, reserve = false, contextTargetRef }: {
   path: string;
@@ -45,8 +54,31 @@ export function RowActions({ path, name, directory = false, reserve = false, con
   const hostPaths = useHostPathsOrEmpty();
   const openTerminal = useContext(OpenShellTerminal);
   const findIn = useContext(FindInDirectory);
+  const quoteTarget = useQuoteTarget();
+  const contextTarget = useContext(AddAsContextOffered) && scope ? quoteTarget : undefined;
+  // Read as the menu opens: whether the session the window shows is one of this project, and takes input now.
+  const addAsContext = (): ActionMenuEntry[] => {
+    if (!contextTarget || contextTarget.project() !== scope?.project) return [];
+    const blocked = contextTarget.contextBlocked();
+    return [{
+      label: t("browser.addAsContext"), icon: MessageSquarePlus, disabled: blocked,
+      reason: blocked ? { state: t("browser.addAsContextUnavailable") } : undefined,
+      onClick: () => {
+        // Offered when the menu opened: the session may have stopped taking input since.
+        if (contextTarget.contextBlocked()) raiseError(new ActionableError(t("common.quoteFailedInput"), "contextInput"), { title: t("browser.addAsContextFailed") });
+        // As the UI's own text shows it, as Copy relative path copies it.
+        else contextTarget.addContext(displayWirePath(path));
+      },
+    }];
+  };
+  const leading = (): ActionMenuEntry[] => {
+    const entries: ActionMenuEntry[] = [
+      ...(directory && findIn ? [{ label: t("contentSearch.findInDirectory"), icon: TextSearch, onClick: () => findIn(path) }] : []),
+      ...addAsContext(),
+    ];
+    return entries.length > 0 ? [...entries, "separator"] : [];
+  };
   const items: ActionMenuEntry[] = [
-    ...(directory && findIn ? [{ label: t("contentSearch.findInDirectory"), icon: TextSearch, onClick: () => findIn(path) }, "separator" as const] : []),
     { label: t("common.copyRelativePath"), icon: Copy, onClick: () => copyPath(path) },
     ...(scope ? [{
       label: t("common.copyAbsolutePath"), icon: Copy, onClick: () => {},
@@ -85,7 +117,7 @@ export function RowActions({ path, name, directory = false, reserve = false, con
         label={t(directory ? "browser.directory.actions" : "browser.row.actions", { name: isolate(name) })}
         contextTargetRef={contextTargetRef}
         onClosed={returnFocusToTrigger}
-        items={items}
+        items={contextTarget ? () => [...leading(), ...items] : [...leading(), ...items]}
       />
     </RowControls>
   );

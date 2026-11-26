@@ -40,7 +40,7 @@ import {
 import { droppedPathsText } from "./droppedFiles";
 import type { DroppedFile } from "./fileDrag";
 import { imageInPaste } from "./pastedImage";
-import { quotedText, quoteLead } from "./quotedText";
+import { quotedText, quoteLead, wordLead } from "./quotedText";
 import type { QuoteBlock } from "../components/host/quoteTarget";
 import { watchUserInput } from "./xtermInternals";
 import { XTERM_THEMES } from "./xtermThemes";
@@ -645,6 +645,15 @@ export class TerminalController {
     const quoted = quotedText(text);
     if (quoted === "" || this.quoteBlock(sessionId) !== undefined) return;
     this.term.paste(quoteLead(this.term.buffer.active) + quoted);
+  }
+
+  /**
+   * Pastes `text`, one line such as a path Add as context writes, into the input of `sessionId`, which is not sent,
+   * after a space where the cursor follows other text (`wordLead`). Nothing is written while the session takes no input.
+   */
+  writeInput(text: string, sessionId: string): void {
+    if (text === "" || this.inputSessionId !== sessionId) return;
+    this.term.paste(wordLead(this.term.buffer.active) + text);
   }
 
   /**

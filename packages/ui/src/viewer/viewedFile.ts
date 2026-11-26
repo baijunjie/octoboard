@@ -17,10 +17,11 @@ export interface ViewedProjectFile {
   launchable?: true;
 }
 
-/** A file a path in a terminal named that lies outside every project directory (anywhere else on the daemon's host),
- * shown from the path as the terminal wrote it, which the daemon reads with `read_path_link`. `project` is the
- * session's, if it has one, which the daemon needs to tell a project kept under a temporary directory from scratch
- * space. */
+/** A file outside every project directory (anywhere else on the daemon's host) that a path in a terminal named, or a
+ * file attached to a message in the composer, shown from the path as written, which the daemon reads with
+ * `read_path_link`.
+ * `project` is the session's, if it has one, which the daemon needs to tell a project kept under a temporary directory
+ * from scratch space. */
 export interface ViewedLinkedFile {
   link: string;
   project?: string;

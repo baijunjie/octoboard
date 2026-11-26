@@ -762,6 +762,86 @@ pub enum RequestBody {
         session: String,
         command: String,
     },
+    /// Puts one of the user's messages at the end of the session's composer queue, for any
+    /// session that is not archived. `mode` defaults to the session's `send_mode`; `now` hands it
+    /// to delivery at once, as `send_queued_message` does. `images` (at most ten, each saved for
+    /// this session by `save_pasted_image`) and `files` (paths, an attachment saved for this
+    /// session among them) are moved into the session's composer directory. Answered with
+    /// `queued_message_created`. Refused, with nothing moved, with `unknown_session`,
+    /// `session_archived`, `field_required` (`field: text`) for nothing to send or a command with
+    /// images or files, `unreadable_request` (`field: images`), `provider_unsupported` for images
+    /// to a provider that takes none or a command to one that runs none, and `limit_exceeded`
+    /// (`queued_messages`).
+    CreateQueuedMessage {
+        session: String,
+        text: String,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        images: Vec<String>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        files: Vec<String>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        command: bool,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        mode: Option<super::SendMode>,
+    },
+    /// Changes a waiting queued message: a field left out is left alone, a present list replaces
+    /// the message's whole. Clears its `failure`. Answered with `ack`. Refused as
+    /// `create_queued_message` is, with `queued_message_not_found` and `queued_message_sending`.
+    UpdateQueuedMessage {
+        session: String,
+        message: String,
+        #[cfg_attr(test, ts(optional))]
+        text: Option<String>,
+        #[cfg_attr(test, ts(optional))]
+        images: Option<Vec<String>>,
+        #[cfg_attr(test, ts(optional))]
+        files: Option<Vec<String>>,
+        #[cfg_attr(test, ts(optional))]
+        command: Option<bool>,
+    },
+    /// Sets the mode a waiting queued message waits in, clearing its `failure`. Answered with
+    /// `ack`. Refused with `queued_message_not_found` and `queued_message_sending`.
+    SetQueuedMessageMode {
+        session: String,
+        message: String,
+        mode: super::QueuedMode,
+    },
+    /// Moves a queued message to `position` in the queue, counted from 0 among the messages after
+    /// it is taken out; past the end puts it last. Answered with `ack`. Refused with
+    /// `queued_message_not_found`, and a negative `position` with `unreadable_request`.
+    MoveQueuedMessage {
+        session: String,
+        message: String,
+        position: u32,
+    },
+    /// Sends a waiting queued message now, whatever its mode and the session's status, through the
+    /// session's message delivery under its own holds. A session with no process is resumed as
+    /// `resume_session` resumes it, and the message handed over once it can take one. Answered
+    /// with `ack` once delivery has taken the message (written or queued) or the resume has
+    /// started; a refusal is answered with its error and also set as the message's `failure`.
+    /// Refused with `queued_message_not_found` and `queued_message_sending`.
+    SendQueuedMessage {
+        session: String,
+        message: String,
+    },
+    /// Withdraws a queued message: one waiting, one a send now waits to hand over once the session
+    /// it resumes can take it, or one delivery holds queued and has not written. Answered with
+    /// `ack`. Refused with `queued_message_not_found`, and with `queued_message_sending` for one
+    /// being handed over or written.
+    WithdrawQueuedMessage {
+        session: String,
+        message: String,
+    },
+    /// Sets the session's default send mode for new messages (`Session.send_mode`). Answered with
+    /// `ack`; every client is sent `session_upserted`. Refused with `unknown_session`.
+    SetSessionSendMode {
+        session: String,
+        mode: super::SendMode,
+    },
     /// The user's answer to the session's `interaction`, named by its `id`: `choice` for a
     /// `permission` prompt (with `text` for a choice that takes it), `answers` for a `question`
     /// prompt (one per question, in order), or `dismiss` to decline a dismissible question. The
@@ -787,14 +867,15 @@ pub enum RequestBody {
         #[cfg_attr(test, ts(optional = nullable))]
         dismiss: bool,
     },
-    /// Saves an image the user pasted into the terminal of a running session as a file on the daemon
-    /// host, for its agent to read by path: `data` is the image as a PNG, JPEG, GIF or WebP file,
-    /// base64-encoded, of at most 10 MiB decoded (see `crate::session::pasted_image`), or `upload`
-    /// names an upload of this connection whose parts hold it; exactly one of the two is given.
-    /// Answered with `pasted_image_saved`. Refused with `unknown_session` or
-    /// `session_not_running`, with `provider_unsupported` (operation `message_images`) for a
-    /// session whose provider takes no images, and for an upload with `upload_unavailable` or
-    /// `upload_parts_mismatch`.
+    /// Saves an image the user pasted into the terminal of a session, or attached to a message of
+    /// its composer, as a file on the daemon host (in its composer directory for an interrupted
+    /// session), for its agent to read by path: `data` is the image as a PNG, JPEG, GIF or WebP
+    /// file, base64-encoded, of at most 10 MiB decoded (see `crate::session::pasted_image`), or
+    /// `upload` names an upload of this connection whose parts hold it; exactly one of the two is
+    /// given. Answered with `pasted_image_saved`. Refused with `unknown_session` or
+    /// `session_not_running` (a session archived, starting or ending), with
+    /// `provider_unsupported` (operation `message_images`) for a session whose provider takes no
+    /// images, and for an upload with `upload_unavailable` or `upload_parts_mismatch`.
     SavePastedImage {
         session: String,
         #[serde(default)]
@@ -826,10 +907,11 @@ pub enum RequestBody {
         upload: String,
     },
     /// Starts uploading a file of `size` bytes (1 to 100 MiB), called `name` where it came from, in
-    /// parts, to attach it to a running session; served on the control connection, which holds the
-    /// upload. Answered with `attachment_upload_created`. Refused with `unknown_session`,
-    /// `session_not_running`, or `limit_exceeded` (`attachment_uploads`,
-    /// `attachment_upload_bytes`). See `crate::session::attachment`.
+    /// parts, to attach it to a running or interrupted session; served on the control connection,
+    /// which holds the upload. Answered with `attachment_upload_created`. Refused with
+    /// `unknown_session`, `session_not_running` (a session archived, starting or ending), or
+    /// `limit_exceeded` (`attachment_uploads`, `attachment_upload_bytes`). See
+    /// `crate::session::attachment`.
     CreateAttachmentUpload {
         session: String,
         /// The file's name where it came from; the saved file is named after a safe form of it.
@@ -845,9 +927,10 @@ pub enum RequestBody {
         offset: u64,
         data: String,
     },
-    /// Saves the file an attachment upload of this connection holds, for the session's agent to
-    /// read by path. Answered with `attachment_saved`. Refused with `unknown_session`,
-    /// `session_not_running`, `upload_unavailable` or `upload_parts_mismatch`.
+    /// Saves the file an attachment upload of this connection holds (in the session's composer
+    /// directory for an interrupted session), for the session's agent to read by path.
+    /// Answered with `attachment_saved`. Refused with `unknown_session`, `session_not_running` (a
+    /// session archived, starting or ending), `upload_unavailable` or `upload_parts_mismatch`.
     SaveAttachment {
         session: String,
         upload: String,
@@ -1866,6 +1949,13 @@ impl RequestBody {
             | Self::SetSessionColour { .. }
             | Self::SendMessage { .. }
             | Self::SendCommand { .. }
+            | Self::CreateQueuedMessage { .. }
+            | Self::UpdateQueuedMessage { .. }
+            | Self::SetQueuedMessageMode { .. }
+            | Self::MoveQueuedMessage { .. }
+            | Self::SendQueuedMessage { .. }
+            | Self::WithdrawQueuedMessage { .. }
+            | Self::SetSessionSendMode { .. }
             | Self::AnswerInteraction { .. }
             | Self::InterruptSession { .. }
             | Self::RenameSession { .. }

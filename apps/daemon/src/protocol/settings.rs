@@ -262,6 +262,7 @@ mod tests {
             shell_terminals: vec![],
             remote_access: None,
             attachments: None,
+            message_queues: None,
         })
         .unwrap();
         assert_eq!(snapshot["trusted_directories"][0], "/work");

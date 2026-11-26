@@ -16,7 +16,9 @@ import { setAccountSwitchesQueued, type Daemon, type State } from "../store";
 import { blurOnRemoval } from "../test/blurOnRemoval";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
-import { sessionOf, standingNoticeOf } from "../fixtures/builders";
+import { composerDraft } from "../composer/composerDrafts";
+import { sessionComposerEnabled } from "../composer/composerSetting";
+import { queuedMessage, sessionOf, standingNoticeOf } from "../fixtures/builders";
 import { FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "../fixtures/fixtureProviders";
 import { CATALOGS, format } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
@@ -74,6 +76,10 @@ const { FakeController } = vi.hoisted(() => {
     quoted: { text: string; sessionId: string }[] = [];
     quote(text: string, sessionId: string): void {
       this.quoted.push({ text, sessionId });
+    }
+    written: { text: string; sessionId: string }[] = [];
+    writeInput(text: string, sessionId: string): void {
+      this.written.push({ text, sessionId });
     }
     /** What the pane's edit menu reads as it opens. */
     selectedText = "";
@@ -515,6 +521,88 @@ describe("quoting through the handle", () => {
     expect(handle.current!.quoteBlock()).toBe("input");
     handle.current!.quote("text");
     expect(FakeController.last.quoted).toEqual([]);
+  });
+});
+
+describe("writing into the session's input through the handle, with the message composer on or off", () => {
+  const projectSession = sessionOf("s-1", "c-1", "p-1", "Work", "working");
+  function mountWith({ composer, queue = true }: { composer: boolean; queue?: boolean }) {
+    sessionComposerEnabled.set(composer);
+    onTestFinished(() => sessionComposerEnabled.set(false));
+    daemon = testDaemon({ state: { connectionState: "open", sessions: new Map([["s-1", projectSession]]), messageQueues: queue ? new Map() : null }, request, terminalUrl: () => "" });
+    return mountEmpty({ session: projectSession });
+  }
+
+  it("names the session's project, for the paths added as context", () => {
+    const { handle } = mountWith({ composer: false });
+    expect(handle.current!.project()).toBe("p-1");
+  });
+
+  it("writes a quote and a path at the end of the composer's text while the composer is on, never into the terminal", () => {
+    const { handle } = mountWith({ composer: true });
+    FakeController.last.blocked = "program";
+    expect(handle.current!.quoteBlock()).toBeUndefined();
+    expect(handle.current!.contextBlocked()).toBe(false);
+    handle.current!.quote("picked\nlines");
+    handle.current!.addContext("src/app.ts");
+    expect(composerDraft(daemon.store, "s-1").text).toBe("> picked\n> lines\nsrc/app.ts");
+    expect(FakeController.last.quoted).toEqual([]);
+    expect(FakeController.last.written).toEqual([]);
+  });
+
+  it("writes a path into the terminal's input, unsent, while the composer is off, and takes none while the terminal takes no input", () => {
+    const { handle } = mountWith({ composer: false });
+    expect(handle.current!.contextBlocked()).toBe(true);
+    FakeController.last.inputSessionId = "s-1";
+    expect(handle.current!.contextBlocked()).toBe(false);
+    handle.current!.addContext("src/app.ts");
+    handle.current!.quote("text");
+    expect(FakeController.last.written).toEqual([{ text: "src/app.ts", sessionId: "s-1" }]);
+    expect(FakeController.last.quoted).toEqual([{ text: "text", sessionId: "s-1" }]);
+    expect(composerDraft(daemon.store, "s-1").text).toBe("");
+    expect(handle.current!.focusComposer()).toBe(false);
+  });
+
+  it("writes into the terminal as before where the daemon keeps no composer queue, the composer being on", () => {
+    const { handle } = mountWith({ composer: true, queue: false });
+    FakeController.last.inputSessionId = "s-1";
+    handle.current!.addContext("README.md");
+    expect(FakeController.last.written).toEqual([{ text: "README.md", sessionId: "s-1" }]);
+  });
+
+  it.each([true, false])("quotes a path with whitespace as a dropped file's is, the composer being on: %s", (composer) => {
+    const { handle } = mountWith({ composer });
+    FakeController.last.inputSessionId = "s-1";
+    handle.current!.addContext("docs/my notes.md");
+    const written = composer ? composerDraft(daemon.store, "s-1").text : FakeController.last.written[0]?.text;
+    expect(written).toBe("'docs/my notes.md'");
+  });
+});
+
+describe("the compact line of queued messages over the terminal", () => {
+  const queuedSession = sessionOf("s-1", "c-1", "p-1", "Work", "working");
+  const queue = [queuedMessage({ id: "m1", text: "first" }), queuedMessage({ id: "m2", text: "second" })];
+  function mountQueued({ composer = false, status = "working" }: { composer?: boolean; status?: "working" | "archived" } = {}) {
+    sessionComposerEnabled.set(composer);
+    onTestFinished(() => sessionComposerEnabled.set(false));
+    const shown = status === "archived" ? sessionOf("s-1", "c-1", "p-1", "Work", "archived") : queuedSession;
+    daemon = testDaemon({ state: { connectionState: "open", sessions: new Map([["s-1", shown]]), messageQueues: new Map([["s-1", queue]]) }, request, terminalUrl: () => "" });
+    return mountEmpty({ session: shown });
+  }
+
+  it("says how many messages are queued while the composer is off", () => {
+    const { container } = mountQueued();
+    expect(container.querySelector('[data-region="queue"]')?.textContent).toContain("2 messages queued");
+  });
+
+  it("is left out while the composer is on, which lists the queue itself", () => {
+    const { container } = mountQueued({ composer: true });
+    expect(container.querySelector('[data-region="queue"]')).toBeNull();
+  });
+
+  it("is left out for an archived session", () => {
+    const { container } = mountQueued({ status: "archived" });
+    expect(container.querySelector('[data-region="queue"]')).toBeNull();
   });
 });
 

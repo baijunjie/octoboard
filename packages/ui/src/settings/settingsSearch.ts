@@ -107,6 +107,7 @@ const INDEX = {
       description: [SESSION_ORDER_WORDS[part].description],
       group: SORTING,
     })),
+    { id: "session-composer", label: "settings.composer.label", description: ["settings.composer.description"], group: TERMINALS },
     daemonSwitch("auto_close_idle_shell_terminals", TERMINALS),
     daemonSwitch("keep_awake", POWER, ({ keepAwake }) => keepAwake),
     {

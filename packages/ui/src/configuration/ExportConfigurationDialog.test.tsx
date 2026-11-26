@@ -6,6 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { errorDetails, errorDetailsTrigger, withoutErrorDetails } from "../components/alerts/detailsTestSupport";
 import { consoleOf } from "../fixtures/builders";
+import { sessionComposerEnabled } from "../composer/composerSetting";
 import { isolate } from "../i18n/isolate";
 import { setLanguage } from "../i18n/language";
 import { runInBackground } from "../lifecycle/runInBackground";
@@ -168,14 +169,14 @@ it("notes under each section what it includes", () => {
 it("notes under General the settings every platform holds", () => {
   const note = () => document.getElementById(box("General").getAttribute("aria-describedby")!)!.textContent;
   mount();
-  expect(note()).toBe("Includes language, resuming sessions on start, preventing sleep, closing idle terminals and sorting.");
+  expect(note()).toBe("Includes language, resuming sessions on start, preventing sleep, the message composer, closing idle terminals and sorting.");
 });
 
 it("notes under General the background run and the host's name for its icon where its platform has them", () => {
   const statusItem = { setMenu: async () => {}, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} };
   mount(undefined, main, { backgroundRun: { set: vi.fn(async () => {}) }, statusItem });
   expect(document.getElementById(box("General").getAttribute("aria-describedby")!)!.textContent).toBe(
-    "Includes language, resuming sessions on start, running in the background, the notification area icon, preventing sleep, closing idle terminals and sorting.",
+    "Includes language, resuming sessions on start, running in the background, the notification area icon, preventing sleep, the message composer, closing idle terminals and sorting.",
   );
 });
 
@@ -338,6 +339,18 @@ it("adds whether this client runs in the background only where its platform has 
   onTestFinished(() => runInBackground.set(false));
   const { saved } = await savedSettings(undefined, { backgroundRun: { set: vi.fn(async () => {}) } });
   expect(saved.run_in_background).toBe(true);
+});
+
+it("adds whether this client shows the message composer with General", async () => {
+  sessionComposerEnabled.set(true);
+  onTestFinished(() => sessionComposerEnabled.set(false));
+  expect((await savedSettings(undefined, undefined, ["General"])).saved.session_composer).toBe(true);
+});
+
+it("adds no message composer choice without General", async () => {
+  sessionComposerEnabled.set(true);
+  onTestFinished(() => sessionComposerEnabled.set(false));
+  expect((await savedSettings(undefined, undefined, ["Appearance"])).saved).not.toHaveProperty("session_composer");
 });
 
 it("adds no menu bar icon choice where its platform has no icon", async () => {

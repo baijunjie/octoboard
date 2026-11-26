@@ -39,6 +39,8 @@ export interface Preferences {
   updateChannel?: UpdateChannel;
   /** Whether the desktop application checks for updates by itself, on unless set to false. */
   updateAutoCheck?: boolean;
+  /** The message composer below the session terminal is shown; off, the app's default, when unset. */
+  sessionComposer?: boolean;
   /** The keyboard shortcuts the user has changed, by command; the others keep their defaults. */
   keyboardShortcuts?: Overrides;
 }

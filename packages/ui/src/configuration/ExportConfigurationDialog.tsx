@@ -52,7 +52,7 @@ const SECTION_NOTE: Record<SettingsSection, PlainMessageKey> = {
  * name it was saved under, or only that it was downloaded where the platform cannot say more. What is added are the
  * settings this client holds, which the daemon does not know of: a document that includes the Keyboard shortcuts
  * section gets this client's shortcut changes (an empty set when none is changed), and with the section they belong to
- * its session order and, where the platform has it, whether it runs in the background and whether it shows its menu bar
+ * its session order, whether it shows the message composer and, where the platform has it, whether it runs in the background and whether it shows its menu bar
  * icon (General; the language and whether it prevents sleep, and when, are the daemon's own and are in the document as
  * it holds them), and its appearance, Markdown style and terminal font size (Appearance; see `heldClientSettings`).
  * Dismissing the save dialog leaves this one open.

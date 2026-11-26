@@ -12,7 +12,8 @@ import type { TerminalPaneHandle } from "../terminal/TerminalPane";
 const foremostModal = (): Element | undefined =>
   Array.from(document.querySelectorAll(MODAL_DIALOG)).reverse().find((dialog) => !dialog.closest('[inert], [aria-hidden="true"]'));
 
-/** The quote target of the window: the session terminal pane behind `terminalRef`, read when asked, so the value
+/** The quote target of the window: the session terminal pane behind `terminalRef` (which writes into the session's
+ * composer while that takes the input, and lands `revealInput`'s focus there), read when asked, so the value
  * keeps its identity for good and nothing that reads it renders as the session changes. Only from an event or a
  * microtask does `revealInput` run, not while rendering or from an effect (it commits synchronously). `focusTerminal` is the
  * window's, so a tap still leaves the terminal unfocused for the on-screen keyboard, and must keep its identity (it is
@@ -29,6 +30,9 @@ export function useTerminalQuoteTarget(
     return {
       blocked: () => (terminalRef.current ? terminalRef.current.quoteBlock() : "input"),
       quote: (text) => terminalRef.current?.quote(text),
+      project: () => terminalRef.current?.project(),
+      contextBlocked: () => (terminalRef.current ? terminalRef.current.contextBlocked() : true),
+      addContext: (path) => terminalRef.current?.addContext(path),
       revealInput: (closeSurface) => {
         // The dialog being closed is the foremost one. It is closed in the same commit as what covers the terminal is
         // cleared, and focus is placed at once after that commit, in the same task: the dialog's opener may be given
@@ -46,7 +50,7 @@ export function useTerminalQuoteTarget(
         });
         const land = () => {
           if (closing?.isConnected) return Date.now() >= deadline;
-          if (!document.querySelector(MODAL_DIALOG)) focusTerminal();
+          if (!document.querySelector(MODAL_DIALOG) && !terminalRef.current?.focusComposer()) focusTerminal();
           return true;
         };
         if (!land()) cancelFocus = tryEachFrame(land, Infinity);

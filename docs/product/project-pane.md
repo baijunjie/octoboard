@@ -336,7 +336,9 @@ desktop app).
   own, followed by a separator and the **Open in** submenu, omitting unavailable actions. A folder's row in Files — a
   symbolic link listed as a folder included — puts **Find in folder** before them, in a group of its own, which opens
   Find in files limited to that folder (see "Opening it" in `docs/product/finding-in-files.md`); the Git mode's folder
-  rows have no Find in folder. On a file's row Open in holds
+  rows have no Find in folder. A file's or folder's row in Files puts **Add as context** in that group too, after Find
+  in folder, while the session the window shows is one of this project and not archived (see the Add as context item
+  below); the Git mode's rows have none. On a file's row Open in holds
   **File manager**, then **Default application**; on a folder's row — a symbolic link listed as a folder included —
   **File manager**, then **Terminal**. In a remote window of the desktop application, whose daemon is another machine's,
   File manager and Default application are left out, and so is Open in when nothing is left in it (see "The remote
@@ -367,6 +369,15 @@ desktop app).
   the daemon refuses raises an error alert titled that the terminal could not be created, and adds no tab; when the
   folder is no longer there or is no longer a folder, its remedy is the one File manager gives for an entry no longer
   there, and other refusals get theirs as in "Starting a shell terminal" in `docs/product/shell-terminals.md`.
+- **Add as context** writes the entry's path into the input of the session the window shows, for its agent to read,
+  without sending it. The path is the relative path as Copy relative path copies it, bare, or in single quotes as a
+  POSIX shell quotes it when it contains whitespace. While that session's message composer is on, the path goes at the
+  end of the composer's text, on a line of its own (see "Text from elsewhere: Quote and Add as context" in
+  `docs/product/message-composer.md`); otherwise it is pasted into the session terminal's input, after a space where
+  the cursor follows other text on its row. It is unavailable, saying under its name that no session is ready for
+  input, while the composer is off and the terminal cannot take input. A session that stopped taking input after the menu opened gets nothing, and an error
+  alert says the path could not be added as context, as no session was ready for input, with the remedy to add it again
+  once the session is ready (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
 - **Copy relative path** and **Copy absolute path** appear immediately when the menu opens. The relative path is slash
   separated, within the project. For a change it is the path the row names, which for a rename is its new path — the old
   one only where the new side is absent (a deletion) or outside the project (see "What is listed" in

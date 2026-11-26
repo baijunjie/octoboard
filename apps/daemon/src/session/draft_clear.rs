@@ -1025,14 +1025,18 @@ impl LiveSession {
             );
         }
         for message in lost.into_iter().rev() {
-            self.report_not_written_again(&message.text, presses, cleared);
+            let notice = self.report_not_written_again(&message.text, presses, cleared);
+            // A composer's message comes back to its queue for the user to send again.
+            if let (Some(state), Some(id)) = (state.as_ref(), message.id.as_deref()) {
+                state.composer_logical_not_carried_out(&self.id, id, Some(&notice));
+            }
         }
     }
 
     /// Tells every client that `message`, a message of Octoboard's the agent gave back at a
     /// cancel and that was cleared from the input box, could not be written again, so it was not
     /// carried out.
-    fn report_not_written_again(&self, message: &str, presses: usize, cleared: Cleared) {
+    fn report_not_written_again(&self, message: &str, presses: usize, cleared: Cleared) -> Notice {
         tracing::warn!(
             session = %self.id,
             agent = %self.agent.label(),
@@ -1070,7 +1074,8 @@ impl LiveSession {
                 ],
             )
         };
-        self.broadcast_notice(notice);
+        self.broadcast_notice(notice.clone());
+        notice
     }
 
     /// Tells every client about the session that `draft`, the text its input box showed, was

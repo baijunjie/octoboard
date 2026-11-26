@@ -2,8 +2,9 @@ import { useLayoutEffect, useRef, useState } from "react";
 
 import type { ViewedFile } from "../viewer/viewedFile";
 
-/** The file a path in the terminal's output named, while the file viewer shows it over the window: `viewLinkedFile`
- * opens it, `setLinkedFile` replaces it from within the viewer, and `closeLinkedFile` closes it and puts focus back. */
+/** The file a path in the terminal's output named, or a file attached to a message in the composer, while the file
+ * viewer shows it over the window: `viewLinkedFile` opens it, `setLinkedFile` replaces it from within the viewer, and
+ * `closeLinkedFile` closes it and puts focus back. */
 export function useLinkedFile({ focusTerminal }: { focusTerminal: () => void }) {
   const [linkedFile, setLinkedFile] = useState<ViewedFile>();
   // Where the viewer returns focus to when it closes, as its opener gave it; the agent terminal when

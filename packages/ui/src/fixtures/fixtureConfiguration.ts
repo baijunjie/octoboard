@@ -407,6 +407,7 @@ const PASSED_THROUGH = {
   session_order: "general",
   run_in_background: "general",
   show_menu_bar_icon: "general",
+  session_composer: "general",
 } as const satisfies Partial<Record<keyof DocumentSettings, SettingsSection>>;
 
 /** The result with the document's client-held settings (see `PASSED_THROUGH`) of the sections asked for echoed in

@@ -62,7 +62,7 @@ it("shows the row in a browser too, where the daemon's host can be held awake, w
 it("changes the daemon's settings, showing the choice of when only while the switch is on", async () => {
   const daemon = withHost(true);
   const container = mount(daemon);
-  const toggle = container.querySelector<HTMLInputElement>("input[type=checkbox]:not([aria-checked=true])");
+  const toggle = container.querySelector<HTMLInputElement>('input[aria-label="Prevent sleep"]');
   await act(async () => {
     toggle!.click();
   });
@@ -76,7 +76,7 @@ it("changes the daemon's settings, showing the choice of when only while the swi
 it("keeps the row for the choice of when to prevent sleep while it is a value this build does not know, showing no choice", () => {
   const container = mount(withHost(true, { ...DEFAULT_SETTINGS, keep_awake: true, keep_awake_when: "from_a_newer_daemon" }));
   expect(container.textContent).toContain("Prevent sleep");
-  expect(container.querySelector('input[role="switch"]')).not.toBeNull();
+  expect(container.querySelector('input[aria-label="Prevent sleep"]')).not.toBeNull();
   expect(container.textContent).toContain("When to prevent sleep");
   expect(container.textContent).not.toContain("from_a_newer_daemon");
   expect(whenChoice(container)!.textContent).not.toMatch(/Always|While sessions work/);
@@ -116,7 +116,7 @@ it("hands focus to the switch when an import turns it off while focus is on the 
     daemon.store.setState({ settings: DEFAULT_SETTINGS });
   });
   expect(container.textContent).not.toContain("When to prevent sleep");
-  expect(document.activeElement).toBe(container.querySelector('input[role="switch"]'));
+  expect(document.activeElement).toBe(container.querySelector('input[aria-label="Prevent sleep"]'));
 });
 
 it("tells the shell whether the daemon is keeping the computer awake, and not while the connection is down", async () => {

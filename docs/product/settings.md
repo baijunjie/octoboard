@@ -195,9 +195,9 @@ Other switches in Settings save by rules of their own: an account's Disable swit
 commands), each unavailable
 while its save is unanswered (see "Provider settings" in `docs/product/per-agent-settings.md`), the sharing switch of an account's
 settings dialog (see "Sharing the default configuration" in `docs/product/agent-accounts.md`), **Keep running in
-the background** and **Show menu bar icon**, choices the client keeps itself rather than the daemon, which take effect
-as they are turned (see "Keep running in the background" and "Show menu bar icon" in
-`docs/product/general-settings.md`), the desktop application's **Check for updates automatically**, kept by the
+the background**, **Show menu bar icon** and **Message composer**, choices the client keeps itself rather than the
+daemon, which take effect as they are turned (see "Keep running in the background", "Show menu bar icon" and "Message
+composer" in `docs/product/general-settings.md`), the desktop application's **Check for updates automatically**, kept by the
 client in the same way (see "Check for updates automatically" in `docs/product/update-settings.md`), and **Launch at login**, which shows and changes the system's own state (see
 "Launch at login" in the same document).
 

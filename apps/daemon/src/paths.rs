@@ -101,6 +101,13 @@ pub fn handoff_dir() -> PathBuf {
     data_dir().join("handoff")
 }
 
+/// The sessions' composer directories, one per session with queued messages that carry files.
+/// Kept outside `run_dir`, which is cleared at startup, because a queued message outlives the
+/// session's process and the daemon.
+pub fn composer_dir() -> PathBuf {
+    data_dir().join("composer")
+}
+
 /// The screens a planned stop saved for the next daemon, which that daemon loads as it starts and
 /// rewrites as it takes each; see `crate::state::restart_screens`.
 pub fn restart_screens_path() -> PathBuf {

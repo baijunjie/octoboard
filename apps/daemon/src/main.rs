@@ -297,6 +297,7 @@ async fn run_daemon(
         paths::saved_output_dir(),
         paths::consoles_dir(),
         paths::handoff_dir(),
+        paths::composer_dir(),
         paths::agent_query_homes_dir(),
         processes::ledger::ProcessLedger::new(&paths::data_dir()),
     ));

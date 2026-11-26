@@ -551,6 +551,7 @@ fn snapshot(state: &Arc<AppState>) -> anyhow::Result<Event> {
         shell_terminals: state.shell_terminals.list(),
         remote_access: state.remote_access.info(state),
         attachments: Some(crate::session::attachment::limits()),
+        message_queues: Some(state.message_queues()),
     })
 }
 
@@ -992,6 +993,192 @@ mod tests {
         assert_eq!(json["remote_access"]["browser_port"], DEFAULT_BROWSER_PORT);
         assert!(json["remote_access"]["address"].is_null());
         drop(state.remote_access.close());
+    }
+
+    /// The snapshot carries the composer queue of each session that has queued messages, in the
+    /// wire shape of `QueuedMessage`, and none for a session whose queue is empty.
+    #[test]
+    fn the_snapshot_carries_the_queues_that_hold_a_message() {
+        use crate::protocol::{QueuedMessage, QueuedMessageState, QueuedMode, SessionStatus};
+        use crate::state::test_support::insert_record;
+
+        let (state, dir) = crate::test_support::app_state("snapshot-message-queues");
+        insert_record(&state, &dir, "s", SessionStatus::Interrupted);
+        let queues = |state: &Arc<AppState>| {
+            serde_json::to_value(snapshot(state).unwrap()).unwrap()["message_queues"].clone()
+        };
+        assert_eq!(queues(&state), serde_json::json!([]), "none queued");
+        state
+            .composer_add(
+                "s",
+                QueuedMessage {
+                    id: "m1".to_string(),
+                    text: "hello".to_string(),
+                    images: Vec::new(),
+                    files: vec!["a.md".to_string()],
+                    command: false,
+                    mode: QueuedMode::Manual,
+                    state: QueuedMessageState::Waiting,
+                    failure: None,
+                    created_at: 5,
+                },
+                Vec::new(),
+            )
+            .unwrap();
+        assert_eq!(
+            queues(&state),
+            serde_json::json!([{
+                "session": "s",
+                "messages": [{
+                    "id": "m1", "text": "hello", "images": [], "files": ["a.md"],
+                    "command": false, "mode": "manual", "state": "waiting",
+                    "created_at": 5
+                }]
+            }])
+        );
+        state.composer_withdraw("s", "m1", |_| true).unwrap();
+        assert_eq!(queues(&state), serde_json::json!([]), "emptied again");
+    }
+
+    /// `handle_request` for `body`, as the reply's JSON.
+    async fn asked(state: &Arc<AppState>, body: serde_json::Value) -> serde_json::Value {
+        let (reply, _) = handle_request(state, &body.to_string(), false).await;
+        serde_json::to_value(reply).unwrap()
+    }
+
+    /// The composer queue's requests are read as the protocol words them: a position or a mode
+    /// the protocol does not have is an unreadable request, a refusal carries its code and the
+    /// ids it names, and every request that works is answered as the protocol says.
+    #[tokio::test]
+    async fn the_composer_queue_requests_are_answered_as_the_protocol_says() {
+        use crate::protocol::SessionStatus;
+        use crate::state::test_support::insert_record;
+        use serde_json::json;
+
+        let (state, dir) = crate::test_support::app_state("control-composer");
+        insert_record(&state, &dir, "s", SessionStatus::Interrupted);
+        let mut record = state.session_record("s").unwrap();
+        record.agent = crate::protocol::AgentId::TEST;
+        state.save_session(&record).unwrap();
+
+        let a = asked(
+            &state,
+            json!({"type": "create_queued_message", "id": "r1", "session": "s",
+                   "text": "a", "mode": "manual"}),
+        )
+        .await;
+        assert_eq!(
+            (a["type"].as_str(), a["id"].as_str()),
+            (Some("queued_message_created"), Some("r1"))
+        );
+        let a = a["message"]
+            .as_str()
+            .expect("the new message's id")
+            .to_string();
+        let b = asked(
+            &state,
+            json!({"type": "create_queued_message", "session": "s", "text": "b", "mode": "manual"}),
+        )
+        .await["message"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let order = |state: &Arc<AppState>| -> Vec<String> {
+            state
+                .queued_messages("s")
+                .unwrap()
+                .into_iter()
+                .map(|message| message.text)
+                .collect()
+        };
+        assert_eq!(order(&state), ["a", "b"]);
+
+        let moved = asked(&state, json!({"type": "move_queued_message", "id": "m", "session": "s", "message": b, "position": 0})).await;
+        assert_eq!(moved, json!({"type": "ack", "id": "m"}));
+        assert_eq!(order(&state), ["b", "a"]);
+        let past = asked(
+            &state,
+            json!({"type": "move_queued_message", "session": "s", "message": b, "position": 99}),
+        )
+        .await;
+        assert_eq!(past["type"], "ack");
+        assert_eq!(order(&state), ["a", "b"], "past the end puts it last");
+        let negative = asked(
+            &state,
+            json!({"type": "move_queued_message", "session": "s", "message": b, "position": -1}),
+        )
+        .await;
+        assert_eq!(
+            (negative["type"].as_str(), negative["code"].as_str()),
+            (Some("error"), Some("unreadable_request"))
+        );
+        assert_eq!(order(&state), ["a", "b"], "nothing moved");
+
+        for (request, what) in [
+            (
+                json!({"type": "set_queued_message_mode", "session": "s", "message": a, "mode": "now"}),
+                "now is no stored mode",
+            ),
+            (
+                json!({"type": "set_session_send_mode", "session": "s", "mode": "sometimes"}),
+                "no such default",
+            ),
+            (
+                json!({"type": "create_queued_message", "session": "s"}),
+                "no text field",
+            ),
+        ] {
+            let reply = asked(&state, request).await;
+            assert_eq!(reply["code"], "unreadable_request", "{what}: {reply}");
+        }
+        assert_eq!(
+            asked(&state, json!({"type": "set_queued_message_mode", "id": "x", "session": "s", "message": a, "mode": "when_idle"})).await,
+            json!({"type": "ack", "id": "x"})
+        );
+        assert_eq!(
+            asked(
+                &state,
+                json!({"type": "set_session_send_mode", "session": "s", "mode": "when_idle"})
+            )
+            .await["type"],
+            "ack"
+        );
+        assert_eq!(
+            state.session_record("s").unwrap().send_mode,
+            crate::protocol::SendMode::WhenIdle
+        );
+
+        let blank = asked(
+            &state,
+            json!({"type": "create_queued_message", "session": "s", "text": ""}),
+        )
+        .await;
+        assert_eq!(
+            (blank["code"].as_str(), blank["params"]["field"].as_str()),
+            (Some("field_required"), Some("text"))
+        );
+        let gone = asked(
+            &state,
+            json!({"type": "create_queued_message", "session": "gone", "text": "x"}),
+        )
+        .await;
+        assert_eq!(gone["code"], "unknown_session");
+
+        let withdrawn = asked(
+            &state,
+            json!({"type": "withdraw_queued_message", "id": "w", "session": "s", "message": a}),
+        )
+        .await;
+        assert_eq!(withdrawn, json!({"type": "ack", "id": "w"}));
+        let again = asked(
+            &state,
+            json!({"type": "withdraw_queued_message", "session": "s", "message": a}),
+        )
+        .await;
+        assert_eq!(again["code"], "queued_message_not_found");
+        assert_eq!(again["params"]["session"], "s");
+        assert_eq!(again["params"]["message"], json!(a));
+        assert_eq!(order(&state), ["b"]);
     }
 
     type Socket = tokio_tungstenite::WebSocketStream<

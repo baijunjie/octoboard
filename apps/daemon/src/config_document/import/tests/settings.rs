@@ -1329,6 +1329,7 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
         "terminal_font_size",
         "run_in_background",
         "show_menu_bar_icon",
+        "session_composer",
     ] {
         assert!(full["settings"].get(client_held).is_none());
     }
@@ -1339,6 +1340,7 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
     carried["settings"]["terminal_font_size"] = json!(18);
     carried["settings"]["run_in_background"] = json!(true);
     carried["settings"]["show_menu_bar_icon"] = json!(false);
+    carried["settings"]["session_composer"] = json!(true);
     let (target, _target_dir) = app_state("import-client-values-target");
     let imported = apply(
         &target,
@@ -1360,6 +1362,7 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
     assert_eq!(echoed.terminal_font_size, Some(18));
     assert_eq!(echoed.run_in_background, Some(true));
     assert_eq!(echoed.show_menu_bar_icon, Some(false));
+    assert_eq!(echoed.session_composer, Some(true));
 
     // Absent in the document: absent in the reply, so a client leaves its own alone.
     let imported = apply(
@@ -1383,9 +1386,10 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
             echoed.markdown_style,
             echoed.terminal_font_size,
             echoed.run_in_background,
-            echoed.show_menu_bar_icon
+            echoed.show_menu_bar_icon,
+            echoed.session_composer
         ),
-        (None, None, None, None, None)
+        (None, None, None, None, None, None)
     );
 }
 

@@ -108,6 +108,15 @@ export function takesMessageImages(providers: readonly ProviderInfo[], id: strin
   return served !== undefined && (served.capabilities.message_images as boolean | undefined) !== false;
 }
 
+/** Whether the agent of provider `id` runs a slash command sent as one (`capabilities.slash_commands`), which the message
+ * composer sends a lone `/name` as. Where it does not, the daemon refuses a command (`provider_unsupported`), so the
+ * composer sends the text as a message. A provider the daemon does not serve takes none, and so does one whose daemon
+ * predates the capability. */
+export function takesSlashCommands(providers: readonly ProviderInfo[], id: string): boolean {
+  // The generated type has the field required, but a released daemon's snapshot may not carry it.
+  return (servedProvider(providers, id)?.capabilities.slash_commands as boolean | undefined) === true;
+}
+
 /** The provider's usual config directory as the account form shows it, under the home directory (`~/.claude`). */
 export function providerConfigDir(providers: readonly ProviderInfo[], id: string): string | undefined {
   const served = servedProvider(providers, id);

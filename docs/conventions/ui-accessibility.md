@@ -212,8 +212,9 @@ interaction conventions are `docs/conventions/ui-standard.md`; what each view do
   (`useHeldWhileHidden`, or `useAnnouncedOnRise`'s `deferred`), unless exposure lands focus on a region already reading
   the same copy.
 - **A status about something that can happen while the user is out of the window waits until the window is attended
-  (`useWindowAttended`)**, and anything re-read or let go on the user's return or departure goes through
-  `onWindowFocusReturn`, `onWindowFocusLoss` or `subscribeWindowFocus`.
+  (`useWindowAttended`)**, its region a live announcer (`liveAnnouncerProps`), since the wait can end with an unrelated
+  modal open, which hides every unmarked region; anything re-read or let go on the user's return or departure goes
+  through `onWindowFocusReturn`, `onWindowFocusLoss` or `subscribeWindowFocus`.
 - **A change made under the user that nothing on screen marks goes through `ChangeAnnouncer`**, which remounts per
   change and clears after `READ_TIME_MS`; `ChangedElsewhereAnnouncer` words a form's replaced fields.
 - **A status region for content a disclosure folds away is mounted outside the folded body, only while it is open.**

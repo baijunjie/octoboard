@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW, GIT_WORKFLOW_ITEM_KEYS } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
-import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type AgentCliUpdate, type AttachmentLimits, type Console, type DaemonUpdateStatus, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PageContent, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Received, type RemoteAccess, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal, type StandingNotice } from "../protocol";
+import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type AgentCliUpdate, type AttachmentLimits, type Console, type DaemonUpdateStatus, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PageContent, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type QueuedMessage, type Received, type RemoteAccess, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal, type StandingNotice } from "../protocol";
 import { type MessageParams } from "../errors/codedError";
 import type { SessionRequest, State, TrustPrompt } from "../store";
 import type { NotificationFixture } from "./fixture";
@@ -192,6 +192,7 @@ export function sessionOf(
     compatibility: {},
     pinned: false,
     locked: false,
+    send_mode: "now",
     started_at: minutesAgo(90),
     bound_to: null,
     colour: null,
@@ -366,6 +367,9 @@ export function snapshotState(parts: {
   /** What the snapshot says of the files the daemon takes as attachments: left out, the daemon takes them up to the
    * real daemon's limits; `null` is a daemon that predates them. */
   attachmentLimits?: AttachmentLimits | null;
+  /** Each session's composer queue (`snapshot.message_queues`): left out, the daemon keeps queues and none holds
+   * anything; `null` is a daemon that predates the queue. */
+  messageQueues?: Record<string, QueuedMessage[]> | null;
 }): Partial<State> {
   return {
     connectionState: parts.connectionState ?? "open",
@@ -391,6 +395,7 @@ export function snapshotState(parts: {
     accountSharing: accountSharingOf(parts.accountSharing ?? []),
     homeDir: parts.homeDir ?? "/Users/dev",
     attachmentLimits: parts.attachmentLimits === undefined ? { max_bytes: 100 * 1024 * 1024, max_part_bytes: 1024 * 1024 } : parts.attachmentLimits,
+    messageQueues: parts.messageQueues === null ? null : new Map(Object.entries(parts.messageQueues ?? {}).filter(([, messages]) => messages.length > 0)),
     ...(parts.host && { host: parts.host }),
   };
 }
@@ -506,4 +511,10 @@ export function currentExportedProviderSettings(effective: Settings["provider_se
     if (carried.length > 0) current[id] = Object.fromEntries(carried);
   }
   return current;
+}
+
+/** A message waiting in a session's composer queue: a plain one waiting to be sent once the agent is idle, unless
+ * `fields` say otherwise. */
+export function queuedMessage(fields: Partial<QueuedMessage> & Pick<QueuedMessage, "id">): QueuedMessage {
+  return { text: "", images: [], files: [], command: false, mode: "when_idle", state: "waiting", created_at: 1_700_000_000_000, ...fields };
 }

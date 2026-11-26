@@ -10,6 +10,10 @@ import { errorAlerts } from "../components/alerts/errorAlerts";
 import { acknowledgeAllAlerts } from "../test/alertQueue";
 import { BROWSER_HOST } from "../test/hosts";
 import { testDaemon } from "../test/testDaemon";
+import { composerDraft } from "../composer/composerDrafts";
+import { sessionComposerEnabled } from "../composer/composerSetting";
+import { sessionOf, snapshotState } from "../fixtures/builders";
+import type { Daemon } from "../store";
 import { TestHost } from "../test/TestHost";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -22,10 +26,11 @@ let clipboard: ClipboardCapability | undefined;
 let sessionId: string;
 let isLocal: boolean | undefined;
 let quoting: boolean;
+let daemon: Daemon;
 const controllerRef = { current: undefined as TerminalController | undefined };
 const targetRef = createRef<HTMLDivElement>();
 const render = () => act(() => root.render(
-  <TestHost daemon={testDaemon({ isLocal })} platform={{ kind: "browser", host: BROWSER_HOST, clipboard }}>
+  <TestHost daemon={daemon} platform={{ kind: "browser", host: BROWSER_HOST, clipboard }}>
     <TerminalEditMenu key={sessionId} sessionId={sessionId} quote={quoting} controllerRef={controllerRef} contextTargetRef={targetRef} />
   </TestHost>,
 ));
@@ -43,6 +48,7 @@ beforeEach(() => {
   sessionId = "s-1";
   isLocal = true;
   quoting = false;
+  daemon = testDaemon({ isLocal });
   root = createRoot(container);
   render();
 });
@@ -296,6 +302,7 @@ it("offers no Open in to a menu opened with the keyboard, whatever was hovered",
 
 it("offers no Open in in the window of a daemon elsewhere", async () => {
   isLocal = false;
+  daemon = testDaemon({ isLocal });
   render();
   controller.pathLinkAt.mockReturnValue({ path: "/r/a.ts", kind: "file" });
   await open();
@@ -417,5 +424,41 @@ describe("Quote", () => {
     await closeMenu();
     await open();
     expect(item("QuoteProgram not accepting pasted lines").getAttribute("aria-disabled")).toBe("true");
+  });
+});
+
+describe("Quote with the message composer on", () => {
+  beforeEach(() => {
+    sessionComposerEnabled.set(true);
+    quoting = true;
+    controller.selectedText = "first line\nsecond line";
+    daemon = testDaemon({ isLocal, state: snapshotState({ sessions: [sessionOf("s-1", "c", "p", "Work", "idle")], messageQueues: {} }) });
+    render();
+  });
+  afterEach(() => sessionComposerEnabled.set(false));
+
+  it("writes the block quote at the end of the session's composer text, not into the terminal's input", async () => {
+    await open();
+    await choose("Quote");
+    expect(composerDraft(daemon.store, "s-1").text).toBe("> first line\n> second line\n");
+    expect(controller.quote).not.toHaveBeenCalled();
+  });
+
+  it("stays offered where the terminal could not take the quote, since the composer takes it", async () => {
+    controller.quoteBlock.mockReturnValue("program");
+    await open();
+    expect(item("Quote").getAttribute("aria-disabled")).not.toBe("true");
+    await choose("Quote");
+    expect(composerDraft(daemon.store, "s-1").text).toBe("> first line\n> second line\n");
+    expect(errorAlerts.getSnapshot()).toEqual([]);
+  });
+
+  it("writes into the terminal's input as before where the daemon keeps no composer queue", async () => {
+    daemon = testDaemon({ isLocal, state: snapshotState({ sessions: [sessionOf("s-1", "c", "p", "Work", "idle")], messageQueues: null }) });
+    render();
+    await open();
+    await choose("Quote");
+    expect(controller.quote).toHaveBeenCalledExactlyOnceWith("first line\nsecond line", "s-1");
+    expect(composerDraft(daemon.store, "s-1").text).toBe("");
   });
 });

@@ -41,7 +41,7 @@ async function mountArea({ archive, inert = false, panel = false }: { archive?: 
   const root = createRoot(host);
   await act(async () => root.render(<Probe />));
   onTestFinished(() => act(() => root.unmount()));
-  const terminal = { focus: vi.fn(), handOff: vi.fn(), quoteBlock: vi.fn(() => "input" as const), quote: vi.fn() };
+  const terminal = { focus: vi.fn(), handOff: vi.fn(), quoteBlock: vi.fn(() => "input" as const), quote: vi.fn(), project: vi.fn(), contextBlocked: vi.fn(() => true), addContext: vi.fn(), focusComposer: vi.fn(() => false) };
   const welcome = { focus: vi.fn() };
   hook.terminalRef.current = terminal;
   hook.welcomeRef.current = welcome;

@@ -261,6 +261,9 @@ export interface Fixture {
    * of `write_attachment_part` answered and the next never answered (0 holds the first), so a file of several parts is
    * held part-way. */
   attachmentUpload?: { answeredParts: number };
+  /** A refusal of every request that puts a message on a session's composer queue or sends one from it
+   * (`fixtureComposer.ts`), for a refusal shown in place. */
+  composerRefusal?: FixtureError;
   /** A runtime refusal after the user confirms archiving; no session changes on failure. */
   sessionArchiveError?: FixtureError;
   /** A coded refusal of releasing a session from its owner after the user confirms; the session stays bound. */

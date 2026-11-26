@@ -149,6 +149,53 @@ it("draws an input and a textarea of a locked field as a value to read, and thos
   for (const control of controls) expect(lockedClasses.some((name) => control.classList.contains(name))).toBe(false);
 });
 
+it("gives a textarea's element to its ref, and keeps its size fixed when it is not to be resized", () => {
+  const ref = React.createRef<HTMLTextAreaElement>();
+  const { container } = mount(
+    <>
+      <TextField value="" onChange={() => {}}>
+        <Label>Story</Label>
+        <TextArea ref={ref} resizable={false} />
+      </TextField>
+      <TextField value="" onChange={() => {}}>
+        <Label>Notes</Label>
+        <TextArea />
+      </TextField>
+    </>,
+  );
+  const [fixed, resizable] = [...container.querySelectorAll("textarea")];
+  expect(ref.current).toBe(fixed);
+  expect(fixed.classList.contains("resize-none")).toBe(true);
+  expect(resizable.classList.contains("resize-none")).toBe(false);
+});
+
+it("says a textarea offers suggestions, naming its list and the one the keys are on only while the list shows, and stays a text box", () => {
+  const field = (suggestions?: { list: string; expanded: boolean; active?: string }) => (
+    <TextField value="" onChange={() => {}}>
+      <Label>Message</Label>
+      <TextArea suggestions={suggestions} />
+    </TextField>
+  );
+  const NAMES = ["aria-autocomplete", "aria-controls", "aria-activedescendant"];
+  const { container, render } = mount(field());
+  const area = () => container.querySelector("textarea")!;
+  for (const name of NAMES) expect(area().hasAttribute(name)).toBe(false);
+  render(field({ list: "list-1", expanded: false, active: "list-1-option-2" }));
+  expect(area().getAttribute("aria-autocomplete")).toBe("list");
+  expect(area().hasAttribute("aria-controls")).toBe(false);
+  expect(area().hasAttribute("aria-activedescendant")).toBe(false);
+  render(field({ list: "list-1", expanded: true, active: "list-1-option-2" }));
+  expect(area().getAttribute("aria-controls")).toBe("list-1");
+  expect(area().getAttribute("aria-activedescendant")).toBe("list-1-option-2");
+  // ARIA in HTML allows a textarea no role: it is never made a combo box.
+  expect(area().hasAttribute("role")).toBe(false);
+  expect(area().hasAttribute("aria-expanded")).toBe(false);
+  render(field({ list: "list-1", expanded: true }));
+  expect(area().hasAttribute("aria-activedescendant")).toBe(false);
+  render(field());
+  for (const name of NAMES) expect(area().hasAttribute(name)).toBe(false);
+});
+
 it("leaves a read-only field that is not locked drawn as a control", () => {
   const { container } = mount(
     <TextField value="abc" onChange={() => {}} readOnly>

@@ -2,7 +2,7 @@ import type { ConnectionState } from "../daemon-client";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { accountKey, loginIsActive } from "../accounts/accountRecords";
 import { sameValue } from "../values/sameValue";
-import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type Event, type Page, type Project, type ScheduledTask, type ScheduledTaskRun, type ShellTerminal } from "../protocol";
+import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type Event, type Page, type Project, type QueuedMessage, type ScheduledTask, type ScheduledTaskRun, type ShellTerminal } from "../protocol";
 import { CODE } from "../errors/codes";
 import type { PageSubmission, State, TrustPrompt } from "./state";
 import { sessionRequestOf, withRequest } from "./sessionRequests";
@@ -154,7 +154,19 @@ function withoutSessions(state: State, ids: ReadonlySet<string>): State {
     trustPrompts: state.trustPrompts.filter((p) => !ids.has(p.session)),
     sessionRequests: state.sessionRequests.filter((r) => !ids.has(r.session)),
     dismissedStandingNotices: new Set(Array.from(state.dismissedStandingNotices).filter((key) => !ids.has(standingNoticeSession(key)))),
+    messageQueues: state.messageQueues && new Map(Array.from(state.messageQueues).filter(kept)),
   };
+}
+
+/** The queues a snapshot names (`message_queues`), each kept as `previous` holds it where it is the same; null for a
+ * daemon that predates the queue. A session whose queue is empty has no entry. */
+function snapshotQueues(previous: State["messageQueues"], queues: Array<{ session: string; messages: QueuedMessage[] }> | undefined): State["messageQueues"] {
+  if (queues === undefined) return null;
+  const next = new Map(queues.filter((queue) => queue.messages.length > 0).map((queue) => {
+    const held = previous?.get(queue.session);
+    return [queue.session, held !== undefined && sameValue(held, queue.messages) ? held : queue.messages] as const;
+  }));
+  return previous !== null && next.size === previous.size && [...next].every(([id, messages]) => previous.get(id) === messages) ? previous : next;
 }
 
 export function reducer(state: State, action: Action): State {
@@ -246,6 +258,7 @@ export function reducer(state: State, action: Action): State {
             homeDir: event.home_dir,
             host: sameValue(state.host, event.host) ? state.host : event.host,
             attachmentLimits: sameValue(state.attachmentLimits, event.attachments ?? null) ? state.attachmentLimits : (event.attachments ?? null),
+            messageQueues: snapshotQueues(state.messageQueues, event.message_queues),
             keepAwakeHeld: event.keep_awake_held,
             daemonUpdate: sameValue(state.daemonUpdate, event.daemon_update) ? state.daemonUpdate : event.daemon_update,
             daemonUpdateStale: false,
@@ -385,6 +398,17 @@ export function reducer(state: State, action: Action): State {
         }
         case "session_deleted":
           return withoutSessions(state, new Set([event.session]));
+        case "session_message_queue": {
+          // A broadcast from a daemon that serves the queue, so a store that took none from the snapshot (one that
+          // predates the queue would send no such event) starts holding them here.
+          const queues = state.messageQueues ?? new Map<string, readonly QueuedMessage[]>();
+          const held = queues.get(event.session);
+          if (event.messages.length === 0 ? held === undefined && state.messageQueues !== null : held !== undefined && sameValue(held, event.messages)) return state;
+          const messageQueues = new Map(queues);
+          if (event.messages.length === 0) messageQueues.delete(event.session);
+          else messageQueues.set(event.session, event.messages);
+          return { ...state, messageQueues };
+        }
         case "trust_prompt": {
           if (state.trustPrompts.some((p) => p.session === event.session)) return state;
           // The daemon sends only a confirmation nobody has the permission for, judging a trusted

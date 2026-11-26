@@ -362,6 +362,11 @@ const CORE_CODES = {
   pull_merge_conflict: { origin: "daemon", recovery: "mergeConflict", detailBlock: true },
   // A push refused because the project's previous one is still running, and says so.
   push_in_progress: { origin: "daemon", recovery: "none" },
+  // Dropped as the session was archived; `detail` hands its content back.
+  queued_message_discarded: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, detailLabel: true },
+  queued_message_not_found: { origin: "daemon", recovery: "refresh" },
+  // A refusal whose sentence says why: the message is being handed to delivery.
+  queued_message_sending: { origin: "daemon", recovery: "none" },
   queued_messages_dropped: { origin: "daemon", recovery: "refreshMessages", failureNotice: true, alertTitle: true, recoveryLine: true },
   queued_messages_lost: { origin: "daemon", recovery: "refreshMessages", recoveryLine: true, variants: { held: {} }, variantOf: (params) => params.fragment === "held" ? "held" : undefined },
   quick_create_owner_gone: { origin: "ui", recovery: "ownerGone", nameParams: ["name"] },

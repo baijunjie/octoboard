@@ -56,6 +56,7 @@ pub mod auto_switch;
 pub mod bindings;
 #[cfg(test)]
 mod checked_write_tests;
+pub(crate) mod composer;
 pub mod console_workdir;
 pub mod consoles;
 pub mod conversation_feed;
@@ -962,6 +963,77 @@ async fn handle_inner(
             images,
         } => {
             send_message(state, &session, text, images).await?;
+            Ok(None)
+        }
+
+        RequestBody::CreateQueuedMessage {
+            session,
+            text,
+            images,
+            files,
+            command,
+            mode,
+        } => {
+            let message = composer::create(
+                state,
+                &session,
+                composer::Content {
+                    text,
+                    images,
+                    files,
+                    command,
+                },
+                mode,
+            )
+            .await?;
+            Ok(Some(Event::QueuedMessageCreated {
+                id: request_id,
+                message,
+            }))
+        }
+
+        RequestBody::UpdateQueuedMessage {
+            session,
+            message,
+            text,
+            images,
+            files,
+            command,
+        } => {
+            composer::update(state, &session, &message, text, images, files, command).await?;
+            Ok(None)
+        }
+
+        RequestBody::SetQueuedMessageMode {
+            session,
+            message,
+            mode,
+        } => {
+            composer::set_message_mode(state, &session, &message, mode)?;
+            Ok(None)
+        }
+
+        RequestBody::MoveQueuedMessage {
+            session,
+            message,
+            position,
+        } => {
+            composer::move_to(state, &session, &message, position)?;
+            Ok(None)
+        }
+
+        RequestBody::SendQueuedMessage { session, message } => {
+            composer::send(state, &session, &message).await?;
+            Ok(None)
+        }
+
+        RequestBody::WithdrawQueuedMessage { session, message } => {
+            composer::withdraw(state, &session, &message)?;
+            Ok(None)
+        }
+
+        RequestBody::SetSessionSendMode { session, mode } => {
+            composer::set_send_mode(state, &session, mode)?;
             Ok(None)
         }
 

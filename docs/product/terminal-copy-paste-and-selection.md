@@ -39,7 +39,9 @@ form one group, in that order, with no divider between them.
   neither, with no reason given; while the selected session cannot accept input, with no reason given, as for Paste;
   and while the program on screen has bracketed paste mode off, saying under its name that the program is not
   accepting pasted lines. Only the session terminal offers it: a shell terminal's editing menu has no Quote, since a
-  shell would run the quoted lines. It closes and uncovers nothing.
+  shell would run the quoted lines. It closes and uncovers nothing. While the session's message composer is on, the
+  quote goes into the composer instead, and Quote is disabled only with nothing to quote (see "Text from elsewhere:
+  Quote and Add as context" in `docs/product/message-composer.md`).
 - **Select all** selects the terminal's contents, including its available scrollback, for copying.
 
 The clipboard is read only when Paste is chosen, so merely opening the menu does not request clipboard access. If
@@ -51,7 +53,10 @@ allows, shows an error alert.
 
 Quote, in the editing menu above and in the file viewer's text menu (see "Selecting and copying" in
 `docs/product/file-viewer.md`), which the Find in files preview shares, writes text into the input of a session's agent as a Markdown block quote for the user
-to go on typing under. It is never sent: nothing reaches the agent as a message until the user sends the input.
+to go on typing under. It is never sent: nothing reaches the agent as a message until the user sends the input. While
+that session's message composer is on, the quote is written at the end of the composer's text instead of into the
+terminal, and only the first three rules below apply to it (see "Text from elsewhere: Quote and Add as context" in
+`docs/product/message-composer.md`).
 
 - Every line of the text is prefixed with `> `; a blank line inside the text becomes `>` alone.
 - Blank lines before the first and after the last line with text are dropped, and so is whitespace at the end of each

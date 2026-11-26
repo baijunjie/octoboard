@@ -28,6 +28,7 @@ export const PREFERENCE_KEYS = {
   markdownView: "octoboard.markdownView",
   markdownStyle: "octoboard.markdownStyle",
   terminalFontSize: "octoboard.terminalFontSize",
+  sessionComposer: "octoboard.sessionComposer",
   // Read only by the one-time carry-over (`migrateLegacyShellSettings`), which then removes them: the
   // desktop shell keeps these two settings in `settings.json` (`lifecycle/shellSettings.ts`).
   runInBackground: "octoboard.runInBackground",

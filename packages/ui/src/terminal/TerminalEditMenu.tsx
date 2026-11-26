@@ -6,6 +6,8 @@ import type { ActionMenuEntry } from "../components/menus/menuEntries";
 import { copyText } from "../components/host/copyText";
 import type { QuoteBlock } from "../components/host/quoteTarget";
 import { raiseQuoteRefused } from "../components/host/raiseQuoteRefused";
+import { quoteIntoComposer } from "../composer/composerDrafts";
+import { composerTakesInput } from "../composer/composerInput";
 import { useLatest, useStableHandler } from "../components/hooks/useLatest";
 import { ActionableError } from "../errors/actionableError";
 import { useT } from "../i18n/react";
@@ -21,14 +23,15 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId, q
   contextTargetRef: React.RefObject<HTMLElement | null>;
   sessionId: string;
   /** Offers Quote, which writes the selection back into the input as a block quote: for a terminal whose program is
-   * an agent, since a shell would run the quote's lines. */
+   * an agent, since a shell would run the quote's lines. While the session's composer is on (`composerTakesInput`),
+   * the quote goes at the end of its text instead. */
   quote?: boolean;
 }): React.ReactElement {
   const t = useT();
   const { clipboard, host } = usePlatform();
   const optionForcesSelection = (host.xtermSelectionModifier ?? (host.os === "macos" ? "alt" : "shift")) === "alt";
   // The host's file manager and applications are this machine's only where the daemon shares it.
-  const { isLocal } = useDaemon();
+  const { isLocal, store } = useDaemon();
   const currentSession = useLatest(sessionId);
   const mounted = useRef(true);
   useEffect(() => {
@@ -84,7 +87,8 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId, q
         // OSC 52, leaving nothing here to copy: the item then says how to select in the terminal instead.
         setMouseReporting(controller?.mouseReporting ?? false);
         setInputSession(controller?.inputSessionId);
-        setQuoteBlock(controller ? controller.quoteBlock(sessionId) : "input");
+        // The session's composer, while it takes the input, takes a quote whatever the terminal could.
+        setQuoteBlock(composerTakesInput(store, sessionId) ? undefined : controller ? controller.quoteBlock(sessionId) : "input");
         // Only a pointer-opened menu has a link under it: a key-opened one is anchored to the focused element.
         setPathLink(byKey ? undefined : controller?.pathLinkAt(clientX, clientY));
         controller?.focus();
@@ -109,6 +113,11 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId, q
             // the quote line by line shows nothing of it.
             reason: selection && quoteBlock === "program" ? { state: t("common.quoteProgramBlocked") } : undefined,
             onClick: () => {
+              // Into the composer while it takes the input, at the end of its text: focus stays where the menu leaves it.
+              if (composerTakesInput(store, sessionId)) {
+                quoteIntoComposer(store, sessionId, selection);
+                return;
+              }
               const controller = controllerRef.current;
               if (!controller) return;
               // Offered when the menu opened: the session may have stopped taking a quote since.

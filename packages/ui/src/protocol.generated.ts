@@ -1905,6 +1905,12 @@ export type DocumentSettings = {
    */
   show_menu_bar_icon?: boolean,
   /**
+   * Whether the session composer is on (the message editor below a session's terminal), carried
+   * like `run_in_background`: the client holds it, the daemon builds none and passes it through
+   * an import's reply as it came, and only a client that has the composer applies it.
+   */
+  session_composer?: boolean,
+  /**
    * Whether the daemon holds its host awake (Prevent sleep, see `Settings.keep_awake`). The
    * daemon builds it when the General section is exported and applies it from an import,
    * whether or not this host can hold: the value is stored either way.
@@ -2191,6 +2197,11 @@ export type Event = {
    * then offers no way to attach a file.
    */
   attachments?: AttachmentLimits,
+  /**
+   * The composer queue of every session that has queued messages, sent by every daemon
+   * that keeps one; absent from one that predates it, and a client then offers no queue.
+   */
+  message_queues?: Array<SessionMessageQueue>,
 }
 | {
   "type": "agent_availability_updated",
@@ -2619,6 +2630,16 @@ export type Event = {
   "type": "attachment_saved",
   id: string | null,
   path: string,
+}
+| {
+  "type": "queued_message_created",
+  id: string | null,
+  message: string,
+}
+| {
+  "type": "session_message_queue",
+  session: string,
+  messages: Array<QueuedMessage>,
 }
 | {
   "type": "attachment_upload_created",
@@ -4327,6 +4348,70 @@ export type QuestionPrompt = {
 };
 
 /**
+ * One of the user's messages waiting in a session's composer queue.
+ */
+export type QueuedMessage = {
+  id: string,
+  /**
+   * The message's text; empty only for a message of images.
+   */
+  text: string,
+  /**
+   * The images to attach, each an absolute path in the session's composer directory, for a
+   * provider that declares `message_images`.
+   */
+  images: Array<string>,
+  /**
+   * Files given to the agent as paths, written after the text when the message is sent.
+   */
+  files: Array<string>,
+  /**
+   * Whether `text` is a slash command for the session's agent to run as one of its own,
+   * sent as `send_command` sends one.
+   */
+  command: boolean,
+  mode: Received<QueuedMode>,
+  state: Received<QueuedMessageState>,
+  failure?: QueuedMessageFailure,
+  created_at: number,
+};
+
+/**
+ * What became of the last attempt to send a queued message, until it is edited or sent again.
+ */
+export type QueuedMessageFailure = {
+  kind: Received<QueuedMessageFailureKind>,
+  /**
+   * The code of the delivery's notice (`not_delivered`) or of the refusal (`refused`), read as
+   * the `session_notice` or `error` of that code is.
+   */
+  code: string,
+  params: {
+    [key in string]: string
+  },
+  /**
+   * The daemon's English text, for the log and an alert's details.
+   */
+  message: string,
+};
+
+/**
+ * Why a queued message is back in the queue.
+ */
+export type QueuedMessageFailureKind = "not_delivered" | "refused";
+
+/**
+ * Where a queued message stands.
+ */
+export type QueuedMessageState = "waiting" | "sending";
+
+/**
+ * The mode a queued message waits in. Sending now is an action (`send_queued_message`), not a
+ * stored mode.
+ */
+export type QueuedMode = "when_idle" | "manual";
+
+/**
  * Why an account's quota has no windows, as a coded message of the same shape as an `error`. It
  * is part of the reading rather than a failure of anything else.
  */
@@ -5128,6 +5213,51 @@ export type Request = {
   "type": "send_command",
   session: string,
   command: string,
+}
+  | {
+  "type": "create_queued_message",
+  session: string,
+  text: string,
+  images?: Array<string>,
+  files?: Array<string>,
+  command?: boolean,
+  mode?: SendMode,
+}
+  | {
+  "type": "update_queued_message",
+  session: string,
+  message: string,
+  text?: string,
+  images?: Array<string>,
+  files?: Array<string>,
+  command?: boolean,
+}
+  | {
+  "type": "set_queued_message_mode",
+  session: string,
+  message: string,
+  mode: QueuedMode,
+}
+  | {
+  "type": "move_queued_message",
+  session: string,
+  message: string,
+  position: number,
+}
+  | {
+  "type": "send_queued_message",
+  session: string,
+  message: string,
+}
+  | {
+  "type": "withdraw_queued_message",
+  session: string,
+  message: string,
+}
+  | {
+  "type": "set_session_send_mode",
+  session: string,
+  mode: SendMode,
 }
   | {
   "type": "answer_interaction",
@@ -6302,6 +6432,51 @@ export type RequestBody = {
   command: string,
 }
 | {
+  "type": "create_queued_message",
+  session: string,
+  text: string,
+  images?: Array<string>,
+  files?: Array<string>,
+  command?: boolean,
+  mode?: SendMode,
+}
+| {
+  "type": "update_queued_message",
+  session: string,
+  message: string,
+  text?: string,
+  images?: Array<string>,
+  files?: Array<string>,
+  command?: boolean,
+}
+| {
+  "type": "set_queued_message_mode",
+  session: string,
+  message: string,
+  mode: QueuedMode,
+}
+| {
+  "type": "move_queued_message",
+  session: string,
+  message: string,
+  position: number,
+}
+| {
+  "type": "send_queued_message",
+  session: string,
+  message: string,
+}
+| {
+  "type": "withdraw_queued_message",
+  session: string,
+  message: string,
+}
+| {
+  "type": "set_session_send_mode",
+  session: string,
+  mode: SendMode,
+}
+| {
   "type": "answer_interaction",
   session: string,
   interaction: string,
@@ -7129,6 +7304,12 @@ export type ScheduledTaskRun = {
  */
 export type SecretLoginText = string;
 
+/**
+ * How a new message of the session's composer is sent: the session's default (`Session.send_mode`)
+ * and the mode `create_queued_message` takes.
+ */
+export type SendMode = "now" | "when_idle" | "manual";
+
 export type Session = {
   id: string,
   agent: Agent,
@@ -7327,6 +7508,11 @@ export type Session = {
    * Prevents archiving and deletion until the user unlocks the session.
    */
   locked: boolean,
+  /**
+   * The default send mode of the session's composer for new messages. Only
+   * `set_session_send_mode` changes it.
+   */
+  send_mode: Received<SendMode>,
   started_at: number,
   ended_at: number | null,
 };
@@ -7432,6 +7618,14 @@ export type SessionContext = {
 };
 
 export type SessionKind = "console" | "project";
+
+/**
+ * A session's composer queue, in queue order.
+ */
+export type SessionMessageQueue = {
+  session: string,
+  messages: Array<QueuedMessage>,
+};
 
 export type SessionRecordPresence = "present" | "absent" | "unknown";
 

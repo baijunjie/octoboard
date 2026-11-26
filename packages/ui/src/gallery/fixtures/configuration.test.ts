@@ -323,7 +323,7 @@ function sectionsWithLines(inspection: Omit<Inspection, "type">, text: string): 
   const client = documentClientSettings(document, { backgroundRun: true, menuBarIcon: true });
   const switches = (list: readonly { field: keyof typeof settings }[]) => list.some(({ field }) => settings[field] != null);
   const lines: Record<SettingsSection, boolean> = {
-    general: isLanguage(documentLanguage(document)) || client.session_order !== undefined || client.run_in_background !== undefined || client.show_menu_bar_icon !== undefined || switches(GENERAL_SWITCHES),
+    general: isLanguage(documentLanguage(document)) || client.session_order !== undefined || client.run_in_background !== undefined || client.show_menu_bar_icon !== undefined || client.session_composer !== undefined || switches(GENERAL_SWITCHES),
     appearance: client.appearance !== undefined || client.markdown_style !== undefined || client.terminal_font_size !== undefined,
     git: settings.default_clone_dir !== null || settings.foreign_default_clone_dir || settings.git_workflow != null || switches(GIT_SWITCHES),
     agent_behavior: switches(AGENT_BEHAVIOR_SWITCHES),

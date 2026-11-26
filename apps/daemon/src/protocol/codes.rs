@@ -177,6 +177,12 @@ pub mod error_code {
     pub const UNKNOWN_PAGE: Code = Code("unknown_page");
     /// No scheduled task has that id. `params` names it as `task`.
     pub const UNKNOWN_SCHEDULED_TASK: Code = Code("unknown_scheduled_task");
+    /// No message of the session's composer queue has that id: it was never queued, or has been
+    /// sent, withdrawn or dropped since. `params` names the `session` and the `message`.
+    pub const QUEUED_MESSAGE_NOT_FOUND: Code = Code("queued_message_not_found");
+    /// A queued message that is being handed to the session's delivery cannot be edited or have
+    /// its mode changed. `params` names the `session` and the `message`.
+    pub const QUEUED_MESSAGE_SENDING: Code = Code("queued_message_sending");
     /// A one-off schedule (`Schedule::Once`) set, when a scheduled task is created or its schedule
     /// changed, to a time that is not in the future. `params` names it as `run_at`, in
     /// milliseconds since the epoch.
@@ -884,6 +890,10 @@ pub mod notice_code {
     use super::Code;
 
     pub const LAUNCH_FAILED: Code = Code("launch_failed");
+    /// A message of the session's composer queue dropped as the session was archived, its
+    /// content handed back: `detail` is its text, followed by the paths of its images and files,
+    /// one to a line.
+    pub const QUEUED_MESSAGE_DISCARDED: Code = Code("queued_message_discarded");
     pub const QUEUED_MESSAGES_DROPPED: Code = Code("queued_messages_dropped");
     pub const HANDOFF_MESSAGES_DROPPED: Code = Code("handoff_messages_dropped");
     pub const SHARING_MESSAGES_DROPPED: Code = Code("sharing_messages_dropped");

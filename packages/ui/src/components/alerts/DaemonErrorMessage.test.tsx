@@ -1262,6 +1262,31 @@ describe("a message the agent took through its own server or channel and gave ba
   });
 });
 
+describe("a queued message dropped as its session was archived", () => {
+  const CONTENT = "Check the build\nرسالة second line\n/tmp/one.png";
+  const discarded = () => new CodedError("plain", "queued_message_discarded", { detail: CONTENT });
+
+  it("says the session was archived and hands the message's content back whole, as a block of its own under its label, so nothing typed is lost silently", () => {
+    const error = discarded();
+    const { body, raw } = mountApart(error);
+    expect(hasErrorDetails(error)).toBe(true);
+    expect(hasRawDetails(error)).toBe(false);
+    expect(raw.textContent).toBe("");
+    expect(body.textContent).toContain("The session was archived");
+    expect(body.textContent).toContain("was dropped");
+    const block = body.querySelector("pre")!;
+    expect(block.textContent).toBe(CONTENT);
+    expect(block.getAttribute("dir")).toBe("auto");
+    expect([...body.querySelectorAll("span[id]")].find((span) => span.textContent === "Message content")?.parentElement?.contains(block)).toBe(true);
+  });
+
+  it("titles its alert for the dropped message", () => {
+    raiseError(discarded(), { title: "Message" });
+    mount(<ErrorAlerts />);
+    expect(document.querySelector('[role="alertdialog"]')!.querySelector("h2")?.textContent).toBe("Queued message dropped");
+  });
+});
+
 describe("a message the agent held and dropped when its turn was cancelled", () => {
   const MESSAGE = "Instruction from your parent session\nرسالة second line";
   const dropped = () => new CodedError("plain", "message_dropped_at_cancel", { agent: "Codex", detail: MESSAGE });

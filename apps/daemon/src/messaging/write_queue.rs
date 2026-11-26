@@ -7,11 +7,14 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
-use super::outbox::{Drain, FirstTicket, HoldKind, PromptSignal, Ticket};
+use super::outbox::{ComposerLeft, Drain, FirstTicket, HoldKind, PromptSignal, Ticket};
 use crate::messaging::texts::SenderNote;
-use crate::protocol::{notice_code, AgentId, Event, Notice, SessionStatus};
+use crate::protocol::{
+    notice_code, AgentId, CodedError, Event, Notice, QueuedMessageFailureKind, SessionStatus,
+};
 use crate::session::dialogs::Sighting;
 use crate::session::{LiveSession, ToldLost};
+use crate::state::composer::{failure_of, failure_of_notice, Outcome};
 use crate::state::AppState;
 
 /// Why a held queue's messages were dropped when a planned stop had saved the queues first.
@@ -253,6 +256,54 @@ fn send_wait(wait: Duration, before: u64) -> Duration {
 }
 
 impl PromptSignal for HookPrompts<'_> {
+    fn composer_outcome(&self, ticket: Ticket, left: ComposerLeft) {
+        let (id, agent) = (&self.live.id, self.live.agent);
+        // As the notice the session is told with, its English text included.
+        let notice = |notice: Notice| {
+            failure_of_notice(notice.code.as_str(), notice.params, &notice.message)
+        };
+        match left {
+            ComposerLeft::Written => self.state.composer_outcome(id, ticket, Outcome::Written),
+            ComposerLeft::Unsent => {
+                self.state.composer_not_carried_out(
+                    id,
+                    ticket,
+                    notice(unsent_notice(agent, false)),
+                );
+                self.state.composer_note_unsent(id, ticket);
+            }
+            ComposerLeft::Diverted => {
+                self.state
+                    .composer_not_carried_out(id, ticket, notice(diverted_notice(agent)))
+            }
+            ComposerLeft::WentElsewhere(text) => {
+                let error = crate::messaging::delivery::not_delivered_error(agent, &text);
+                if let Some(error) = error.downcast_ref::<CodedError>() {
+                    self.state.composer_not_carried_out(
+                        id,
+                        ticket,
+                        failure_of(QueuedMessageFailureKind::NotDelivered, error),
+                    );
+                }
+            }
+            ComposerLeft::Refused(refused) => {
+                let error = crate::messaging::delivery::refusal_error(agent, refused);
+                if let Some(error) = error.downcast_ref::<CodedError>() {
+                    self.state.composer_outcome(
+                        id,
+                        ticket,
+                        Outcome::Back(failure_of(QueuedMessageFailureKind::Refused, error)),
+                    );
+                }
+            }
+            ComposerLeft::Lost => self.state.composer_outcome(
+                id,
+                ticket,
+                Outcome::Back(notice(queued_messages_dropped_notice())),
+            ),
+        }
+    }
+
     fn mark_submission_uncertain(&self, before: u64) {
         self.live.mark_submission_uncertain(before);
     }
@@ -412,6 +463,7 @@ impl AppState {
                 code: notice_code::MESSAGE_NOT_SENT,
                 detail: None,
             });
+            self.composer_unsent_sent(&live.id);
         }
     }
 
@@ -494,6 +546,21 @@ impl AppState {
         Some(ticket)
     }
 
+    /// [`Self::queue_users_message`] for a message of a session's composer queue, written as
+    /// `shape` says where given, and marked as the composer's in the same step
+    /// (`super::outbox::Outbox::push_composer`).
+    pub(crate) fn queue_users_composer(
+        &self,
+        id: &str,
+        text: &str,
+        shape: Option<crate::session::term::Shape>,
+    ) -> Option<Ticket> {
+        self.cancel_recoveries_silently(id);
+        let ticket = self.outbox.push_composer(id, text, shape, true)?;
+        self.note_activity(id);
+        Some(ticket)
+    }
+
     /// Reserves a new session's first automatic message before the session can receive reports.
     pub(crate) fn reserve_first_message(self: &Arc<Self>, id: &str) -> Result<FirstMessage> {
         anyhow::ensure!(
@@ -566,7 +633,25 @@ impl AppState {
         let Ok(_admission) = self.admit_change() else {
             return Drain::Pending;
         };
-        self.flush_outbox_once(id, status, true)
+        let outcome = self.flush_outbox_once(id, status, true);
+        self.composer_after_flush(id, status);
+        outcome
+    }
+
+    /// What the session's composer queue does once its delivery queue has been drained: a turn
+    /// that began ends the idle its last message was sent at, what delivery holds no longer is
+    /// put back to waiting, and a message that can go now is handed over
+    /// (`crate::coordinator::composer::after_drain`).
+    fn composer_after_flush(&self, id: &str, status: SessionStatus) {
+        if status == SessionStatus::Working {
+            self.composer_idle_over(id);
+        }
+        self.composer_reconcile(id, |ticket| self.outbox.holds_composer(id, ticket));
+        if self.composer_has_work(id) {
+            if let Some(state) = self.live_session(id).and_then(|live| live.app_state()) {
+                crate::coordinator::composer::after_drain(&state, id);
+            }
+        }
     }
 
     /// [`Self::flush_outbox`]; `again` says whether a message a dialog discarded may be written
@@ -641,20 +726,7 @@ impl AppState {
             live.notice_unsent(|retry| self.broadcast(unsent_notice(live.agent, retry).about(id)));
         }
         if matches!(outcome, Drain::Diverted(_)) && still_running {
-            self.broadcast(
-                Notice::new(
-                    notice_code::MESSAGE_DIVERTED_BY_VIEW,
-                    format!(
-                        "{} was showing a view of its background agents while {} wrote a message \
-                         into this session, so the message went there rather than to the \
-                         conversation. Check the session.",
-                        live.agent.label(),
-                        crate::APP_NAME
-                    ),
-                    &[("agent", live.agent.label())],
-                )
-                .about(id),
-            );
+            self.broadcast(diverted_notice(live.agent).about(id));
         }
         // Told to the user and its sender by the drain as it met it (`HookPrompts::went_elsewhere`).
         if matches!(outcome, Drain::WentElsewhere(_)) && still_running {
@@ -721,18 +793,7 @@ impl AppState {
             // Nobody is waiting on a return value for most of these drains, and a message Octoboard
             // accepted and then could not deliver is the user's business — the more so because the
             // session's input line is the thing left in a state only they can see.
-            self.broadcast(
-                Notice::new(
-                    notice_code::QUEUED_MESSAGES_DROPPED,
-                    format!(
-                        "{} dropped what it had queued for this session: {}",
-                        crate::APP_NAME,
-                        crate::session::term::FRAGMENT_HAZARD
-                    ),
-                    &[],
-                )
-                .about(id),
-            );
+            self.broadcast(queued_messages_dropped_notice().about(id));
         }
         self.note_activity(id);
         outcome
@@ -755,22 +816,34 @@ impl AppState {
     }
 
     pub(crate) fn retry_pending_outbox(self: &Arc<Self>, id: &str) {
-        // Only for what a drain may take: one held until the next message is written is not.
-        if self.outbox.takeable(id) > 0 {
-            if let Ok(record) = self.session_record(id) {
-                self.spawn_flush_outbox(id, self.agent_status(&record));
-            }
+        if let Some(status) = self.pending_flush_status(id) {
+            self.spawn_flush_outbox(id, status);
         }
     }
 
     /// [`Self::retry_pending_outbox`] on the calling thread, for a caller off the runtime that may
     /// block on the write.
     pub(crate) fn flush_pending_outbox(&self, id: &str) {
-        if self.outbox.takeable(id) > 0 {
-            if let Ok(record) = self.session_record(id) {
-                self.flush_outbox(id, self.agent_status(&record));
-            }
+        if let Some(status) = self.pending_flush_status(id) {
+            self.flush_outbox(id, status);
         }
+    }
+
+    /// The agent's status to drain the session `id` at, where a retry has something to drain:
+    /// what a drain may take (one held until the next message is written is not), or a message
+    /// the composer queue could hand over now (`AppState::composer_could_dispatch`), which a
+    /// drain hands over from. Nothing for a session with neither: the session's record, a store
+    /// read, is read only where delivery's queue or the composer queue holds something for it, so
+    /// a retry costs a session with nothing queued no store read.
+    fn pending_flush_status(&self, id: &str) -> Option<SessionStatus> {
+        let takeable = self.outbox.takeable(id) > 0;
+        if !takeable && !self.composer_has_work(id) {
+            return None;
+        }
+        let record = self.session_record(id).ok()?;
+        let status = self.agent_status(&record);
+        (takeable || self.composer_could_dispatch(id, status == SessionStatus::Idle))
+            .then_some(status)
     }
 
     /// Drains this session's queue off the runtime. Used wherever releasing a message is a side
@@ -996,6 +1069,36 @@ impl AppState {
     pub fn discard_outbox(&self, id: &str) {
         self.outbox.forget(id);
     }
+}
+
+/// The `message_diverted_by_view` notice for a message a view of `agent`'s background agents
+/// took ([`Drain::Diverted`]).
+pub(crate) fn diverted_notice(agent: AgentId) -> Notice {
+    Notice::new(
+        notice_code::MESSAGE_DIVERTED_BY_VIEW,
+        format!(
+            "{} was showing a view of its background agents while {} wrote a message into this \
+             session, so the message went there rather than to the conversation. Check the \
+             session.",
+            agent.label(),
+            crate::APP_NAME
+        ),
+        &[("agent", agent.label())],
+    )
+}
+
+/// The `queued_messages_dropped` notice for a message written only in part, which took what was
+/// queued behind it along ([`Drain::Lost`]).
+pub(crate) fn queued_messages_dropped_notice() -> Notice {
+    Notice::new(
+        notice_code::QUEUED_MESSAGES_DROPPED,
+        format!(
+            "{} dropped what it had queued for this session: {}",
+            crate::APP_NAME,
+            crate::session::term::FRAGMENT_HAZARD
+        ),
+        &[],
+    )
 }
 
 /// The `message_not_delivered` notice for a message `agent` did not report sending whose input
@@ -1890,5 +1993,124 @@ mod tests {
             assert!(Instant::now() < deadline, "the retry started no flush");
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
+    }
+
+    /// What a drain made of a message it took from the composer's queue is placed there: written,
+    /// it leaves; left unsent, taken by a view, gone elsewhere or written only in part, it comes
+    /// back as manual, not delivered, with the code of the notice about it; refused as it was
+    /// written, it comes back as manual, refused, with the refusal's code. A message the agent
+    /// left unsent and reports sending after all leaves again.
+    #[test]
+    fn what_a_drain_made_of_a_composers_message_is_placed_in_its_queue() {
+        use crate::messaging::outbox::{ComposerLeft, RefusalKind, Refused};
+        use crate::protocol::{QueuedMessage, QueuedMessageState, QueuedMode};
+        use crate::state::composer::How;
+
+        let refused = |kind| {
+            ComposerLeft::Refused(Refused {
+                reason: "why".to_string(),
+                kind,
+            })
+        };
+        let not_delivered = QueuedMessageFailureKind::NotDelivered;
+        let refusal = QueuedMessageFailureKind::Refused;
+        let cases: Vec<(ComposerLeft, Option<(&str, QueuedMessageFailureKind)>)> = vec![
+            (ComposerLeft::Written, None),
+            (
+                ComposerLeft::Unsent,
+                Some(("message_not_sent", not_delivered)),
+            ),
+            (
+                ComposerLeft::Diverted,
+                Some(("message_diverted_by_view", not_delivered)),
+            ),
+            (
+                ComposerLeft::WentElsewhere("text".to_string()),
+                Some(("message_not_delivered", not_delivered)),
+            ),
+            (
+                ComposerLeft::Lost,
+                Some(("queued_messages_dropped", not_delivered)),
+            ),
+            (
+                refused(RefusalKind::Agent),
+                Some(("message_refused", refusal)),
+            ),
+            (
+                refused(RefusalKind::Unwritable),
+                Some(("message_not_written", refusal)),
+            ),
+            (
+                refused(RefusalKind::OtherCommand("/a".into(), "/b".into())),
+                Some(("command_not_recognised", refusal)),
+            ),
+            (
+                refused(RefusalKind::NoSuchCommand("/a".into())),
+                Some(("command_not_found", refusal)),
+            ),
+        ];
+        let (state, dir) = app_state("state-composer-outcomes");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
+        for (n, (left, expected)) in cases.into_iter().enumerate() {
+            let id = format!("m{n}");
+            state
+                .composer_add(
+                    "s",
+                    QueuedMessage {
+                        id: id.clone(),
+                        text: id.clone(),
+                        images: Vec::new(),
+                        files: Vec::new(),
+                        command: false,
+                        mode: QueuedMode::WhenIdle,
+                        state: QueuedMessageState::Waiting,
+                        failure: None,
+                        created_at: 1,
+                    },
+                    Vec::new(),
+                )
+                .unwrap();
+            state
+                .composer_begin_send("s", &id, How::Now, false)
+                .unwrap();
+            let ticket = 1 + n as u64;
+            state.composer_note_ticket(&id, ticket);
+            HookPrompts {
+                state: &state,
+                live: &live,
+            }
+            .composer_outcome(ticket, left.clone());
+            let queued = state.queued_messages("s").unwrap();
+            let found = queued.iter().find(|message| message.id == id);
+            match expected {
+                None => assert!(found.is_none(), "{left:?}"),
+                Some((code, kind)) => {
+                    let message = found.unwrap_or_else(|| panic!("{left:?} is back"));
+                    assert_eq!(message.state, QueuedMessageState::Waiting, "{left:?}");
+                    assert_eq!(message.mode, QueuedMode::Manual, "{left:?}");
+                    let failure = message.failure.as_ref().expect("a failure");
+                    assert_eq!(
+                        (failure.code.as_str(), failure.kind),
+                        (code, kind),
+                        "{left:?}"
+                    );
+                    // The English text the session's notice of it carries.
+                    assert!(!failure.message.is_empty(), "{left:?}");
+                }
+            }
+        }
+        // The one the agent left unsent is sent after all.
+        assert!(state
+            .queued_messages("s")
+            .unwrap()
+            .iter()
+            .any(|message| message.id == "m1"));
+        state.composer_unsent_sent("s");
+        assert!(!state
+            .queued_messages("s")
+            .unwrap()
+            .iter()
+            .any(|message| message.id == "m1"));
     }
 }

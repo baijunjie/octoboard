@@ -3,7 +3,9 @@
 How Octoboard writes into a running session everything it has to put there — an instruction from an owner, a report,
 information shared by another session, a report panel form submission, a client's own message — and when it holds one
 back. A slash command or a message with images a client sends goes through the same queue and holds; what is particular
-to them is in `docs/product/slash-commands-and-image-messages.md`.
+to them is in `docs/product/slash-commands-and-image-messages.md`. A message from a session's composer queue is handed
+to this delivery in the same way; the queue in front of it, and what becomes of a message delivery reports back, are in
+`docs/product/composer-queue.md`.
 
 ## Messages held until a session can take them
 

@@ -222,6 +222,45 @@ pub trait PromptSignal {
     /// taken now, so the session has it written again as it does one given back later. Nothing to
     /// do where the session has no server or channel that gives messages back.
     fn given_back_while_written(&self, _ticket: Ticket) {}
+    /// What became of the composer's message `ticket` a drain took off the queue
+    /// ([`Outbox::mark_composer`]), for the composer queue to place it. Told once per message,
+    /// before the drain goes on; a message the drain put back on the queue is told nothing.
+    fn composer_outcome(&self, _ticket: Ticket, _left: ComposerLeft) {}
+}
+
+/// What became of a composer's message a drain took off the queue
+/// ([`PromptSignal::composer_outcome`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ComposerLeft {
+    /// Written, and taken by the agent or its own queue as far as the drain can tell.
+    Written,
+    /// Written, and left unsent in the input box.
+    Unsent,
+    /// Written, and taken by a view of the agent's background agents.
+    Diverted,
+    /// Written, neither sent nor in the input box afterwards: the message's text.
+    WentElsewhere(String),
+    /// Refused as it was written, nothing of it sent.
+    Refused(Refused),
+    /// Written only in part, and dropped.
+    Lost,
+}
+
+/// Takes a composer's message out of [`Outbox::composer_writing`] when the drain is done with it,
+/// whichever way it leaves.
+struct ComposerWriting<'a> {
+    outbox: &'a Outbox,
+    ticket: Ticket,
+}
+
+impl Drop for ComposerWriting<'_> {
+    fn drop(&mut self) {
+        self.outbox
+            .composer_writing
+            .lock()
+            .expect("outbox composer lock poisoned")
+            .remove(&self.ticket);
+    }
 }
 
 /// A screen watch that ends when it is dropped, so no return from a drain leaves it on.
@@ -304,6 +343,15 @@ pub struct Outbox {
     /// carried out, and bounded by [`SENDERS_KEPT`]. The user's messages and Octoboard's own have
     /// none. Locked on its own, or after the queues (`Self::push_again`).
     senders: Mutex<BTreeMap<Ticket, String>>,
+    /// The messages handed over from a session's composer queue ([`Self::mark_composer`]), by
+    /// ticket, while this queue holds them or a drain writes them: what becomes of each is told
+    /// back through [`PromptSignal::composer_outcome`], and none is ever carried elsewhere as
+    /// text (to another process, a handoff's receiver or the next daemon), since the composer
+    /// queue still holds it and puts it back to waiting. Locked on its own.
+    composer: Mutex<HashSet<Ticket>>,
+    /// The composer's messages a drain has taken off the queue and not yet told the outcome of.
+    /// Locked on its own.
+    composer_writing: Mutex<HashSet<Ticket>>,
     /// The messages whose writer waits on the drain to answer it ([`Self::await_answer`]), and
     /// the text of each of them a drain met gone elsewhere, for that writer to take
     /// ([`Self::take_answer`]). Locked on its own.
@@ -478,7 +526,21 @@ impl Outbox {
     /// hold: written as soon as nothing else holds the session, ahead of the messages that hold
     /// keeps back, which stay in their order behind it.
     pub fn push_past_usage_limit(&self, id: &str, text: &str) -> Option<Ticket> {
-        self.push_unsealed(id, text, true, None)
+        self.push_unsealed(id, text, true, None, false)
+    }
+
+    /// [`Self::push_unless_sealed`] for a message handed over from a session's composer queue,
+    /// written as `shape` says where given (`past_usage_limit` as [`Self::push_past_usage_limit`]):
+    /// marked as the composer's ([`Self::composer`]) in the same step that queues it, so no drain
+    /// can write it unmarked.
+    pub fn push_composer(
+        &self,
+        id: &str,
+        text: &str,
+        shape: Option<Shape>,
+        past_usage_limit: bool,
+    ) -> Option<Ticket> {
+        self.push_unsealed(id, text, past_usage_limit, shape, true)
     }
 
     /// The instruction a relaunch gives a session whose queue a restart holds
@@ -579,6 +641,79 @@ impl Outbox {
         true
     }
 
+    /// Notes that the message `ticket` was handed over from a session's composer queue; see
+    /// [`Self::composer`]. A message queued through [`Self::push_composer`] is marked already.
+    pub(crate) fn mark_composer(&self, ticket: Ticket) {
+        self.composer
+            .lock()
+            .expect("outbox composer lock poisoned")
+            .insert(ticket);
+    }
+
+    fn is_composer(&self, ticket: Ticket) -> bool {
+        self.composer
+            .lock()
+            .expect("outbox composer lock poisoned")
+            .contains(&ticket)
+    }
+
+    /// Whether the composer's message `ticket` is still the queue's: queued for the session `id`,
+    /// or being written by a drain that has not told its outcome yet.
+    pub(crate) fn holds_composer(&self, id: &str, ticket: Ticket) -> bool {
+        // Both read under the queues' lock: a drain takes a message off the queue and marks it as
+        // being written in one step under it, and puts one back on the queue under it before it
+        // lets the mark go, so under the lock the message is in one or the other while the drain
+        // still has it. The queues' lock is taken first, as the drain takes it.
+        let queues = self.queues.lock().expect("outbox lock poisoned");
+        let queued = queues
+            .get(id)
+            .is_some_and(|queue| queue.iter().any(|(queued, _, _)| *queued == ticket));
+        queued
+            || self
+                .composer_writing
+                .lock()
+                .expect("outbox composer lock poisoned")
+                .contains(&ticket)
+    }
+
+    /// Takes the message `ticket` off the session `id`'s queue while no drain has taken it to
+    /// write: whether it was there. The messages around it stay as they were.
+    pub(crate) fn withdraw_queued(&self, id: &str, ticket: Ticket) -> bool {
+        let mut queues = self.queues.lock().expect("outbox lock poisoned");
+        let Some(queue) = queues.get_mut(id) else {
+            return false;
+        };
+        let before = queue.len();
+        queue.retain(|(queued, _, _)| *queued != ticket);
+        let withdrawn = queue.len() != before;
+        if queue.is_empty() {
+            queues.remove(id);
+        }
+        drop(queues);
+        if withdrawn {
+            self.unkeep(std::iter::once(ticket));
+            self.composer
+                .lock()
+                .expect("outbox composer lock poisoned")
+                .remove(&ticket);
+        }
+        withdrawn
+    }
+
+    /// Whether `ticket` is a composer's message, which is never carried elsewhere as text: taken
+    /// out of the composer's watch as it is left out.
+    fn leaves_composer(&self, ticket: Ticket) -> bool {
+        self.composer
+            .lock()
+            .expect("outbox composer lock poisoned")
+            .remove(&ticket)
+    }
+
+    /// The ticket of the message a drain wrote as `logical_id` (`<launch id>:<ticket>`).
+    pub(crate) fn ticket_of(logical_id: &str) -> Option<Ticket> {
+        redelivery::ticket_of(logical_id)
+    }
+
     /// Whether the message `ticket` is still queued for the session `id`, not taken by a drain.
     pub fn is_queued(&self, id: &str, ticket: Ticket) -> bool {
         self.queues
@@ -592,7 +727,7 @@ impl Outbox {
     /// then `None`, and nothing is queued. Judged under the queues' lock, so a message either is
     /// among those sealed or is refused.
     pub fn push_unless_sealed(&self, id: &str, text: &str) -> Option<Ticket> {
-        self.push_unsealed(id, text, false, None)
+        self.push_unsealed(id, text, false, None, false)
     }
 
     /// [`Self::push_unless_sealed`] for a message of the given `shape` (`past_usage_limit` as
@@ -605,23 +740,28 @@ impl Outbox {
         shape: Shape,
         past_usage_limit: bool,
     ) -> Option<Ticket> {
-        self.push_unsealed(id, text, past_usage_limit, Some(shape))
+        self.push_unsealed(id, text, past_usage_limit, Some(shape), false)
     }
 
     /// [`Self::push_unless_sealed`], marking the message as going past a hold for the account's
-    /// usage limit when `past_usage_limit`, and noting its `shape`.
+    /// usage limit when `past_usage_limit`, noting its `shape`, and marking it as the composer's
+    /// when `composer`.
     fn push_unsealed(
         &self,
         id: &str,
         text: &str,
         past_usage_limit: bool,
         shape: Option<Shape>,
+        composer: bool,
     ) -> Option<Ticket> {
         let mut queues = self.queues.lock().expect("outbox lock poisoned");
         if self.sealed.load(Ordering::Acquire) {
             return None;
         }
         let ticket = self.next_ticket.fetch_add(1, Ordering::Relaxed);
+        if composer {
+            self.mark_composer(ticket);
+        }
         if let Some(shape) = shape {
             self.shapes
                 .lock()
@@ -687,6 +827,10 @@ impl Outbox {
                 let messages = queue
                     .into_iter()
                     .filter_map(|(ticket, text, _)| {
+                        // The composer queue keeps it, and the next daemon loads it from there.
+                        if self.leaves_composer(ticket) {
+                            return None;
+                        }
                         let row = kept.queued.remove(&ticket);
                         if let Some(row) = row {
                             kept.tickets.remove(&row);
@@ -1083,6 +1227,17 @@ impl Outbox {
             let Some((ticket, text, protection_started)) = next else {
                 return Drain::Clear;
             };
+            // Marked as being written as it was taken (`Self::note_composer_writing`).
+            let composer = self.is_composer(ticket);
+            let _composer_writing = composer.then_some(ComposerWriting {
+                outbox: self,
+                ticket,
+            });
+            let tell = |left: ComposerLeft| {
+                if composer && self.leaves_composer(ticket) {
+                    prompts.composer_outcome(ticket, left);
+                }
+            };
             let protection_started = protection_started.unwrap_or_else(Instant::now);
             // A slash command is no prompt: a built-in one reports none, so its hook is not waited
             // for. Its write confirmed that it left the input box (`LiveSession::write_command`).
@@ -1121,6 +1276,7 @@ impl Outbox {
                 // Nothing of it is in the input box, and the queue answered for it.
                 Ok(Route::Queued) => {
                     self.mark_written(ticket);
+                    tell(ComposerLeft::Written);
                     // Given back while it was written, when the queue did not hold it as taken
                     // yet: taken up now that it does.
                     if given_back {
@@ -1129,10 +1285,12 @@ impl Outbox {
                 }
                 Ok(Route::Terminal) if prompts.input_recovery_pending() => {
                     self.mark_written(ticket);
+                    tell(ComposerLeft::Written);
                     return Drain::Pending;
                 }
                 Ok(Route::Terminal) if !checked || prompts.wait_past(before) => {
-                    self.mark_written(ticket)
+                    self.mark_written(ticket);
+                    tell(ComposerLeft::Written);
                 }
                 Ok(Route::Terminal) => {
                     let now = prompts.sighting();
@@ -1146,6 +1304,7 @@ impl Outbox {
                     if now.diverted_seen > seen.diverted_seen {
                         tracing::warn!(session = %id, "a view of background agents took a message");
                         self.mark_written(ticket);
+                        tell(ComposerLeft::Diverted);
                         return Drain::Diverted(ticket);
                     }
                     if prompts.write_went_elsewhere() {
@@ -1157,12 +1316,14 @@ impl Outbox {
                              may be lost"
                         );
                         self.mark_written(ticket);
+                        tell(ComposerLeft::WentElsewhere(text.clone()));
                         prompts.went_elsewhere(ticket, &text);
                         return Drain::WentElsewhere(ticket);
                     }
                     tracing::warn!(session = %id, "a written message was not sent by the agent");
                     // Its text is in the input box, which is as far as a written message goes.
                     self.mark_written(ticket);
+                    tell(ComposerLeft::Unsent);
                     prompts.mark_unsent(before);
                     return Drain::Unsent(ticket);
                 }
@@ -1176,6 +1337,7 @@ impl Outbox {
                 {
                     tracing::warn!(session = %id, "a written message was left in the input box");
                     self.mark_written(ticket);
+                    tell(ComposerLeft::Unsent);
                     prompts.mark_not_submitted(before);
                     return Drain::Unsent(ticket);
                 }
@@ -1187,6 +1349,7 @@ impl Outbox {
                     }) =>
                 {
                     self.mark_written(ticket);
+                    tell(ComposerLeft::Written);
                     prompts.mark_submission_uncertain(before);
                     tracing::error!(session = %id, error = %partial.error,
                         "the native queue did not confirm accepting a message; it will not be resent");
@@ -1204,7 +1367,12 @@ impl Outbox {
                         .get_ref()
                         .and_then(refusal_kind)
                         .expect("matched as a refusal");
-                    self.refuse(id, ticket, partial.error.to_string(), kind);
+                    let reason = partial.error.to_string();
+                    tell(ComposerLeft::Refused(Refused {
+                        reason: reason.clone(),
+                        kind: kind.clone(),
+                    }));
+                    self.refuse(id, ticket, reason, kind);
                     continue;
                 }
                 // The agent's own queue refused it outright: it fails to its sender, is never written
@@ -1216,7 +1384,12 @@ impl Outbox {
                         .is_some_and(|error| error.is::<term::RefusedByAgent>()) =>
                 {
                     tracing::warn!(session = %id, error = %partial.error, "the agent's own queue refused a message");
-                    self.refuse(id, ticket, partial.error.to_string(), RefusalKind::Agent);
+                    let reason = partial.error.to_string();
+                    tell(ComposerLeft::Refused(Refused {
+                        reason: reason.clone(),
+                        kind: RefusalKind::Agent,
+                    }));
+                    self.refuse(id, ticket, reason, RefusalKind::Agent);
                     continue;
                 }
                 // Nothing went in, so the session simply could not take it — most likely a modal its
@@ -1256,6 +1429,7 @@ impl Outbox {
                     // longer join the fragment, so the queue behind it waits, in order, as it does
                     // for any hold. A drain meanwhile finds the session refusing writes.
                     self.mark_written(ticket);
+                    tell(ComposerLeft::Lost);
                     tracing::error!(
                         session = %id,
                         written = partial.written,
@@ -1272,6 +1446,7 @@ impl Outbox {
                     // The sender is told these messages were lost, so their rows are done with
                     // too, and a resume does not deliver what was reported undelivered.
                     self.mark_written(ticket);
+                    tell(ComposerLeft::Lost);
                     let abandoned = self.forget_as_done(id);
                     tracing::error!(
                         session = %id,
@@ -1425,12 +1600,22 @@ impl Outbox {
 
     /// [`Self::take`], also counting the messages of a [`Shape`] it dropped.
     pub fn take_counting_shaped(&self, id: &str) -> (Vec<(String, Option<i64>)>, usize) {
-        let queue = self
+        let mut queue = self
             .queues
             .lock()
             .expect("outbox lock poisoned")
             .remove(id)
             .unwrap_or_default();
+        // A composer's message goes back to its own queue rather than elsewhere as text.
+        let composer: Vec<Ticket> = queue
+            .iter()
+            .map(|(ticket, _, _)| *ticket)
+            .filter(|ticket| self.leaves_composer(*ticket))
+            .collect();
+        if !composer.is_empty() {
+            queue.retain(|(ticket, _, _)| !composer.contains(ticket));
+            self.unkeep(composer.iter().copied());
+        }
         // Whoever takes it forwards it, and what is kept for the session is theirs to deal with.
         let kept = self.kept.lock().expect("outbox kept lock poisoned");
         let rows: Vec<Option<i64>> = queue
@@ -1501,6 +1686,7 @@ impl Outbox {
         if queue.is_empty() {
             queues.remove(id);
         }
+        self.note_composer_writing(next.as_ref().map(|(ticket, _, _)| *ticket));
         next
     }
 
@@ -1531,7 +1717,20 @@ impl Outbox {
         if queue.is_empty() {
             queues.remove(id);
         }
+        self.note_composer_writing(next.as_ref().map(|(ticket, _, _)| *ticket));
         next
+    }
+
+    /// Notes that a drain has taken the composer's message `ticket` off the queue to write it,
+    /// called under the queues' lock in the step that takes it, so that it never reads as gone
+    /// from the queue meanwhile ([`Self::holds_composer`]).
+    fn note_composer_writing(&self, ticket: Option<Ticket>) {
+        if let Some(ticket) = ticket.filter(|ticket| self.is_composer(*ticket)) {
+            self.composer_writing
+                .lock()
+                .expect("outbox composer lock poisoned")
+                .insert(ticket);
+        }
     }
 
     /// Puts a message a drain could not write back at the front of its queue. Accepted after the

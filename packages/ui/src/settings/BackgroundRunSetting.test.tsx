@@ -42,7 +42,9 @@ afterEach(() => {
 
 it("has no row without the capability", () => {
   const container = mount({ kind: "browser", host: BROWSER_HOST });
-  expect(container.querySelector("[role=switch], input[type=checkbox]")).toBeNull();
+  // The row beside it, the message composer, shows on every platform, so only this setting's own row is looked for.
+  expect(container.querySelector('input[aria-label="Keep running in the background when the window is closed"]')).toBeNull();
+  expect(container.querySelector('[data-settings-search-id="run-in-background"]')).toBeNull();
 });
 
 it("pushes the choice to the shell when the switch is toggled", async () => {
@@ -50,7 +52,7 @@ it("pushes the choice to the shell when the switch is toggled", async () => {
   connectShellSettings({ runInBackground: set });
   const container = mount({ kind: "tauri", host: BROWSER_HOST, backgroundRun: { set } });
   await act(async () => {});
-  const toggle = container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+  const toggle = container.querySelector<HTMLInputElement>('input[aria-label="Keep running in the background when the window is closed"]')!;
   expect(toggle.checked).toBe(false);
   expect(set).not.toHaveBeenCalled();
   await act(async () => {

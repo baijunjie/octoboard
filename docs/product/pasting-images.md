@@ -51,7 +51,11 @@ Each image is a new file in the session's scratch directory, `~/.octoboard/run/<
 host, named `paste-<milliseconds>-<n>.<extension>`, where `<n>` tells apart images saved within the same millisecond;
 the name holds nothing an agent's path detection splits on. The file is readable by its owner alone. It is removed with
 the scratch directory, when the session's process ends, or at the next daemon start for a session whose process that
-start does not take over (see `~/.octoboard/run/<session id>/` in `docs/product/files-octoboard-owns.md`).
+start does not take over (see `~/.octoboard/run/<session id>/` in `docs/product/files-octoboard-owns.md`), unless a
+message put on the session's composer queue has moved it into the session's composer directory first (see "Files of
+queued messages" in `docs/product/composer-queue.md`). For an interrupted session, which has no scratch directory, the
+image is saved straight into its composer directory, `~/.octoboard/composer/<session id>/`, for the message composer
+to queue with a message.
 
 ## When pasting an image fails
 
@@ -83,7 +87,8 @@ The window saves an image with the control request `save_pasted_image`:
 
 It is answered with `pasted_image_saved`, carrying `id` and `path`, the absolute path of the saved file as the
 daemon's host spells paths. It is refused with `unknown_session` for an id that names no session,
-`session_not_running` for a session with no process, and `provider_unsupported` (operation `message_images`) for a
+`session_not_running` for an archived session or one starting or ending (an interrupted session is taken, see "Where
+the image is kept" above), and `provider_unsupported` (operation `message_images`) for a
 session whose agent's provider does not declare `message_images`, whose agent would read the path as text; a refusal
 writes nothing. Data over 10 MiB, data that is not one of the four formats or not
 valid base64, and a write that fails are errors with no code.
@@ -94,8 +99,9 @@ For a client whose link cannot carry the whole image in one message within the d
 daemon also takes the image in parts; the window never uploads this way. The client starts an upload of the image's
 size (`create_pasted_image_upload`), sends its bytes in order in parts of at most 1 MiB each
 (`write_pasted_image_part`), and then saves it with `save_pasted_image` naming the upload. The saved file, its
-formats, its 10 MiB limit and the answer are those of the single-message request, and starting an upload is refused
-with `provider_unsupported` as that request is.
+formats, its 10 MiB limit and the answer are those of the single-message request, and starting an upload takes the
+same sessions, an interrupted one included, and is refused with `session_not_running` and `provider_unsupported` as
+that request is.
 
 The parts are held in the daemon's memory only, so an upload that is not saved leaves nothing behind. An upload
 belongs to the connection that started it and is discarded when it is deleted (`delete_pasted_image_upload`), when

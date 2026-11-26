@@ -10,7 +10,7 @@ use crate::session::term::{self, Shape};
 use crate::state::AppState;
 
 /// The most images one message takes.
-const MAX_IMAGES: usize = 10;
+pub(super) const MAX_IMAGES: usize = 10;
 
 /// The user's own write into a session. Refused rather than queued while the session is waiting for
 /// them: they are the one who has to answer the prompt that is blocking it, and they can be told so.
@@ -60,6 +60,14 @@ pub(super) async fn send_message(
 /// `command_not_recognised` where the agent would run another command in its place, and with
 /// `command_not_found` where its list says it has no such command.
 pub(super) async fn send_command(state: &Arc<AppState>, id: &str, command: String) -> Result<()> {
+    let command = checked_command(state, id, &command)?;
+    delivery::write_users_shaped_off_runtime(state, id, command, Shape::Command).await?;
+    Ok(())
+}
+
+/// `command` as [`send_command`] writes it into the session `id`, trimmed, once it is checked to
+/// be one the session's agent can be given: refused as `send_command` refuses it before writing.
+pub(super) fn checked_command(state: &Arc<AppState>, id: &str, command: &str) -> Result<String> {
     let agent = state.session_record(id)?.agent;
     if !agent.descriptor().capabilities.slash_commands {
         return Err(CodedError::provider_unsupported(
@@ -67,7 +75,7 @@ pub(super) async fn send_command(state: &Arc<AppState>, id: &str, command: Strin
             ProviderOperation::SlashCommands,
         ));
     }
-    let command = term::stripped(&command).trim().to_string();
+    let command = term::stripped(command).trim().to_string();
     let named = command
         .strip_prefix('/')
         .is_some_and(|rest| !rest.is_empty() && !rest.starts_with(char::is_whitespace));
@@ -91,8 +99,7 @@ pub(super) async fn send_command(state: &Arc<AppState>, id: &str, command: Strin
             ProviderOperation::SlashCommands,
         ));
     }
-    delivery::write_users_shaped_off_runtime(state, id, command, Shape::Command).await?;
-    Ok(())
+    Ok(command)
 }
 
 #[cfg(all(test, unix))]

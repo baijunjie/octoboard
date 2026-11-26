@@ -11,7 +11,7 @@ import { looseRequestSender, type RequestHandler } from "../requests";
 import { acknowledgeAllAlerts } from "../test/alertQueue";
 import { afterQueuedWork } from "../test/clock";
 import { dropUploads } from "./dropUploads";
-import { droppedPathsText, dropFilesHandler } from "./droppedFiles";
+import { droppedPathsText, dropFilesHandler, uploadFiles } from "./droppedFiles";
 import { dragsFiles, filesOfDrop, type DroppedFile } from "./fileDrag";
 import { MAX_PASTED_IMAGE_BYTES } from "./pastedImage";
 
@@ -393,6 +393,28 @@ describe("uploading dropped files", () => {
     it("answer the paths of those that arrived in the order dropped, an image and a file among them", async () => {
       const { upload } = setup();
       await expect(upload([file("a.png", "abc", "image/png"), file("b.txt", "abc")])).resolves.toBe("/run/s-1/pasted/image.png /run/s-1/attachments/up-1.bin ");
+    });
+
+    it("tell the caller of each file as it arrives, with its path and whether it went as an image, and answer all that arrived", async () => {
+      const { latest } = setup();
+      const seen: Array<[string, string, boolean]> = [];
+      const answered = await uploadFiles([file("a.png", "abc", "image/png"), { file: new File([""], "docs"), folder: true }, file("b.txt", "abc")], "s-1", latest, {
+        onUploaded: (uploaded) => seen.push([uploaded.file.file.name, uploaded.path, uploaded.image]),
+      });
+      expect(seen).toEqual([
+        ["a.png", "/run/s-1/pasted/image.png", true],
+        ["b.txt", "/run/s-1/attachments/up-1.bin", false],
+      ]);
+      expect(answered?.map(({ path, image }) => [path, image])).toEqual([
+        ["/run/s-1/pasted/image.png", true],
+        ["/run/s-1/attachments/up-1.bin", false],
+      ]);
+    });
+
+    it("send an image as a file, and say so, where the session's agent takes no images", async () => {
+      const { latest } = setup({ takesImages: false });
+      const answered = await uploadFiles([file("a.png", "abc", "image/png")], "s-1", latest);
+      expect(answered?.map(({ path, image }) => [path, image])).toEqual([["/run/s-1/attachments/up-1.bin", false]]);
     });
 
     it("raise one alert for a single refused file, as it is, and send the others", async () => {

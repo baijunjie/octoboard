@@ -566,6 +566,9 @@ are now wrong or it leaves out one thing, the meaning has changed.
     or repository name): a fixed sample is not a default. Where empty means an inherited setting or no value, name that
     state rather than inventing a value, and a default that belongs to each item of a batch is never shown as one
     shared value.
+  - A free-form message editor (the session composer), whose content is a message to an agent with no single valid
+    example, names what is written there as a short instruction without a prefix ("Write a message for the agent"),
+    and still has an accessible name of its own. (the user's decision)
   - A multi-value field's input (the Tags field) names the empty state while its list is empty ("No tags") and invites
     adding another once it holds an item ("Add a tag").
   - A search field (a `SearchField`, a filter or find field) takes the standard word "Search" in each language (zh-CN

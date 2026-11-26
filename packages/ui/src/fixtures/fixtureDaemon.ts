@@ -8,6 +8,7 @@ import { createContentSearchListeners, createImportProgressListeners, createMemo
 import { broadcastNotification, errorNotification } from "../store/notifications";
 import type { Fixture, NotificationFixture } from "./fixture";
 import { terminalFixtureUrl } from "./fakeTerminal";
+import { createComposerReplies } from "./fixtureComposer";
 import { createConfigurationReplies } from "./fixtureConfiguration";
 import { createGitReplies, GIT_REQUESTS } from "./fixtureGit";
 import { createAgentCliReplies } from "./fixtureAgentClis";
@@ -123,6 +124,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
     createFileReplies(context, contentSearches.deliver),
     createProcessReplies(context, ledger),
     createLifecycleReplies(context),
+    createComposerReplies(context),
     memory.replies,
     createScheduledTaskReplies(context, sessionReplies.open_session!, scheduledRuns.deliver),
   );

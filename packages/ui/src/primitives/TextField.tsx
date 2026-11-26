@@ -144,10 +144,44 @@ export function Input({
   );
 }
 
-/** HeroUI's text area, the multi-line input of a `TextField`; Enter adds a line rather than submitting. */
-export function TextArea({ rows, placeholder, dir, required }: { rows?: number; placeholder?: string; dir?: "auto"; required?: boolean }): React.ReactElement {
+/** HeroUI's text area, the multi-line input of a `TextField`; Enter adds a line rather than submitting. `ref` holds the
+ * element, for a caller that handles its keys or pastes on the element itself; `resizable` false keeps the user from
+ * dragging its size. */
+export function TextArea({ ref, rows, placeholder, dir, required, resizable = true, landing, suggestions }: {
+  ref?: React.Ref<HTMLTextAreaElement>;
+  rows?: number;
+  placeholder?: string;
+  dir?: "auto";
+  required?: boolean;
+  resizable?: boolean;
+  /** Makes the area where F6 lands in its region (`data-region-landing`), which no other control of the region then is. */
+  landing?: boolean;
+  /** For an area that offers suggestions for what is being typed in a list of their own while it keeps focus: the area
+   * says so (`aria-autocomplete="list"`), names the list, whose id is `list`, while it shows (`expanded`; then
+   * `aria-controls`), and `active`, the id of the suggestion the keys have moved to, is its active descendant while it
+   * shows. It stays a multi-line text box: ARIA in HTML allows a `textarea` no role, so it is no combo box and carries
+   * no `aria-expanded`. */
+  suggestions?: { list: string; expanded: boolean; active?: string };
+}): React.ReactElement {
   const locked = useFieldLocked();
-  return <HeroTextArea {...openingFocus(useFieldAutoFocus())} {...definedProps({ rows, placeholder, dir, "aria-required": required || undefined, className: locked ? `resize-none ${LOCKED_FIELD_CLASS}` : undefined })} />;
+  const classes = [locked || !resizable ? "resize-none" : "", locked ? LOCKED_FIELD_CLASS : ""].filter(Boolean).join(" ");
+  return (
+    <HeroTextArea
+      ref={ref}
+      {...openingFocus(useFieldAutoFocus())}
+      {...definedProps({
+        rows,
+        placeholder,
+        dir,
+        "aria-required": required || undefined,
+        "data-region-landing": landing || undefined,
+        "aria-autocomplete": suggestions === undefined ? undefined : ("list" as const),
+        "aria-controls": suggestions?.expanded ? suggestions.list : undefined,
+        "aria-activedescendant": suggestions?.expanded ? suggestions.active : undefined,
+        className: classes || undefined,
+      })}
+    />
+  );
 }
 
 /** HeroUI's search field: a search icon, the input, and at its end `trailing` (a status mark, kept apart from the

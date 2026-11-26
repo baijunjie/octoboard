@@ -56,6 +56,14 @@ impl AppState {
         }
         if let Ok(Some(session)) = self.store.get_session(id) {
             self.note_sharing_activity(&session);
+            // An archived session's composer queue is dropped, its content handed back; one with
+            // no process gets back what it was handing over, which the queue it went to dropped.
+            if session.status == crate::protocol::SessionStatus::Archived {
+                self.composer_discard(id);
+            } else if session.status.has_no_process() {
+                self.composer_reconcile(id, |ticket| self.outbox.holds_composer(id, ticket));
+                self.composer_resume_ended(id);
+            }
         }
     }
 

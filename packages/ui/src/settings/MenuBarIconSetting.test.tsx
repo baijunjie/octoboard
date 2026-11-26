@@ -52,7 +52,7 @@ it("pushes the choice to the shell when the switch is toggled", async () => {
   connectShellSettings({ showMenuBarIcon: setVisible });
   const container = mount({ kind: "tauri", host: BROWSER_HOST, statusItem: statusItem(setVisible) });
   await act(async () => {});
-  const toggle = container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+  const toggle = container.querySelector<HTMLInputElement>('[data-settings-search-id="menu-bar-icon"] input[type=checkbox]')!;
   expect(toggle.checked).toBe(true);
   expect(setVisible).not.toHaveBeenCalled();
   await act(async () => {

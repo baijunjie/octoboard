@@ -63,8 +63,8 @@ sentence.
   and ordered as Settings names them: **General**, **Appearance**, **Agent behavior**, **Git**, **Keyboard shortcuts**
   and **Cleanup** (see "Which settings travel" in `docs/product/settings-in-a-configuration.md`). Each has a
   one-sentence note under it saying what it includes: General the language, resuming sessions on start, preventing
-  sleep, closing idle terminals and the sorting and, only where this client's platform has both, running in the
-  background and the menu bar icon (named as the system names it); Appearance the theme, the Markdown style and the
+  sleep, the message composer, closing idle terminals and the sorting and, only where this client's platform has both,
+  running in the background and the menu bar icon (named as the system names it); Appearance the theme, the Markdown style and the
   session terminal font size; Agent behavior which requests are approved automatically and whether questions are asked
   as choices and whether sessions are kept to their own project; Git the default clone directory, pulling repositories
   automatically and the Git workflow; Keyboard shortcuts the shortcuts the user has changed; Cleanup deleting archived
@@ -81,8 +81,8 @@ Every checkbox of the two groups starts unchecked, and no note changes with the 
 
 **Export** is unavailable while nothing is chosen — Do not export consoles with no checkbox checked — and nothing says
 why, since the boxes that left it so are in view. It asks the daemon for the document with the sections checked, adds
-the settings this client holds of those sections to it — for General its sorting and, in the desktop application,
-keeping running in the background and showing the menu bar icon; for Appearance its theme, Markdown style and session
+the settings this client holds of those sections to it — for General its sorting, whether the message composer shows
+and, in the desktop application, keeping running in the background and showing the menu bar icon; for Appearance its theme, Markdown style and session
 terminal font size; for Keyboard shortcuts its changed shortcuts (see "The settings a client holds" in
 `docs/product/settings-in-a-configuration.md`) — and opens the save dialog. In the desktop app a
 toast names the file it was saved as. A browser files a download itself, under its own name and wherever its settings
@@ -279,8 +279,8 @@ unchecked, a card collapses to its title row, with a **Left out** outcome at its
 the order of that section's rows:
 
 - **General**: Language, then the switch Resume sessions on start, then Keep running in the background and Show menu
-  bar icon, then the switch Prevent sleep and When to prevent sleep, then the switch Close idle terminals when closing
-  the panel, then **Sorting**.
+  bar icon, then the switch Prevent sleep and When to prevent sleep, then Message composer, then the switch Close idle
+  terminals when closing the panel, then **Sorting**.
 - **Appearance**: Theme, Markdown style, then Session terminal font size.
 - **Agent behavior**: its seven switches.
 - **Git**: the default clone directory, Automatically pull repositories, then one line for the git workflow.
@@ -301,8 +301,8 @@ with what then follows in that setting's own words (see "The application setting
 brackets, the one set now, each by its name as Settings words it; or **No change** when they are the same.
 
 A **setting only a client holds** — Theme, Markdown style, Session terminal font size, Keep running in the background,
-Show menu bar icon — is badged **Set to the file's**, with the file's value and, in brackets, the value this client has
-now, worded as Settings words them (a Markdown style by its name, a switch as **On** or **Off**, a font size in pixels,
+Show menu bar icon, Message composer — is badged **Set to the file's**, with the file's value and, in brackets, the
+value this client has now, worded as Settings words them (a Markdown style by its name, a switch as **On** or **Off**, a font size in pixels,
 as "18 px (now 15 px)"); or **No change** when they are the same. The file's session terminal font size is given as this
 client would apply it: rounded, and held to the range of 10 to 24 pixels (see "The application settings an export
 carries" in `docs/product/settings-in-a-configuration.md`). **Language**, which the daemon holds rather than the client,

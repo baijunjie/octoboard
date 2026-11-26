@@ -79,7 +79,7 @@ pub(super) const SESSION_COLUMNS: &str =
                                role, terminal_title, model, effort, model_override,
                                effort_override, context, record_title, record_prompt, locked,
                                observed_model, observed_effort, last_turn_abnormal, compatibility,
-                               record_roots";
+                               record_roots, send_mode";
 
 impl Store {
     pub(crate) fn session_working_directory(&self, session: &Session) -> Result<PathBuf> {
@@ -1083,9 +1083,10 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
              status, has_conversation, bound_to, colour, ordinal, account_id, config_dir, pinned,
              started_at, ended_at, role, terminal_title, model, effort, model_override,
              effort_override, context, record_title, record_prompt, locked, observed_model, observed_effort,
-             last_turn_abnormal, compatibility, record_roots)
+             last_turn_abnormal, compatibility, record_roots, send_mode)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34)",
+                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34,
+                 ?35)",
         params![
             session.id,
             enum_to_text(&session.agent),
@@ -1121,6 +1122,7 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.paused,
             compatibility_to_text(&session.compatibility),
             record_roots_to_text(&session.record_roots),
+            enum_to_text(&session.send_mode),
         ],
     )?;
     Ok(())
@@ -1162,6 +1164,7 @@ pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Option<Session>> {
         config_dir: row.get(15)?,
         pinned: row.get(16)?,
         locked: row.get(28)?,
+        send_mode: enum_from_row::<crate::protocol::SendMode>(row, 34)?,
         observed_model: row.get(29)?,
         observed_effort: row.get(30)?,
         started_at: row.get(17)?,

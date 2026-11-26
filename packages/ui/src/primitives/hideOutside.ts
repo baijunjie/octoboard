@@ -23,7 +23,11 @@ export function clearTopLayer(element: Element): void {
 }
 
 /** Props that mark an element a live announcer, which the modal's hiding of the page leaves exposed to assistive
- * technology, with its ancestors, while a modal is open. */
+ * technology, with its ancestors, while a modal is open. A wrapper that holds only status regions and stands among the
+ * items of a flex or grid container with a gap takes `contents` as well, so it gets no layout box: an empty block there
+ * would still take the gap. The
+ * mark is read as the modal opens: a live announcer mounted while one is already open lies inside the subtree hidden
+ * then, and stays hidden until it closes, so a live announcer must exist before the modal opens. */
 export function liveAnnouncerProps(): { "data-live-announcer": "true" } {
   return { "data-live-announcer": "true" };
 }

@@ -1226,6 +1226,14 @@
       },
       "description": "The answer to one question of a `question` interaction, in `answer_interaction`."
     },
+    "QueuedMode": {
+      "type": "string",
+      "enum": [
+        "when_idle",
+        "manual"
+      ],
+      "description": "The mode a queued message waits in. Sending now is an action (`send_queued_message`), not a\nstored mode."
+    },
     "RangeFile": {
       "oneOf": [
         {
@@ -2624,6 +2632,199 @@
             "session": {
               "type": "string"
             },
+            "text": {
+              "type": "string"
+            },
+            "images": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "command": {
+              "type": "boolean"
+            },
+            "mode": {
+              "$ref": "#/$defs/SendMode"
+            },
+            "type": {
+              "type": "string",
+              "const": "create_queued_message"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "text"
+          ],
+          "description": "Puts one of the user's messages at the end of the session's composer queue, for any\nsession that is not archived. `mode` defaults to the session's `send_mode`; `now` hands it\nto delivery at once, as `send_queued_message` does. `images` (at most ten, each saved for\nthis session by `save_pasted_image`) and `files` (paths, an attachment saved for this\nsession among them) are moved into the session's composer directory. Answered with\n`queued_message_created`. Refused, with nothing moved, with `unknown_session`,\n`session_archived`, `field_required` (`field: text`) for nothing to send or a command with\nimages or files, `unreadable_request` (`field: images`), `provider_unsupported` for images\nto a provider that takes none or a command to one that runs none, and `limit_exceeded`\n(`queued_messages`)."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "images": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "command": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "update_queued_message"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "message"
+          ],
+          "description": "Changes a waiting queued message: a field left out is left alone, a present list replaces\nthe message's whole. Clears its `failure`. Answered with `ack`. Refused as\n`create_queued_message` is, with `queued_message_not_found` and `queued_message_sending`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "mode": {
+              "$ref": "#/$defs/QueuedMode"
+            },
+            "type": {
+              "type": "string",
+              "const": "set_queued_message_mode"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "message",
+            "mode"
+          ],
+          "description": "Sets the mode a waiting queued message waits in, clearing its `failure`. Answered with\n`ack`. Refused with `queued_message_not_found` and `queued_message_sending`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "position": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "move_queued_message"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "message",
+            "position"
+          ],
+          "description": "Moves a queued message to `position` in the queue, counted from 0 among the messages after\nit is taken out; past the end puts it last. Answered with `ack`. Refused with\n`queued_message_not_found`, and a negative `position` with `unreadable_request`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "send_queued_message"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "message"
+          ],
+          "description": "Sends a waiting queued message now, whatever its mode and the session's status, through the\nsession's message delivery under its own holds. A session with no process is resumed as\n`resume_session` resumes it, and the message handed over once it can take one. Answered\nwith `ack` once delivery has taken the message (written or queued) or the resume has\nstarted; a refusal is answered with its error and also set as the message's `failure`.\nRefused with `queued_message_not_found` and `queued_message_sending`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "withdraw_queued_message"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "message"
+          ],
+          "description": "Withdraws a queued message: one waiting, one a send now waits to hand over once the session\nit resumes can take it, or one delivery holds queued and has not written. Answered with\n`ack`. Refused with `queued_message_not_found`, and with `queued_message_sending` for one\nbeing handed over or written."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "mode": {
+              "$ref": "#/$defs/SendMode"
+            },
+            "type": {
+              "type": "string",
+              "const": "set_session_send_mode"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "mode"
+          ],
+          "description": "Sets the session's default send mode for new messages (`Session.send_mode`). Answered with\n`ack`; every client is sent `session_upserted`. Refused with `unknown_session`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
             "interaction": {
               "type": "string"
             },
@@ -2675,7 +2876,7 @@
             "type",
             "session"
           ],
-          "description": "Saves an image the user pasted into the terminal of a running session as a file on the daemon\nhost, for its agent to read by path: `data` is the image as a PNG, JPEG, GIF or WebP file,\nbase64-encoded, of at most 10 MiB decoded (see `crate::session::pasted_image`), or `upload`\nnames an upload of this connection whose parts hold it; exactly one of the two is given.\nAnswered with `pasted_image_saved`. Refused with `unknown_session` or\n`session_not_running`, with `provider_unsupported` (operation `message_images`) for a\nsession whose provider takes no images, and for an upload with `upload_unavailable` or\n`upload_parts_mismatch`."
+          "description": "Saves an image the user pasted into the terminal of a session, or attached to a message of\nits composer, as a file on the daemon host (in its composer directory for an interrupted\nsession), for its agent to read by path: `data` is the image as a PNG, JPEG, GIF or WebP\nfile, base64-encoded, of at most 10 MiB decoded (see `crate::session::pasted_image`), or\n`upload` names an upload of this connection whose parts hold it; exactly one of the two is\ngiven. Answered with `pasted_image_saved`. Refused with `unknown_session` or\n`session_not_running` (a session archived, starting or ending), with\n`provider_unsupported` (operation `message_images`) for a session whose provider takes no\nimages, and for an upload with `upload_unavailable` or `upload_parts_mismatch`."
         },
         {
           "type": "object",
@@ -2770,7 +2971,7 @@
             "name",
             "size"
           ],
-          "description": "Starts uploading a file of `size` bytes (1 to 100 MiB), called `name` where it came from, in\nparts, to attach it to a running session; served on the control connection, which holds the\nupload. Answered with `attachment_upload_created`. Refused with `unknown_session`,\n`session_not_running`, or `limit_exceeded` (`attachment_uploads`,\n`attachment_upload_bytes`). See `crate::session::attachment`."
+          "description": "Starts uploading a file of `size` bytes (1 to 100 MiB), called `name` where it came from, in\nparts, to attach it to a running or interrupted session; served on the control connection,\nwhich holds the upload. Answered with `attachment_upload_created`. Refused with\n`unknown_session`, `session_not_running` (a session archived, starting or ending), or\n`limit_exceeded` (`attachment_uploads`, `attachment_upload_bytes`). See\n`crate::session::attachment`."
         },
         {
           "type": "object",
@@ -2818,7 +3019,7 @@
             "session",
             "upload"
           ],
-          "description": "Saves the file an attachment upload of this connection holds, for the session's agent to\nread by path. Answered with `attachment_saved`. Refused with `unknown_session`,\n`session_not_running`, `upload_unavailable` or `upload_parts_mismatch`."
+          "description": "Saves the file an attachment upload of this connection holds (in the session's composer\ndirectory for an interrupted session), for the session's agent to read by path.\nAnswered with `attachment_saved`. Refused with `unknown_session`, `session_not_running` (a\nsession archived, starting or ending), `upload_unavailable` or `upload_parts_mismatch`."
         },
         {
           "type": "object",
@@ -4766,6 +4967,26 @@
     "SecretLoginText": {
       "type": "string",
       "description": "One transient line of login input. Its debug representation is always redacted."
+    },
+    "SendMode": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "now",
+          "description": "Handed to the session's message delivery at once."
+        },
+        {
+          "type": "string",
+          "const": "when_idle",
+          "description": "Sent by the daemon once the session is idle, one message per idle, in queue order."
+        },
+        {
+          "type": "string",
+          "const": "manual",
+          "description": "Never sent automatically: it waits in the queue until the user sends it."
+        }
+      ],
+      "description": "How a new message of the session's composer is sent: the session's default (`Session.send_mode`)\nand the mode `create_queued_message` takes."
     },
     "SessionBranchKind": {
       "type": "string",

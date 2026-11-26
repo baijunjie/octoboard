@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::messaging::texts::SenderNote;
-use crate::protocol::{notice_code, Notice};
+use crate::protocol::{notice_code, AgentId, Notice};
 use crate::session::{LiveSession, ToldLost};
 use crate::state::AppState;
 
@@ -194,7 +194,6 @@ impl AppState {
         if untaken.is_empty() {
             return;
         }
-        let agent = live.agent.label();
         tracing::warn!(
             session = %live.id,
             messages = untaken.len(),
@@ -202,20 +201,24 @@ impl AppState {
         );
         self.tell_senders_of(&live.id, live.agent, SenderNote::NotTaken, &untaken);
         for (logical_id, text) in untaken {
-            self.broadcast(
-                Notice::new(
-                    notice_code::MESSAGE_NOT_TAKEN,
-                    format!(
-                        "{agent} did not take a message {app} wrote while its turn ran: the turn \
-                         ended without it, so it was not sent and may still be in the input box. \
-                         It is not written again. It read:\n{text}",
-                        app = crate::APP_NAME,
-                    ),
-                    &[("agent", agent), ("detail", &text)],
-                )
-                .about(&live.id),
-            );
+            self.broadcast(not_taken_notice(live.agent, &text).about(&live.id));
             live.note_told_lost(ToldLost::NotTaken, logical_id, text);
         }
     }
+}
+
+/// The `message_not_taken` notice for a message `agent` did not take in the turn it was written
+/// during, with its `text`.
+pub(crate) fn not_taken_notice(agent: AgentId, text: &str) -> Notice {
+    let label = agent.label();
+    Notice::new(
+        notice_code::MESSAGE_NOT_TAKEN,
+        format!(
+            "{label} did not take a message {app} wrote while its turn ran: the turn ended \
+             without it, so it was not sent and may still be in the input box. It is not written \
+             again. It read:\n{text}",
+            app = crate::APP_NAME,
+        ),
+        &[("agent", label), ("detail", text)],
+    )
 }

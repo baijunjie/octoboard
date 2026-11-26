@@ -7,7 +7,7 @@ import { useRegionCycle } from "./useRegionCycle";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const SHOWN = { topbar: true, rail: false, devices: false, tasks: false, welcome: false, sidebar: false, archive: false, notices: false, uploads: false, terminal: false, banner: false, update: false };
+const SHOWN = { topbar: true, rail: false, devices: false, tasks: false, welcome: false, sidebar: false, archive: false, notices: false, uploads: false, queue: false, terminal: false, composer: false, banner: false, update: false };
 
 function Cycle({ panel, landing = false }: { panel: boolean; landing?: boolean }) {
   useRegionCycle({ shown: SHOWN, panels: { "panel-files": panel }, focusTerminal: () => {} });
@@ -222,4 +222,56 @@ it("skips the standing notices' banner where it is not shown", () => {
   document.getElementById("bar")!.focus();
   cycle.f6();
   expect(cycle.active()).toBe("terminal-input");
+});
+
+function ComposerCycle({ queue, composer }: { queue: boolean; composer: boolean }) {
+  useRegionCycle({
+    shown: { ...SHOWN, terminal: true, uploads: true, queue, composer },
+    panels: { "panel-files": true },
+    focusTerminal: () => document.getElementById("terminal-input")?.focus(),
+  });
+  return (
+    <>
+      <header data-region="topbar"><button id="bar">bar</button></header>
+      <div data-region="uploads"><button id="cancel-uploads">Cancel</button></div>
+      {queue && <div data-region="queue"><button id="view-queue">View</button></div>}
+      <section data-region="terminal"><textarea id="terminal-input" /></section>
+      {composer && <section data-region="composer"><button id="composer-control">Attach</button><textarea id="composer-input" data-region-landing /></section>}
+      <section data-region="panel-files"><button id="files">files</button></section>
+    </>
+  );
+}
+
+function mountComposer(queue: boolean, composer: boolean) {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  act(() => root.render(<ComposerCycle queue={queue} composer={composer} />));
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const f6 = (shiftKey = false) => act(() => void window.dispatchEvent(new KeyboardEvent("keydown", { key: "F6", shiftKey, bubbles: true })));
+  return { f6, active: () => document.activeElement?.id };
+}
+
+it("visits the compact queue line after the uploads notice and before the terminal, then the composer right after the terminal and before the panels, in both directions", () => {
+  const cycle = mountComposer(true, true);
+  document.getElementById("bar")!.focus();
+  for (const stop of ["cancel-uploads", "view-queue", "terminal-input", "composer-input", "files", "bar"]) {
+    cycle.f6();
+    expect(cycle.active()).toBe(stop);
+  }
+  for (const stop of ["files", "composer-input", "terminal-input", "view-queue", "cancel-uploads", "bar"]) {
+    cycle.f6(true);
+    expect(cycle.active()).toBe(stop);
+  }
+});
+
+it("skips the queue line and the composer where they are not shown", () => {
+  const cycle = mountComposer(false, false);
+  document.getElementById("bar")!.focus();
+  for (const stop of ["cancel-uploads", "terminal-input", "files"]) {
+    cycle.f6();
+    expect(cycle.active()).toBe(stop);
+  }
 });

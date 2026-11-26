@@ -5,7 +5,7 @@ because it governs the whole interface, then app-wide settings in six groups, ea
 headings" in `docs/product/settings.md`). The groups are ordered by how often each is used, most frequent first:
 
 - **Sorting**: **Sessions**, **Active projects** and **Inactive projects**, in every client;
-- **Terminals**: **Close idle terminals when closing the panel**, in every client;
+- **Terminals**: **Message composer**, then **Close idle terminals when closing the panel**, in every client;
 - **Power**, in every client, where the daemon's host can be held awake: **Prevent sleep**, and under it, while it is
   on, **When to prevent sleep**;
 - **Window**, in the desktop application's main window only: **Keep running in the background**, then **Show menu bar
@@ -146,6 +146,15 @@ read and change them, and a configuration export that includes the General secti
 "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The
 application settings an export carries" in `docs/product/settings-in-a-configuration.md`). What is held, and exactly
 when, is in `docs/product/keeping-the-computer-awake.md`.
+
+## Message composer
+
+A switch, **off to begin with**: whether the message composer shows below the session terminal, where a message is
+written in full, given files and sent or added to the session's queue (see `docs/product/message-composer.md`). The
+description says so, and that the choice applies to this device or browser only: it is kept by the client rather than
+the daemon, and takes effect as it is turned (see "Turning the composer on" in `docs/product/message-composer.md`). A
+configuration export that includes the General section carries it, from any platform (see "The settings a client
+holds" in `docs/product/settings-in-a-configuration.md`).
 
 ## Close idle terminals when closing the panel
 

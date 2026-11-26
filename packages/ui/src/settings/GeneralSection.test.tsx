@@ -77,7 +77,7 @@ it("shows the language row on its own, then Sorting, Terminals, Power, Window an
   ]);
   expect(groups.map(({ ids }) => ids)).toEqual([
     ["session-order.sessions", "session-order.activeProjects", "session-order.inactiveProjects"],
-    ["auto_close_idle_shell_terminals"],
+    ["session-composer", "auto_close_idle_shell_terminals"],
     ["keep_awake"],
     ["run-in-background", "menu-bar-icon"],
     ["launch-at-login", "resume_sessions_on_start"],
@@ -89,7 +89,7 @@ it("leaves out the Window and Power groups and the launch-at-login row in a brow
   expect(ungrouped).toEqual(["language"]);
   expect(groups.map(({ key, ids }) => [key, ids])).toEqual([
     ["settings.sort.group", ["session-order.sessions", "session-order.activeProjects", "session-order.inactiveProjects"]],
-    ["settings.general.group.terminals", ["auto_close_idle_shell_terminals"]],
+    ["settings.general.group.terminals", ["session-composer", "auto_close_idle_shell_terminals"]],
     ["settings.general.group.startup", ["resume_sessions_on_start"]],
   ]);
 });

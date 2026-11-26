@@ -5,6 +5,7 @@ import { aboutScenarios } from "./about";
 import { activityScenarios } from "./activity";
 import { archiveScenarios } from "./archive";
 import { busyScenarios } from "./busy";
+import { composerScenarios } from "./composer";
 import { configurationScenarios } from "./configuration";
 import { connectionScenarios } from "./connection";
 import { consoleMemoryScenarios } from "./consoleMemory";
@@ -62,6 +63,7 @@ export const SCENARIOS: Scenario[] = [
   ...startupScenarios,
   ...connectionScenarios,
   ...sessionHistoryScenarios,
+  ...composerScenarios,
   ...terminalPanelScenarios,
   ...updateScenarios,
   ...noticeScenarios,

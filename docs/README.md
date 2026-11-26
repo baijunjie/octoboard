@@ -61,6 +61,11 @@ Where to start, by question:
 - [Interrupting a session's turn](product/interrupting-turns.md) — how a parent stops a child session's running turn.
 - [Message delivery](product/message-delivery.md) — how messages are written into a running session and held when it
   cannot take them.
+- [Message composer](product/message-composer.md) — the optional per-client editor below the session terminal: the
+  switch, writing and sending a message, attachments, editing a queued message, the `@` picker, and Quote and Add as
+  context into it.
+- [Composer queue](product/composer-queue.md) — the daemon's queue of unsent messages shared by all clients: send modes,
+  when-idle sending, Send now, messages that come back, their files, the queue line, and the requests and refusals.
 - [Slash commands and image messages](product/slash-commands-and-image-messages.md) — `send_command` and images on
   `send_message`: the completion check, writing images and text through the terminal or Codex's queue, and why neither
   is ever carried to another process as text.

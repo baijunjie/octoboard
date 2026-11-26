@@ -9,7 +9,7 @@ import { delegatingSessionIds, type ShownStatusKind } from "./sessionStatus";
 /** No session delegates: the sessions of a test that does not look at delegated work. */
 const NONE: ReadonlySet<string> = new Set();
 
-const session = (id: string, status: Received<SessionStatus>, started_at: number, pinned = false, bound_to: string | null = null): Session => ({ compatibility: {},
+const session = (id: string, status: Received<SessionStatus>, started_at: number, pinned = false, bound_to: string | null = null): Session => ({ compatibility: {}, send_mode: "now",
   id,
   agent: "claude",
   console_id: "c",

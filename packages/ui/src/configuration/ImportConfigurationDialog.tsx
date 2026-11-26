@@ -103,7 +103,7 @@ async function whileListening<T>(subscribe: () => () => void, work: () => Promis
  * unchecked) there is nothing to import. A directory typed for a project or an account that the daemon would refuse
  * stops the import at the row, bringing its tab forward. A document the daemon refuses leaves the dialog on the first
  * step, with the reason, for another file to be tried. The settings only this client holds (appearance, Markdown style,
- * terminal font size, running in the background, the menu bar icon, session order) and the keyboard shortcuts travel
+ * terminal font size, running in the background, the menu bar icon, the message composer, session order) and the keyboard shortcuts travel
  * in the settings of their sections: the review says what each would change here, and they are applied here from the
  * daemon's reply, for what it says it applied. The language is the daemon's own: the review lists it with the
  * General settings and the daemon applies it, after which every window follows it. The file's default clone directory

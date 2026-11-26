@@ -18,6 +18,30 @@ pub(crate) fn scratch_of(state: &AppState, session_id: &str) -> Result<PathBuf> 
         .ok_or_else(|| not_running(session_id))
 }
 
+/// Where the files Octoboard keeps for the session `session_id`'s agent (pasted images, attached
+/// files) are saved: its scratch directory while its process runs, and, for an interrupted
+/// session, its composer directory (`AppState::composer_dir`), created if missing,
+/// where the files of a message queued for it wait for it to be resumed. Refused with
+/// `unknown_session`, or `session_not_running` for an archived session. **Blocks.**
+pub(crate) fn files_home(state: &AppState, session_id: &str) -> Result<PathBuf> {
+    let record = state.session_record(session_id)?;
+    if let Some(scratch) = state
+        .live_session(session_id)
+        .and_then(|live| live.scratch_dir())
+    {
+        return Ok(scratch);
+    }
+    // Only a session that rests with no process: one that reads as running but has none
+    // registered is starting or ending, and its own scratch directory is what it would use.
+    if record.status != crate::protocol::SessionStatus::Interrupted {
+        return Err(not_running(session_id));
+    }
+    let directory = state.composer_dir(session_id);
+    crate::platform::fs::create_private_dir(&directory)
+        .with_context(|| format!("creating {}", directory.display()))?;
+    Ok(directory)
+}
+
 /// The refusal of a session with no process.
 pub(crate) fn not_running(session_id: &str) -> anyhow::Error {
     CodedError::raised(
@@ -40,3 +64,6 @@ pub(crate) fn subdirectory(session_id: &str, scratch: &Path, name: &str) -> Resu
         Err(err) => Err(err).with_context(|| format!("creating {}", directory.display())),
     }
 }
+
+#[cfg(test)]
+mod tests;

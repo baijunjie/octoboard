@@ -335,12 +335,13 @@ describe("which section each row is indexed under", () => {
     expect(SETTINGS_SEARCH_INDEX.appearance.every((entry) => entry.group === undefined)).toBe(true);
   });
 
-  it("lists the language row and the sorting, terminal, power, window, startup and command-line rows under General, in the order the page shows them, and not the theme or the Markdown style", () => {
+  it("lists the language row and the sorting, message composer, terminal, power, window, startup and command-line rows under General, in the order the page shows them, and not the theme or the Markdown style", () => {
     expect(ids("general")).toEqual([
       "language",
       "session-order.sessions",
       "session-order.activeProjects",
       "session-order.inactiveProjects",
+      "session-composer",
       "auto_close_idle_shell_terminals",
       "keep_awake",
       "keep_awake_when",

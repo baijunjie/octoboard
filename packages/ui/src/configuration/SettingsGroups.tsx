@@ -43,7 +43,7 @@ export function SettingsGroupCard({ title, lines, choice }: { title: string; lin
  * workflow listing its values. The daemon holds the switches, when Prevent sleep holds and the git workflow; the lines
  * of what only the client holds or carries are the caller's: `clientLine` words one of `clientSettings` (appearance,
  * language, which the daemon holds but is worded the same way, Markdown style, terminal font size, run in background,
- * menu bar icon),
+ * menu bar icon, message composer),
  * `sorting` is the session order's line, `cloneDir` is the default clone directory's line and `shortcuts` the keyboard
  * shortcuts', each absent when the document carries none. Only the `sections` given are drawn (all of them when
  * absent), and a group with no line is not drawn: what `settings` lacks has no line. With `choices` (the review's)
@@ -107,6 +107,7 @@ export function SettingsGroups({
           ...clientLines("run_in_background", "show_menu_bar_icon"),
           ...generalSwitches("keep_awake"),
           ...keepAwakeWhenLine(),
+          ...clientLines("session_composer"),
           ...generalSwitches("auto_close_idle_shell_terminals"),
           ...(sorting ? [React.cloneElement(sorting, { key: "sorting" })] : []),
         ]}

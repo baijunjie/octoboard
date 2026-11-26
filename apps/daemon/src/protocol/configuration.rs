@@ -239,6 +239,12 @@ pub struct DocumentSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub show_menu_bar_icon: Option<bool>,
+    /// Whether the session composer is on (the message editor below a session's terminal), carried
+    /// like `run_in_background`: the client holds it, the daemon builds none and passes it through
+    /// an import's reply as it came, and only a client that has the composer applies it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub session_composer: Option<bool>,
     /// Whether the daemon holds its host awake (Prevent sleep, see `Settings.keep_awake`). The
     /// daemon builds it when the General section is exported and applies it from an import,
     /// whether or not this host can hold: the value is stored either way.
@@ -347,6 +353,7 @@ impl DocumentSettings {
             resume_sessions_on_start,
             run_in_background,
             show_menu_bar_icon,
+            session_composer,
             keep_awake,
             keep_awake_when,
             auto_close_idle_shell_terminals,
@@ -369,6 +376,7 @@ impl DocumentSettings {
                     || resume_sessions_on_start.is_some()
                     || run_in_background.is_some()
                     || show_menu_bar_icon.is_some()
+                    || session_composer.is_some()
                     || keep_awake.is_some()
                     || keep_awake_when.is_some()
                     || auto_close_idle_shell_terminals.is_some()
@@ -423,6 +431,7 @@ impl DocumentSettings {
             resume_sessions_on_start,
             run_in_background,
             show_menu_bar_icon,
+            session_composer,
             keep_awake,
             keep_awake_when,
             auto_close_idle_shell_terminals,
@@ -448,6 +457,7 @@ impl DocumentSettings {
             resume_sessions_on_start: resume_sessions_on_start.filter(|_| general),
             run_in_background: run_in_background.filter(|_| general),
             show_menu_bar_icon: show_menu_bar_icon.filter(|_| general),
+            session_composer: session_composer.filter(|_| general),
             keep_awake: keep_awake.filter(|_| general),
             keep_awake_when: keep_awake_when.filter(|_| general),
             auto_close_idle_shell_terminals: auto_close_idle_shell_terminals.filter(|_| general),
@@ -1057,6 +1067,7 @@ mod tests {
             auto_close_idle_shell_terminals: Some(true),
             run_in_background: Some(true),
             show_menu_bar_icon: Some(true),
+            session_composer: Some(true),
             keep_awake: Some(true),
             keep_awake_when: Some("always".to_string()),
             default_clone_dir: Some("~/code".to_string()),
@@ -1123,6 +1134,7 @@ mod tests {
                 "keep_awake_when",
                 "resume_sessions_on_start",
                 "run_in_background",
+                "session_composer",
                 "session_order",
                 "show_menu_bar_icon",
             ]
@@ -1172,6 +1184,13 @@ mod tests {
                 "show_menu_bar_icon",
                 DocumentSettings {
                     show_menu_bar_icon: Some(false),
+                    ..Default::default()
+                },
+            ),
+            (
+                "session_composer",
+                DocumentSettings {
+                    session_composer: Some(false),
                     ..Default::default()
                 },
             ),

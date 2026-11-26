@@ -21,6 +21,7 @@ import { ThemeProvider } from "./preferences/theme";
 import { defaultDaemonReply, testDaemon } from "./test/testDaemon";
 import { matchesWidthQuery } from "./test/viewport";
 import { partSelector } from "./primitives";
+import { sessionComposerEnabled } from "./composer/composerSetting";
 import { BROWSER_HOST } from "./test/hosts";
 
 /** Clearing localStorage alone leaves the window preferences held in module memory unchanged. */
@@ -33,6 +34,7 @@ export function resetAppPreferences(): void {
     scheduledTaskPreference.set(undefined);
     visibility.sidebar.set(true);
     visibility.aside.set(true);
+    sessionComposerEnabled.set(false);
   });
 }
 

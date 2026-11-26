@@ -74,6 +74,8 @@
     { "path": "session/pasted_image/mod.rs", "kind": "own", "writes": "A session's scratch directory under `~/.octoboard/run/`: attachments, pasted images, its own files." },
     { "path": "session/scratch.rs", "kind": "own", "writes": "A session's scratch directory under `~/.octoboard/run/`: attachments, pasted images, its own files." },
     { "path": "session/term/mod.rs", "kind": "own", "writes": "A session's scratch directory under `~/.octoboard/run/`: attachments, pasted images, its own files." },
+    { "path": "session/queued_files.rs", "kind": "own", "writes": "A session's composer directory under `~/.octoboard/composer/`: the images and files of its queued messages, moved in from its scratch directory." },
+    { "path": "state/composer.rs", "kind": "own", "writes": "Removes a queued message's own files, and a session's composer directory under `~/.octoboard/composer/` when the session is deleted." },
     { "path": "terminal/pty.rs", "kind": "own", "writes": "Removes a terminal's scratch directory when its process has ended." },
     { "path": "terminal/saved_output.rs", "kind": "own", "writes": "`~/.octoboard/output/`." },
     { "path": "session_git_hooks/mod.rs", "kind": "own", "writes": "`~/.octoboard/githooks/`: the hook dispatchers and their state." },

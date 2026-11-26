@@ -89,6 +89,9 @@ import { useDaemon, useDaemonStore, useDaemonStoreEqual, useNativeAppsRefresh, u
 import { useOpenSessionInApp } from "./components/host/useOpenSessionInApp";
 import { terminalEmptyState } from "./app/emptyState";
 import { TerminalPane } from "./terminal/TerminalPane";
+import { SessionComposer, useComposerShown } from "./composer/SessionComposer";
+import { useQueueLineShown } from "./composer/SessionQueueLine";
+import { useEndEditsWhenOff } from "./composer/useEndEditsWhenOff";
 import { useTerminalFontShortcuts } from "./terminal/terminalFontShortcut";
 import { useFindInFilesShortcut } from "./app/useFindInFilesShortcut";
 import { StartupFramed } from "./StartupScreen";
@@ -342,6 +345,13 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   const uploadsShown = useDropUploadsShown(selectedSession?.id) && !archiveOpen && !agentAreaInert && !pageShown;
   // So is the banner of the session's standing notices, for its Details and dismiss controls.
   const noticesShown = useShownStandingNotices(selectedSession).length > 0 && !archiveOpen && !agentAreaInert && !pageShown;
+  // And the compact line of the session's queued messages while the composer is off, which lists them.
+  const queueShown = useQueueLineShown(selectedSession?.id) && selectedSession?.status !== "archived" && !archiveOpen && !agentAreaInert && !pageShown;
+  // The message composer below the terminal, while it is on.
+  const composerOn = useComposerShown(selectedSession);
+  // An edit of a queued message under way here ends as the composer goes off, in this window or another.
+  useEndEditsWhenOff();
+  const composerShown = composerOn && !archiveOpen && !agentAreaInert && !pageShown;
   useRegionCycle({
     shown: {
       topbar: true,
@@ -353,6 +363,8 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
       archive: archiveOpen && !agentAreaInert && !pageShown,
       notices: noticesShown,
       uploads: uploadsShown,
+      queue: queueShown,
+      composer: composerShown,
       terminal: (selectedSession !== undefined || emptyHasAction) && !archiveOpen && !agentAreaInert && !pageShown,
       banner: connectionState === "reconnecting" || connectionState === "closed",
       update: updateNoticeShown,
@@ -953,34 +965,43 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
                           onViewState: onArchiveViewState,
                         } : undefined}
                       />
-                      <TerminalPane
-                        exposed={!agentAreaInert && !pageShown}
-                        ref={terminalRef}
-                        resizing={isDockEasing(sidebarColumnPhase)}
-                        onViewFile={viewLinkedFile}
-                        onSelectSession={stableSelectSession}
-                        restoreFocus={focusTerminal}
-                        behindArchive={archiveOpen}
-                        noSelection={selectedSessionId === undefined}
-                        session={selectedSession}
-                        onResume={resumeSession}
-                        resuming={selectedSessionId !== undefined && resumingIds.has(selectedSessionId)}
-                        modalOpen={otherModalOpen || settingsOpen}
-                        onAddProject={emptyState?.kind === "add-project" && currentConsole
-                          ? () => openDialog({ kind: "new-project", console: currentConsole })
-                          : undefined}
-                        noAgents={emptyState?.kind === "no-agents" ? emptyState.reason : undefined}
-                        onAddAgent={() => openSettingsAt("accounts", { addAgent: true })}
-                        newSession={emptyState && currentConsole && (emptyState.kind === "new-session" || emptyState.kind === "new-console-session")
-                          ? {
-                            message: t(emptyState.kind === "new-session" ? "sidebar.project.openSession" : "sidebar.consoleSessions.empty"),
-                            label: t(emptyState.kind === "new-session" ? "sidebar.project.openSession" : "sidebar.consoleSessions.new"),
-                            onPress: () => emptyState.kind === "new-session"
-                              ? openDialog({ kind: "new-session", console: currentConsole, project: emptyState.project, binding: emptyState.binding })
-                              : openConsoleSession(currentConsole),
-                          }
-                          : undefined}
-                      />
+                      {/* The terminal over the message composer, which takes its height from the column while it is on. */}
+                      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                        <TerminalPane
+                          exposed={!agentAreaInert && !pageShown}
+                          ref={terminalRef}
+                          resizing={isDockEasing(sidebarColumnPhase)}
+                          onViewFile={viewLinkedFile}
+                          onSelectSession={stableSelectSession}
+                          restoreFocus={focusTerminal}
+                          behindArchive={archiveOpen}
+                          noSelection={selectedSessionId === undefined}
+                          session={selectedSession}
+                          onResume={resumeSession}
+                          resuming={selectedSessionId !== undefined && resumingIds.has(selectedSessionId)}
+                          modalOpen={otherModalOpen || settingsOpen}
+                          onAddProject={emptyState?.kind === "add-project" && currentConsole
+                            ? () => openDialog({ kind: "new-project", console: currentConsole })
+                            : undefined}
+                          noAgents={emptyState?.kind === "no-agents" ? emptyState.reason : undefined}
+                          onAddAgent={() => openSettingsAt("accounts", { addAgent: true })}
+                          newSession={emptyState && currentConsole && (emptyState.kind === "new-session" || emptyState.kind === "new-console-session")
+                            ? {
+                              message: t(emptyState.kind === "new-session" ? "sidebar.project.openSession" : "sidebar.consoleSessions.empty"),
+                              label: t(emptyState.kind === "new-session" ? "sidebar.project.openSession" : "sidebar.consoleSessions.new"),
+                              onPress: () => emptyState.kind === "new-session"
+                                ? openDialog({ kind: "new-session", console: currentConsole, project: emptyState.project, binding: emptyState.binding })
+                                : openConsoleSession(currentConsole),
+                            }
+                            : undefined}
+                        />
+                        {composerOn && selectedSession && (
+                        // Inert behind the archive view, as the terminal is.
+                          <div inert={archiveOpen} className="flex max-h-[60%] min-h-0 shrink-0 flex-col">
+                            <SessionComposer key={selectedSession.id} session={selectedSession} onViewFile={viewLinkedFile} exposed={!agentAreaInert && !pageShown && !archiveOpen} />
+                          </div>
+                        )}
+                      </div>
                     </div>
                     {asideOwner && (
                       <OpenShellTerminal.Provider value={stableOpenShellTerminal}>

@@ -25,12 +25,17 @@ order:
    a stop (see `docs/product/standing-session-notices.md`);
 8. the upload notice over the top of the terminal, only while it shows and the terminal is a stop (see "The upload
    notice" in `docs/product/dropping-files-onto-a-terminal.md`);
-9. the terminal;
-10. the right pane's panels, each a region of its own, in stacking order, except that a maximized panel comes first among
+9. the line of the session's queued messages over the top of the terminal, only while it shows (the message composer
+   is off in this window) and the terminal is a stop (see "The queue line with the composer off" in
+   `docs/product/composer-queue.md`);
+10. the terminal;
+11. the message composer below the terminal, only while it shows and the terminal is a stop (see
+   `docs/product/message-composer.md`);
+12. the right pane's panels, each a region of its own, in stacking order, except that a maximized panel comes first among
    them (see "Panels and keyboard focus" in `docs/product/right-pane-panels.md`);
-11. the update notice, only while it is shown (see "The update notice" in `docs/product/in-app-updates.md`);
-12. the connection banner, only while it is shown;
-13. the toasts, only while at least one toast is shown.
+13. the update notice, only while it is shown (see "The update notice" in `docs/product/in-app-updates.md`);
+14. the connection banner, only while it is shown;
+15. the toasts, only while at least one toast is shown.
 
 It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` still go to the agent, and `F6` and
 `Shift+F6` never do. The same holds in a shell terminal of the Terminal panel, for the shell. With focus in none of the
@@ -72,7 +77,9 @@ Where focus lands in each region:
 | Archive view | its first control |
 | Standing notices' banner | its Details button (All notices while there are several); when the banner goes while one of its controls holds focus, focus returns to the terminal |
 | Upload notice | its Cancel button; when the notice goes while Cancel holds focus, focus returns to the terminal |
+| Queued messages' line | its View button; when the line goes while one of its controls holds focus, focus returns to the terminal |
 | Terminal | the terminal, so typing reaches the agent; instead its cover while the session's process cannot be reached (see "While the session's process cannot be reached" in `docs/product/session-terminal-reconnecting-and-loading.md`), or the button its area offers in the terminal's place while there is one — its cover's Reconnect, or its empty state's Add project, New session or New console session (see "Reconnecting" in `docs/product/session-terminal-reconnecting-and-loading.md` and "A console with nothing in it" in `docs/product/session-terminal-with-no-session-selected.md`); for an archived session, its history in the terminal's place (see "Keyboard focus" in `docs/product/session-history.md`) |
+| Message composer | its text area |
 | Report panel | the pager's first enabled button in its header, else Maximize panel or Restore panel size while docked, else Close panel; Tab goes through the remaining header controls to the report page |
 | Files panel | its header's selected tab, Files or Changes, preserving the current mode; the arrow keys move between Files and Changes, and Tab goes through the tab's controls (the filter toggle, in Files Find in files and Collapse all folders while it is enabled, and in Changes Expand all folders or Collapse all folders while the list is grouped by folder and the button is enabled, then Group by folder), then Refresh, the panel's own buttons (see "A panel's header" in `docs/product/right-pane-panels.md`) and the content below; Try again while the panel failed to load (see "Loading the project pane" in `docs/product/project-pane.md`) |
 | Processes panel | Try again while the first reading of its list failed (see "Loading, refreshing and failures" in `docs/product/processes-panel.md`); otherwise, in a project's panel, its session filter while the field is shown, or its header's filter toggle while the field is hidden; in a console session's, the first tree's Stop, else its Close panel |

@@ -19,7 +19,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{bail, Context, Result};
 
-use super::scratch::{not_running, scratch_of, subdirectory};
+use super::scratch::{files_home, not_running, subdirectory};
 use super::upload::{Body, Kind, Taken, UploadBudget, Uploads, MAX_PART_BYTES};
 use crate::platform::fs::create_private;
 use crate::platform::names::with_suffix;
@@ -37,7 +37,7 @@ pub const MAX_BYTES: usize = 100 * 1024 * 1024;
 pub const MAX_UPLOAD_BYTES: usize = 512 * 1024 * 1024;
 
 /// The directory under a session's scratch directory the files go in.
-const DIRECTORY: &str = "attachments";
+pub(crate) const DIRECTORY: &str = "attachments";
 
 /// How many numbered names a save tries before it gives up.
 const MAX_NAME_TRIES: u32 = 1000;
@@ -78,8 +78,8 @@ impl Uploads<Spool> {
         Self::of_kind(&ATTACHMENT, budget)
     }
 
-    /// Starts uploading a file of `size` bytes, called `name` where it came from, for the running
-    /// session `session_id`, and returns the upload's handle; its spool file is created at once.
+    /// Starts uploading a file of `size` bytes, called `name` where it came from, for the session
+    /// `session_id` (not archived), and returns the upload's handle; its spool file is created at once.
     /// See [`Uploads::create_with`] for the refusals. **Blocks.**
     pub fn create(
         &self,
@@ -154,14 +154,14 @@ impl Drop for Spool {
     }
 }
 
-/// Saves the file whose parts the upload `taken` holds for the running session `session_id`, under
-/// its name, numbered (`report-2.pdf`) when a file of that name is there already, and returns its
-/// absolute path. Refused with `unknown_session` or `session_not_running`; a failure to write is an
+/// Saves the file whose parts the upload `taken` holds for the session `session_id`, under its name,
+/// numbered (`report-2.pdf`) when a file of that name is there already, and returns its absolute
+/// path. Refused with `unknown_session` or `session_not_running` (an archived session); a failure to write is an
 /// error shown as it is. The upload's bytes stay counted against the budget until it returns.
 /// **Blocks.**
 pub fn save(state: &AppState, session_id: &str, taken: Taken<Spool>) -> Result<PathBuf> {
     let mut spool = taken.body;
-    scratch_of(state, session_id)?;
+    files_home(state, session_id)?;
     drop(spool.file.take());
     let Some(directory) = spool.path.parent().map(Path::to_path_buf) else {
         bail!("the spool file {} has no directory", spool.path.display());

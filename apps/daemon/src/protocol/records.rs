@@ -646,6 +646,10 @@ pub struct Session {
     /// Prevents archiving and deletion until the user unlocks the session.
     #[serde(default)]
     pub locked: bool,
+    /// The default send mode of the session's composer for new messages. Only
+    /// `set_session_send_mode` changes it.
+    #[serde(default)]
+    pub send_mode: super::SendMode,
     pub started_at: i64,
     pub ended_at: Option<i64>,
 }
@@ -956,6 +960,7 @@ mod tests {
             shell_terminals: vec![terminal],
             remote_access: None,
             attachments: None,
+            message_queues: None,
         });
         assert_eq!(snapshot["shell_terminals"], serde_json::json!([record]));
         assert_eq!(

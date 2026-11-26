@@ -118,9 +118,10 @@ impl<B: Body> Uploads<B> {
         }
     }
 
-    /// Starts an upload of `size` bytes for the running session `session_id`, its parts kept in
-    /// the body `open` makes from the session's scratch directory, and returns its handle.
-    /// Refused with `unknown_session` or `session_not_running`, a size of nothing or over the
+    /// Starts an upload of `size` bytes for the session `session_id`, its parts kept in the body
+    /// `open` makes from the directory its files are saved in (`super::scratch::files_home`), and
+    /// returns its handle. Refused with `unknown_session` or `session_not_running` (an archived
+    /// session), a size of nothing or over the
     /// kind's limit as a plain error, whatever `open` fails with, and `limit_exceeded` past the
     /// uploads this connection or the daemon may hold (the body made is dropped then). Blocks for
     /// as long as `open` does.
@@ -131,7 +132,7 @@ impl<B: Body> Uploads<B> {
         size: u64,
         open: impl FnOnce(&Path) -> Result<B>,
     ) -> Result<String> {
-        let scratch = super::scratch::scratch_of(state, session_id)?;
+        let scratch = super::scratch::files_home(state, session_id)?;
         let noun = self.kind.noun;
         if size == 0 {
             bail!("the {noun} upload cannot be empty");

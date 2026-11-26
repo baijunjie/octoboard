@@ -188,6 +188,9 @@ it("quotes a selection of the preview into the session and hands the dialog's cl
   const quoteTarget: QuoteTarget = {
     blocked: () => undefined,
     quote: (text) => calls.push(`quote ${text}`),
+    project: () => undefined,
+    contextBlocked: () => false,
+    addContext: () => {},
     revealInput: (close) => { calls.push("revealInput"); close(); },
   };
   const { fake } = await mount({ quoteTarget, onClose });

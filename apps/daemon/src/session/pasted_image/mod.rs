@@ -23,7 +23,7 @@ use anyhow::{bail, Context, Result};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 
-use super::scratch::{scratch_of, subdirectory};
+use super::scratch::{files_home, scratch_of, subdirectory};
 use super::upload::{Kind, UploadBudget, Uploads};
 use crate::hostfs::replace::{replace_beside, Permissions};
 use crate::protocol::{error_code, CodedError, ProviderOperation};
@@ -143,15 +143,17 @@ fn require_images_taken(state: &AppState, session_id: &str) -> Result<()> {
     )
 }
 
-/// Writes the image `data` (base64) holds for the running session `session_id`, and returns the
-/// file's absolute path. Refused with `unknown_session` or `session_not_running`, and with
+/// Writes the image `data` (base64) holds for the session `session_id`, in its scratch directory
+/// while it runs and in its composer directory otherwise (`super::scratch::files_home`), and
+/// returns the file's absolute path. Refused with `unknown_session` or `session_not_running` (an
+/// archived session), and with
 /// `provider_unsupported` for a session whose provider takes no images; an image over
 /// [`MAX_BYTES`], one that is not a PNG, JPEG, GIF or WebP, or a write that fails is an error the
 /// window shows as it is: it limits the size before sending and sends only those formats.
 /// **Blocks.**
 pub fn save(state: &AppState, session_id: &str, data: &str) -> Result<PathBuf> {
     require_images_taken(state, session_id)?;
-    let scratch = scratch_of(state, session_id)?;
+    let scratch = files_home(state, session_id)?;
     // Four characters hold three bytes, so a longer text is over the limit whatever it decodes to.
     if data.len() > MAX_BYTES.div_ceil(3) * 4 {
         bail!("the image is larger than {MAX_BYTES} bytes");
@@ -165,12 +167,13 @@ pub fn save(state: &AppState, session_id: &str, data: &str) -> Result<PathBuf> {
 /// [`save`] for an image already decoded, as an upload's parts hold it. **Blocks.**
 pub fn save_bytes(state: &AppState, session_id: &str, bytes: &[u8]) -> Result<PathBuf> {
     require_images_taken(state, session_id)?;
-    let scratch = scratch_of(state, session_id)?;
+    let scratch = files_home(state, session_id)?;
     write_image(session_id, &scratch, bytes)
 }
 
 /// Checks that `paths` are each an image `save` or `save_bytes` wrote for the running session
-/// `session_id`: directly in its scratch directory's `pasted` directory, a file that exists. A
+/// `session_id`: directly in its scratch directory's or its composer directory's `pasted`
+/// directory, a file that exists. A
 /// path anywhere else, one with `..` in it or one of another session's would have the agent read
 /// any file the daemon can. Refused with `unreadable_request` (`field: images`), or as
 /// [`scratch_of`] refuses.
@@ -180,9 +183,11 @@ pub(crate) fn require_saved_for(
     paths: &[String],
 ) -> Result<()> {
     let directory = scratch_of(state, session_id)?.join(DIRECTORY);
+    let queued = state.composer_dir(session_id).join(DIRECTORY);
     for path in paths {
         let path = std::path::Path::new(path);
-        let own = path.parent() == Some(directory.as_path())
+        let own = (path.parent() == Some(directory.as_path())
+            || path.parent() == Some(queued.as_path()))
             && path
                 .file_name()
                 .is_some_and(|name| name.to_string_lossy().starts_with(NAME_PREFIX))
@@ -369,6 +374,28 @@ mod tests {
         let err = save_bytes(&stopped.state, &stopped.id, PNG).unwrap_err();
         assert_eq!(code_of(&err), error_code::SESSION_NOT_RUNNING);
         assert!(!pasted_directory(&stopped, &stopped.id).exists());
+    }
+
+    /// An interrupted session has no scratch directory: its pasted image is saved straight into
+    /// its composer directory, and an archived session takes none.
+    #[tokio::test]
+    async fn an_image_for_an_interrupted_session_is_saved_in_its_composer_directory() {
+        let f = fixture(false);
+        let set = |status| {
+            let mut record = f.state.session_record(&f.id).unwrap();
+            record.status = status;
+            f.state.save_session(&record).unwrap();
+        };
+        set(crate::protocol::SessionStatus::Interrupted);
+        let path = save(&f.state, &f.id, &encoded(PNG)).unwrap();
+        assert_eq!(
+            path.parent().unwrap(),
+            f.state.composer_dir(&f.id).join("pasted")
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), PNG);
+        set(crate::protocol::SessionStatus::Archived);
+        let err = save_bytes(&f.state, &f.id, PNG).unwrap_err();
+        assert_eq!(code_of(&err), error_code::SESSION_NOT_RUNNING);
     }
 
     #[tokio::test]

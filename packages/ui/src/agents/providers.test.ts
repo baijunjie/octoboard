@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 
 import { DEFAULT_ACCOUNT_ONLY_PROVIDER, FIXTURE_PROVIDERS, NO_QUOTA_PROVIDER, UNPRESENTED_PROVIDER } from "../fixtures/fixtureProviders";
-import { hasPlanQuota, offersLoginFlow, offersOwnedAccounts, takesMessageImages } from "./providers";
+import { hasPlanQuota, offersLoginFlow, offersOwnedAccounts, takesMessageImages, takesSlashCommands } from "./providers";
 
 it("offers owned accounts for a served provider that declares them, and not for one that declares it has the default account only", () => {
   const served = [...FIXTURE_PROVIDERS, DEFAULT_ACCOUNT_ONLY_PROVIDER];
@@ -79,4 +79,15 @@ it("reads a served provider whose capabilities lack message_images, as an older 
 it("takes no images for a provider the daemon does not serve, or before it serves any", () => {
   expect(takesMessageImages(FIXTURE_PROVIDERS, "not_served")).toBe(false);
   expect(takesMessageImages([], FIXTURE_PROVIDERS[0].id)).toBe(false);
+});
+
+it("takes slash commands only for a served provider that declares them", () => {
+  const [first] = FIXTURE_PROVIDERS;
+  const taking = { ...first, capabilities: { ...first.capabilities, slash_commands: true } };
+  const refusing = { ...first, capabilities: { ...first.capabilities, slash_commands: false } };
+  const { slash_commands: _omitted, ...older } = first.capabilities;
+  expect(takesSlashCommands([taking], first.id)).toBe(true);
+  expect(takesSlashCommands([refusing], first.id)).toBe(false);
+  expect(takesSlashCommands([{ ...first, capabilities: older as typeof first.capabilities }], first.id)).toBe(false);
+  expect(takesSlashCommands([taking], "not_served")).toBe(false);
 });

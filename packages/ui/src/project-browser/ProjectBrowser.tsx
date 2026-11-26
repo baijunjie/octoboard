@@ -22,7 +22,7 @@ import { BrowserViewControls } from "./BrowserViewControls";
 import { FilesPanel } from "./files/FilesPanel";
 import { useFilesMode } from "./files/useFilesMode";
 import { GitView } from "./git/GitView";
-import { FindInDirectory, RowPathScope } from "./RowActions";
+import { AddAsContextOffered, FindInDirectory, RowPathScope } from "./RowActions";
 import { useGitReview } from "./git/useGitReview";
 import { ContentSearchDialog } from "./files/contentSearch/ContentSearchDialog";
 import { findInFilesLauncher } from "./files/contentSearch/findInFilesLauncher";
@@ -177,7 +177,9 @@ export function ProjectBrowser({
           <FileFilterField contextKey={tab} state={activeFilter} ignoredToggle={mode === "files"} incomplete={mode === "files" && files.searchIncomplete} label={t("browser.filter.label")} />
           {mode === "files" ? <TabPanel key="files" id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
             <FindInDirectory.Provider value={contentSearch.show}>
-              <FilesPanel project={project.id} files={files} refreshRef={refreshRef} focusHandoff={filesFocus} />
+              <AddAsContextOffered.Provider value>
+                <FilesPanel project={project.id} files={files} refreshRef={refreshRef} focusHandoff={filesFocus} />
+              </AddAsContextOffered.Provider>
             </FindInDirectory.Provider>
           </TabPanel> : <TabPanel key="changes" id="changes" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
             <RowPathScope.Provider value={{ project: project.id, worktree: git.worktree }}>

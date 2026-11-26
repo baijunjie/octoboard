@@ -20,7 +20,10 @@ The rest of the session terminal is described in its own docs:
 - the card, the history and the saved terminal preview of interrupted and archived sessions:
   `docs/product/session-terminal-interrupted-and-archived-sessions.md`;
 - the banner over the top of the terminal that says what a running session lacks of Octoboard's additions:
-  `docs/product/standing-session-notices.md`.
+  `docs/product/standing-session-notices.md`;
+- the optional message composer below the terminal, for writing a whole message and sending or queuing it:
+  `docs/product/message-composer.md`, and the session's queue of unsent messages, with the line over the terminal that
+  shows it while the composer is off: `docs/product/composer-queue.md`.
 
 ## Typing and the mouse
 

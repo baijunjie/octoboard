@@ -24,7 +24,7 @@ use std::sync::Arc;
 
 use crate::messaging::outbox::Returned;
 use crate::messaging::texts::SenderNote;
-use crate::protocol::{notice_code, Notice};
+use crate::protocol::{notice_code, AgentId, Notice};
 use crate::session::LiveSession;
 use crate::state::AppState;
 
@@ -104,7 +104,6 @@ impl AppState {
         }
         lost.reverse();
         self.tell_senders_of(id, live.agent, SenderNote::DroppedAtCancel, &lost);
-        let agent = live.agent.label();
         for (_, text) in lost {
             tracing::warn!(
                 session = %id,
@@ -112,18 +111,7 @@ impl AppState {
                 "the agent dropped a message it held when its turn was cancelled; it could not \
                  be queued again, so it was not carried out"
             );
-            self.broadcast(
-                Notice::new(
-                    notice_code::MESSAGE_DROPPED_AT_CANCEL,
-                    format!(
-                        "{agent} dropped, unsent, a message it had held for the end of the turn \
-                         when the turn was cancelled. It could not be written again, so it was \
-                         not carried out. It read:\n{text}"
-                    ),
-                    &[("agent", agent), ("detail", &text)],
-                )
-                .about(id),
-            );
+            self.broadcast(dropped_at_cancel_notice(live.agent, &text).about(id));
         }
     }
 
@@ -135,7 +123,6 @@ impl AppState {
         if unseen.is_empty() {
             return;
         }
-        let agent = live.agent.label();
         tracing::warn!(
             session = %live.id,
             messages = unseen.len(),
@@ -149,20 +136,7 @@ impl AppState {
             &unseen,
         );
         for (_, text) in unseen {
-            self.broadcast(
-                Notice::new(
-                    notice_code::MESSAGE_MAYBE_DROPPED_AT_CANCEL,
-                    format!(
-                        "A message {app} wrote while the turn ran may not have been carried out: \
-                         the turn was cancelled, and {agent} may have dropped the message if it \
-                         was still holding it. Nothing tells whether it was taken, so it is not \
-                         written again. It read:\n{text}",
-                        app = crate::APP_NAME,
-                    ),
-                    &[("agent", agent), ("detail", &text)],
-                )
-                .about(&live.id),
-            );
+            self.broadcast(maybe_dropped_at_cancel_notice(live.agent, &text).about(&live.id));
         }
     }
 
@@ -222,19 +196,7 @@ impl AppState {
                         &[(Some(logical_id.to_string()), text.clone())],
                     );
                 }
-                let agent = live.agent.label();
-                self.broadcast(
-                    Notice::new(
-                        notice_code::MESSAGE_GIVEN_BACK_UNSENT,
-                        format!(
-                            "{agent} gave back, unsent, a message its own server or channel had \
-                             taken. It could not be written again, so it was not carried out. It \
-                             read:\n{text}"
-                        ),
-                        &[("agent", agent), ("detail", &text)],
-                    )
-                    .about(id),
-                );
+                self.broadcast(given_back_unsent_notice(live.agent, &text).about(id));
             }
             // The drain writing it takes the give-back up once its write is over
             // (`PromptSignal::given_back_while_written`), and comes back here then.
@@ -250,6 +212,51 @@ impl AppState {
             ),
         }
     }
+}
+
+/// The `message_maybe_dropped_at_cancel` notice for a message written during a turn a cancel may
+/// have dropped, with its `text`.
+pub(crate) fn maybe_dropped_at_cancel_notice(agent: AgentId, text: &str) -> Notice {
+    let label = agent.label();
+    Notice::new(
+        notice_code::MESSAGE_MAYBE_DROPPED_AT_CANCEL,
+        format!(
+            "A message {app} wrote while the turn ran may not have been carried out: the turn was \
+             cancelled, and {label} may have dropped the message if it was still holding it. \
+             Nothing tells whether it was taken, so it is not written again. It read:\n{text}",
+            app = crate::APP_NAME,
+        ),
+        &[("agent", label), ("detail", text)],
+    )
+}
+
+/// The `message_dropped_at_cancel` notice for a message `agent` dropped at a cancel and that could
+/// not be written again, with its `text`.
+pub(crate) fn dropped_at_cancel_notice(agent: AgentId, text: &str) -> Notice {
+    let label = agent.label();
+    Notice::new(
+        notice_code::MESSAGE_DROPPED_AT_CANCEL,
+        format!(
+            "{label} dropped, unsent, a message it had held for the end of the turn when the turn \
+             was cancelled. It could not be written again, so it was not carried out. It \
+             read:\n{text}"
+        ),
+        &[("agent", label), ("detail", text)],
+    )
+}
+
+/// The `message_given_back_unsent` notice for a message `agent`'s own server or channel gave back
+/// and that could not be written again, with its `text`.
+pub(crate) fn given_back_unsent_notice(agent: AgentId, text: &str) -> Notice {
+    let label = agent.label();
+    Notice::new(
+        notice_code::MESSAGE_GIVEN_BACK_UNSENT,
+        format!(
+            "{label} gave back, unsent, a message its own server or channel had taken. It could \
+             not be written again, so it was not carried out. It read:\n{text}"
+        ),
+        &[("agent", label), ("detail", text)],
+    )
 }
 
 #[cfg(test)]

@@ -137,5 +137,6 @@ ring alone. A terminal that would refuse the drop shows neither, and neither doe
 
 ## A drop anywhere else
 
-A file dropped anywhere else in the window or browser tab, outside a terminal that takes it, does nothing: the page is
-never replaced by the dropped file. In a remote window and a browser the drag there shows that nothing can be dropped.
+A file dropped anywhere else in the window or browser tab, outside a terminal that takes it and outside the message
+composer (see "Attaching files" in `docs/product/message-composer.md`), does nothing: the page is never replaced by the
+dropped file. In a remote window and a browser the drag there shows that nothing can be dropped.

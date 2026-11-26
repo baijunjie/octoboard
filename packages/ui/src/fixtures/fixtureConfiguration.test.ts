@@ -149,9 +149,9 @@ describe("withClientValuesEcho", () => {
     expect(withClientValuesEcho(asked({ keyboard_shortcuts: {} }), applied).settings_applied?.keyboard_shortcuts).toEqual({});
   });
 
-  it("hands back the appearance, Markdown style, terminal font size, background running and menu bar icon choices the same way", () => {
+  it("hands back the appearance, Markdown style, terminal font size, background running, menu bar icon and message composer choices the same way", () => {
     const echoed = withClientValuesEcho(
-      asked({ appearance: "dark", markdown_style: "github", terminal_font_size: 18, run_in_background: false, show_menu_bar_icon: false, interface_language: "ja" }),
+      asked({ appearance: "dark", markdown_style: "github", terminal_font_size: 18, run_in_background: false, show_menu_bar_icon: false, session_composer: true, interface_language: "ja" }),
       applied,
     ).settings_applied;
     expect(echoed).toEqual({
@@ -161,6 +161,7 @@ describe("withClientValuesEcho", () => {
       terminal_font_size: 18,
       run_in_background: false,
       show_menu_bar_icon: false,
+      session_composer: true,
     });
   });
 

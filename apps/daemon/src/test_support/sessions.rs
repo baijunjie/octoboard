@@ -59,6 +59,7 @@ pub(crate) fn bare_session(id: &str, kind: SessionKind) -> Session {
         config_dir: None,
         pinned: false,
         locked: false,
+        send_mode: Default::default(),
         started_at: 0,
         ended_at: None,
     }

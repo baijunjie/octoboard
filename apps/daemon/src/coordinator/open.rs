@@ -444,6 +444,7 @@ async fn begin_open(
         ordinal: None,
         pinned: false,
         locked: false,
+        send_mode: Default::default(),
         started_at: now_millis(),
         ended_at: None,
     };

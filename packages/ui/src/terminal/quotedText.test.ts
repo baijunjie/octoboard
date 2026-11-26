@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { quoteLead, quotedText, type QuoteScreen } from "./quotedText";
+import { quoteLead, quotedText, wordLead, type QuoteScreen } from "./quotedText";
 import { rowsReader } from "./screenTestSupport";
 
 describe("quotedText", () => {
@@ -72,5 +72,13 @@ describe("quoteLead", () => {
 
   it("is nothing where the cursor's row does not exist", () => {
     expect(quoteLead(screenOf(["text"], { cursorX: 4, cursorY: 5 }))).toBe("");
+  });
+});
+
+describe("wordLead", () => {
+  it("puts a space before a word where the cursor follows other text, and none after whitespace or on an empty row", () => {
+    expect(wordLead(screenOf(["❯ typed"], { cursorX: 7, cursorY: 0 }))).toBe(" ");
+    expect(wordLead(screenOf(["❯ "], { cursorX: 2, cursorY: 0 }))).toBe("");
+    expect(wordLead(screenOf([""], { cursorX: 0, cursorY: 0 }))).toBe("");
   });
 });

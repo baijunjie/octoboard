@@ -863,6 +863,24 @@ describe("quoting text into the input", () => {
     controller.quote(text, destination);
     expect(sentText()).toEqual([]);
   });
+
+  it("writes a path added as context into the input as one paste, never Enter, after a space where text is left of the cursor", async () => {
+    await attached();
+    const { active } = FakeTerminal.last.buffer;
+    FakeTerminal.last.bufferRows = ["❯ "];
+    active.cursorX = 2;
+    controller.writeInput("src/app.ts", "s-quote");
+    FakeTerminal.last.bufferRows = ["❯ look at"];
+    active.cursorX = "❯ look at".length;
+    controller.writeInput("README.md", "s-quote");
+    expect(sentText()).toEqual([bracketed("src/app.ts"), bracketed(" README.md")]);
+  });
+
+  it("writes nothing for a session other than the one on input", async () => {
+    await attached();
+    controller.writeInput("src/app.ts", "s-other");
+    expect(sentText()).toEqual([]);
+  });
 });
 
 describe("pasting an image", () => {

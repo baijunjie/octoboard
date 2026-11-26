@@ -249,6 +249,11 @@ pub enum Event {
         #[serde(skip_serializing_if = "Option::is_none")]
         #[cfg_attr(test, ts(optional))]
         attachments: Option<AttachmentLimits>,
+        /// The composer queue of every session that has queued messages, sent by every daemon
+        /// that keeps one; absent from one that predates it, and a client then offers no queue.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        message_queues: Option<Vec<super::SessionMessageQueue>>,
     },
     /// Availability or a default account's resolved directory changed for one or more agents —
     /// the whole three-entry list, like every other upsert. Broadcast when the daemon's one-time
@@ -735,6 +740,17 @@ pub enum Event {
     AttachmentSaved {
         id: Option<String>,
         path: String,
+    },
+    /// The reply to `create_queued_message`: `message` is the new queued message's id.
+    QueuedMessageCreated {
+        id: Option<String>,
+        message: String,
+    },
+    /// The session's composer queue changed: the whole queue, in order, empty once nothing is
+    /// queued (the session's messages sent, withdrawn, or dropped as it was archived or deleted).
+    SessionMessageQueue {
+        session: String,
+        messages: Vec<super::QueuedMessage>,
     },
     /// The reply to `create_attachment_upload`: `upload` is the handle its parts and its
     /// `save_attachment` name, valid on this connection only.

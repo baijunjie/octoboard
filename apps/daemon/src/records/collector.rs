@@ -1452,6 +1452,7 @@ mod tests {
             directory.join("output"),
             directory.join("consoles"),
             directory.join("handoff"),
+            directory.join("composer"),
             directory.join("agent-query-homes"),
             crate::processes::ledger::ProcessLedger::new(&directory),
         ));

@@ -182,10 +182,12 @@ const UPWARD: &[Upward] = &[
             "lifecycle::Finished",
             "lifecycle::Unfinished",
             "lifecycle::unfinished",
+            "composer::after_drain",
         ],
         reason: "messaging::reporting archives a session that reported it is done, and checks \
                  beforehand that it may be, through the coordinator's archive of a finished \
-                 session",
+                 session; a drain of a session's queue has the coordinator send what its composer \
+                 queue can send now",
     },
 ];
 

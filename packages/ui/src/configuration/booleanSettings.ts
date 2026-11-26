@@ -192,7 +192,8 @@ function switchesIn<F extends BooleanField>(section: SwitchSection): readonly Bo
 export const AGENT_SWITCHES = switchesIn<AgentBooleanField>("agentAccounts");
 
 /** The switches the Settings dialog's General section shows, in its order (the settings of it a client holds sit
- * around them in the import cards: the background run and the menu bar icon between the first and the second). */
+ * around them in the import cards: the background run and the menu bar icon between the first and the second, the message composer between the
+ * second (with when it holds) and the third). */
 export const GENERAL_SWITCHES = switchesIn<ApplicationBooleanField>("general");
 
 /** The switches of the Git section, in its order. */

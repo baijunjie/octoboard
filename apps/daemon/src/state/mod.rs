@@ -50,6 +50,7 @@ mod background_store;
 pub(crate) mod bindings;
 mod claims;
 mod clean_up_run;
+pub(crate) mod composer;
 mod conversation_feeds;
 mod display_fallback;
 mod field_versions;
@@ -277,6 +278,12 @@ pub struct AppState {
     consoles_dir: std::path::PathBuf,
     /// Where the handoff packages are kept, one file per receiving session; see `crate::handoff`.
     handoff_dir: std::path::PathBuf,
+    /// Parent of the sessions' composer directories, which hold the files of their queued
+    /// messages; see [`AppState::composer_dir`].
+    composer_dir: std::path::PathBuf,
+    /// The sessions' composer queues as the store holds them, with what their hand-overs to
+    /// delivery stand at; see `composer`.
+    pub(crate) composer: composer::ComposerQueues,
     /// The bounds every connection's browse requests share: how many reads run at once, and how
     /// many bytes their replies may hold before they are written.
     pub browse_gate: Arc<crate::browse::lane::Gate>,
@@ -471,6 +478,7 @@ impl AppState {
         saved_output_dir: std::path::PathBuf,
         consoles_dir: std::path::PathBuf,
         handoff_dir: std::path::PathBuf,
+        composer_dir: std::path::PathBuf,
         agent_query_homes: std::path::PathBuf,
         process_ledger: Arc<crate::processes::ledger::ProcessLedger>,
     ) -> Self {
@@ -546,6 +554,8 @@ impl AppState {
             saved_output: SavedOutput::new(saved_output_dir),
             consoles_dir,
             handoff_dir,
+            composer_dir,
+            composer: Default::default(),
             agent_query_homes,
             browse_gate: Arc::new(crate::browse::lane::Gate::with_budget()),
             pasted_image_uploads: crate::session::upload::UploadBudget::images(),
@@ -594,6 +604,13 @@ impl AppState {
             process_ledger,
             display_fallback: Default::default(),
         }
+    }
+
+    /// The composer directory of the session `id`, which holds the images and files of its queued
+    /// messages: kept outside its scratch directory, which goes with its process, and removed with
+    /// the session's record.
+    pub fn composer_dir(&self, id: &str) -> std::path::PathBuf {
+        self.composer_dir.join(id)
     }
 
     /// Where the handoff packages are kept; see `crate::handoff`.

@@ -1258,6 +1258,9 @@ it("closes the viewer once Quote in the content menu has quoted the selection, t
   const quoteTarget: QuoteTarget = {
     blocked: () => undefined,
     quote: (text) => calls.push(`quote ${text}`),
+    project: () => undefined,
+    contextBlocked: () => false,
+    addContext: () => {},
     revealInput: (close) => { calls.push("revealInput"); close(); },
   };
   act(() => {

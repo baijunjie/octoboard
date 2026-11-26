@@ -446,7 +446,7 @@ describe("Quote", () => {
     blocked = vi.fn(() => undefined);
     quote = vi.fn();
     revealInput = vi.fn();
-    quoteTarget = { blocked, quote, revealInput };
+    quoteTarget = { blocked, quote, project: () => undefined, contextBlocked: () => false, addContext: () => {}, revealInput };
     render();
   });
 

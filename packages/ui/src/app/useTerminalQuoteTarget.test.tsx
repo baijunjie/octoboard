@@ -34,7 +34,7 @@ async function mountHook(ref: RefObject<TerminalPaneHandle | null>, focusTermina
   return { targets, render };
 }
 
-const handle = (block: QuoteBlock | undefined): TerminalPaneHandle => ({ focus: vi.fn(), handOff: vi.fn(), quoteBlock: vi.fn(() => block), quote: vi.fn() });
+const handle = (block: QuoteBlock | undefined): TerminalPaneHandle => ({ focus: vi.fn(), handOff: vi.fn(), quoteBlock: vi.fn(() => block), quote: vi.fn(), project: vi.fn(), contextBlocked: vi.fn(() => block !== undefined), addContext: vi.fn(), focusComposer: vi.fn(() => false) });
 
 it("is the same target on every render", async () => {
   const { targets, render } = await mountHook(createRef<TerminalPaneHandle>());
@@ -82,6 +82,23 @@ it("reads the handle when asked, so a handle set or swapped after the first rend
   expect(second.quote).toHaveBeenCalledExactlyOnceWith("late");
 });
 
+it("forwards a path added as context, and asks the handle for its project and whether it takes one", async () => {
+  const ref = createRef<TerminalPaneHandle>() as { current: TerminalPaneHandle | null };
+  ref.current = { ...handle(undefined), project: vi.fn(() => "p1") };
+  const { targets } = await mountHook(ref);
+  expect(targets[0].project()).toBe("p1");
+  expect(targets[0].contextBlocked()).toBe(false);
+  targets[0].addContext("src/app.ts");
+  expect(ref.current.addContext).toHaveBeenCalledExactlyOnceWith("src/app.ts");
+});
+
+it("takes no context, and names no project, while the ref holds no handle", async () => {
+  const { targets } = await mountHook(createRef<TerminalPaneHandle>());
+  expect(targets[0].contextBlocked()).toBe(true);
+  expect(targets[0].project()).toBeUndefined();
+  expect(() => targets[0].addContext("a")).not.toThrow();
+});
+
 describe("revealInput", () => {
   /** Frames asked for as 0 ms timers on a fake clock, as a dialog's own focus handoff is tested; the clock is started
    * before the hook is mounted. A frame asked for inside a frame is due a millisecond later, so one advance of this
@@ -124,6 +141,18 @@ describe("revealInput", () => {
     target.revealInput(() => {});
     expect(second).toHaveBeenCalledOnce();
     expect(first).not.toHaveBeenCalled();
+  });
+
+  it("focuses the session's composer instead of the terminal where it takes the input", async () => {
+    framesAsTimers();
+    fakeTimersKeepingFrames();
+    const focusTerminal = vi.fn();
+    const ref = createRef<TerminalPaneHandle>() as { current: TerminalPaneHandle | null };
+    ref.current = { ...handle(undefined), focusComposer: vi.fn(() => true) };
+    const { targets } = await mountHook(ref, focusTerminal);
+    targets[0].revealInput(() => {});
+    expect(ref.current.focusComposer).toHaveBeenCalledOnce();
+    expect(focusTerminal).not.toHaveBeenCalled();
   });
 
   it("focuses the terminal at once, once the surface is closed, where no dialog is left", async () => {

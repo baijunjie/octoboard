@@ -9,12 +9,14 @@ import { KeepAwakeSetting } from "./KeepAwakeSetting";
 import { LanguageSetting } from "./LanguageSetting";
 import { LaunchAtLoginSetting } from "./LaunchAtLoginSetting";
 import { MenuBarIconSetting } from "./MenuBarIconSetting";
+import { SessionComposerSetting } from "./SessionComposerSetting";
 import { SessionOrderSettings } from "./SessionOrderSettings";
 import { SettingsGroup } from "./SettingsGroup";
 
 /** The app-wide settings: first the language, a row of no group since it governs the whole interface, then groups
  * ordered by how often each is used, most frequent first: Sorting, in which sessions and projects are ordered; the
- * terminals (whether closing a panel closes idle terminals); power (where the daemon's host offers it: whether the
+ * terminals (whether this client shows the message composer below a session's terminal, and whether closing a panel
+ * closes idle terminals); power (where the daemon's host offers it: whether the
  * computer is kept awake, and when); the window (where the platform offers it: whether closing it keeps the app
  * running, whether the menu bar icon shows); startup (whether the app opens at login, where the platform offers it, and
  * whether the interrupted sessions are resumed); and the command-line tool (where the application can link it into the
@@ -35,6 +37,7 @@ export function GeneralSection(): React.ReactElement {
         <SessionOrderSettings />
       </SettingsGroup>
       <SettingsGroup title="settings.general.group.terminals">
+        <SessionComposerSetting />
         <DaemonSwitchSetting field="auto_close_idle_shell_terminals" />
       </SettingsGroup>
       {keepAwake && (

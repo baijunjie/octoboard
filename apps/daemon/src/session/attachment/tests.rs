@@ -585,3 +585,31 @@ async fn the_attachments_directory_is_made_by_the_first_upload_and_reused_by_the
     assert_eq!(first.parent(), second.parent());
     assert_eq!(names_in(&f), ["a.txt", "b.txt"]);
 }
+
+fn with_status(f: &Fixture, status: crate::protocol::SessionStatus) {
+    let mut record = f.state.session_record(&f.id).unwrap();
+    record.status = status;
+    f.state.save_session(&record).unwrap();
+}
+
+/// A file attached for an interrupted session, which has no scratch directory, is saved straight
+/// into its composer directory, where a message queued for it finds it; an archived session
+/// takes none.
+#[tokio::test]
+async fn a_file_for_an_interrupted_session_is_saved_in_its_composer_directory() {
+    let f = fixture(false);
+    with_status(&f, crate::protocol::SessionStatus::Interrupted);
+    let uploads = uploads_of(&f);
+    let bytes = bytes_of(30);
+    let path = saved(&f, &uploads, "report.pdf", &bytes);
+    assert_eq!(
+        path.parent().unwrap(),
+        f.state.composer_dir(&f.id).join("attachments")
+    );
+    assert_eq!(path.file_name().unwrap(), "report.pdf");
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+
+    with_status(&f, crate::protocol::SessionStatus::Archived);
+    let refused = uploads.create(&f.state, &f.id, "late.pdf", 10).unwrap_err();
+    assert_eq!(code_of(&refused), error_code::SESSION_NOT_RUNNING);
+}

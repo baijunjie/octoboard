@@ -59,6 +59,8 @@ language only when the daemon holds one; every other one is in every document wh
   does not know leaves this machine's choice as it is. An import applies both whether or not the importing daemon's host
   can be held awake: they are stored there all the same (see "Which computers can be held awake" in
   `docs/product/keeping-the-computer-awake.md`).
+- **Message composer** (see that section in `docs/product/general-settings.md`), under `session_composer`, `true` or
+  `false`, carried by every client, a browser included.
 - **Close idle terminals when closing the panel** (see that section in `docs/product/general-settings.md`), under
   `auto_close_idle_shell_terminals`. The review's line for turning it on says that closing the Terminal panel closes
   idle terminals and keeps terminals with running programs.
@@ -171,10 +173,11 @@ holds:
 
 ## The settings a client holds
 
-The theme, the Markdown style, the session terminal font size, the sorting, keeping running in the background, showing
-the menu bar icon and the keyboard shortcuts are each client's own, kept in that client rather than by the daemon. So
-the client adds them to the document it saves, for the sections chosen alone — for General the sorting and, where it has
-those settings, keeping running in the background and showing the menu bar icon; for Appearance the theme, the Markdown
+The theme, the Markdown style, the session terminal font size, the sorting, the message composer, keeping running in the
+background, showing the menu bar icon and the keyboard shortcuts are each client's own, kept in that client rather than
+by the daemon. So the client adds them to the document it saves, for the sections chosen alone — for General the
+sorting, whether the message composer shows and, where it has those settings, keeping running in the background and
+showing the menu bar icon; for Appearance the theme, the Markdown
 style and the session terminal font size; for Keyboard shortcuts its changed shortcuts — and the daemon builds none of
 them and applies none of them. A document with application settings asked of the daemon by any other program therefore
 has none of them. A remote window of the desktop application has neither keeping running in the background nor showing

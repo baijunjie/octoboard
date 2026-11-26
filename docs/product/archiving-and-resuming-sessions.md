@@ -18,6 +18,9 @@ Shell terminals have their own closing rules (see "Closing a shell terminal" in 
 a daemon going down on an internal failure is in "Crashes and forced termination" in
 `docs/product/application-lifecycle.md`.
 
+**The session's composer queue is dropped**, each unsent message's content handed back in a notice of its own (see
+"Lifetime of the queue" in `docs/product/composer-queue.md`).
+
 Archiving is available for a session that is not already archived, including an interrupted one, subject to "Locking a
 session" in `docs/product/sessions.md`. A console session is archived from its own row's menu, like any other (see
 "Console sessions and project sessions" in `docs/product/sessions.md`). The user archives a session from its row's menu.

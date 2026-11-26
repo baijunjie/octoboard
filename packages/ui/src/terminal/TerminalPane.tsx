@@ -14,6 +14,7 @@ import { FadeOverflow } from "../components/text/FadeOverflow";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { liveAnnouncerProps, ProgressCircle } from "../primitives";
+import { SessionQueueLine } from "../composer/SessionQueueLine";
 import { type Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { hasNoProcess, holdsPendingLink, isLive } from "../sessions/sessionStatus";
@@ -21,6 +22,9 @@ import { dismissStandingNotice, useAccountSwitchHeld, useDaemon } from "../store
 import { standingNoticeKey } from "../store/standingNotices";
 import type { ViewedFile } from "../viewer/viewedFile";
 import type { QuoteBlock } from "../components/host/quoteTarget";
+import { appendToComposer, focusComposer, quoteIntoComposer } from "../composer/composerDrafts";
+import { composerTakesInput } from "../composer/composerInput";
+import { pastedPath } from "./pastedImage";
 import type { TerminalController } from "./TerminalController";
 import { SessionHistoryView } from "./history/SessionHistoryView";
 import { TerminalEditMenu } from "./TerminalEditMenu";
@@ -99,10 +103,22 @@ export interface TerminalPaneHandle {
   /** Hands focus on from what is going away or inert in the pane, as `focus` does for focus meant for the terminal,
    * but also from `<body>`: with no session shown, to the empty state's action, else the top bar. */
   handOff: () => void;
-  /** Why the session shown cannot take a quote into its input now, if it cannot; `input` with none shown. */
+  /** Why the session shown cannot take a quote into its input now, if it cannot; `input` with none shown. Its composer,
+   * while that takes the input (`composerTakesInput`), always can. */
   quoteBlock: () => QuoteBlock | undefined;
-  /** Writes `text` into the input of the session shown as a block quote, without sending it. */
+  /** Writes `text` into the input of the session shown as a block quote, without sending it: at the end of its
+   * composer's text while that takes the input, else into its terminal's input. */
   quote: (text: string) => void;
+  /** The project of the session shown, for paths added as context; none for a console session or with none shown. */
+  project: () => string | undefined;
+  /** Whether the session shown cannot take a path added as context now: its terminal takes no input, while its
+   * composer does not take the input instead. */
+  contextBlocked: () => boolean;
+  /** Writes `path` into the input of the session shown, without sending it: at the end of its composer's text, on a
+   * line of its own, while that takes the input, else into its terminal's input. */
+  addContext: (path: string) => void;
+  /** Puts focus in the composer of the session shown, while that takes the input; returns whether it did. */
+  focusComposer: () => boolean;
 }
 
 /**
@@ -231,12 +247,39 @@ export function TerminalPane({
 
   // None while an account switch holds the session: its socket stays open, but no input is to reach the process.
   const quoteSessionId = session && !isArchived && !switching ? session.id : undefined;
-  useImperativeHandle(ref, () => ({
-    focus: focusPane,
-    handOff: handOffFocus,
-    quoteBlock: () => (quoteSessionId !== undefined && controllerRef.current ? controllerRef.current.quoteBlock(quoteSessionId) : "input"),
-    quote: (text) => { if (quoteSessionId !== undefined) controllerRef.current?.quote(text, quoteSessionId); },
-  }), [focusTerminal, restoreFocus, noSession, quoteSessionId]);
+  // The session whose composer, while on, takes what is written into its input: a composer reaches no process, so an
+  // account switch does not hold it.
+  const composerSessionId = session && !isArchived ? session.id : undefined;
+  const projectId = session?.project_id ?? undefined;
+  useImperativeHandle(ref, () => {
+    const toComposer = (): string | undefined => (composerSessionId !== undefined && composerTakesInput(store, composerSessionId) ? composerSessionId : undefined);
+    return {
+      focus: focusPane,
+      handOff: handOffFocus,
+      quoteBlock: () => {
+        if (toComposer() !== undefined) return undefined;
+        return quoteSessionId !== undefined && controllerRef.current ? controllerRef.current.quoteBlock(quoteSessionId) : "input";
+      },
+      quote: (text) => {
+        const composer = toComposer();
+        if (composer !== undefined) quoteIntoComposer(store, composer, text);
+        else if (quoteSessionId !== undefined) controllerRef.current?.quote(text, quoteSessionId);
+      },
+      project: () => (composerSessionId !== undefined ? projectId : undefined),
+      contextBlocked: () => toComposer() === undefined && (quoteSessionId === undefined || controllerRef.current?.inputSessionId !== quoteSessionId),
+      addContext: (path) => {
+        // A path with whitespace is quoted as a dropped file's is, since an agent splits a bare one at the space.
+        const written = pastedPath(path);
+        const composer = toComposer();
+        if (composer !== undefined) appendToComposer(store, composer, written);
+        else if (quoteSessionId !== undefined) controllerRef.current?.writeInput(written, quoteSessionId);
+      },
+      focusComposer: () => {
+        const composer = toComposer();
+        return composer !== undefined && focusComposer(store, composer);
+      },
+    };
+  }, [focusTerminal, restoreFocus, noSession, quoteSessionId, composerSessionId, projectId]);
   const noProcess = session ? hasNoProcess(session.status) : false;
   // A starting session's agent is still being launched, so there is no process to connect to and
   // nothing saved to show. The pane waits, covered, for the status that says it is up, and
@@ -603,6 +646,9 @@ export function TerminalPane({
             />
           </div>
         )}
+        {/* The session's queued messages while the composer is off in this window: a stop of the F6 cycle (`queue`)
+            while it shows, focus handed back to the terminal when it goes (`held`). */}
+        {session && !isArchived && <SessionQueueLine session={session.id} held={held} deferred={livePending || !exposed} />}
       </TerminalNoticeSlot>
     </TerminalSurface>
   );

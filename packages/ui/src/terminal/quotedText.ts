@@ -35,3 +35,14 @@ export function quoteLead(screen: QuoteScreen): string {
   if (before === "") return "";
   return /[\p{L}\p{N}]/u.test(before) || !/\s$/u.test(before) ? "\n" : "";
 }
+
+/**
+ * What goes before a word written into an agent's input (a path Add as context writes) so that it stands apart from
+ * what is already there: a space where the character left of the cursor on its row is not whitespace, nothing
+ * otherwise. As for `quoteLead`, the screen is all there is to go by, and an empty input's prompt mark is followed by a
+ * space already.
+ */
+export function wordLead(screen: QuoteScreen): string {
+  const before = screen.getLine(screen.baseY + screen.cursorY)?.translateToString(false, 0, screen.cursorX) ?? "";
+  return before === "" || /\s$/u.test(before) ? "" : " ";
+}

@@ -300,7 +300,10 @@ button. Its items form one group:
   "Focus after a tap" in `docs/product/moving-focus-between-regions.md`). With another dialog still open once the
   viewer has gone, focus is left where it is. Nothing announces the quote. If the session can no longer take the quote
   by the time the menu has closed, nothing is written and an error alert says so (see "What Quote writes" in
-  `docs/product/terminal-copy-paste-and-selection.md`); the viewer stays open, with the selection kept.
+  `docs/product/terminal-copy-paste-and-selection.md`); the viewer stays open, with the selection kept. While that
+  session's message composer is on, the quote goes into the composer instead, Quote is disabled for none of the
+  reasons above, and focus goes to the composer's text area (see "Text from elsewhere: Quote and Add as context" in
+  `docs/product/message-composer.md`).
 - **Select all** does what ⌘A does with keyboard focus on that region (see above): the code alone, or the whole
   document.
 

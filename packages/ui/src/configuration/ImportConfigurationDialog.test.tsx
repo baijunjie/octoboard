@@ -15,6 +15,7 @@ import { accessibleName } from "../components/dialog/dialogTestSupport";
 import { press as pressWithMouse } from "../components/hint/tooltipTestSupport";
 import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
+import { sessionComposerEnabled } from "../composer/composerSetting";
 import { runInBackground } from "../lifecycle/runInBackground";
 import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import { ConfigurationFileError } from "../platform";
@@ -634,7 +635,7 @@ const FOCUS = { code: "KeyK", primary: true, shift: true };
 const echoing = (settings: Record<string, unknown> = {}) => (body: ClientRequestBody): Promise<Event> => {
   if (body.type !== "import_configuration") return reply(body);
   const document = (body.document as { settings?: Record<string, unknown> }).settings ?? {};
-  const passedThrough = Object.fromEntries(["keyboard_shortcuts", "appearance", "markdown_style", "terminal_font_size", "run_in_background", "show_menu_bar_icon", "interface_language", "session_order"].flatMap((field) => (document[field] === undefined || document[field] === null ? [] : [[field, document[field]]])));
+  const passedThrough = Object.fromEntries(["keyboard_shortcuts", "appearance", "markdown_style", "terminal_font_size", "run_in_background", "show_menu_bar_icon", "session_composer", "interface_language", "session_order"].flatMap((field) => (document[field] === undefined || document[field] === null ? [] : [[field, document[field]]])));
   const applied = { ...MIXED_RESULT.settings_applied!, ...passedThrough, ...settings };
   return Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: body.apply_settings?.length ? applied : null });
 };
@@ -688,7 +689,7 @@ it("lists the General card in the order of the section on a desktop app, the set
       save: vi.fn(),
       open: vi.fn(async () => ({
         name: "mine.json",
-        text: JSON.stringify({ ...DOCUMENT, settings: { ...DOCUMENT.settings, run_in_background: true, show_menu_bar_icon: false } }),
+        text: JSON.stringify({ ...DOCUMENT, settings: { ...DOCUMENT.settings, run_in_background: true, show_menu_bar_icon: false, session_composer: true } }),
       })),
     },
     {},
@@ -707,6 +708,7 @@ it("lists the General card in the order of the section on a desktop app, the set
     "Show notification area icon",
     "Prevent sleep",
     "When to prevent sleep",
+    "Message composer",
     "Close idle terminals when closing the panel",
   ]);
 });
@@ -789,6 +791,7 @@ describe("the settings only this client holds, and the language", () => {
       setLanguage("en");
       runInBackground.set(false);
       showMenuBarIcon.set(true);
+      sessionComposerEnabled.set(false);
       localStorage.removeItem("heroui-theme");
     });
 
@@ -951,6 +954,23 @@ describe("the settings only this client holds, and the language", () => {
     await openTab("Settings");
     expect(runInBackground.get()).toBe(true);
     expect(resultSettingLines()["Keep running in the background when the window is closed"]).toEqual({ badge: "On" });
+  });
+
+  it("take the message composer on any platform", async () => {
+    restoreOnFinish();
+    mountDialog(
+      (onClose) => <ImportConfigurationDialog onClose={onClose} />,
+      echoing(),
+      { save: vi.fn(), open: vi.fn(async () => ({ name: "mine.json", text: carrying({ session_composer: true }) })) },
+    );
+    await press("Choose file");
+    await checkSettings();
+    await openTab("Settings");
+    expect(settingLines()["Message composer"]).toEqual({ badge: "Set to the file's", note: "On (now Off)" });
+    await press("Import");
+    await openTab("Settings");
+    expect(sessionComposerEnabled.get()).toBe(true);
+    expect(resultSettingLines()["Message composer"]).toEqual({ badge: "On" });
   });
 
   it("take the menu bar icon where the platform has one", async () => {

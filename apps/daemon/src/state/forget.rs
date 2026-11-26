@@ -48,6 +48,7 @@ impl AppState {
         self.forget_ended_launches(id);
         self.forget_standing_notices(id);
         self.conversation_feeds.forget(id);
+        self.composer_forget(id);
     }
 
     /// Drops what is held for a session whose process has left.

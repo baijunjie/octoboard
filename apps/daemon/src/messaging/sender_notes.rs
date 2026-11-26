@@ -10,7 +10,7 @@
 use std::sync::Arc;
 
 use crate::messaging::texts::{self, SenderNote};
-use crate::protocol::AgentId;
+use crate::protocol::{AgentId, Notice};
 use crate::session_tools::catalogue;
 use crate::state::AppState;
 
@@ -27,6 +27,7 @@ impl AppState {
         note: SenderNote,
         messages: &[(Option<String>, String)],
     ) {
+        self.composer_told(session, agent, note, messages);
         let mut senders: Vec<(String, Vec<&str>)> = Vec::new();
         for (logical_id, text) in messages {
             let Some(sender) = logical_id
@@ -48,6 +49,38 @@ impl AppState {
             );
             let note = texts::sender_note(note, session, agent.label(), &get_session, &sent);
             self.tell_sender(&sender, note);
+        }
+    }
+
+    /// Places in the session's composer queue each of `messages` that is a composer's message
+    /// (`crate::state::composer`): back in its place as not carried out, or, for a note that it
+    /// ran after all, out of the queue again. The user's messages have no sender to tell, but the
+    /// queue they came from takes them back so that the user can send them again.
+    fn composer_told(
+        &self,
+        session: &str,
+        agent: AgentId,
+        note: SenderNote,
+        messages: &[(Option<String>, String)],
+    ) {
+        use crate::messaging::{cleared_messages, untaken_messages, write_queue};
+        // The notice the user is told with, by the same builder, its English text included.
+        let notice: Option<fn(AgentId, &str) -> Notice> = match note {
+            SenderNote::NotTaken => Some(untaken_messages::not_taken_notice),
+            SenderNote::MaybeDroppedAtCancel => {
+                Some(cleared_messages::maybe_dropped_at_cancel_notice)
+            }
+            SenderNote::DroppedAtCancel => Some(cleared_messages::dropped_at_cancel_notice),
+            SenderNote::GivenBackUnsent => Some(cleared_messages::given_back_unsent_notice),
+            SenderNote::NotDelivered => Some(write_queue::went_elsewhere_notice),
+            SenderNote::RanAfterAll => None,
+        };
+        for (logical_id, text) in messages {
+            let Some(logical_id) = logical_id else {
+                continue;
+            };
+            let notice = notice.map(|notice| notice(agent, text));
+            self.composer_logical_not_carried_out(session, logical_id, notice.as_ref());
         }
     }
 

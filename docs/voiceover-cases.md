@@ -407,6 +407,9 @@ proxy and VoiceOver were stopped afterwards; `cleanup.json` records the exact ow
 | [OPEN-3 Unprompted question turned failed in place](#open-3-unprompted-question-turned-failed-in-place) | focus relayed off a dialog and back as its content becomes a failure | Unconfirmed |
 | [OPEN-4 Clean-up result's outcome line and the warning's read-failed alert](#open-4-clean-up-results-outcome-line-and-the-warnings-read-failed-alert) | focus moved onto a plain dialog's outcome line once the window is attended; a delayed alert hidden while it waits inside an alert dialog | Pass in the packaged app for the opening phrases, focus after closing, and the retry alert |
 | [OPEN-5 In-place Alert loses a control](#open-5-in-place-alert-loses-a-control) | retained or handed-off focus inside Connectors and MCP, then a delayed Alert | Unconfirmed |
+| [OPEN-6 Composer mention picker's note while typing](#open-6-composer-mention-pickers-note-while-typing) | `StatusAnnouncer` mounted with each opening of a list beside a focused text area, then replaced in place; a delayed alert for a failed search | Unconfirmed |
+| [OPEN-7 Composer's waiting note on a rise](#open-7-composers-waiting-note-on-a-rise) | attended rise through `StatusAnnouncer` in the composer's live wrapper, held while it is inert, read-time clear | Unconfirmed |
+| [OPEN-8 Compact queue line coming up over the terminal](#open-8-compact-queue-line-coming-up-over-the-terminal) | attended rise through `StatusAnnouncer` in a live wrapper beside a terminal bar, held with the pane's announcements, read-time clear | Unconfirmed |
 
 ### NAME-1 Retained picker trigger
 
@@ -2567,6 +2570,88 @@ tree equal to main `505f1c2fc`, with the holder-runtime repair `30eb3e434`) and 
   Alert and button identity on retry, and the delayed role. A packaged macOS VoiceOver listening pass is pending.
 - **Reuse scope.** None until confirmed.
 
+### OPEN-6 Composer mention picker's note while typing
+
+- **Location and state change.** The message composer below a session's terminal: typing `@` in its text area opens
+  the mention picker above it. While the project's files are searched and none are listed yet, its note reads
+  `Searching project files`; once answered with no match, `No matching files`; a failed search, `Could not search
+  project files`; in a console session's composer, which lists no files, `No matching sessions` when no session's title
+  contains what follows the `@`. Typing on changes the note in place; the picker closes as the mention ends.
+- **Mechanism.** A `StatusAnnouncer` mounted with the picker, so with each opening, and given the note's text from the
+  first render (`packages/ui/src/composer/MentionPicker.tsx`, `MentionList`); later changes are written at once. A
+  failed search is not written to it: a `span` mounted with the failure takes `role="alert"`
+  `AFTER_FOCUS_MOVE_DELAY_MS` later (`SearchFailureAnnouncement`, through `useAlertAnnouncement`), as a submenu's load
+  failure does (`components/menus/MenuItems.tsx`, `SubmenuFailureAnnouncement`). Focus
+  stays in the composer's text area throughout (`aria-autocomplete="list"`, with `aria-controls` and
+  `aria-activedescendant` while the picker shows), so neither the note nor an option is reached by focus; the visible
+  note is `aria-hidden`. The picker is in the main window, no modal, not inert while it shows.
+- **Matching.** A candidate for SA-M for the first write of an opening (a region mounted per opening at the default
+  delay, with the control that caused it keeping focus) and for SA-A for a change while the picker stays open (a region
+  mounted longer than its first write delay, its text replaced while focus rests). Two items differ from both and keep
+  it from matching: the focused control is a text area being typed in, whose own echo of the typed characters speaks at
+  the same time, and an option can become the area's active descendant in the same commit as a note change. The
+  failure's alert has no recorded case beside a focused text area either.
+- **Expected listening result.** After typing `@` in a project session with the search held, one automatic reading of
+  `Searching project files`; then `No matching files` once, as the answer arrives, after the typed character's echo;
+  `Could not search project files` once, as an alert, about 1.5 s after a failed search; nothing for a note that clears
+  as options appear.
+- **Native ARIA, capture, environment, date and result.** Unconfirmed. DOM tests cover the region's mounting with the
+  picker, its first write and in-place changes, the failure's alert taking its role after the delay instead of the
+  status, and the visible note being hidden. A packaged macOS VoiceOver listening
+  pass is pending.
+- **Reuse scope.** None until confirmed.
+
+### OPEN-7 Composer's waiting note on a rise
+
+- **Location and state change.** The message composer below a session's terminal, switched on in Settings, the session
+  selected and working, focus anywhere in the window (the terminal, the composer's text area). The agent turns to wait
+  on the user (a permission prompt or a question): the session becomes `waiting_user`, and the composer's note
+  `The agent is waiting for your answer in the terminal.` appears above its text area.
+- **Mechanism.** A `StatusAnnouncer` with `clearAfterRead`, mounted for the life of the composer
+  (`packages/ui/src/composer/SessionComposer.tsx`), fed by `useAnnouncedOnRise` over `useAttendedDelivery`
+  (`packages/ui/src/terminal/`): only a rise of `waiting_user` under the open composer is queued, a session opened
+  already waiting is not (the composer is mounted per session), the sentence waits `AFTER_FOCUS_MOVE_DELAY_MS` of
+  attended time, is held while the composer is out of reach (`exposed` false: inert behind the archive view or a panel
+  over the agent area, or hidden behind a page) and said once it is exposed, and is dropped unsaid when the status
+  turns or the session changes first. The region sits inside a `liveAnnouncerProps` wrapper, as the terminal's attended
+  regions do, so a write that lands while an unrelated modal is open (Settings) stays exposed. The visible note is plain
+  text, not a region. A composer mounted while a modal is already open (the composer switched on from Settings) has its live wrapper inside the subtree the modal hid as it opened, which stays hidden until the modal closes: a rise while that modal is still open goes unheard.
+- **Matching.** A candidate for RCV-1's attended rise (a region mounted empty for longer than its first write delay,
+  written after the attended wait, held while the area is inert, inside a live wrapper, and cleared after the read
+  time). It differs in place (the composer's own region below the terminal rather than the pane's) and in its subject,
+  and was not heard.
+- **Expected listening result.** With focus in the terminal, one automatic reading of the sentence about 1.5 s after the
+  agent turns to wait (attended time), and none for a session selected while already waiting. With the archive view open over
+  the composer at the rise, nothing until it closes, then one reading.
+- **Native ARIA, capture, environment, date and result.** Unconfirmed. DOM tests cover the rise, the mount already
+  waiting, the hold while the composer is not exposed, and the region sitting in the live wrapper. A packaged macOS VoiceOver listening pass is pending.
+- **Reuse scope.** None until confirmed.
+
+### OPEN-8 Compact queue line coming up over the terminal
+
+- **Location and state change.** A session's terminal with the message composer switched off in this window. Another
+  window (or the iOS client) queues a message for the session: the compact line `1 message queued` with View appears
+  over the top of the terminal.
+- **Mechanism.** A `StatusAnnouncer` with `clearAfterRead`, mounted with the session terminal's top bars whether or not
+  the line shows (`packages/ui/src/composer/SessionQueueLine.tsx`, inside `terminal/TerminalPane.tsx`'s top notice
+  slot), fed by `useAnnouncedOnRise` over `useAttendedDelivery`: only the line coming up under the open session is
+  queued (a session opened with messages already queued is not), written after `AFTER_FOCUS_MOVE_DELAY_MS` of attended
+  time, held while the pane's announcements are held (the pane not exposed, or a pending cover over it) and dropped
+  when the session changes or the line goes first. The sentence keeps the count as it stood when it came due (a change
+  during the attended wait included), so a later change of the count while the line shows is not announced. The region sits inside a `liveAnnouncerProps` wrapper of
+  its own, as the pane's attended regions do, so a write beside an unrelated modal stays exposed.
+  The bar's own sentence is `aria-hidden`, as every bar over the terminal's is; View stays reachable.
+- **Matching.** A candidate for RCV-1's attended rise, as the pane's recovered-display sentence, which it shares the
+  hold, the wait and a live wrapper with. It differs in its region (a wrapper of its own beside the bar rather than the
+  pane's) and in its subject, and was not heard.
+- **Expected listening result.** With focus in the terminal, one automatic reading of `1 message queued` about 1.5 s
+  after the line appears (attended time); nothing for a later change of the count; none on selecting a session that already has messages queued; nothing while a
+  maximized panel makes the agent area inert, then one reading once it is exposed.
+- **Native ARIA, capture, environment, date and result.** Unconfirmed. DOM tests cover the rise, the session opened with
+  a queue, the hold while deferred, the drop on a session change, the count as it stood at delivery, the silence on a later count change and the live wrapper. A packaged macOS VoiceOver listening pass is
+  pending.
+- **Reuse scope.** None until confirmed.
+
 ## Existing `StatusAnnouncer` callers and the case each matches
 
 Compared strictly against the rules above, from the code and the recordings. Paths are relative to `packages/ui/src`.
@@ -2618,18 +2703,24 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `configuration/ImportConfigurationDialog.tsx`, through `ChangeAnnouncer` | the file was read again because settings changed | SA-R (E18, E20) | Heard for listed variants | Ordinary refresh with Import focused, and successful retry with focus handed from Try again to Import; 1500 ms attended wait and later clear. The inline failure alerts are measured separately in ALERT-3, not as this status. |
 | `terminal/TerminalPane.tsx`, through `useAttendedDelivery` | "Recovered terminal display" when `screen_inexact` rises under the open session (`useAnnouncedOnRise`, `clearAfterRead`); the pending cover's sentence when a session is opened already pending (`useAnnouncedWhilePending`'s `delayed`) | RCV-1 for recovered rise; RCV-3 for the separately listed delayed pending relations | Heard for listed variants | Listed for `useAttendedDelivery`: the attended wait after a focus move that delivers these sentences (RCV-1, RCV-3). Two regions mounted with the pane inside a `liveAnnouncerProps` wrapper, so a write beside an unrelated modal stays exposed. Each sentence is queued per session and written `AFTER_FOCUS_MOVE_DELAY_MS` of attended time later, the wait restarted on each return to the window; it is dropped unsaid when the session changes, the flag turns off or the pending period ends first. A rise under the pending cover is queued only once that cover and the loading cover after it are gone, as is a rise still waiting when a new pending cover comes up, so the wait follows the uncover and its focus return. The delayed pending sentence is skipped when the cover has focus as the wait ends. RCV-6 heard it held through maximized-panel inertness and either spoken on exposure or consumed silently when the cover holds focus. The RCV cases give the measured terminal-specific attention, cover and destination relations; responsive inert floating remains unconfirmed. |
 | `terminal/shell/ShellTerminalView.tsx`, through `useAttendedDelivery` | "Recovered terminal display" when `screen_inexact` rises while the tab is shown; the pending cover's sentence when a tab is shown already pending | RCV-1 and RCV-3 for their listed shell relations | Heard for listed variants | Listed for `useAttendedDelivery`, as the pane's: the attended wait after a focus move that delivers these sentences (RCV-1, RCV-3). The regions are mounted with each showing of the tab, at the default first delay, which the attended wait outlasts; hiding the tab drops a queued sentence. A rise under the pending cover is queued as the cover lifts (no loading cover follows); RCV-1 and RCV-3 keep the pointer and keyboard destinations separate. |
+| `composer/MentionPicker.tsx`, `MentionList` | the mention picker's note (`Searching project files`, `No matching files`, `Could not search project files`, `No matching sessions`) while `@` is typed in the composer | SA-M for an opening's first write, SA-A for a change while it stays open; see OPEN-6 | Candidate | Region mounted with each opening of the picker, given the note from the first render, changed in place; focus stays in the text area, whose echo of typing speaks at the same time, and an option may become its active descendant in the same commit. Not heard. |
+| `composer/SessionComposer.tsx`, through `useAttendedDelivery` | "The agent is waiting for your answer in the terminal." when the session turns to wait under the open composer (`useAnnouncedOnRise`, `clearAfterRead`) | RCV-1's attended rise is the nearest; see OPEN-7 | Candidate | Region mounted for the life of the composer, inside a `liveAnnouncerProps` wrapper; held while the composer is not exposed, dropped on a session change; a session opened already waiting is not announced. Not heard. |
+| `composer/SessionQueueLine.tsx`, through `useAttendedDelivery` | the compact queue line's count when the line comes up over the terminal with the composer off (`useAnnouncedOnRise`, `clearAfterRead`) | RCV-1's attended rise is the nearest; see OPEN-8 | Candidate | Region mounted with the terminal's top bars whether or not the line shows, inside a `liveAnnouncerProps` wrapper; the sentence keeps the count as it stood when it came due; held with the pane's announcements, dropped on a session change; a later count change is not announced. Not heard. |
 
-Totals: of 42 callers (the three dialogs of one row count as three, and the terminal views' attended regions count apart from their other regions), 22 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
+Totals: of 45 callers (the three dialogs of one row count as three, and the terminal views' attended regions count apart from their other regions), 22 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
 `AccountLoginAnnouncer`, `PermissionsSection`, `ViewerContentView`, `UnchangedView`, `CopyButton`, `GitView`,
 `ActionMenu`, `CodeSurface`, `AdvancedSection`, `FileNotice`, `useGitRetryAnnouncement`, `DelayedAnnouncer`, and the
 attended regions of `TerminalPane` and `ShellTerminalView`, `ConsoleDialog`, `ProjectDialog`, `AccountDialog`,
-`CloneDirSetting` and `ImportConfigurationDialog`), 5 are candidates (`ImportReview`, `ChangeList`,
-`FilesPanel`, `TerminalPane` and `ShellTerminalView` for their other regions) and 15 have no complete match (`ShellTerminalPanel`, `SpotNotice`,
+`CloneDirSetting` and `ImportConfigurationDialog`), 8 are candidates (`ImportReview`, `ChangeList`,
+`FilesPanel`, `TerminalPane` and `ShellTerminalView` for their other regions, `MentionList`, `SessionComposer` and
+`SessionQueueLine`) and 15 have no complete match (`ShellTerminalPanel`, `SpotNotice`,
 `BlockFallback`, the account switch outcome in `app/useSessionRequests.ts`, and the eleven unmatched callers listed after it). Of
 the heard callers, `ConnectionBanner` matches for every write it makes, and `AccountLoginAnnouncer` matches the E10
 table and owned-account details paths recorded in SA-D; the other twenty match for some writes only, with SA-N's
 native-capture limits stated in that case. Of the candidates, `ImportReview` matches for every write it makes;
-`ChangeList`, `FilesPanel`, `TerminalPane` and `ShellTerminalView` for some.
+`ChangeList`, `FilesPanel`, `TerminalPane` and `ShellTerminalView` for some; `MentionList` (OPEN-6), `SessionComposer`
+(OPEN-7) and `SessionQueueLine` (OPEN-8) are the nearest matches only, each with the items that differ stated in its
+case.
 
 Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 
@@ -2639,6 +2730,9 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 
 ## Open items
 
+- The composer's mention picker note (OPEN-6) needs a listening pass while the text area keeps focus and echoes typing.
+- The composer's waiting note (OPEN-7) and the compact queue line (OPEN-8) need a listening pass for the attended rise,
+  the hold while out of reach and the session switch.
 - In-place Alert control changes in Connectors and MCP need a listening pass for retained Try again focus and for
   focus handed off when Details or Download Git disappears (OPEN-4).
 - KNW-9 preserves the E6 bare mark's duplicated sentence as a failure. FOCUS-4 heard the replacement in E8 for Error and

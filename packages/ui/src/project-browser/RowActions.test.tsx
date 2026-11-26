@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { PlatformAdapter } from "../platform";
-import { FindInDirectory, OpenShellTerminal, RowActions, RowPathScope } from "./RowActions";
+import { QuoteTargetContext, type QuoteTarget } from "../components/host/quoteTarget";
+import { AddAsContextOffered, FindInDirectory, OpenShellTerminal, RowActions, RowPathScope } from "./RowActions";
 import { ChangeList } from "./git/ChangeList";
 import { change, changeViewFixture, committedChange, mountRows } from "./browserTestSupport";
 import { changeItems } from "./git/changes";
@@ -404,4 +405,85 @@ it("leaves Find in folder out of a folder's menu where nothing provides it", asy
   await flush();
   expect(openInItems()).not.toContain("Find in folder");
   expect(openInItems()[0]).toBe("Copy relative path");
+});
+
+describe("Add as context", () => {
+  function contextTarget(extra: Partial<QuoteTarget> = {}): QuoteTarget {
+    return { blocked: () => undefined, quote: vi.fn(), revealInput: vi.fn(), project: () => "p", contextBlocked: () => false, addContext: vi.fn(), ...extra };
+  }
+  function mount(target: QuoteTarget, { offered = true, directory = false, path = "src/a.ts" }: { offered?: boolean; directory?: boolean; path?: string } = {}) {
+    return mountRows(
+      <QuoteTargetContext.Provider value={target}>
+        <AddAsContextOffered.Provider value={offered}>
+          <RowPathScope.Provider value={{ project: "p" }}><RowActions path={path} name={path.split("/").at(-1)!} directory={directory} /></RowPathScope.Provider>
+        </AddAsContextOffered.Provider>
+      </QuoteTargetContext.Provider>,
+      { notifications },
+    );
+  }
+  const menuEntries = () => [...document.querySelectorAll<HTMLElement>('[role="menu"] > *')].map((element) => (element.getAttribute("role") === "separator" ? "-" : element.textContent));
+  const choose = (name: string) => act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent?.startsWith(name))!.click());
+
+  it("leads a file's menu, and writes the file's path, as text to read, into the session's input", async () => {
+    const target = contextTarget();
+    const container = mount(target, { path: "src/caf%C3%A9.ts" });
+    act(() => actionsOf(container).click());
+    await flush();
+    expect(menuEntries().slice(0, 3)).toEqual(["Add as context", "-", "Copy relative path"]);
+    choose("Add as context");
+    expect(target.addContext).toHaveBeenCalledExactlyOnceWith("src/café.ts");
+  });
+
+  it("follows Find in folder in a folder's menu, writing the folder's path", async () => {
+    const target = contextTarget();
+    const container = mountRows(
+      <QuoteTargetContext.Provider value={target}>
+        <FindInDirectory.Provider value={vi.fn()}>
+          <AddAsContextOffered.Provider value>
+            <RowPathScope.Provider value={{ project: "p" }}><RowActions path="src/ui" name="ui" directory /></RowPathScope.Provider>
+          </AddAsContextOffered.Provider>
+        </FindInDirectory.Provider>
+      </QuoteTargetContext.Provider>,
+      { notifications },
+    );
+    act(() => actionsOf(container).click());
+    await flush();
+    expect(menuEntries().slice(0, 4)).toEqual(["Find in folder", "Add as context", "-", "Copy relative path"]);
+    choose("Add as context");
+    expect(target.addContext).toHaveBeenCalledExactlyOnceWith("src/ui");
+  });
+
+  it("is not offered for another project's session, nor where the Files mode does not offer it", async () => {
+    const container = mount(contextTarget({ project: () => "other" }));
+    act(() => actionsOf(container).click());
+    await flush();
+    expect(openInItems()).not.toContain("Add as context");
+    const unoffered = mount(contextTarget(), { offered: false });
+    act(() => actionsOf(unoffered).click());
+    await flush();
+    expect(openInItems()).not.toContain("Add as context");
+  });
+
+  it("is disabled, saying why, while the session takes no input", async () => {
+    const target = contextTarget({ contextBlocked: () => true });
+    const container = mount(target);
+    act(() => actionsOf(container).click());
+    await flush();
+    const item = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent?.startsWith("Add as context"))!;
+    expect(item.getAttribute("aria-disabled")).toBe("true");
+    expect(item.textContent).toContain("No session ready for input");
+  });
+
+  it("says nothing was written when the session stopped taking input after the menu opened", async () => {
+    let blocked = false;
+    const target = contextTarget({ contextBlocked: () => blocked });
+    const container = mount(target);
+    act(() => actionsOf(container).click());
+    await flush();
+    blocked = true;
+    choose("Add as context");
+    await flush();
+    expect(target.addContext).not.toHaveBeenCalled();
+    expect(errorAlerts.getSnapshot().at(-1)).toMatchObject({ title: "Could not add as context" });
+  });
 });

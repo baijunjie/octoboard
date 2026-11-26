@@ -1,6 +1,7 @@
 import { documentLanguage, languageSettingValues } from "./languageSettingValues";
 import { clientSettingsPlatform, clientSettingValues, documentClientSettings, type ClientSettingValue } from "./clientSettings";
 import { sessionOrderValues, type SettingValue } from "./importValues";
+import { sessionComposerEnabled } from "../composer/composerSetting";
 import { isLanguage } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { runInBackground } from "../lifecycle/runInBackground";
@@ -28,6 +29,7 @@ export function useClientSettingsReview(document: unknown) {
   const fontSize = terminalFontSize.useValue();
   const inBackground = runInBackground.useValue();
   const menuBarIconShown = showMenuBarIcon.useValue();
+  const composerShown = sessionComposerEnabled.useValue();
   const sessionOrder = sessionOrderPreference.useValue();
   const platformSettings = clientSettingsPlatform(platform);
   const documentSettings = document === undefined ? {} : documentClientSettings(document, platformSettings);
@@ -38,6 +40,7 @@ export function useClientSettingsReview(document: unknown) {
       appearance,
       markdown_style: markdown,
       terminal_font_size: fontSize,
+      session_composer: composerShown,
       ...(platformSettings.backgroundRun && { run_in_background: inBackground }),
       ...(platformSettings.menuBarIcon && { show_menu_bar_icon: menuBarIconShown }),
     }), ...languageSettingValues(documentLanguage(document), isLanguage(heldLanguage) ? heldLanguage : language)];

@@ -178,9 +178,25 @@ pub(super) const MIGRATIONS: &[&str] = &[
     // 6 to 7: the colours the last client reported for a terminal's display, kept so that a
     // terminal started before any client has reported answers its program's colour queries with
     // them, and the records directories a session's launches selected through their environment
-    // (see `SCHEMA`).
+    // (see `SCHEMA`); and the session composer's queue of the user's unsent messages, with each
+    // session's default send mode.
     "ALTER TABLE settings ADD COLUMN last_terminal_colors TEXT;
-     ALTER TABLE sessions ADD COLUMN record_roots TEXT;",
+     ALTER TABLE sessions ADD COLUMN record_roots TEXT;
+     ALTER TABLE sessions ADD COLUMN send_mode TEXT NOT NULL DEFAULT 'now';
+     CREATE TABLE queued_messages (
+         id         TEXT PRIMARY KEY,
+         session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+         position   INTEGER NOT NULL,
+         text       TEXT NOT NULL,
+         images     TEXT NOT NULL,
+         files      TEXT NOT NULL,
+         command    INTEGER NOT NULL,
+         mode       TEXT NOT NULL,
+         failure    TEXT,
+         created_at INTEGER NOT NULL,
+         owned      TEXT NOT NULL DEFAULT '[]'
+     );
+     CREATE INDEX queued_messages_session_id ON queued_messages (session_id, position);",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -376,14 +392,15 @@ CREATE TABLE sessions (
     locked           INTEGER NOT NULL DEFAULT 0,
     started_at       INTEGER NOT NULL,
     ended_at         INTEGER ,
-    owner_notice_former_owner TEXT, compatibility TEXT, record_roots TEXT);
+    owner_notice_former_owner TEXT, compatibility TEXT, record_roots TEXT, send_mode TEXT NOT NULL DEFAULT 'now');
 -- `owner_notice_former_owner` is the id of the owner that released the session while it was
 -- not running, named in the notice with the parting note; NULL for none. Written and cleared
 -- with `owner_notice_note`. `compatibility` is a JSON object of the compatibility switches the
 -- session holds its own value for, as for a console's launch pair; NULL for none.
 -- `record_roots` is a JSON array of the records directories the session's launches selected
 -- through their environment instead of the account's (see `Session::record_roots`); NULL for
--- none. They are the last columns, spelled as a migration leaves them.
+-- none. `send_mode` is the session composer's default send mode for new messages (`now`,
+-- `when_idle` or `manual`). They are the last columns, spelled as a migration leaves them.
 -- The lookups by the columns that other rows and the daemon's queries hold sessions by.
 CREATE INDEX sessions_console_id ON sessions (console_id);
 CREATE INDEX sessions_project_id ON sessions (project_id);
@@ -426,6 +443,27 @@ CREATE TABLE kept_messages (
     text       TEXT NOT NULL
 );
 CREATE INDEX kept_messages_session_id ON kept_messages (session_id);
+-- The session composer's queue of the user's unsent messages, in `position` order from 0
+-- (`Store::replace_queued_messages_owning`). `images` and `files` are JSON arrays of paths, `mode`
+-- `when_idle` or `manual`, and `failure` the JSON of what became of the last attempt to send the
+-- message (`QueuedMessageFailure`), NULL for none. `owned` is a JSON array of the paths the
+-- message's own create or update moved into the session's composer directory, the only files
+-- withdrawing or editing it may remove; it is not sent to clients. Deleting the session takes its
+-- rows.
+CREATE TABLE queued_messages (
+    id         TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    position   INTEGER NOT NULL,
+    text       TEXT NOT NULL,
+    images     TEXT NOT NULL,
+    files      TEXT NOT NULL,
+    command    INTEGER NOT NULL,
+    mode       TEXT NOT NULL,
+    failure    TEXT,
+    created_at INTEGER NOT NULL,
+    owned      TEXT NOT NULL DEFAULT '[]'
+);
+CREATE INDEX queued_messages_session_id ON queued_messages (session_id, position);
 -- The session working on a branch, keyed on the branch because one session works on
 -- many and a branch has one responsible session. It starts as the session whose own git
 -- reported creating the branch and moves only by a transfer. No `REFERENCES` on

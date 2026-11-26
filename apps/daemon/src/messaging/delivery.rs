@@ -187,6 +187,7 @@ pub(crate) fn write_message_from(
             origin: Origin::Automatic,
             shape: None,
             sender,
+            queued: None,
         },
     )
 }
@@ -222,6 +223,7 @@ pub async fn write_users_message_off_runtime(
                 origin: Origin::User,
                 shape: None,
                 sender: None,
+                queued: None,
             },
         )
     })
@@ -253,6 +255,38 @@ pub async fn write_users_shaped_off_runtime(
                 origin: Origin::User,
                 shape: Some(shape),
                 sender: None,
+                queued: None,
+            },
+        )
+    })
+    .await?
+}
+
+/// The user's message `message` of the session's composer queue, handed over as
+/// [`write_users_shaped_off_runtime`] writes one of `shape` (or as text with none): the ticket it
+/// is queued under is noted with the composer queue, so that what delivery makes of it is placed
+/// there (`crate::state::composer`). Refused as the user's own message is.
+pub async fn write_queued_off_runtime(
+    state: &Arc<AppState>,
+    id: &str,
+    text: String,
+    shape: Option<Shape>,
+    message: String,
+) -> Result<Delivery> {
+    let state = state.clone();
+    let id = id.to_string();
+    tokio::task::spawn_blocking(move || {
+        write_message_inner(
+            &state,
+            &id,
+            &text,
+            None,
+            Write {
+                when_blocked: WhenBlocked::Refuse,
+                origin: Origin::User,
+                shape,
+                sender: None,
+                queued: Some(&message),
             },
         )
     })
@@ -289,6 +323,8 @@ struct Write<'a> {
     shape: Option<Shape>,
     /// The session that sent the message, where one did ([`write_message_from`]).
     sender: Option<&'a str>,
+    /// The composer queue's message it is, where it is one ([`write_queued_off_runtime`]).
+    queued: Option<&'a str>,
 }
 
 fn write_message_inner(
@@ -303,7 +339,21 @@ fn write_message_inner(
         origin,
         shape,
         sender,
+        queued,
     } = write;
+    // Marked as the composer's as it is queued (`Outbox::push_composer`), and its ticket given to
+    // the composer queue right after. Taken back out of delivery where the composer queue no
+    // longer holds it as being handed over: withdrawn meanwhile, it must not be written.
+    let note_queued = |ticket: Ticket| -> Result<()> {
+        let Some(message) = queued else {
+            return Ok(());
+        };
+        if !state.composer_note_ticket(message, ticket) && state.outbox.withdraw_queued(id, ticket)
+        {
+            return Err(crate::state::composer::not_found(id, message));
+        }
+        Ok(())
+    };
     // Written, it would be an empty prompt the agent does not send, and nobody would learn why.
     // Images are a message of their own without text.
     if term::is_blank_once_stripped(text) && !matches!(shape, Some(Shape::Images(_))) {
@@ -319,17 +369,21 @@ fn write_message_inner(
             .transpose()?
             .is_some(),
         None => {
-            let queued = match shape.as_ref() {
-                Some(shape) => state.queue_if_restarting_with(id, || {
+            let held = match (shape.as_ref(), queued) {
+                (shape, Some(_)) => state.queue_if_restarting_with(id, || {
+                    state.outbox.push_composer(id, text, shape.cloned(), false)
+                }),
+                (Some(shape), None) => state.queue_if_restarting_with(id, || {
                     state.outbox.push_shaped(id, text, shape.clone(), false)
                 }),
-                None => state.queue_if_restarting(id, text),
+                (None, None) => state.queue_if_restarting(id, text),
             };
-            match queued {
+            match held {
                 Some(Some(ticket)) => {
                     if let Some(sender) = sender {
                         state.outbox.note_sender(ticket, sender);
                     }
+                    note_queued(ticket)?;
                     true
                 }
                 Some(None) => return Err(outbox_saved()),
@@ -380,6 +434,9 @@ fn write_message_inner(
             state.note_activity(id);
             ticket
         }
+        None if queued.is_some() => state
+            .queue_users_composer(id, text, shape)
+            .ok_or_else(outbox_saved)?,
         None if origin == Origin::User => match shape {
             Some(shape) => state.queue_users_shaped(id, text, shape),
             None => state.queue_users_message(id, text),
@@ -394,6 +451,7 @@ fn write_message_inner(
     if let Some(sender) = sender {
         state.outbox.note_sender(ticket, sender);
     }
+    note_queued(ticket)?;
     // Whichever drain meets the message gone elsewhere keeps that for this writer to answer with,
     // rather than telling its sender apart (`HookPrompts::went_elsewhere`).
     state.outbox.await_answer(ticket);
@@ -419,7 +477,7 @@ fn write_message_inner(
 
 /// The `message_not_delivered` error the writer of a message that went elsewhere gets, with the
 /// message's `text` as `detail`.
-fn not_delivered_error(agent: AgentId, text: &str) -> anyhow::Error {
+pub(crate) fn not_delivered_error(agent: AgentId, text: &str) -> anyhow::Error {
     CodedError::raised(
         error_code::MESSAGE_NOT_DELIVERED,
         crate::messaging::write_queue::went_elsewhere_error_text(agent),
@@ -428,7 +486,7 @@ fn not_delivered_error(agent: AgentId, text: &str) -> anyhow::Error {
 }
 
 /// The error a sender gets for a message that failed alone ([`Refused`]).
-fn refusal_error(agent: AgentId, refused: Refused) -> anyhow::Error {
+pub(crate) fn refusal_error(agent: AgentId, refused: Refused) -> anyhow::Error {
     match refused.kind {
         RefusalKind::Agent => refused_error(agent, &refused.reason),
         RefusalKind::Unwritable => CodedError::raised(
@@ -488,6 +546,7 @@ pub(crate) async fn write_first_message_off_runtime(
                 origin: Origin::Automatic,
                 shape: None,
                 sender: None,
+                queued: None,
             },
         )
     })

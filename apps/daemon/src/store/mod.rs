@@ -42,6 +42,7 @@ mod memory;
 mod pages;
 mod projects;
 mod provider_settings;
+mod queued_messages;
 mod rows;
 mod scheduled_tasks;
 mod schema;
