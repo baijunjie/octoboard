@@ -177,8 +177,10 @@ pub(super) const MIGRATIONS: &[&str] = &[
     ),
     // 6 to 7: the colours the last client reported for a terminal's display, kept so that a
     // terminal started before any client has reported answers its program's colour queries with
-    // them (see `SCHEMA`).
-    "ALTER TABLE settings ADD COLUMN last_terminal_colors TEXT;",
+    // them, and the records directories a session's launches selected through their environment
+    // (see `SCHEMA`).
+    "ALTER TABLE settings ADD COLUMN last_terminal_colors TEXT;
+     ALTER TABLE sessions ADD COLUMN record_roots TEXT;",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -374,12 +376,14 @@ CREATE TABLE sessions (
     locked           INTEGER NOT NULL DEFAULT 0,
     started_at       INTEGER NOT NULL,
     ended_at         INTEGER ,
-    owner_notice_former_owner TEXT, compatibility TEXT);
+    owner_notice_former_owner TEXT, compatibility TEXT, record_roots TEXT);
 -- `owner_notice_former_owner` is the id of the owner that released the session while it was
 -- not running, named in the notice with the parting note; NULL for none. Written and cleared
 -- with `owner_notice_note`. `compatibility` is a JSON object of the compatibility switches the
--- session holds its own value for, as for a console's launch pair; NULL for none. They are the
--- last columns, spelled as a migration leaves them.
+-- session holds its own value for, as for a console's launch pair; NULL for none.
+-- `record_roots` is a JSON array of the records directories the session's launches selected
+-- through their environment instead of the account's (see `Session::record_roots`); NULL for
+-- none. They are the last columns, spelled as a migration leaves them.
 -- The lookups by the columns that other rows and the daemon's queries hold sessions by.
 CREATE INDEX sessions_console_id ON sessions (console_id);
 CREATE INDEX sessions_project_id ON sessions (project_id);
@@ -1639,6 +1643,42 @@ mod tests {
             reopened.last_terminal_colors().unwrap().as_deref(),
             Some("colours")
         );
+    }
+
+    /// Migrating a version 6 database keeps its sessions, with no records directory a launch
+    /// selected; one added afterwards survives reopening the store.
+    #[test]
+    fn migrating_a_version_6_database_keeps_sessions_with_no_record_roots() {
+        let path = temp_db("migrate-record-roots");
+        {
+            let conn = Connection::open(&path).expect("version 6 database");
+            conn.execute_batch(PAST_SCHEMAS[5])
+                .expect("version 6 schema");
+            conn.pragma_update(None, "user_version", 6)
+                .expect("version");
+            conn.pragma_update(None, "application_id", APPLICATION_ID)
+                .expect("application id");
+            conn.execute_batch(
+                "INSERT INTO consoles (id, name, workdir, default_agent, created_at)
+                 VALUES ('console-1', 'Console', '/work', 'claude', 0);
+                 INSERT INTO sessions (id, agent, console_id, host_id, kind, origin, title,
+                                       status, role, started_at)
+                 VALUES ('s', 'claude', 'console-1', 'local', 'console', 'user', 't', 'idle',
+                         'coordinator', 0);",
+            )
+            .expect("rows");
+        }
+
+        let root = std::env::temp_dir().join("records");
+        {
+            let store = Store::open(&path).expect("migrated");
+            assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
+            let session = store.require_session("s").unwrap();
+            assert!(session.record_roots.is_empty());
+            store.add_session_record_root("s", &root).unwrap();
+        }
+        let reopened = Store::open(&path).expect("reopened");
+        assert_eq!(reopened.require_session("s").unwrap().record_roots, [root]);
     }
 
     /// Migrating a version 5 database adds the automatic approval of scheduled task changes, off,

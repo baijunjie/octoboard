@@ -199,55 +199,69 @@ impl<'a> Locator<'a> {
             .or_insert_with(|| index_records_at(agent, records, depth))
     }
 
-    /// A configured records directory, or no override. An unresolved environment or working
-    /// directory leaves a missing record inconclusive.
-    pub(super) fn alternate_root(&self, session: &Session) -> Result<Option<(PathBuf, usize)>, ()> {
-        let Some(root) = provider(session.agent).records().record_root_override() else {
-            return Ok(None);
+    /// The records directories `session`'s records may be in apart from its account's, with the
+    /// depth records sit at below each: those its launches selected
+    /// (`Session::record_roots`), then the one the current environment selects, once each. The
+    /// flag is `false` when the current environment's could not be resolved (the environment or
+    /// the working directory a relative one is taken from is unknown), which leaves a record not
+    /// found inconclusive. Empty, and `true`, for a provider whose launches select none
+    /// (`RecordStore::record_root_override`).
+    pub(super) fn alternate_roots(&self, session: &Session) -> (Vec<(PathBuf, usize)>, bool) {
+        let Some(over) = provider(session.agent).records().record_root_override() else {
+            return (Vec::new(), true);
         };
-        let env = self.shell_env().ok_or(())?;
-        let Some(path) = env.get(root.variable).filter(|path| !path.is_empty()) else {
-            return Ok(None);
+        let mut roots: Vec<(PathBuf, usize)> = Vec::new();
+        let mut add = |dir: PathBuf| {
+            if !roots
+                .iter()
+                .any(|(known, _)| lexical_key(known) == lexical_key(&dir))
+            {
+                roots.push((dir, over.search_depth));
+            }
         };
-        let home_relative = crate::platform::names::home_relative(path);
-        let path = home_relative.map_or_else(
-            || PathBuf::from(path),
-            |relative| crate::adapter::snapshot_home(env).join(relative),
-        );
-        let path = if path.is_absolute() {
-            path
-        } else {
-            let store = self.store.ok_or(())?;
-            let cwd = store.session_working_directory(session).map_err(|_| ())?;
-            cwd.join(path)
-        };
-        let path = lexically_normalise(&path);
-        if !path.is_absolute() {
-            return Err(());
+        for dir in &session.record_roots {
+            let dir = lexically_normalise(dir);
+            if dir.is_absolute() {
+                add(dir);
+            }
         }
-        Ok(Some((path, root.search_depth)))
-    }
-
-    pub(super) fn alternate_root_complete(&mut self, session: &Session) -> bool {
-        match self.alternate_root(session) {
-            Ok(Some((dir, depth))) => self.index_at_depth(session.agent, &dir, depth).complete,
+        let current = self.shell_env().ok_or(()).and_then(|env| {
+            override_root(session.agent, env, || {
+                self.store?.session_working_directory(session).ok()
+            })
+        });
+        let known = match current {
+            Ok(Some(dir)) => {
+                add(dir);
+                true
+            }
             Ok(None) => true,
             Err(()) => false,
-        }
+        };
+        (roots, known)
+    }
+
+    /// Whether every directory of [`Self::alternate_roots`] is known and could be searched whole.
+    pub(super) fn alternate_roots_complete(&mut self, session: &Session) -> bool {
+        let (roots, known) = self.alternate_roots(session);
+        known
+            && roots
+                .iter()
+                .all(|(dir, depth)| self.index_at_depth(session.agent, dir, *depth).complete)
     }
 
     pub(super) fn current_session_record(&mut self, session: &Session) -> Option<PathBuf> {
         let id = session.agent_session_id.as_deref()?;
         let agent = session.agent;
-        if let Ok(Some((dir, depth))) = self.alternate_root(session) {
-            if let Some(path) = self
-                .index_at_depth(agent, &dir, depth)
-                .records
-                .get(id)
-                .and_then(|paths| provider(agent).records().current_of(paths))
-            {
-                return Some(path);
+        let (roots, _) = self.alternate_roots(session);
+        let mut paths: Vec<PathBuf> = Vec::new();
+        for (dir, depth) in &roots {
+            if let Some(found) = self.index_at_depth(agent, dir, *depth).records.get(id) {
+                paths.extend(found.iter().cloned());
             }
+        }
+        if let Some(path) = provider(agent).records().current_of(&paths) {
+            return Some(path);
         }
         let root = self.root(agent, session.config_dir.as_deref())?;
         self.current_record(agent, &root, id)
@@ -270,6 +284,51 @@ impl<'a> Locator<'a> {
 /// keeps none (`AgentLayout::records`).
 pub(crate) fn records_dir(agent: AgentId, root: &Path) -> Option<PathBuf> {
     layout(agent).records().map(|relative| root.join(relative))
+}
+
+/// The records directory a launch of `agent` in the environment `env` selects instead of the
+/// account's ([`crate::records::store::RecordRootOverride`]): `Ok(None)` where the provider
+/// declares no such variable or `env` leaves it unset or empty. A leading `~` is the snapshot's
+/// home; a relative directory is taken from the launch's working directory, which `cwd` gives.
+/// `Err` when that is needed and unknown, or the result is still not absolute.
+fn override_root(
+    agent: AgentId,
+    env: &HashMap<String, String>,
+    cwd: impl FnOnce() -> Option<PathBuf>,
+) -> Result<Option<PathBuf>, ()> {
+    let Some(over) = provider(agent).records().record_root_override() else {
+        return Ok(None);
+    };
+    let Some(path) = env.get(over.variable).filter(|path| !path.is_empty()) else {
+        return Ok(None);
+    };
+    let path = crate::platform::names::home_relative(path).map_or_else(
+        || PathBuf::from(path),
+        |relative| crate::adapter::snapshot_home(env).join(relative),
+    );
+    let path = if path.is_absolute() {
+        path
+    } else {
+        cwd().ok_or(())?.join(path)
+    };
+    let path = lexically_normalise(&path);
+    if !path.is_absolute() {
+        return Err(());
+    }
+    Ok(Some(path))
+}
+
+/// The records directory a launch of `agent` started in `cwd` with the environment `env` selected
+/// ([`override_root`]), for the session to keep (`Session::record_roots`); `None` for none, and
+/// for one that cannot be made absolute.
+pub(crate) fn launch_record_root(
+    agent: AgentId,
+    env: &HashMap<String, String>,
+    cwd: &Path,
+) -> Option<PathBuf> {
+    override_root(agent, env, || Some(cwd.to_path_buf()))
+        .ok()
+        .flatten()
 }
 
 /// What a [`walk_records`] visitor decides about one entry.
@@ -465,8 +524,8 @@ pub fn record_paths(
             records.push((dir.clone(), record.clone()));
         }
     }
-    let alternate = locator.alternate_root(session).ok().flatten();
-    if let Some((dir, depth)) = &alternate {
+    let (alternates, _) = locator.alternate_roots(session);
+    for (dir, depth) in &alternates {
         for record in locator
             .index_at_depth(agent, dir, *depth)
             .records
@@ -482,7 +541,7 @@ pub fn record_paths(
         let home = roots
             .iter()
             .filter_map(|root| records_dir(agent, root))
-            .chain(alternate.into_iter().filter_map(|(dir, depth)| {
+            .chain(alternates.into_iter().filter_map(|(dir, depth)| {
                 (hint.strip_prefix(&dir).ok()?.components().count() == depth).then_some(dir)
             }))
             .find(|dir| lexically_within(&hint, dir));

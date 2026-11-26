@@ -21,6 +21,7 @@
   "uninstallCleanUp.commandLine.inEffect": "أداة سطر الأوامر: رابطها في ‎{path}‎.",
   "uninstallCleanUp.accountSharing.left": "الحساب «‎{name}‎» (‎{agent}‎) يشارك التكوين الافتراضي لوكيله. وما زال يشاركه: ‎{message}‎",
   "uninstallCleanUp.accountSharing.inEffect": "الحساب «‎{name}‎» (‎{agent}‎) يشارك التكوين الافتراضي لوكيله.",
+  "uninstallCleanUp.accountSharing.handRestore": "إذا كان إيقاف المشاركة لحساب ما جاريًا، فقد يبقى مجلده متغيّرًا جزئيًا: قد تظل بعض العناصر فيه روابط إلى المجلد الافتراضي لوكيله، وبجانبها عناصر الحساب الخاصة باسم «‎<entry>.bak-<stamp>‎». لاستعادة مثل هذا العنصر يدويًا، احذف الرابط وأعد تسمية نسخته الاحتياطية إلى «‎<entry>‎».",
   "uninstallCleanUp.deviceKey.left": "مفتاح هذا الكمبيوتر لـ «‎{name}‎»: {parts}.",
   "uninstallCleanUp.deviceKey.partSeparator": "؛ ",
   "uninstallCleanUp.deviceKey.lineLeft": "ما زال سطره المعلَّم بـ «‎{mark}‎» ضمن المفاتيح المصرّح بها للمستخدم ‎{user}‎ على ‎{host}‎، ويجب إزالته هناك",

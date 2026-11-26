@@ -21,7 +21,7 @@ pub const HTTP_HOOK_TIMEOUT_SECS: u32 = 3;
 /// Hard deadline for the whole round trip of the `hook` mode (`crate::cli::hook`), posting a hook
 /// payload to the daemon. Comfortably inside the hook timeouts the adapters set, so a daemon that
 /// is gone or wedged costs the turn a fraction of a second rather than the hook's full timeout. An
-/// extension that waits for its hook script to exit waits this long and a little more (Pi's).
+/// extension that waits for its hook script to exit waits this long and a little more.
 pub const HOOK_ROUND_TRIP_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1500);
 
 /// Where an agent that posts its hooks itself sends them: the daemon's own hook route for this

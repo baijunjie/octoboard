@@ -21,6 +21,7 @@
   "uninstallCleanUp.commandLine.inEffect": "A ferramenta de linha de comando: o link dela em {path}.",
   "uninstallCleanUp.accountSharing.left": "A conta “{name}” ({agent}) compartilha a configuração padrão do agente dela. Ela ainda compartilha: {message}",
   "uninstallCleanUp.accountSharing.inEffect": "A conta “{name}” ({agent}) compartilha a configuração padrão do agente dela.",
+  "uninstallCleanUp.accountSharing.handRestore": "Se o compartilhamento de uma conta estava sendo desativado, o diretório dela pode ter ficado alterado pela metade: algumas entradas nele podem ainda ser links para o diretório padrão do agente, com as da própria conta ao lado como “<entry>.bak-<stamp>”. Para restaurar uma entrada assim manualmente, exclua o link e renomeie o backup de volta para “<entry>”.",
   "uninstallCleanUp.deviceKey.left": "A chave deste computador para “{name}”: {parts}.",
   "uninstallCleanUp.deviceKey.partSeparator": "; ",
   "uninstallCleanUp.deviceKey.lineLeft": "a linha dela, marcada “{mark}”, ainda está nas chaves autorizadas de {user} em {host}, e precisa ser removida lá",

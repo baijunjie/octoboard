@@ -217,7 +217,7 @@ export function UninstallCleanup(): React.ReactElement | null {
     <>
       <SettingRow compact searchId="cleanup.uninstall" label={label} status={status} description={<Message id="settings.uninstall.row.description" />}>
         {/* Nothing to remove is what the row says, so the button gives no reason of its own. */}
-        <Button ref={actionRef} size="sm" variant="danger" focusOnPress={false} disabled={inEffect === undefined || nothing} onPress={() => void readForDialog()}>
+        <Button ref={actionRef} size="sm" variant="danger-soft" focusOnPress={false} disabled={inEffect === undefined || nothing} onPress={() => void readForDialog()}>
           {t("settings.uninstall.clear.action")}
         </Button>
       </SettingRow>

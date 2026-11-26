@@ -36,7 +36,9 @@ pub(crate) fn transcript_path_hint(payload: &Value) -> Option<(String, PathBuf)>
 /// A directory a launch can select through its inherited environment, with the record search
 /// depth measured from that directory.
 pub struct RecordRootOverride {
+    /// The environment variable that names the directory.
     pub variable: &'static str,
+    /// How many levels below the directory its records are looked for (1 is its own entries).
     pub search_depth: usize,
 }
 
@@ -61,6 +63,12 @@ pub trait RecordStore: Send + Sync {
 
     // -- Finding a record ------------------------------------------------------------------------
 
+    /// The environment variable through which a launch puts the provider's records in a directory
+    /// of its choosing instead of the account's records directory. The directory each launch
+    /// selected is kept with the session (`Session::record_roots`) and searched with the one the
+    /// current environment selects, so a record is still found, and judged absent only by a
+    /// complete search of all of them, after the variable has changed. `None` (the default) for a
+    /// provider whose records are always under the account.
     fn record_root_override(&self) -> Option<RecordRootOverride> {
         None
     }

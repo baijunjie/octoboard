@@ -21,6 +21,7 @@
   "uninstallCleanUp.commandLine.inEffect": "命令行工具：其位于 {path} 的链接。",
   "uninstallCleanUp.accountSharing.left": "账户“{name}”（{agent}）共享其智能体的默认配置。它仍在共享：{message}",
   "uninstallCleanUp.accountSharing.inEffect": "账户“{name}”（{agent}）共享其智能体的默认配置。",
+  "uninstallCleanUp.accountSharing.handRestore": "如果某个账户正在关闭共享，其目录可能处于只改了一半的状态：其中一些条目可能仍是指向其智能体默认目录的链接，账户自己的条目以“<entry>.bak-<stamp>”的名称放在旁边。要手动恢复这样的条目，请删除链接，并把它的备份重命名回“<entry>”。",
   "uninstallCleanUp.deviceKey.left": "用于“{name}”的本机密钥：{parts}。",
   "uninstallCleanUp.deviceKey.partSeparator": "；",
   "uninstallCleanUp.deviceKey.lineLeft": "其标记为“{mark}”的那一行仍在 {host} 上 {user} 的授权密钥中，需在那里移除",

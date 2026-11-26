@@ -36,6 +36,8 @@ the structure docs (`docs/structure/daemon.md` and `docs/structure/ui.md`, "Wher
   that behaviour (or of `AgentProvider`); something the agent does its own way is a method of `AgentProvider` or the trait it hands out for that kind of thing,
   implemented in each adapter that has the behaviour. A fact the UI needs travels in what the daemon serves, never in a
   table keyed by id. Do not branch on the id meanwhile.
+- **Adding or updating an agent follows P10, "Terminal first"** (`docs/conventions/principles.md`): no version
+  allowlist, enhancements degrade individually, and a non-blocking notice tells the user what is unavailable.
 - **A new provider is a descriptor, an adapter directory and one line in each registry** (`REGISTRY` in
   `apps/daemon/src/providers/mod.rs`, `PROVIDERS` in `apps/daemon/src/adapter/mod.rs`), plus a presentation module
   added to `BUILT_IN` in `packages/ui/src/providers/registry.ts` with its served-info fixture beside it

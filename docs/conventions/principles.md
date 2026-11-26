@@ -45,3 +45,8 @@ opens with its own domain principles and states only the rules these do not alre
   exists for Octoboard alone and would otherwise be left as a dead setting, a dead file or a side effect once Octoboard
   is gone. Nothing relies on an uninstall hook: once the
   application is deleted, only static files in its own directories may remain.
+- **P10 Terminal first.** An agent CLI's version is never gated by a list (exact, patch level or "measured"): the
+  session always starts and runs as it would in a plain terminal. Each Octoboard enhancement (records, status, hooks,
+  quota, title) detects at runtime whether it can work and degrades on its own to plain-terminal behavior, and the user
+  is told by a non-blocking notice in the terminal area. A version floor is allowed only for a demonstrated missing
+  capability, and even then the terminal itself keeps working. Measured versions are documentation, never a gate.

@@ -21,6 +21,7 @@
   "uninstallCleanUp.commandLine.inEffect": "เครื่องมือบรรทัดคำสั่ง: ลิงก์ที่ {path}",
   "uninstallCleanUp.accountSharing.left": "บัญชี “{name}” ({agent}) ใช้การกำหนดค่าเริ่มต้นของเอเจนต์ร่วมกัน และยังใช้ร่วมกันอยู่: {message}",
   "uninstallCleanUp.accountSharing.inEffect": "บัญชี “{name}” ({agent}) ใช้การกำหนดค่าเริ่มต้นของเอเจนต์ร่วมกัน",
+  "uninstallCleanUp.accountSharing.handRestore": "หากกำลังปิดการใช้ร่วมกันของบัญชีอยู่ ไดเรกทอรีของบัญชีนั้นอาจถูกเปลี่ยนไปเพียงครึ่งเดียว: รายการบางส่วนในนั้นอาจยังเป็นลิงก์ไปยังไดเรกทอรีเริ่มต้นของเอเจนต์ โดยมีรายการของบัญชีเองอยู่ข้างกันในชื่อ “<entry>.bak-<stamp>” หากต้องการกู้คืนรายการเช่นนั้นด้วยตนเอง ให้ลบลิงก์แล้วเปลี่ยนชื่อข้อมูลสำรองกลับเป็น “<entry>”",
   "uninstallCleanUp.deviceKey.left": "คีย์ของคอมพิวเตอร์เครื่องนี้สำหรับ “{name}”: {parts}",
   "uninstallCleanUp.deviceKey.partSeparator": " ",
   "uninstallCleanUp.deviceKey.lineLeft": "บรรทัดที่มีเครื่องหมาย “{mark}” ยังอยู่ในคีย์ที่ได้รับอนุญาตของ {user} บน {host} ต้องลบที่นั่น",

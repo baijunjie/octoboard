@@ -10,8 +10,8 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use crate::accounts::shared_config::{
-    account_in_use, carry_out, default_dir, entries, history_present, in_use, lock_account,
-    lock_agent, not_shareable, own_conversations, require_file_links, sharing_failed,
+    account_in_use, begin_on_disk, carry_out, default_dir, entries, history_present, in_use,
+    lock_account, lock_agent, not_shareable, own_conversations, require_file_links, sharing_failed,
     sharing_in_progress, still_sharing, try_lock_agent, Changing, Locked, Refused,
 };
 use crate::hostfs::dir_key;
@@ -40,7 +40,8 @@ use super::system_changes::{
 /// whose directory is the default account's under another spelling
 /// (`default_account_not_shareable`), while sessions of the account run or start or it is being
 /// signed in (`account_in_use`), and while a change of it runs already
-/// (`account_sharing_in_progress`). A change that fails part-way is answered with what it left
+/// (`account_sharing_in_progress`), and once the daemon is stopping, before the change is
+/// recorded (`daemon_shutting_down`). A change that fails part-way is answered with what it left
 /// where (`account_sharing_failed`) and stays incomplete.
 pub async fn set(state: &Arc<AppState>, account: Option<String>, share: bool) -> Result<()> {
     if share {
@@ -247,10 +248,10 @@ fn same_directory(a: &Account, b: &Account) -> bool {
 
 /// Runs `account`'s change to `share` under `locked`. It waits for the agent's directory, claims
 /// the account's idle sessions (one that turned working refuses the change with `refused`, before
-/// anything is stopped or recorded) and ends their processes; then it records the choice
-/// as incomplete, waits for the short CLI reads running under the account's directory to end,
-/// processes every entry, telling the progress as each is reached, and records the outcome; and
-/// last, whatever the outcome, it resumes the sessions it ended, onto the directory as it stands.
+/// anything is stopped or recorded) and ends their processes; then, unless the daemon is stopping
+/// by now, it records the choice as incomplete, waits for the short CLI reads running under the
+/// account's directory to end, processes every entry, telling the progress as each is reached,
+/// and records the outcome, the daemon's stop waiting for all of it; and last, whatever the outcome, it resumes the sessions it ended, onto the directory as it stands.
 async fn change(
     state: &Arc<AppState>,
     locked: &mut Locked,
@@ -310,10 +311,16 @@ async fn change(
         0,
     );
     let (stopped, not_stopped) = stop(state, account, &to_stop).await;
-    let started = not_stopped.is_none();
-    let outcome = match not_stopped {
+    // Before anything is recorded: a daemon that is stopping begins no change on disk, and waits
+    // for this one until it is done there.
+    let on_disk = match not_stopped {
         Some(err) => Err(err),
-        None => {
+        None => begin_on_disk(state),
+    };
+    let started = on_disk.is_ok();
+    let outcome = match on_disk {
+        Err(err) => Err(err),
+        Ok(_on_disk) => {
             async {
                 state.store.set_account_sharing(&account.id, share, true)?;
                 broadcast_settings(state)?;

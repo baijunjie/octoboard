@@ -52,7 +52,7 @@ use super::files::{canonical_project, read_bounded_text, read_regular_text, SMAL
 use super::user_json::{self, Takes};
 use super::{AgentProvider, CliPackaging, LaunchPlan, LaunchSpec, MCP_TOOL_TIMEOUT_SECS};
 use crate::hostfs::replace::{replace_beside, Permissions};
-use crate::protocol::{CodedError, ProviderOperation};
+use crate::protocol::{Code, CodedError, Notice, ProviderOperation};
 use crate::providers::{AgentId, ProviderDescriptor};
 use crate::session::screen::ScreenReader;
 use crate::session_tools;
@@ -116,13 +116,31 @@ pub struct OpenCodeProvider;
 impl AgentProvider for OpenCodeProvider {
     #[cfg(test)]
     fn launch_fixture_version(&self) -> Option<super::AgentVersion> {
-        crate::providers::opencode::SUPPORTED_VERSIONS
-            .last()
-            .copied()
+        Some((2, 4, 1))
     }
 
     fn descriptor(&self) -> &'static ProviderDescriptor {
         AgentId::OPENCODE.descriptor()
+    }
+
+    // A version nobody measured launches like any other; what its formats changed degrades where it
+    // is read, and the user is told so.
+    fn further_launch_notices(&self, spec: &LaunchSpec<'_>, _plan: &LaunchPlan) -> Vec<Notice> {
+        let Some(version @ (major, minor, patch)) = spec.agent_version else {
+            return Vec::new();
+        };
+        if crate::providers::opencode::is_measured(version) {
+            return Vec::new();
+        }
+        let version = format!("{major}.{minor}.{patch}");
+        vec![Notice::new(
+            Code::of_provider(crate::providers::opencode::VERSION_UNMEASURED),
+            format!(
+                "OpenCode {version} has not been tested with {}, so some of its features may be unavailable for this session; the terminal works as usual.",
+                crate::APP_NAME
+            ),
+            &[("version", &version)],
+        )]
     }
 
     fn hooks(&self) -> &'static dyn crate::hooks::HookInterpreter {

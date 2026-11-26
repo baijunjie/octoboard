@@ -387,6 +387,7 @@ async fn the_first_native_submission_has_the_completed_handoff_context() {
                 agent_session_id: None,
                 notices: Vec::new(),
                 first_message: None,
+                record_root: None,
             })
         })
         .await

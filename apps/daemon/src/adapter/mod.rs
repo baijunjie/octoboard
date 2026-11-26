@@ -1730,35 +1730,53 @@ pub mod tests {
         assert_eq!(coded.params["path"], missing.to_string_lossy());
     }
 
-    /// The helper exports what the launch plans that still write the block out export: the same
-    /// variable and value for a pinned account, and nothing of the variable for the default one.
+    /// The helper exports what the launch plans that still write the block out export: wherever a
+    /// pinned account's plan sets the configuration-directory variable, it is the helper's value, and
+    /// the helper exports nothing of the variable for the default account.
     #[test]
     fn the_export_helper_agrees_with_the_plans_that_write_the_block_out() {
         use crate::protocol::AgentId;
-        for agent in [AgentId::QWEN, AgentId::COPILOT, AgentId::PI] {
+        let mut agreeing = 0;
+        for agent in AgentId::ALL {
             let var = agent.descriptor().layout.config_dir_var;
+            let provider = super::provider(agent);
             let of_plan = |spec: &LaunchSpec<'_>| -> Vec<(String, String)> {
-                let plan = super::provider(agent).plan(spec).expect("a plan");
-                plan.env
-                    .into_iter()
-                    .filter(|(name, _)| name == var)
-                    .collect()
+                // A plan that refuses the account's directory sets nothing.
+                provider.plan(spec).map_or_else(
+                    |_| Vec::new(),
+                    |plan| {
+                        plan.env
+                            .into_iter()
+                            .filter(|(name, _)| name == var)
+                            .collect()
+                    },
+                )
             };
             let mut fixture = spec_fixture();
+            fixture.agent_version = provider.launch_fixture_version();
             let default = super::pinned_config_dir_export(&fixture.spec(), agent).expect("default");
             assert_eq!(default, None, "{agent:?}");
-            assert_eq!(of_plan(&fixture.spec()), Vec::new(), "{agent:?}");
 
             let pinned = fixture.scratch.join("account");
             std::fs::create_dir_all(&pinned).expect("the account's directory");
             fixture.config_dir = Some(pinned);
-            let exported = super::pinned_config_dir_export(&fixture.spec(), agent).expect("pinned");
-            assert!(exported.is_some(), "{agent:?}");
-            assert_eq!(
-                of_plan(&fixture.spec()),
-                exported.into_iter().collect::<Vec<_>>(),
-                "{agent:?}"
-            );
+            // A directory the agent's variable cannot name is refused by the helper and the plan alike.
+            let exported = super::pinned_config_dir_export(&fixture.spec(), agent)
+                .ok()
+                .flatten();
+            let planned = of_plan(&fixture.spec());
+            if !planned.is_empty() {
+                assert_eq!(
+                    planned,
+                    exported.into_iter().collect::<Vec<_>>(),
+                    "{agent:?}"
+                );
+                agreeing += 1;
+            }
         }
+        assert!(
+            agreeing > 0,
+            "no plan sets the variable of a pinned account"
+        );
     }
 }

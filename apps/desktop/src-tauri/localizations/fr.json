@@ -21,6 +21,7 @@
   "uninstallCleanUp.commandLine.inEffect": "L’outil en ligne de commande : son lien dans {path}.",
   "uninstallCleanUp.accountSharing.left": "Le compte « {name} » ({agent}) partage la configuration par défaut de son agent. Il la partage toujours : {message}",
   "uninstallCleanUp.accountSharing.inEffect": "Le compte « {name} » ({agent}) partage la configuration par défaut de son agent.",
+  "uninstallCleanUp.accountSharing.handRestore": "Si le partage d’un compte était en cours de désactivation, son dossier est peut-être resté à moitié modifié : des entrées peuvent encore y être des liens vers le dossier par défaut de son agent, avec celles du compte à côté sous le nom « <entry>.bak-<stamp> ». Pour restaurer une telle entrée à la main, supprimez le lien et renommez sa sauvegarde en « <entry> ».",
   "uninstallCleanUp.deviceKey.left": "La clé de cet ordinateur pour « {name} » : {parts}.",
   "uninstallCleanUp.deviceKey.partSeparator": " ; ",
   "uninstallCleanUp.deviceKey.lineLeft": "sa ligne, marquée « {mark} », figure toujours dans les clés autorisées de {user} sur {host}, à retirer là-bas",

@@ -33,6 +33,9 @@ pub struct Launch {
     /// The first task, to be queued as the session's first message; see
     /// `adapter::LaunchPlan::first_message`.
     pub first_message: Option<String>,
+    /// The records directory the launch's environment selected instead of the account's, for the
+    /// session to keep (`protocol::Session::record_roots`); `None` for none.
+    pub record_root: Option<PathBuf>,
 }
 
 /// One agent process to start. Owned rather than borrowed: launching snapshots the user's shell
@@ -380,6 +383,8 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         crate::session::channel::transport_of(transport, declares_channel);
     // It borrows the launch's credentials, which the spawn takes.
     drop(host);
+    // Read from what the program is given, so it is the directory the agent itself writes to.
+    let record_root = crate::records::locate::launch_record_root(agent, &environment, cwd);
     let mut cmd = host_term::Command::new(&binary.program);
     cmd.args(&binary.leading_args);
     cmd.args(&args);
@@ -471,6 +476,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         agent_session_id,
         notices,
         first_message: plan.first_message,
+        record_root,
     })
 }
 

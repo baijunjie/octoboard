@@ -409,6 +409,118 @@ mod tests {
         );
     }
 
+    /// A record written where an earlier launch's `PI_CODING_AGENT_SESSION_DIR` pointed is still
+    /// found once the variable is unset or points elsewhere, and is proven gone only by a complete
+    /// search of that directory too.
+    #[test]
+    fn a_pi_record_in_a_directory_an_earlier_launch_selected_outlives_the_variable() {
+        use crate::protocol::SessionRecordPresence;
+        use crate::records::{
+            history_branch, presence, removable_record_paths, resumability, Hints, Locator,
+            Resumability,
+        };
+        use std::collections::HashMap;
+
+        let dir = ScratchDir::new("pi-kept-record-root");
+        let root = crate::hostfs::canonical(&*dir).unwrap();
+        let account = root.join("account");
+        std::fs::create_dir_all(account.join("sessions")).unwrap();
+        let header: Value = serde_json::from_str(RECORD.lines().next().unwrap()).unwrap();
+        let id = header["id"].as_str().unwrap();
+        let kept = root.join("kept records");
+        std::fs::create_dir(&kept).unwrap();
+        let record = kept.join(format!("2026-11-24T04-00-00-000Z_{id}.jsonl"));
+        std::fs::write(&record, RECORD).unwrap();
+        let mut session = crate::records::fixtures::session(AgentId::PI, id, Some(&account));
+        session.record_roots = vec![kept.clone()];
+        let elsewhere = root.join("other records");
+        std::fs::create_dir(&elsewhere).unwrap();
+        let shells = [
+            HashMap::new(),
+            HashMap::from([(
+                "PI_CODING_AGENT_SESSION_DIR".to_owned(),
+                elsewhere.to_string_lossy().into_owned(),
+            )]),
+        ];
+        let hints = Hints::default();
+
+        for shell in &shells {
+            let mut locator = Locator::with_shell(shell.clone());
+            assert_eq!(resumability(&locator, &session), Resumability::Resumable);
+            assert_eq!(
+                presence(&hints, &mut locator, &[], &session),
+                SessionRecordPresence::Present
+            );
+            assert_eq!(
+                history_branch(&hints, &mut locator, &[], &session)
+                    .unwrap()
+                    .record,
+                record
+            );
+            assert_eq!(
+                removable_record_paths(&hints, &mut locator, &[], &session),
+                std::slice::from_ref(&record)
+            );
+        }
+
+        std::fs::remove_file(&record).unwrap();
+        // Something in the kept directory that cannot be looked through could hide the record.
+        crate::test_support::symlink(&elsewhere, kept.join("linked")).unwrap();
+        for shell in &shells {
+            let mut locator = Locator::with_shell(shell.clone());
+            assert_eq!(resumability(&locator, &session), Resumability::Unknown);
+            assert_eq!(
+                presence(&hints, &mut locator, &[], &session),
+                SessionRecordPresence::Unknown
+            );
+        }
+        std::fs::remove_file(kept.join("linked")).unwrap();
+        for shell in &shells {
+            let mut locator = Locator::with_shell(shell.clone());
+            assert_eq!(resumability(&locator, &session), Resumability::Unresumable);
+            assert_eq!(
+                presence(&hints, &mut locator, &[], &session),
+                SessionRecordPresence::Absent
+            );
+        }
+    }
+
+    /// The directory a launch keeps is the one its environment selects: a leading `~` from the
+    /// snapshot's home, a relative one from the launch's working directory; none when the variable
+    /// is unset or empty.
+    #[test]
+    fn a_launch_keeps_the_record_directory_its_environment_selects() {
+        use crate::records::locate::launch_record_root;
+        use std::collections::HashMap;
+
+        let dir = ScratchDir::new("pi-launch-record-root");
+        let root = crate::hostfs::canonical(&*dir).unwrap();
+        let cwd = root.join("project");
+        let home = root.join("home");
+        let env = |value: &str| {
+            HashMap::from([
+                ("PI_CODING_AGENT_SESSION_DIR".to_owned(), value.to_owned()),
+                ("HOME".to_owned(), home.to_string_lossy().into_owned()),
+            ])
+        };
+
+        assert_eq!(
+            launch_record_root(AgentId::PI, &env("records/../pi"), &cwd),
+            Some(cwd.join("pi"))
+        );
+        assert_eq!(
+            launch_record_root(AgentId::PI, &env("~/pi"), &cwd),
+            Some(home.join("pi"))
+        );
+        let absolute = root.join("absolute");
+        assert_eq!(
+            launch_record_root(AgentId::PI, &env(absolute.to_str().unwrap()), &cwd),
+            Some(absolute)
+        );
+        assert_eq!(launch_record_root(AgentId::PI, &env(""), &cwd), None);
+        assert_eq!(launch_record_root(AgentId::PI, &HashMap::new(), &cwd), None);
+    }
+
     #[test]
     fn history_feed_and_context_follow_the_captured_pi_branch() {
         assert_eq!(

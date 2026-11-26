@@ -372,8 +372,9 @@ FunctionEnd
 ; setup runs in place, where the executable may be missing as well, by the folder it runs from, which is then the
 ; installation's own.
 ;
-; The application is ended first, by the check Tauri runs right after this hook, so that the clean-up finds no
-; daemon of a running application holding the data directory.
+; The application is ended first, by the same check Tauri runs after this hook (`CheckIfAppIsRunning`), asked here
+; before the executable is started, so that the clean-up finds no daemon of a running application holding the data
+; directory.
 !macro OCTOBOARD_CLEAN_UP
   StrCpy $OctoboardCleanUpLeft ""
   StrCpy $OctoboardCleanUpEnded 0

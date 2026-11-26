@@ -1,6 +1,6 @@
 //! The files named by a patch in the `*** Begin Patch` format some agents edit files with (a GPT
-//! model's `apply_patch` tool), for the cross-project guard to ask about each: GitHub Copilot CLI
-//! and OpenCode both hand the guard such a patch in place of a path.
+//! model's `apply_patch` tool), for the cross-project guard to ask about each: an agent that edits
+//! this way hands the guard such a patch in place of a path.
 
 /// The headers of a patch that name a file, the path following each.
 const HEADERS: [&str; 4] = [

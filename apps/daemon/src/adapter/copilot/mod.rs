@@ -36,6 +36,7 @@ use anyhow::{Context, Result};
 use serde_json::json;
 
 use super::{AgentProvider, LaunchPlan, LaunchSpec};
+use crate::hostfs::replace::{replace_beside, Permissions};
 use crate::providers::{AgentId, ProviderDescriptor};
 use crate::session::screen::ScreenReader;
 use crate::session_tools;
@@ -365,14 +366,18 @@ fn write_plugin(spec: &LaunchSpec<'_>) -> Result<PathBuf> {
         }
         events.insert((*event).to_string(), serde_json::Value::Array(entries));
     }
-    std::fs::write(
-        dir.join("plugin.json"),
-        json!({ "name": "octoboard" }).to_string(),
+    replace_beside(
+        &dir.join("plugin.json"),
+        json!({ "name": "octoboard" }).to_string().as_bytes(),
+        Permissions::Private,
     )
     .context("writing the hooks plugin's manifest")?;
-    std::fs::write(
-        dir.join("hooks.json"),
-        json!({ "version": 1, "hooks": events }).to_string(),
+    replace_beside(
+        &dir.join("hooks.json"),
+        json!({ "version": 1, "hooks": events })
+            .to_string()
+            .as_bytes(),
+        Permissions::Private,
     )
     .context("writing the hooks plugin's hooks")?;
     Ok(dir)
@@ -395,8 +400,12 @@ fn write_mcp_config(spec: &LaunchSpec<'_>) -> Result<PathBuf> {
         }),
     );
     let path = spec.scratch.join("copilot-mcp.json");
-    std::fs::write(&path, json!({ "mcpServers": servers }).to_string())
-        .context("writing the MCP configuration")?;
+    replace_beside(
+        &path,
+        json!({ "mcpServers": servers }).to_string().as_bytes(),
+        Permissions::Private,
+    )
+    .context("writing the MCP configuration")?;
     Ok(path)
 }
 
@@ -413,8 +422,12 @@ fn write_role(spec: &LaunchSpec<'_>) -> Result<PathBuf> {
         AgentId::COPILOT,
         &spec.role_options(),
     );
-    std::fs::write(files.join("octoboard.instructions.md"), role)
-        .context("writing the role instructions")?;
+    replace_beside(
+        &files.join("octoboard.instructions.md"),
+        role.as_bytes(),
+        Permissions::Private,
+    )
+    .context("writing the role instructions")?;
     Ok(dir)
 }
 

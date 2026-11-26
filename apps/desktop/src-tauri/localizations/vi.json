@@ -21,6 +21,7 @@
   "uninstallCleanUp.commandLine.inEffect": "Công cụ dòng lệnh: liên kết của nó tại {path}.",
   "uninstallCleanUp.accountSharing.left": "Tài khoản “{name}” ({agent}) dùng chung cấu hình mặc định của tác tử. Tài khoản đó vẫn dùng chung: {message}",
   "uninstallCleanUp.accountSharing.inEffect": "Tài khoản “{name}” ({agent}) dùng chung cấu hình mặc định của tác tử.",
+  "uninstallCleanUp.accountSharing.handRestore": "Nếu tài khoản đang được tắt dùng chung, thư mục của nó có thể bị thay đổi dở dang: một số mục trong đó có thể vẫn là liên kết đến thư mục mặc định của tác tử, với mục riêng của tài khoản nằm bên cạnh dưới tên “<entry>.bak-<stamp>”. Để khôi phục thủ công một mục như vậy, hãy xóa liên kết và đổi tên bản sao lưu về lại “<entry>”.",
   "uninstallCleanUp.deviceKey.left": "Khóa của máy tính này cho “{name}”: {parts}.",
   "uninstallCleanUp.deviceKey.partSeparator": "; ",
   "uninstallCleanUp.deviceKey.lineLeft": "dòng của nó, được đánh dấu “{mark}”, vẫn còn trong các khóa được ủy quyền của {user} trên {host}, cần xóa ở đó",

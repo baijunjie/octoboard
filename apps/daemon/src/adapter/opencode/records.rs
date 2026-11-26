@@ -53,6 +53,11 @@ fn database_exists(account: &RowAccount<'_>) -> bool {
     account.config_dir.is_none() && super::version::database(account.shell_env).is_file()
 }
 
+// Rows come through OpenCode's own command, not a read of `opencode.db` here. The database is in WAL
+// mode and a running TUI holds it open, so the turn so far sits in the WAL; the immutable read the
+// migration checks use (`version::immutable_database`) ignores the WAL and would miss it, and opening
+// it normally would create or checkpoint the sidecars of a file that is OpenCode's. In 2.x the
+// conversation is also a projection only its `session export` builds.
 fn select(account: &RowAccount<'_>, sql: &str) -> io::Result<Vec<Value>> {
     let _slot = Slot::acquire()?;
     if !database_exists(account) {

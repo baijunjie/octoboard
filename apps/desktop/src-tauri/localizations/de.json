@@ -21,6 +21,7 @@
   "uninstallCleanUp.commandLine.inEffect": "Das Befehlszeilenwerkzeug: sein Link unter {path}.",
   "uninstallCleanUp.accountSharing.left": "Das Konto „{name}“ ({agent}) teilt die Standardkonfiguration seines Agenten. Das tut es weiterhin: {message}",
   "uninstallCleanUp.accountSharing.inEffect": "Das Konto „{name}“ ({agent}) teilt die Standardkonfiguration seines Agenten.",
+  "uninstallCleanUp.accountSharing.handRestore": "Wurde für ein Konto gerade das Teilen beendet, ist sein Verzeichnis möglicherweise nur halb geändert: Einträge darin können noch Links in das Standardverzeichnis seines Agenten sein, mit den eigenen des Kontos daneben als „<entry>.bak-<stamp>“. Um einen solchen Eintrag von Hand wiederherzustellen, lösche den Link und benenne seine Sicherung wieder in „<entry>“ um.",
   "uninstallCleanUp.deviceKey.left": "Der Schlüssel dieses Computers für „{name}“: {parts}.",
   "uninstallCleanUp.deviceKey.partSeparator": "; ",
   "uninstallCleanUp.deviceKey.lineLeft": "seine Zeile mit der Markierung „{mark}“ steht noch in den autorisierten Schlüsseln von {user} auf {host} und ist dort zu entfernen",

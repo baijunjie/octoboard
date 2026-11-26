@@ -9,10 +9,9 @@ const names = {
 // The copy that speaks of the provider's own behaviour, found by the components under `provider.<id>.` (see
 // `ProviderMessage`). `auto` is the CLI's own `--auto`: it approves every permission its rules do not deny.
 const arMessages = {
-  "provider.opencode.unsupported_version": "تعذّر بدء {agent} لأن الإصدار المثبّت غير مدعوم.",
-  "provider.opencode.unsupported_version.remedy": "ثبّت أحد الإصدارات المدعومة من {agent} ({supported}) ثم أعد تشغيل الجلسة.",
   "provider.opencode.migration_required": "يحتاج {agent} إلى ترحيل إعداداته قبل بدء الجلسة.",
   "provider.opencode.migration_required.remedy": "شغّل {agent} مباشرةً في طرفية لإتمام الترحيل، ثم أعد تشغيل الجلسة.",
+  "provider.opencode.version_unmeasured": "لم يُختبر هذا الإصدار من {agent} ({version}) مع {appName}، لذا قد لا تتوفر بعض ميزات {appName} في هذه الجلسة. تعمل الطرفية نفسها كالمعتاد.",
   "provider.opencode.setting.claude_compatibility.heading": "التوافق مع Claude",
   "provider.opencode.setting.claude_compatibility.helpLabel": "حول التوافق مع Claude",
   "provider.opencode.setting.claude_compatibility.label": "التوافق مع Claude لـ {agent}",
@@ -35,10 +34,9 @@ const arMessages = {
 } as const;
 
 const deMessages = {
-  "provider.opencode.unsupported_version": "{agent} konnte mit der installierten Version nicht gestartet werden.",
-  "provider.opencode.unsupported_version.remedy": "Installiere eine unterstützte Version von {agent} ({supported}) und starte die Sitzung erneut.",
   "provider.opencode.migration_required": "{agent} muss seine Konfiguration migrieren, bevor die Sitzung starten kann.",
   "provider.opencode.migration_required.remedy": "Starte {agent} direkt in einem Terminal, um die Migration abzuschließen, und starte dann die Sitzung erneut.",
+  "provider.opencode.version_unmeasured": "Diese Version von {agent} ({version}) wurde nicht mit {appName} getestet, daher stehen in dieser Sitzung möglicherweise einige Funktionen von {appName} nicht zur Verfügung. Das Terminal selbst funktioniert wie gewohnt.",
   "provider.opencode.setting.claude_compatibility.heading": "Claude-Kompatibilität",
   "provider.opencode.setting.claude_compatibility.helpLabel": "Informationen zur Claude-Kompatibilität",
   "provider.opencode.setting.claude_compatibility.label": "Claude-Kompatibilität für {agent}",
@@ -61,10 +59,9 @@ const deMessages = {
 } as const;
 
 const en = {
-  "provider.opencode.unsupported_version": "The installed version of {agent} could not be used to launch this session.",
-  "provider.opencode.unsupported_version.remedy": "Install a supported version of {agent} ({supported}), then launch the session again.",
   "provider.opencode.migration_required": "{agent} needs to migrate its own configuration before this session can start.",
   "provider.opencode.migration_required.remedy": "Run {agent} directly in a terminal to complete the migration, then launch the session again.",
+  "provider.opencode.version_unmeasured": "This version of {agent} ({version}) has not been tested with {appName}, so some {appName} features may be unavailable for this session. The terminal itself works as usual.",
   "provider.opencode.setting.claude_compatibility.heading": "Claude compatibility",
   "provider.opencode.setting.claude_compatibility.helpLabel": "About Claude compatibility",
   "provider.opencode.setting.claude_compatibility.label": "Claude compatibility for {agent}",
@@ -87,10 +84,9 @@ const en = {
 } as const;
 
 const esMessages = {
-  "provider.opencode.unsupported_version": "La versión instalada de {agent} no permite iniciar esta sesión.",
-  "provider.opencode.unsupported_version.remedy": "Instala una versión compatible de {agent} ({supported}) y vuelve a iniciar la sesión.",
   "provider.opencode.migration_required": "{agent} debe migrar su configuración antes de iniciar esta sesión.",
   "provider.opencode.migration_required.remedy": "Ejecuta {agent} directamente en una terminal para completar la migración y vuelve a iniciar la sesión.",
+  "provider.opencode.version_unmeasured": "Esta versión de {agent} ({version}) no se ha probado con {appName}, por lo que puede que algunas funciones de {appName} no estén disponibles en esta sesión. El terminal funciona con normalidad.",
   "provider.opencode.setting.claude_compatibility.heading": "Compatibilidad con Claude",
   "provider.opencode.setting.claude_compatibility.helpLabel": "Acerca de la compatibilidad con Claude",
   "provider.opencode.setting.claude_compatibility.label": "Compatibilidad con Claude para {agent}",
@@ -113,10 +109,9 @@ const esMessages = {
 } as const;
 
 const frMessages = {
-  "provider.opencode.unsupported_version": "La version installée de {agent} ne permet pas de lancer cette session.",
-  "provider.opencode.unsupported_version.remedy": "Installez une version compatible de {agent} ({supported}), puis relancez la session.",
   "provider.opencode.migration_required": "{agent} doit migrer sa configuration avant de lancer cette session.",
   "provider.opencode.migration_required.remedy": "Lancez {agent} directement dans un terminal pour terminer la migration, puis relancez la session.",
+  "provider.opencode.version_unmeasured": "Cette version de {agent} ({version}) n’a pas été testée avec {appName} ; certaines fonctionnalités de {appName} peuvent donc être indisponibles dans cette session. Le terminal fonctionne normalement.",
   "provider.opencode.setting.claude_compatibility.heading": "Compatibilité Claude",
   "provider.opencode.setting.claude_compatibility.helpLabel": "À propos de la compatibilité Claude",
   "provider.opencode.setting.claude_compatibility.label": "Compatibilité Claude pour {agent}",
@@ -139,10 +134,9 @@ const frMessages = {
 } as const;
 
 const hiMessages = {
-  "provider.opencode.unsupported_version": "{agent} के इंस्टॉल किए गए संस्करण से यह सत्र शुरू नहीं हो सका।",
-  "provider.opencode.unsupported_version.remedy": "{agent} का कोई समर्थित संस्करण ({supported}) इंस्टॉल करें, फिर सत्र दोबारा शुरू करें।",
   "provider.opencode.migration_required": "इस सत्र को शुरू करने से पहले {agent} को अपना कॉन्फ़िगरेशन माइग्रेट करना होगा।",
   "provider.opencode.migration_required.remedy": "माइग्रेशन पूरा करने के लिए {agent} को सीधे टर्मिनल में चलाएँ, फिर सत्र दोबारा शुरू करें।",
+  "provider.opencode.version_unmeasured": "{agent} का यह संस्करण ({version}) {appName} के साथ परखा नहीं गया है, इसलिए इस सत्र में {appName} की कुछ सुविधाएँ उपलब्ध नहीं हो सकतीं। टर्मिनल सामान्य रूप से काम करता है।",
   "provider.opencode.setting.claude_compatibility.heading": "Claude के साथ संगतता",
   "provider.opencode.setting.claude_compatibility.helpLabel": "Claude के साथ संगतता के बारे में",
   "provider.opencode.setting.claude_compatibility.label": "{agent} के लिए Claude के साथ संगतता",
@@ -165,10 +159,9 @@ const hiMessages = {
 } as const;
 
 const idMessages = {
-  "provider.opencode.unsupported_version": "Versi {agent} yang terpasang tidak dapat digunakan untuk memulai sesi ini.",
-  "provider.opencode.unsupported_version.remedy": "Instal versi {agent} yang didukung ({supported}), lalu mulai ulang sesi.",
   "provider.opencode.migration_required": "{agent} perlu memigrasikan konfigurasinya sebelum sesi ini dapat dimulai.",
   "provider.opencode.migration_required.remedy": "Jalankan {agent} langsung di terminal untuk menyelesaikan migrasi, lalu mulai ulang sesi.",
+  "provider.opencode.version_unmeasured": "Versi {agent} ini ({version}) belum diuji dengan {appName}, jadi sebagian fitur {appName} mungkin tidak tersedia di sesi ini. Terminal tetap berfungsi seperti biasa.",
   "provider.opencode.setting.claude_compatibility.heading": "Kompatibilitas Claude",
   "provider.opencode.setting.claude_compatibility.helpLabel": "Tentang kompatibilitas Claude",
   "provider.opencode.setting.claude_compatibility.label": "Kompatibilitas Claude untuk {agent}",
@@ -191,10 +184,9 @@ const idMessages = {
 } as const;
 
 const itMessages = {
-  "provider.opencode.unsupported_version": "La versione installata di {agent} non consente di avviare questa sessione.",
-  "provider.opencode.unsupported_version.remedy": "Installa una versione supportata di {agent} ({supported}), poi riavvia la sessione.",
   "provider.opencode.migration_required": "{agent} deve migrare la propria configurazione prima di avviare questa sessione.",
   "provider.opencode.migration_required.remedy": "Esegui {agent} direttamente in un terminale per completare la migrazione, poi riavvia la sessione.",
+  "provider.opencode.version_unmeasured": "Questa versione di {agent} ({version}) non è stata testata con {appName}, quindi alcune funzioni di {appName} potrebbero non essere disponibili in questa sessione. Il terminale funziona normalmente.",
   "provider.opencode.setting.claude_compatibility.heading": "Compatibilità con Claude",
   "provider.opencode.setting.claude_compatibility.helpLabel": "Informazioni sulla compatibilità con Claude",
   "provider.opencode.setting.claude_compatibility.label": "Compatibilità con Claude per {agent}",
@@ -217,10 +209,9 @@ const itMessages = {
 } as const;
 
 const jaMessages = {
-  "provider.opencode.unsupported_version": "インストールされている {agent} のバージョンでは、このセッションを起動できませんでした。",
-  "provider.opencode.unsupported_version.remedy": "{agent} の対応バージョン（{supported}）をインストールしてから、セッションを起動し直してください。",
   "provider.opencode.migration_required": "このセッションを起動するには、先に {agent} の設定を移行する必要があります。",
   "provider.opencode.migration_required.remedy": "ターミナルで {agent} を直接実行して移行を完了してから、セッションを起動し直してください。",
+  "provider.opencode.version_unmeasured": "この {agent} のバージョン（{version}）は {appName} で検証されていないため、このセッションでは {appName} の一部の機能が使えない場合があります。ターミナル自体は通常どおり動作します。",
   "provider.opencode.setting.claude_compatibility.heading": "Claude との互換性",
   "provider.opencode.setting.claude_compatibility.helpLabel": "Claude との互換性について",
   "provider.opencode.setting.claude_compatibility.label": "{agent} の Claude との互換性",
@@ -243,10 +234,9 @@ const jaMessages = {
 } as const;
 
 const koMessages = {
-  "provider.opencode.unsupported_version": "설치된 {agent} 버전으로 이 세션을 시작할 수 없습니다.",
-  "provider.opencode.unsupported_version.remedy": "지원되는 {agent} 버전({supported})을 설치한 다음 세션을 다시 시작하세요.",
   "provider.opencode.migration_required": "세션을 시작하려면 먼저 {agent}의 설정을 마이그레이션해야 합니다.",
   "provider.opencode.migration_required.remedy": "터미널에서 {agent}을(를) 직접 실행해 마이그레이션을 완료한 다음 세션을 다시 시작해 주세요.",
+  "provider.opencode.version_unmeasured": "이 {agent} 버전({version})은 {appName}에서 검증되지 않아 이 세션에서 {appName}의 일부 기능을 사용할 수 없을 수 있습니다. 터미널은 평소처럼 작동합니다.",
   "provider.opencode.setting.claude_compatibility.heading": "Claude 호환성",
   "provider.opencode.setting.claude_compatibility.helpLabel": "Claude 호환성에 관하여",
   "provider.opencode.setting.claude_compatibility.label": "{agent}의 Claude 호환성",
@@ -269,10 +259,9 @@ const koMessages = {
 } as const;
 
 const ptMessages = {
-  "provider.opencode.unsupported_version": "A versão instalada do {agent} não pôde iniciar esta sessão.",
-  "provider.opencode.unsupported_version.remedy": "Instale uma versão compatível do {agent} ({supported}) e inicie a sessão novamente.",
   "provider.opencode.migration_required": "O {agent} precisa migrar a própria configuração antes de iniciar esta sessão.",
   "provider.opencode.migration_required.remedy": "Execute o {agent} diretamente em um terminal para concluir a migração e inicie a sessão novamente.",
+  "provider.opencode.version_unmeasured": "Esta versão do {agent} ({version}) não foi testada com o {appName}, por isso alguns recursos do {appName} podem não estar disponíveis nesta sessão. O terminal funciona normalmente.",
   "provider.opencode.setting.claude_compatibility.heading": "Compatibilidade com Claude",
   "provider.opencode.setting.claude_compatibility.helpLabel": "Sobre a compatibilidade com Claude",
   "provider.opencode.setting.claude_compatibility.label": "Compatibilidade com Claude para {agent}",
@@ -295,10 +284,9 @@ const ptMessages = {
 } as const;
 
 const ruMessages = {
-  "provider.opencode.unsupported_version": "Установленная версия {agent} не позволяет запустить этот сеанс.",
-  "provider.opencode.unsupported_version.remedy": "Установите поддерживаемую версию {agent} ({supported}) и запустите сеанс снова.",
   "provider.opencode.migration_required": "Перед запуском сеанса {agent} необходимо перенести свою конфигурацию.",
   "provider.opencode.migration_required.remedy": "Запустите {agent} напрямую в терминале, чтобы завершить перенос, затем запустите сеанс снова.",
+  "provider.opencode.version_unmeasured": "Эта версия {agent} ({version}) не проверялась с {appName}, поэтому часть функций {appName} может быть недоступна в этом сеансе. Сам терминал работает как обычно.",
   "provider.opencode.setting.claude_compatibility.heading": "Совместимость с Claude",
   "provider.opencode.setting.claude_compatibility.helpLabel": "О совместимости с Claude",
   "provider.opencode.setting.claude_compatibility.label": "Совместимость с Claude для {agent}",
@@ -321,10 +309,9 @@ const ruMessages = {
 } as const;
 
 const thMessages = {
-  "provider.opencode.unsupported_version": "ไม่สามารถเริ่มเซสชันด้วย {agent} เวอร์ชันที่ติดตั้งไว้ได้",
-  "provider.opencode.unsupported_version.remedy": "ติดตั้ง {agent} เวอร์ชันที่รองรับ ({supported}) แล้วเริ่มเซสชันอีกครั้ง",
   "provider.opencode.migration_required": "{agent} ต้องย้ายการกำหนดค่าก่อนเริ่มเซสชันนี้",
   "provider.opencode.migration_required.remedy": "เรียกใช้ {agent} โดยตรงในเทอร์มินัลเพื่อให้การย้ายเสร็จสมบูรณ์ แล้วเริ่มเซสชันอีกครั้ง",
+  "provider.opencode.version_unmeasured": "{agent} เวอร์ชันนี้ ({version}) ยังไม่ได้ทดสอบกับ {appName} จึงอาจใช้ฟีเจอร์บางอย่างของ {appName} ไม่ได้ในเซสชันนี้ ส่วนเทอร์มินัลทำงานได้ตามปกติ",
   "provider.opencode.setting.claude_compatibility.heading": "ความเข้ากันได้กับ Claude",
   "provider.opencode.setting.claude_compatibility.helpLabel": "เกี่ยวกับความเข้ากันได้กับ Claude",
   "provider.opencode.setting.claude_compatibility.label": "ความเข้ากันได้กับ Claude สำหรับ {agent}",
@@ -347,10 +334,9 @@ const thMessages = {
 } as const;
 
 const trMessages = {
-  "provider.opencode.unsupported_version": "Yüklü {agent} sürümüyle bu oturum başlatılamadı.",
-  "provider.opencode.unsupported_version.remedy": "Desteklenen bir {agent} sürümünü ({supported}) yükleyip oturumu yeniden başlatın.",
   "provider.opencode.migration_required": "Bu oturum başlamadan önce {agent} kendi yapılandırmasını taşımalıdır.",
   "provider.opencode.migration_required.remedy": "Taşımayı tamamlamak için {agent} uygulamasını doğrudan terminalde çalıştırın, ardından oturumu yeniden başlatın.",
+  "provider.opencode.version_unmeasured": "{agent} sürümü ({version}) {appName} ile test edilmediğinden bu oturumda {appName} özelliklerinden bazıları kullanılamayabilir. Terminalin kendisi her zamanki gibi çalışır.",
   "provider.opencode.setting.claude_compatibility.heading": "Claude uyumluluğu",
   "provider.opencode.setting.claude_compatibility.helpLabel": "Claude uyumluluğu hakkında",
   "provider.opencode.setting.claude_compatibility.label": "{agent} için Claude uyumluluğu",
@@ -373,10 +359,9 @@ const trMessages = {
 } as const;
 
 const viMessages = {
-  "provider.opencode.unsupported_version": "Không thể khởi chạy phiên này bằng phiên bản {agent} đã cài đặt.",
-  "provider.opencode.unsupported_version.remedy": "Cài đặt một phiên bản {agent} được hỗ trợ ({supported}) rồi khởi chạy lại phiên.",
   "provider.opencode.migration_required": "{agent} cần chuyển đổi cấu hình trước khi phiên này có thể bắt đầu.",
   "provider.opencode.migration_required.remedy": "Chạy {agent} trực tiếp trong thiết bị đầu cuối để hoàn tất chuyển đổi, rồi khởi chạy lại phiên.",
+  "provider.opencode.version_unmeasured": "Phiên bản {agent} này ({version}) chưa được kiểm thử với {appName}, nên một số tính năng của {appName} có thể không dùng được trong phiên này. Bản thân terminal vẫn hoạt động bình thường.",
   "provider.opencode.setting.claude_compatibility.heading": "Tương thích Claude",
   "provider.opencode.setting.claude_compatibility.helpLabel": "Về khả năng tương thích Claude",
   "provider.opencode.setting.claude_compatibility.label": "Tương thích Claude cho {agent}",
@@ -399,10 +384,9 @@ const viMessages = {
 } as const;
 
 const zhCN = {
-  "provider.opencode.unsupported_version": "已安装的 {agent} 版本无法启动此会话。",
-  "provider.opencode.unsupported_version.remedy": "请安装受支持的 {agent} 版本（{supported}），然后重新启动会话。",
   "provider.opencode.migration_required": "启动此会话前，{agent} 需要迁移自己的配置。",
   "provider.opencode.migration_required.remedy": "请直接在终端运行 {agent} 完成迁移，然后重新启动会话。",
+  "provider.opencode.version_unmeasured": "此版本的 {agent}（{version}）尚未与 {appName} 一起测试，因此本会话中 {appName} 的部分功能可能无法使用。终端本身照常工作。",
   "provider.opencode.setting.claude_compatibility.heading": "兼容 Claude",
   "provider.opencode.setting.claude_compatibility.helpLabel": "关于兼容 Claude",
   "provider.opencode.setting.claude_compatibility.label": "{agent} 兼容 Claude",
@@ -425,10 +409,9 @@ const zhCN = {
 } as const;
 
 const zhTWMessages = {
-  "provider.opencode.unsupported_version": "已安裝的 {agent} 版本無法啟動此工作階段。",
-  "provider.opencode.unsupported_version.remedy": "請安裝支援的 {agent} 版本（{supported}），然後重新啟動工作階段。",
   "provider.opencode.migration_required": "啟動此工作階段前，{agent} 需要移轉自己的設定。",
   "provider.opencode.migration_required.remedy": "請直接在終端機執行 {agent} 完成移轉，然後重新啟動工作階段。",
+  "provider.opencode.version_unmeasured": "此版本的 {agent}（{version}）尚未與 {appName} 一起測試，因此此工作階段中 {appName} 的部分功能可能無法使用。終端機本身照常運作。",
   "provider.opencode.setting.claude_compatibility.heading": "相容 Claude",
   "provider.opencode.setting.claude_compatibility.helpLabel": "關於相容 Claude",
   "provider.opencode.setting.claude_compatibility.label": "{agent} 相容 Claude",
@@ -460,13 +443,8 @@ export const opencode = {
   },
   params: { opencode: names["provider.opencode.label"] },
   references: { signInHint: { command: "opencode auth login" } },
-  recoveryReferences: { supported: "1.19.6, 2.3.2, 2.4.0, 2.4.1" },
   codes: {
-    "provider.opencode.unsupported_version": {
-      origin: "daemon",
-      recovery: "provider.opencode.unsupported_version.remedy",
-      uiParams: { agent: names["provider.opencode.label"] },
-    },
+    "provider.opencode.version_unmeasured": { origin: "daemon", codeParams: ["version"], uiParams: { agent: names["provider.opencode.label"] } },
     "provider.opencode.migration_required": {
       origin: "daemon",
       recovery: "provider.opencode.migration_required.remedy",

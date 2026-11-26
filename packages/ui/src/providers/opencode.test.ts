@@ -27,10 +27,8 @@ describe("the OpenCode presentation module", () => {
     }
   });
 
-  it("gives refusals a remedy and names the supported CLI versions", () => {
-    expect(opencode.codes["provider.opencode.unsupported_version"].recovery).toBe("provider.opencode.unsupported_version.remedy");
+  it("gives its refusal a remedy", () => {
     expect(opencode.codes["provider.opencode.migration_required"].recovery).toBe("provider.opencode.migration_required.remedy");
-    expect(opencode.recoveryReferences.supported).toBe("1.19.6, 2.3.2, 2.4.0, 2.4.1");
   });
 
   it("words the same messages in every language, none of them empty", () => {

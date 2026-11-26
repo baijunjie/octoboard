@@ -21,6 +21,7 @@
   "uninstallCleanUp.commandLine.inEffect": "コマンドラインツール：{path} にあるリンク。",
   "uninstallCleanUp.accountSharing.left": "アカウント「{name}」（{agent}）はエージェントのデフォルト構成を共有しています。まだ共有したままです：{message}",
   "uninstallCleanUp.accountSharing.inEffect": "アカウント「{name}」（{agent}）はエージェントのデフォルト構成を共有しています。",
+  "uninstallCleanUp.accountSharing.handRestore": "アカウントの共有をオフにしている途中だった場合、そのディレクトリが中途半端に変更されたままになっている可能性があります：中のエントリーがまだエージェントのデフォルトディレクトリへのリンクのままで、その横にアカウント自身のものが「<entry>.bak-<stamp>」として残っていることがあります。手動で元に戻すには、リンクを削除し、そのバックアップの名前を「<entry>」に戻してください。",
   "uninstallCleanUp.deviceKey.left": "「{name}」用のこのコンピューターの鍵：{parts}。",
   "uninstallCleanUp.deviceKey.partSeparator": "、",
   "uninstallCleanUp.deviceKey.lineLeft": "「{mark}」の印が付いた行が {host} の {user} の認証済み鍵にまだ残っており、そこで削除する必要があります",

@@ -21,6 +21,7 @@
   "uninstallCleanUp.commandLine.inEffect": "Alat baris perintah: tautannya di {path}.",
   "uninstallCleanUp.accountSharing.left": "Akun “{name}” ({agent}) berbagi konfigurasi default agennya. Akun itu masih berbagi: {message}",
   "uninstallCleanUp.accountSharing.inEffect": "Akun “{name}” ({agent}) berbagi konfigurasi default agennya.",
+  "uninstallCleanUp.accountSharing.handRestore": "Jika berbagi sedang dimatikan untuk sebuah akun, direktorinya mungkin tertinggal setengah berubah: beberapa entri di dalamnya mungkin masih berupa tautan ke direktori default agennya, dengan milik akun itu sendiri di sebelahnya sebagai “<entry>.bak-<stamp>”. Untuk memulihkan entri seperti itu secara manual, hapus tautannya lalu ganti nama cadangannya kembali menjadi “<entry>”.",
   "uninstallCleanUp.deviceKey.left": "Kunci komputer ini untuk “{name}”: {parts}.",
   "uninstallCleanUp.deviceKey.partSeparator": "; ",
   "uninstallCleanUp.deviceKey.lineLeft": "barisnya, bertanda “{mark}”, masih ada di kunci yang diotorisasi milik {user} di {host}, dan harus dihapus di sana",

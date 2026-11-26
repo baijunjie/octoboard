@@ -21,6 +21,7 @@
   "uninstallCleanUp.commandLine.inEffect": "Lo strumento da riga di comando: il suo collegamento in {path}.",
   "uninstallCleanUp.accountSharing.left": "L’account «{name}» ({agent}) condivide la configurazione predefinita del suo agente. La condivide ancora: {message}",
   "uninstallCleanUp.accountSharing.inEffect": "L’account «{name}» ({agent}) condivide la configurazione predefinita del suo agente.",
+  "uninstallCleanUp.accountSharing.handRestore": "Se la condivisione di un account era in fase di disattivazione, la sua directory potrebbe essere rimasta modificata a metà: alcune voci potrebbero essere ancora collegamenti alla directory predefinita del suo agente, con quelle dell’account accanto come «<entry>.bak-<stamp>». Per ripristinare a mano una di queste voci, elimina il collegamento e rinomina il suo backup di nuovo in «<entry>».",
   "uninstallCleanUp.deviceKey.left": "La chiave di questo computer per «{name}»: {parts}.",
   "uninstallCleanUp.deviceKey.partSeparator": "; ",
   "uninstallCleanUp.deviceKey.lineLeft": "la sua riga, contrassegnata «{mark}», è ancora nelle chiavi autorizzate di {user} su {host}, da rimuovere lì",

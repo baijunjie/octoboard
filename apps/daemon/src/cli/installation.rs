@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
+use crate::hostfs::lexically_normalise;
 use crate::platform::{fs, proc};
 
 /// The path to start this daemon's executable from, taken at start-up, before the working
@@ -29,21 +30,28 @@ pub(crate) fn launch_path() -> Result<PathBuf> {
 /// The absolute path `argv0` names, final symlink unresolved: an absolute one as it stands, a
 /// relative one (it has a separator) joined to `cwd`, a bare name looked up in `search_path` as a
 /// shell does, the first executable file it finds. `None` when there is nothing to go by.
+///
+/// Its `..` are folded lexically (`hostfs::lexically_normalise`), so that `../bin/octoboardd`
+/// names the path a service unit names, not one spelled with `..` that no unit compares equal
+/// to. `cwd` holds no symlink, being the working directory as the system tells it; where a
+/// directory of `argv0` before a `..` is a symlink, the folded path may name another file, which
+/// [`names_image`] then turns down.
 fn invocation_path(argv0: &OsStr, cwd: &Path, search_path: Option<&OsStr>) -> Option<PathBuf> {
     if argv0.is_empty() {
         return None;
     }
     let path = Path::new(argv0);
-    if path.is_absolute() {
-        return Some(path.to_path_buf());
-    }
-    if argv0.to_string_lossy().contains(std::path::is_separator) {
-        return Some(cwd.join(path));
-    }
-    std::env::split_paths(search_path?)
-        // An empty entry stands for the working directory.
-        .map(|dir| cwd.join(dir).join(path))
-        .find(|candidate| fs::is_executable(candidate))
+    let found = if path.is_absolute() {
+        path.to_path_buf()
+    } else if argv0.to_string_lossy().contains(std::path::is_separator) {
+        cwd.join(path)
+    } else {
+        std::env::split_paths(search_path?)
+            // An empty entry stands for the working directory.
+            .map(|dir| cwd.join(dir).join(path))
+            .find(|candidate| fs::is_executable(candidate))?
+    };
+    Some(lexically_normalise(&found))
 }
 
 /// Whether `path` leads to the same file as the running image `image`, symlinks followed (see
@@ -81,6 +89,22 @@ mod tests {
         assert_eq!(
             invocation_path(OsStr::new("bin/octoboardd"), cwd, None),
             Some(PathBuf::from("/work/bin/octoboardd"))
+        );
+    }
+
+    /// A `..` is folded into the directory before it, whether the working directory or the
+    /// path's own, so that the path is spelled as a service unit names it.
+    #[cfg(unix)]
+    #[test]
+    fn a_parent_directory_in_the_path_is_folded() {
+        let cwd = Path::new("/home/me/work");
+        assert_eq!(
+            invocation_path(OsStr::new("../.local/bin/octoboardd"), cwd, None),
+            Some(PathBuf::from("/home/me/.local/bin/octoboardd"))
+        );
+        assert_eq!(
+            invocation_path(OsStr::new("/home/me/work/../bin/octoboardd"), cwd, None),
+            Some(PathBuf::from("/home/me/bin/octoboardd"))
         );
     }
 

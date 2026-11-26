@@ -82,8 +82,10 @@ const START_END_WAIT: Duration = Duration::from_secs(15);
 
 /// How long the daemon is given to end once it is asked to stop, before it is killed: its ordinary
 /// stop ends every session it took over, each given its own time to end, and the holders, and
-/// nothing has asked it to stop before. A daemon killed in the middle of that leaves agents
-/// running in their holders after the uninstall.
+/// nothing has asked it to stop before; it also waits for a change of an account's sharing that
+/// the clearing left at work on disk once it ran out of time. A daemon killed in the middle of
+/// that leaves agents running in their holders after the uninstall, or that account's directory
+/// half-changed ([`out_of_time`] says how to restore it by hand).
 const DAEMON_STOP_BOUND: Duration = Duration::from_secs(30);
 
 /// How long the application the uninstaller has just ended is given to be gone, its
@@ -231,14 +233,26 @@ pub(super) async fn clean_up<C: Sync>(
     }
 }
 
-/// What a clearing that ended came to: a line for each item of which something stays, and for each
-/// feature that could not tell what it has.
+/// The code of the daemon's failure for a change of sharing that did not complete
+/// (`account_sharing_failed` in `apps/daemon/PROTOCOL.md`): the account's directory is left as far
+/// as the change got.
+const SHARING_FAILED: &str = "account_sharing_failed";
+
+/// What a clearing that ended came to: a line for each item of which something stays, with how to
+/// restore by hand an account's directory a change of sharing left part-way, and for each feature
+/// that could not tell what it has.
 fn report_of(cleared: &ClearedAll, texts: Catalog) -> Report {
     let mut lines: Vec<String> = cleared
         .results
         .iter()
         .filter_map(|result| left_line(result, texts))
         .collect();
+    let part_way = cleared.results.iter().any(|result| {
+        matches!(&result.outcome, Outcome::AccountSharingLeft { failure } if failure.code == SHARING_FAILED)
+    });
+    if part_way {
+        lines.push(texts.text("uninstallCleanUp.accountSharing.handRestore", &[]));
+    }
     lines.extend(
         cleared
             .failed
@@ -255,20 +269,31 @@ fn report_of(cleared: &ClearedAll, texts: Catalog) -> Report {
 
 /// What a clearing that ran out of time came to: what `listed` says was still in effect when it
 /// was read, or that it could not be read. Nothing listed, with every feature having answered, is
-/// nothing left.
+/// nothing left. An account that shares may have been in the middle of its change then, which the
+/// daemon's stop waits for only until the daemon is killed (`DAEMON_STOP_BOUND`, [`HARD_BOUND`]):
+/// how to restore its directory by hand follows.
 fn out_of_time(bound: Duration, listed: Option<&Listed>, texts: Catalog) -> Report {
     let mut lines: Vec<String> = match listed {
-        Some(listed) => listed
-            .changes
-            .iter()
-            .map(|change| in_effect_line(change, texts))
-            .chain(
-                listed
-                    .failed
-                    .iter()
-                    .map(|failed| failed_line(failed, texts)),
-            )
-            .collect(),
+        Some(listed) => {
+            let sharing = listed
+                .changes
+                .iter()
+                .any(|change| matches!(change, Change::AccountSharing { .. }));
+            listed
+                .changes
+                .iter()
+                .map(|change| in_effect_line(change, texts))
+                .chain(
+                    sharing.then(|| texts.text("uninstallCleanUp.accountSharing.handRestore", &[])),
+                )
+                .chain(
+                    listed
+                        .failed
+                        .iter()
+                        .map(|failed| failed_line(failed, texts)),
+                )
+                .collect()
+        }
         None => vec![texts.text("uninstallCleanUp.notRead", &[])],
     };
     if lines.is_empty() {
@@ -992,6 +1017,69 @@ mod tests {
         assert_eq!(
             out_of_time(bound, None, en()).lines[1],
             "What is still in effect could not be read."
+        );
+    }
+
+    /// The line that tells how to restore by hand an account's directory a change of sharing may
+    /// have left half-changed.
+    fn hand_restore() -> String {
+        en().text("uninstallCleanUp.accountSharing.handRestore", &[])
+    }
+
+    /// A change of sharing the daemon left part-way is followed by how to restore the directory by
+    /// hand, and an account the daemon refused to change is not: its directory was not touched.
+    #[tokio::test]
+    async fn a_change_of_sharing_left_part_way_tells_how_to_restore_it_by_hand() {
+        let shell = stand_in(Ok(vec![]), Ok(vec![gone(LOGIN)]));
+        let body = format!(
+            r#"{{"results":[{{"change":{SHARING},"failure":{{"code":"account_sharing_failed","params":{{}},"message":"settings.json left linked"}}}}],"failed":[]}}"#
+        );
+        let report = clean_up(
+            &[&shell],
+            &(),
+            &OwnDaemon::answering(&body),
+            CLEAR_BOUND,
+            en(),
+        )
+        .await;
+        assert_eq!(report.status, Status::Left);
+        assert_eq!(
+            report.lines,
+            [
+                "The account “Work” (claude) shares its agent’s default configuration. It still \
+                 does: settings.json left linked"
+                    .to_owned(),
+                hand_restore(),
+            ]
+        );
+        assert!(hand_restore().contains("<entry>.bak-<stamp>"));
+    }
+
+    /// A clearing out of time may have cut an account's change of sharing short, so an account
+    /// still listed is followed by how to restore its directory by hand; nothing else is.
+    #[test]
+    fn a_clearing_out_of_time_with_an_account_still_sharing_tells_how_to_restore_it() {
+        let listed = Listed {
+            changes: vec![sharing()],
+            failed: vec![],
+        };
+        let report = out_of_time(CLEAR_BOUND, Some(&listed), en());
+        assert_eq!(report.status, Status::Left);
+        assert_eq!(report.lines.len(), 3, "{:?}", report.lines);
+        assert_eq!(
+            report.lines[1],
+            "The account “Work” (claude) shares its agent’s default configuration."
+        );
+        assert_eq!(report.lines[2], hand_restore());
+        let others = Listed {
+            changes: vec![LOGIN],
+            failed: vec![],
+        };
+        let report = out_of_time(CLEAR_BOUND, Some(&others), en());
+        assert!(
+            !report.lines.contains(&hand_restore()),
+            "{:?}",
+            report.lines
         );
     }
 

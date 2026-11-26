@@ -1254,6 +1254,7 @@ them is `docs/README.md`, "Coding conventions".
   `src/providers/<id>.rs`, listed in that descriptor's `codes`. The UI's record and wording go in the same change (the
   UI's side: the UI structure doc). The rules, including store code's `Result`, are in
   `docs/conventions/error-codes.md`, "Daemon codes" and "Provider codes".
+- Adding or updating an agent: P10 "Terminal first" (`docs/conventions/principles.md`) applies: no version gate, enhancements degrade individually, and a launch notice tells the user what is unavailable.
 - A new provider: its descriptor in `src/providers/<id>.rs` and its behavior in `src/adapter/<id>/`, plus one line in
   each registry (`REGISTRY` in `src/providers/mod.rs`, `PROVIDERS` in `src/adapter/mod.rs`); everything keyed by
   provider (`protocol::PerAgent`, the store's per-provider tables) covers the new one without a change, and the UI adds

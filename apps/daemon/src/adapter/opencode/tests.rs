@@ -251,6 +251,32 @@ fn a_launch_given_an_account_directory_is_refused() {
     assert!(!injection_dir(&fixture).exists());
 }
 
+#[test]
+fn only_a_version_of_an_unmeasured_minor_raises_the_notice() {
+    let plan = LaunchPlan::default();
+    let notices = |version| {
+        let mut fixture = spec_fixture();
+        fixture.agent_version = version;
+        OpenCodeProvider.further_launch_notices(&fixture.spec(), &plan)
+    };
+    assert!(notices(Some((2, 4, 2))).is_empty());
+    assert!(notices(Some((1, 19, 6))).is_empty());
+    assert!(notices(None).is_empty());
+    for version in [(2, 5, 0), (3, 0, 0)] {
+        let [notice] = &notices(Some(version))[..] else {
+            panic!("{version:?} raised no single notice");
+        };
+        assert_eq!(
+            notice.code,
+            crate::protocol::Code::of_provider(crate::providers::opencode::VERSION_UNMEASURED)
+        );
+        assert_eq!(
+            notice.params["version"],
+            format!("{}.{}.{}", version.0, version.1, version.2)
+        );
+    }
+}
+
 /// Compatibility is scoped to the launch without redirecting the default account's data.
 #[test]
 fn the_default_account_exports_no_directory() {
@@ -1474,15 +1500,16 @@ fn v2_loads_a_launch_scoped_plugin_directory_and_private_server() {
 }
 
 #[test]
-fn an_unmeasured_version_is_refused_before_injection() {
-    let mut fixture = spec_fixture();
-    fixture.agent_version = Some((3, 0, 0));
-    let Err(error) = OpenCodeProvider.plan(&fixture.spec()) else {
-        panic!("unsupported CLI was admitted");
-    };
-    assert_eq!(
-        CodedError::of(&error).code,
-        crate::protocol::Code::of_provider(crate::providers::opencode::UNSUPPORTED_VERSION),
-    );
-    assert!(!injection_dir(&fixture).exists());
+fn a_version_nobody_measured_is_launched() {
+    for version in [Some((1, 20, 0)), Some((2, 4, 2)), Some((3, 0, 0))] {
+        let mut fixture = spec_fixture();
+        fixture.agent_version = version;
+        fixture.shell_env.insert(
+            "HOME".into(),
+            fixture.scratch.join("home").display().to_string(),
+        );
+        OpenCodeProvider
+            .plan(&fixture.spec())
+            .unwrap_or_else(|error| panic!("{version:?} was refused: {error:#}"));
+    }
 }

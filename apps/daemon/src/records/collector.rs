@@ -723,10 +723,10 @@ fn recorded_conversation(
         return Recorded::No;
     };
     let Some(file) = locator
-        .alternate_root(session)
-        .ok()
-        .flatten()
-        .filter(|(dir, depth)| {
+        .alternate_roots(session)
+        .0
+        .into_iter()
+        .find(|(dir, depth)| {
             record
                 .strip_prefix(dir)
                 .is_ok_and(|relative| relative.components().count() == *depth)

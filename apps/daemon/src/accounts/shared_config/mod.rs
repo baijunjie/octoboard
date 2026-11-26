@@ -7,7 +7,9 @@
 //! the account is being signed in, and waits only for Octoboard's short agent CLI reads there
 //! (`cli_reads.rs`). While it runs the account is locked: none of its sessions is created,
 //! launched, resumed or switched to. Nothing carries a change out later; one that fails is left
-//! as it is, marked incomplete, for the user to ask again. Before every launch of a session of a
+//! as it is, marked incomplete, for the user to ask again. None begins on disk once the daemon is
+//! stopping, and the daemon's stop waits for one at work there (`on_disk.rs`), so that a stop
+//! never leaves an entry half-changed. Before every launch of a session of a
 //! sharing account, the links an agent replaced are repaired, and then, after each of its sessions
 //! ends, as the daemon stops and at daemon start, what its sessions left in the default
 //! directory's plugin registries by the account's spelling is pointed at the default directory's
@@ -24,6 +26,7 @@ mod launch;
 mod link;
 mod locks;
 mod moves;
+mod on_disk;
 mod registries;
 mod take_back;
 #[cfg(test)]
@@ -55,6 +58,8 @@ pub(crate) use keep::{
 };
 pub use launch::before_launch;
 pub(crate) use link::entries;
+pub(crate) use on_disk::begin_on_disk;
+pub use on_disk::{changes_on_disk_ended, close_changes_on_disk};
 pub(crate) use registries::FileRegistry;
 pub(crate) use take_back::own_conversations;
 
@@ -62,6 +67,8 @@ pub(crate) use take_back::own_conversations;
 #[derive(Default)]
 pub struct Sharing {
     locks: locks::Locks,
+    /// The changes at work on the accounts' directories, which the daemon's stop waits for.
+    on_disk: on_disk::OnDisk,
     /// What resumes the sessions a change ended, in place of starting their agents.
     #[cfg(test)]
     pub(crate) relaunch: std::sync::Mutex<Option<Launcher>>,

@@ -213,7 +213,7 @@
   "heroPlatformsWindowsArm": "macOS（Apple 晶片與 Intel）· Windows（x64 與 arm64）· Linux 伺服器（x86_64 與 aarch64）· Beta 版",
   "workspaceSeoSummary": "在開源的 macOS 與 Windows 工作區及 Linux 伺服器中管理 Claude Code、Codex、Grok Build、Antigravity CLI、GitHub Copilot CLI、OpenCode、Qwen Code 與 Pi 的多個帳號，追蹤用量、切換帳號，並協調程式開發代理跨專案協作。",
   "faqRemoteHostsAnswer": "可以。智慧代理程式可在 Linux 伺服器或另一部執行 {appName} 的 Mac 或 Windows 電腦上執行。可從桌面應用程式或瀏覽器透過 SSH 連線。",
-  "privacyRemoteHostsBody": "透過 SSH 連線至自己管理的 Linux 伺服器或另一部電腦時，智慧代理程式的工作階段在主機執行，資料也留在主機上。介面經 SSH 直接傳輸。桌面應用程式將已儲存的遠端常駐程式和下載的檔案副本保留在本機。登入之後，應用程式會先詢問是否加入本裝置自己的金鑰：只有你同意，它才會將裝置的 SSH 私密金鑰放在 macOS 登入鑰匙圈或 Windows 認證管理員，並將公開金鑰加入遠端使用者在主機上的 authorized_keys；關閉該金鑰、移除已儲存的遠端常駐程式，或變更其主機、連接埠或使用者時，兩者都會一併移除；如果當時連不上主機，應用程式會說明公開金鑰可能仍留在主機上。應用程式不儲存 SSH 密碼。",
+  "privacyRemoteHostsBody": "透過 SSH 連線至自己管理的 Linux 伺服器或另一部電腦時，智慧代理程式的工作階段在主機執行，資料也留在主機上。介面經 SSH 直接傳輸。桌面應用程式將已儲存的遠端背景服務和下載的檔案副本保留在本機。登入之後，應用程式會先詢問是否加入本裝置自己的金鑰：只有你同意，它才會將裝置的 SSH 私密金鑰放在 macOS 登入鑰匙圈或 Windows 認證管理員，並將公開金鑰加入遠端使用者在主機上的 authorized_keys；關閉該金鑰、移除已儲存的遠端背景服務，或變更其主機、連接埠或使用者時，兩者都會一併移除；如果當時連不上主機，應用程式會說明公開金鑰可能仍留在主機上。應用程式不儲存 SSH 密碼。",
   "downloadSeoTitle": "下載 {appName}：macOS、Windows 和 Linux",
   "downloadSeoDescription": "下載 macOS 或 Windows 版 {appName} 應用程式，或用一行指令安裝 Linux 伺服器。免費，以 MIT 授權條款開源。",
   "downloadPageTitle": "下載 {appName}",

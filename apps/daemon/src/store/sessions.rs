@@ -2,7 +2,7 @@
 //! deletion and the reads.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::Result;
 use rusqlite::{params, Connection, OptionalExtension, Row};
@@ -78,7 +78,8 @@ pub(super) const SESSION_COLUMNS: &str =
                                ordinal, account_id, config_dir, pinned, started_at, ended_at,
                                role, terminal_title, model, effort, model_override,
                                effort_override, context, record_title, record_prompt, locked,
-                               observed_model, observed_effort, last_turn_abnormal, compatibility";
+                               observed_model, observed_effort, last_turn_abnormal, compatibility,
+                               record_roots";
 
 impl Store {
     pub(crate) fn session_working_directory(&self, session: &Session) -> Result<PathBuf> {
@@ -259,6 +260,33 @@ impl Store {
              WHERE id = ?1 AND agent_session_id IS NOT ?2",
             params![id, agent_session_id],
         )
+    }
+
+    /// Adds `root` to the records directories the session's launches selected
+    /// (`Session::record_roots`), unless it is there already. Nothing is written for a session
+    /// that is gone. The list is never sent, so nothing is published.
+    pub fn add_session_record_root(&self, id: &str, root: &Path) -> Result<()> {
+        let conn = self.lock();
+        let Some(text) = conn
+            .query_row(
+                "SELECT record_roots FROM sessions WHERE id = ?1",
+                params![id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()?
+        else {
+            return Ok(());
+        };
+        let mut roots = record_roots_from_text(text);
+        if roots.iter().any(|known| known == root) {
+            return Ok(());
+        }
+        roots.push(root.to_owned());
+        conn.execute(
+            "UPDATE sessions SET record_roots = ?2 WHERE id = ?1",
+            params![id, record_roots_to_text(&roots)],
+        )?;
+        Ok(())
     }
 
     /// Records that the session has had a turn. Returns the record as it now stands, or `None`
@@ -1036,9 +1064,9 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
              status, has_conversation, bound_to, colour, ordinal, account_id, config_dir, pinned,
              started_at, ended_at, role, terminal_title, model, effort, model_override,
              effort_override, context, record_title, record_prompt, locked, observed_model, observed_effort,
-             last_turn_abnormal, compatibility)
+             last_turn_abnormal, compatibility, record_roots)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33)",
+                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34)",
         params![
             session.id,
             enum_to_text(&session.agent),
@@ -1073,6 +1101,7 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.observed_effort,
             session.paused,
             compatibility_to_text(&session.compatibility),
+            record_roots_to_text(&session.record_roots),
         ],
     )?;
     Ok(())
@@ -1130,7 +1159,23 @@ pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Option<Session>> {
         compatibility: agent
             .descriptor()
             .known_compatibility(compatibility_from_text(row.get(32)?)),
+        record_roots: record_roots_from_text(row.get(33)?),
     }))
+}
+
+/// `Session::record_roots` as the `record_roots` column keeps it: a JSON array of paths, NULL for
+/// none.
+fn record_roots_to_text(roots: &[PathBuf]) -> Option<String> {
+    if roots.is_empty() {
+        return None;
+    }
+    serde_json::to_string(roots).ok()
+}
+
+/// The `record_roots` column read back; a value that is not an array of paths reads as none.
+fn record_roots_from_text(text: Option<String>) -> Vec<PathBuf> {
+    text.and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -2078,6 +2123,34 @@ mod tests {
             RecordTitles::default(),
             "another conversation does not inherit the titles"
         );
+    }
+
+    #[test]
+    fn record_roots_are_kept_once_each_in_order_across_conversations() {
+        let path = temp_db("record-roots");
+        let store = Store::open(&path).unwrap();
+        store.insert_console(&console(None, None, None)).unwrap();
+        let first = std::env::temp_dir().join("first records");
+        let second = std::env::temp_dir().join("second records");
+        let mut inserted = session(None);
+        inserted.record_roots = vec![first.clone()];
+        store.insert_session(&inserted).unwrap();
+
+        store.add_session_record_root("session-1", &second).unwrap();
+        store.add_session_record_root("session-1", &first).unwrap();
+        store
+            .set_agent_session_id("session-1", "another conversation")
+            .unwrap();
+        store.add_session_record_root("gone", &first).unwrap();
+        drop(store);
+
+        let store = Store::open(&path).unwrap();
+        assert_eq!(
+            store.require_session("session-1").unwrap().record_roots,
+            [first, second],
+            "a record written under an earlier conversation is still looked for"
+        );
+        assert!(store.get_session("gone").unwrap().is_none());
     }
 
     #[test]

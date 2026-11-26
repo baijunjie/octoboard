@@ -60,7 +60,7 @@ pub(crate) fn of_session(
             Err(_) => UserPrompt::Unknown,
         };
     }
-    let mut unknown = !locator.alternate_root_complete(session);
+    let mut unknown = !locator.alternate_roots_complete(session);
     for path in record_paths(hints, locator, accounts, session) {
         let file = store.conversation_file(path);
         match std::fs::metadata(&file) {

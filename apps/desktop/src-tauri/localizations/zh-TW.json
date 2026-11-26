@@ -21,6 +21,7 @@
   "uninstallCleanUp.commandLine.inEffect": "命令列工具：其位於 {path} 的連結。",
   "uninstallCleanUp.accountSharing.left": "帳號「{name}」（{agent}）共用其代理程式的預設組態。它仍在共用：{message}",
   "uninstallCleanUp.accountSharing.inEffect": "帳號「{name}」（{agent}）共用其代理程式的預設組態。",
+  "uninstallCleanUp.accountSharing.handRestore": "如果某個帳號正在關閉共用，其目錄可能處於只改了一半的狀態：其中一些項目可能仍是指向其代理程式預設目錄的連結，帳號自己的項目以「<entry>.bak-<stamp>」的名稱放在旁邊。若要手動還原這樣的項目，請刪除連結，並將其備份重新命名回「<entry>」。",
   "uninstallCleanUp.deviceKey.left": "用於「{name}」的本機金鑰：{parts}。",
   "uninstallCleanUp.deviceKey.partSeparator": "；",
   "uninstallCleanUp.deviceKey.lineLeft": "其標記為「{mark}」的那一行仍在 {host} 上 {user} 的授權金鑰中，需在那裡移除",

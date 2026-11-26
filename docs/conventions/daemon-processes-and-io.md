@@ -75,8 +75,10 @@ daemon to its OS-token and source rules, are in `docs/structure/daemon.md`.
   From a thread with no runtime, `blocking_pass::within_deadline` is the same pass.
 - **Work that can run for minutes and that a stop or planned restart should not wait for runs on `std::thread::spawn`,
   not `spawn_blocking`, and checks `AppState::stop_asked` right before each step that cannot be undone.** Once
-  `run_daemon` returns, `main` cuts blocking work off after `RUNTIME_SHUTDOWN_WAIT`. The agent CLI update
-  (`agents::cli`) is the one long task the stop waits for; no other is added.
+  `run_daemon` returns, `main` cuts blocking work off after `RUNTIME_SHUTDOWN_WAIT`. The stop waits for only two kinds of
+  long task: the agent CLI update (`agents::cli`), and a step that changes the user's own files, which cut short would
+  leave them half-changed (the account-sharing change on disk, `accounts::shared_config::on_disk`). Such a step is
+  refused once a stop is asked, and awaited once begun; no other kind is added.
 - **Whatever the stop must finish (a record the next daemon reads, the handover) is awaited by `run_daemon` itself.**
   Blocking work whose `JoinHandle` is dropped is not waited for past `RUNTIME_SHUTDOWN_WAIT`.
 - **The stop's own steps (ending terminals, reading screens, the sweep) each keep a timeout of their own, but the writes

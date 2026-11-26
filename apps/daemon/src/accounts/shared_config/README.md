@@ -10,7 +10,8 @@ in [`PROTOCOL.md`](../../../PROTOCOL.md); the items that may be shared are each 
 Each account stores whether it shares and whether the last change toward that choice is incomplete. A change runs at
 once or is refused: it takes the agent's lock, ends the account's idle sessions, moves or links the catalog items one by
 one, then resumes those sessions, and reports its progress as `account_sharing`. A change that fails part-way leaves the
-account marked incomplete, with the failing items, until it is tried again.
+account marked incomplete, with the failing items, until it is tried again. Once the daemon is stopping no change begins
+on disk, and the stop waits for one already at work there (`on_disk.rs`), so that no stop leaves an entry half-changed.
 
 What lives where:
 
@@ -49,7 +50,10 @@ Exported from `mod.rs` (defined there unless a file is named):
   registries back at the default directory after a sharing account's session ends, as the daemon stops and as it starts.
 - `refuse_if_changing`, `before_switch_copy` — refuse opening a session, a handoff or an account switch while a change
   of the account involved runs.
-- `Sharing` — what `AppState` holds: the per-agent locks.
+- `Sharing` — what `AppState` holds: the per-agent locks and the changes at work on disk.
+- `begin_on_disk`, `close_changes_on_disk`, `changes_on_disk_ended` (`on_disk.rs`) — a change's admission to the
+  account's directory, refused once the daemon is stopping; and the daemon's stop closing that admission and waiting for
+  the changes already at work there.
 - `admitted_reading`, `running_long`, `hold`, `is_missing`, `Run` (`cli_reads.rs`) — taken by agent CLI runs outside a
   session (a change, or the move of a removed account's directory to the Trash, waits for or refuses them), and by a
   change or an account's removal while it moves files under the directory, so that no CLI run starts there meanwhile.

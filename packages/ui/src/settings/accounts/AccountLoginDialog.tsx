@@ -61,8 +61,11 @@ function SecretQuestionDialog({ subject, question, words, url, send, close }: {
   const { busy, run } = useDialogAction(question.id, t("settings.accounts.login.answerFailedTitle"));
   const submit = () => {
     if (busy || !secret) return;
-    setSecret("");
-    void run(() => send({ secret_text: secret }));
+    // The typed secret stays where sending fails, for the person to send again.
+    void run(async () => {
+      await send({ secret_text: secret });
+      setSecret("");
+    });
   };
   return (
     <Dialog
@@ -76,7 +79,7 @@ function SecretQuestionDialog({ subject, question, words, url, send, close }: {
       <p>{subject}</p>
       <p><QuestionText question={question} id={words.question} /></p>
       {url && <ExternalLink href={url}>{t("settings.accounts.login.reopen")}</ExternalLink>}
-      <TextInput type="password" dir="ltr" label={t(words.field)} value={secret} onChange={setSecret} autoFocus />
+      <TextInput type="password" dir="ltr" label={t(words.field)} placeholder={t("settings.accounts.login.secret.placeholder")} value={secret} onChange={setSecret} autoFocus />
     </Dialog>
   );
 }

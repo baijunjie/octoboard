@@ -469,6 +469,12 @@ pub struct Session {
     /// The titles the agent's own records give the session. Stored, never sent.
     #[serde(skip)]
     pub record_titles: RecordTitles,
+    /// The records directories the session's launches selected through their environment instead
+    /// of the account's (`crate::records::store::RecordRootOverride`), absolute, in the order first
+    /// seen. Kept for as long as the session, so that a record a launch wrote there is still looked
+    /// for after the environment has changed. Stored, never sent.
+    #[serde(skip)]
+    pub record_roots: Vec<std::path::PathBuf>,
     /// The session's last known context size, retained after archiving. Absent until reported,
     /// and again after a compaction until the next request.
     #[serde(default, skip_serializing_if = "Option::is_none")]

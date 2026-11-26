@@ -325,6 +325,7 @@ async fn a_model_change_whose_relaunch_does_not_come_up_keeps_the_model_it_had()
             agent_session_id: None,
             notices: Vec::new(),
             first_message: None,
+            record_root: None,
         })
     };
 
@@ -476,6 +477,7 @@ async fn a_model_change_that_relaunches_nothing_drops_the_queue_quietly() {
             agent_session_id: None,
             notices: Vec::new(),
             first_message: None,
+            record_root: None,
         })
     };
 

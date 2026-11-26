@@ -619,7 +619,9 @@ async fn run_daemon(
         result = serve => {
             if let Err(err) = result {
                 tracing::error!(%err, "the server stopped with an error");
+                accounts::shared_config::close_changes_on_disk(&state);
                 stop_all_processes(&state).await;
+                accounts::shared_config::changes_on_disk_ended(&state).await;
                 return Err(err.into());
             }
             StopKind::Ordinary
@@ -637,6 +639,9 @@ async fn run_daemon(
             StopKind::Ordinary
         }
     };
+    // From here on no change of an account's sharing begins on disk; one at work there is
+    // awaited below, alongside the stop's own steps.
+    accounts::shared_config::close_changes_on_disk(&state);
     drop(browser);
     // The owner record as remote access last wrote it, which is the one to remove.
     let owner = state.remote_access.close().or(owner);
@@ -705,6 +710,8 @@ async fn run_daemon(
             }
         },
     };
+    // Cut short by the exit, a change of sharing would leave the account's directory half-changed.
+    accounts::shared_config::changes_on_disk_ended(&state).await;
     // The colours the next daemon seeds from: what clients reported until now is written first.
     state.display_fallback.stop_storing_changes();
     let _ = display_writer.await;

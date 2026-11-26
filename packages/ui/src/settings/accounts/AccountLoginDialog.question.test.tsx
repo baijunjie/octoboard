@@ -85,7 +85,7 @@ it("masks the authorization code, sends it to the waiting login and clears the f
     agent: "antigravity",
     device_code: null,
     question: { id, params: {}, message: "Paste the authorization code.", answer_kind: "secret_text" },
-  }), () => new Promise(() => {}));
+  }));
   await settleFrames();
   const field = dialog().querySelector<HTMLInputElement>('input[type="password"]')!;
   expect(field).toBeTruthy();
@@ -101,6 +101,19 @@ it("masks the authorization code, sends it to the waiting login and clears the f
     answer: { secret_text: "example-code" },
   });
   expect(field.value).toBe("");
+});
+
+it("keeps the typed code in the field when sending it fails", async () => {
+  const { dialog, button } = setup(asking({
+    agent: "antigravity",
+    question: { id: "google_authorization_code", params: {}, message: "Paste the authorization code.", answer_kind: "secret_text" },
+  }), () => Promise.reject(new Error("The daemon is unreachable.")));
+  await settleFrames();
+  const field = dialog().querySelector<HTMLInputElement>('input[type="password"]')!;
+  await typeInto(field, "example-code");
+  await click(button("Send code"));
+  await settleFrames();
+  expect(field.value).toBe("example-code");
 });
 
 it.each([

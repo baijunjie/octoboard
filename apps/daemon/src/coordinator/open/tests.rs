@@ -27,6 +27,7 @@ fn launch_after(
             agent_session_id: None,
             notices: Vec::new(),
             first_message: None,
+            record_root: None,
         })
     }
 }
@@ -476,6 +477,7 @@ async fn a_session_opened_with_a_task_shows_as_prompting_until_it_is_launched() 
                     agent_session_id: None,
                     notices: Vec::new(),
                     first_message: None,
+                    record_root: None,
                 })
             },
         )

@@ -21,6 +21,7 @@
   "uninstallCleanUp.commandLine.inEffect": "Komut satırı aracı: {path} konumundaki bağlantısı.",
   "uninstallCleanUp.accountSharing.left": "“{name}” hesabı ({agent}) ajanının saptanmış yapılandırmasını paylaşıyor. Hâlâ paylaşıyor: {message}",
   "uninstallCleanUp.accountSharing.inEffect": "“{name}” hesabı ({agent}) ajanının saptanmış yapılandırmasını paylaşıyor.",
+  "uninstallCleanUp.accountSharing.handRestore": "Bir hesabın paylaşımı kapatılırken bu yarıda kaldıysa, dizini yarı değişmiş durumda kalmış olabilir: içindeki bazı girdiler hâlâ ajanının saptanmış dizinine bağlantı olabilir ve hesabın kendi girdileri yanlarında “<entry>.bak-<stamp>” adıyla durur. Böyle bir girdiyi elle geri yüklemek için bağlantıyı silin ve yedeğini yeniden “<entry>” olarak adlandırın.",
   "uninstallCleanUp.deviceKey.left": "“{name}” için bu bilgisayarın anahtarı: {parts}.",
   "uninstallCleanUp.deviceKey.partSeparator": "; ",
   "uninstallCleanUp.deviceKey.lineLeft": "“{mark}” işaretli satırı hâlâ {host} üzerinde {user} kullanıcısının yetkili anahtarlarında; orada kaldırılmalı",

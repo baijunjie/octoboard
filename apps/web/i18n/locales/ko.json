@@ -220,7 +220,7 @@
   "downloadTabsLabel": "시스템 선택",
   "downloadMacosRequirements": "Apple Silicon 및 Intel Mac용이며, macOS 11 이상이 필요합니다.",
   "downloadWindowsRequirements": "x64용이며, Windows 10 버전 21H2 이상이 필요합니다. Arm 기반 Windows 11에서는 x64 앱이 에뮬레이션으로 실행됩니다. Microsoft Edge WebView2가 없으면 설치 프로그램이 내려받으므로 인터넷 연결이 필요합니다.",
-  "downloadWindowsArmRequirements": "x64용이며, Windows 10 버전 21H2 이상이 필요합니다. Arm 기반 Windows 11에서는 아래의 arm64 설치 프로그램을 내려받으세요. Microsoft Edge WebView2가 없으면 설치 프로그램이 내려받으므로 인터넷 연결이 필요합니다.",
+  "downloadWindowsArmRequirements": "x64용이며, Windows 10 버전 21H2 이상이 필요합니다. Arm 기반 Windows 11에서는 아래의 arm64 설치 프로그램을 내려받아 주세요. Microsoft Edge WebView2가 없으면 설치 프로그램이 내려받으므로 인터넷 연결이 필요합니다.",
   "downloadWindowsArm": "Arm 기반 Windows용 다운로드",
   "downloadTeaser": "macOS 또는 Windows 앱을 받거나, 명령 하나로 Linux 서버를 설치합니다.",
   "downloadPageSummary": "macOS와 Windows 앱, Linux 서버는 베타 버전입니다.",

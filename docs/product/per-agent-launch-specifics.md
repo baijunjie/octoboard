@@ -562,7 +562,8 @@ choose which file to keep before migrating. Octoboard never starts the migration
 
 ## OpenCode
 
-Octoboard launches OpenCode 1.19.6, 2.3.2, 2.4.0 and 2.4.1. Launch refuses an unrecognized version and lists
-the supported versions. If OpenCode 2 still needs to import legacy credentials, launch asks the user to run
+Octoboard launches any OpenCode version; it was measured on 1.19.6, 2.3.2, 2.4.0 and 2.4.1, and a newer one is
+not refused for being unmeasured. A version of a minor not measured shows a notice that some Octoboard
+features may be unavailable for the session; the terminal works as usual. If OpenCode 2 still needs to import legacy credentials, launch asks the user to run
 OpenCode directly to finish its migration. For session messages, see "Messages through OpenCode's private server"
 in `docs/product/message-delivery.md`.

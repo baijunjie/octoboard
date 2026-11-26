@@ -26,11 +26,14 @@ resolves to the default directory under another spelling. The account carries tw
 | Value | Meaning |
 |---|---|
 | `share_default_config` | Whether the account shares the default configuration. |
-| `share_default_config_incomplete` | The last change toward that choice did not finish: it failed part-way, or the daemon stopped while carrying it out. |
+| `share_default_config_incomplete` | The last change toward that choice did not finish: it failed part-way, or the daemon was ended while carrying it out. |
 
 Both start false and survive a daemon restart. Like the account itself, the choice stays on this machine. A change is
 recorded, with `share_default_config_incomplete` set, as soon as it starts, and the flag is cleared when the change
-completes; every client is told both times. A failed change does not reset the recorded choice. Only the user clears
+completes; every client is told both times. The daemon's stop, ordinary or planned, never cuts a change short on the
+account's directory: once a stop is asked for, a change not yet recorded is refused (`daemon_shutting_down`) with
+nothing recorded, and the stop waits for one already recorded to finish there before the daemon exits; only a daemon
+ended from outside or crashing leaves one part-way. A failed change does not reset the recorded choice. Only the user clears
 an incomplete change: by asking again for the value already recorded, which carries the change out again, or by
 asking for the opposite one. The window's switch offers only the first: while the change is incomplete it shows the
 position from before the change, so turning it asks for the recorded value again. The exception is turning sharing on

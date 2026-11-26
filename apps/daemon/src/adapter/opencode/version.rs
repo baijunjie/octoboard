@@ -7,7 +7,7 @@ use rusqlite::{Connection, OpenFlags};
 
 use crate::adapter::{account_cli, account_dir, version_from_output, AgentProvider, AgentVersion};
 use crate::protocol::{Code, CodedError};
-use crate::providers::opencode::{MIGRATION_REQUIRED, SUPPORTED_VERSIONS, UNSUPPORTED_VERSION};
+use crate::providers::opencode::MIGRATION_REQUIRED;
 use crate::providers::AgentId;
 
 use super::{LaunchSpec, OpenCodeProvider};
@@ -25,10 +25,6 @@ impl Generation {
             Self::V2 => "plugins",
         }
     }
-}
-
-fn text((major, minor, patch): AgentVersion) -> String {
-    format!("{major}.{minor}.{patch}")
 }
 
 pub(super) fn installed(env: &HashMap<String, String>) -> Result<Option<AgentVersion>> {
@@ -57,23 +53,12 @@ pub(super) fn at_launch(spec: &LaunchSpec<'_>) -> Result<Generation> {
         Some(version) => Some(version),
         None => installed(spec.shell_env)?,
     };
+    // The major version picks the generation of the launch, server and record formats. A version
+    // nobody measured is launched as the newest generation; whatever it changed fails where the
+    // format is read. A version that cannot be read is taken for the newest too.
     let generation = match version {
-        Some(version) if SUPPORTED_VERSIONS.contains(&version) => {
-            if version.0 == 1 {
-                Generation::V1
-            } else {
-                Generation::V2
-            }
-        }
-        _ => {
-            let supported = SUPPORTED_VERSIONS.map(text).join(", ");
-            let detected = version.map(text).unwrap_or_default();
-            return Err(CodedError::raised(
-                Code::of_provider(UNSUPPORTED_VERSION),
-                "OpenCode's launch requires a measured CLI version",
-                &[("version", &detected), ("supported", &supported)],
-            ));
-        }
+        Some((1, _, _)) => Generation::V1,
+        _ => Generation::V2,
     };
     if generation == Generation::V2 && migration_pending(spec.shell_env) {
         return Err(CodedError::raised(
@@ -215,11 +200,8 @@ fn has_settings(path: &Path, keys: &[&str]) -> bool {
 // OpenCode 2 inspection commands otherwise connect to or start its persistent service.
 pub(super) fn background_v2(env: &HashMap<String, String>) -> Option<bool> {
     match installed(env) {
-        Ok(Some(version @ (2, _, _))) => {
-            (!migration_pending(env) && SUPPORTED_VERSIONS.contains(&version)).then_some(true)
-        }
+        Ok(Some((2.., _, _))) => (!migration_pending(env)).then_some(true),
         Ok(None) if migration_pending(env) => None,
-        Ok(Some((3.., _, _))) => None,
         _ => Some(false),
     }
 }

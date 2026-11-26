@@ -17,6 +17,7 @@ Reaching a usage limit is the most common thing that interrupts work. When a ses
 - <strong>A cut-off turn is continued.</strong> If the switch interrupted a turn, or the turn had stopped on the usage limit, the session is sent a message from {productName} asking it to continue the task without repeating finished work. If you had cancelled the turn, or it had finished, no such message is sent.
 - <strong>A session keeps its agent.</strong> A session never changes agent by a switch, so you can only switch between accounts of the session's own agent. The session reads the new account's configuration; the model, reasoning effort and compatibility choices you set explicitly stay. Settings kept only in the old account's folder do not follow, so the same conversation can come up with different defaults.
 - <strong>Some accounts are not valid targets.</strong> A session cannot be switched onto an account that has reached its limit, is not logged in or is turned off.
+- <strong>Some agents cannot switch.</strong> Antigravity CLI and OpenCode have a single login that does not follow a configuration folder, so {productName} offers no account switch for them and carries no conversation across.
 
 ## Why it works this way
 
@@ -49,6 +50,7 @@ You know it worked when the session stops showing as switching and comes back ca
 How the account is chosen:
 
 - It is the account a new session would get with <strong>Automatically select an account</strong> on (see [Quota scheduling](../quota-scheduling/)), leaving out the account the session is on, any account the session was switched away from for a usage limit in the last 30 minutes, and any account that is used up, not logged in, turned off or whose usage could not be read.
+- For an agent whose usage {productName} does not read (Pi, Qwen Code and OpenCode), there is no usage to rank accounts by: the session is switched to the first usable account in the order shown in Settings, leaving out the same two accounts and any that is turned off or not logged in.
 - If the limit is about to reset, within 5 minutes by the last reading, {productName} waits for it instead, because a switch costs more than a few minutes. The session continues on its own account shortly after the reset.
 - If no account qualifies, nothing is switched and the session waits. See [Quota scheduling](../quota-scheduling/).
 
@@ -59,7 +61,7 @@ Only a turn that really stopped on the usage limit triggers a switch, never an o
 Whenever a session's turn stops on the usage limit, with automatic switching on or off, anything {productName} would write into the session, such as an instruction from the session that owns it (see [Cross-project coordination](../cross-project-work/)), would only start another turn that fails the same way. So it is queued, in order, and written once a reading shows the account has recovered, the session gets a new process, for example by moving to another account, or a turn you start yourself ends normally. A message you send yourself is not held.
 
 <Aside type="caution">
-Usage limits are read from what the agent records about the turn. For Grok Build the limit is recognized from its error text, which can change between versions of the agent; if it does, its usage limit stops being recognized.
+Usage limits are read from what the agent records about the turn, and only for Claude Code, Codex and Grok Build; a turn of any other agent that stops on a limit never triggers an automatic switch. For Grok Build the limit is recognized from its error text, which can change between versions of the agent; if it does, its usage limit stops being recognized.
 </Aside>
 
 ## Next

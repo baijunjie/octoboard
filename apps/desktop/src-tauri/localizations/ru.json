@@ -21,6 +21,7 @@
   "uninstallCleanUp.commandLine.inEffect": "Инструмент командной строки: его ссылка в {path}.",
   "uninstallCleanUp.accountSharing.left": "Учётная запись «{name}» ({agent}) использует общую конфигурацию по умолчанию своего агента. Она всё ещё её использует: {message}",
   "uninstallCleanUp.accountSharing.inEffect": "Учётная запись «{name}» ({agent}) использует общую конфигурацию по умолчанию своего агента.",
+  "uninstallCleanUp.accountSharing.handRestore": "Если для учётной записи как раз отключалось использование общей конфигурации, её каталог может остаться изменённым наполовину: некоторые элементы в нём могут всё ещё быть ссылками в каталог по умолчанию её агента, а рядом лежат собственные элементы учётной записи с именем «<entry>.bak-<stamp>». Чтобы восстановить такой элемент вручную, удалите ссылку и переименуйте его резервную копию обратно в «<entry>».",
   "uninstallCleanUp.deviceKey.left": "Ключ этого компьютера для «{name}»: {parts}.",
   "uninstallCleanUp.deviceKey.partSeparator": "; ",
   "uninstallCleanUp.deviceKey.lineLeft": "его строка с меткой «{mark}» всё ещё в авторизованных ключах пользователя {user} на {host}, удалить её нужно там",

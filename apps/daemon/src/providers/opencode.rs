@@ -1,21 +1,31 @@
 //! OpenCode's descriptor, with its on-disk layout. Its versions were measured on 1.19.6, 2.3.2,
-//! 2.4.0 and 2.4.1 (`docs/agent-cli-reference.md`, section "OpenCode").
+//! 2.4.0 and 2.4.1 (`docs/agent-cli-reference.md`, section "OpenCode"). No version is refused; one of a minor not
+//! measured raises a notice.
 
 use super::layout::{AgentLayout, ConfigDirVarNames};
 use super::{
-    AgentId, AgentVersion, Capabilities, DeliveryQuirks, DetectionMarkers, InteractionKinds,
-    ModelDisplay, NativeMemory, ProviderCode, ProviderDescriptor, QuotaWindowNaming,
-    SessionWindowName, SettingChoice, SettingDescriptor, SettingKind, SwitchDefault,
+    AgentId, Capabilities, DeliveryQuirks, DetectionMarkers, InteractionKinds, ModelDisplay,
+    NativeMemory, ProviderCode, ProviderDescriptor, QuotaWindowNaming, SessionWindowName,
+    SettingChoice, SettingDescriptor, SettingKind, SwitchDefault,
 };
 
-// Each version here has a captured launch, server and record format.
-pub(crate) const SUPPORTED_VERSIONS: [AgentVersion; 4] =
-    [(1, 19, 6), (2, 3, 2), (2, 4, 0), (2, 4, 1)];
-
-pub const UNSUPPORTED_VERSION: ProviderCode =
-    ProviderCode::error("provider.opencode.unsupported_version");
+pub const VERSION_UNMEASURED: ProviderCode =
+    ProviderCode::notice("provider.opencode.version_unmeasured");
 pub const MIGRATION_REQUIRED: ProviderCode =
     ProviderCode::error("provider.opencode.migration_required");
+
+/// The versions measured, each with a captured launch, server and record format. They gate nothing:
+/// a launch of any version goes ahead, and only the notice [`VERSION_UNMEASURED`] reads them, for a
+/// version whose major and minor none of them shares.
+const MEASURED_VERSIONS: [(u32, u32, u32); 4] = [(1, 19, 6), (2, 3, 2), (2, 4, 0), (2, 4, 1)];
+
+pub(crate) fn is_measured((major, minor, _): (u32, u32, u32)) -> bool {
+    MEASURED_VERSIONS
+        .iter()
+        .any(|&(measured_major, measured_minor, _)| {
+            (measured_major, measured_minor) == (major, minor)
+        })
+}
 
 impl AgentId {
     pub const OPENCODE: AgentId = AgentId(DESCRIPTOR.id);
@@ -137,7 +147,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
             compatibility_with: Some("claude"),
         },
     ],
-    codes: &[UNSUPPORTED_VERSION, MIGRATION_REQUIRED],
+    codes: &[VERSION_UNMEASURED, MIGRATION_REQUIRED],
 };
 
 #[cfg(test)]
@@ -236,7 +246,7 @@ mod tests {
         );
         assert!(descriptor.quota_windows.kinds.is_empty());
         assert_eq!(descriptor.model_display, ModelDisplay::PLAIN);
-        assert_eq!(descriptor.codes, &[UNSUPPORTED_VERSION, MIGRATION_REQUIRED]);
+        assert_eq!(descriptor.codes, &[VERSION_UNMEASURED, MIGRATION_REQUIRED]);
         assert_eq!(
             descriptor.inherited_session_vars,
             &["AGENT", "OPENCODE", "OPENCODE_PID"]

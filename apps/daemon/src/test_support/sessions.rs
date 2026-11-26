@@ -34,6 +34,7 @@ pub(crate) fn bare_session(id: &str, kind: SessionKind) -> Session {
         status: SessionStatus::Idle,
         terminal_title: None,
         record_titles: Default::default(),
+        record_roots: Vec::new(),
         background_tasks: Vec::new(),
         switching_account: false,
         at_usage_limit: false,

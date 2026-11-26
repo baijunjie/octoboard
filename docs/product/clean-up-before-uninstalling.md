@@ -9,10 +9,13 @@ after an uninstall, with the clean-up run and without it, is in `docs/product/wh
 macOS deleting the application runs nothing, so the row is the only way; on Windows the uninstaller also runs the same
 clean-up by itself, before it removes anything (see "The Windows uninstaller's clean-up" below). A server form's
 `octoboardd uninstall`, run on the server, does it as its first step, before it removes anything (see "The server
-form's uninstall" below). No request or tool offers it: no client connection, a browser's or a remote window's (a window
-onto another computer's daemon) included, can list or clear these items, and Octoboard's MCP tools offer none. A shell
-on the host can still run `octoboardd uninstall`, as the user could: an agent's shell in a session, or a shell terminal
-opened from a browser or a remote window. That is a local command run as the user, and nothing prevents it.
+form's uninstall" below). No other window and no tool offers it: neither a browser nor a remote window (a window onto
+another computer's daemon) shows an action for it, and Octoboard's MCP tools offer none. That is what the windows offer,
+not a check the application makes of who asks. The daemon's own part is held to the machine by the daemon as well: its
+two routes take only the launch key, which a browser or another device never holds, and the control socket has no
+request for either. A shell on the host can still run `octoboardd uninstall`, as the user could: an agent's shell in a
+session, or a shell terminal opened from a browser or a remote window. That is a local command run as the user, and
+nothing prevents it.
 
 The row is no setting: nothing of it travels in a configuration export, and no agent reads or runs it through the
 settings tools. A search in Settings finds it by its name and by the words of its description, in each wording the
@@ -266,7 +269,8 @@ say that it is undoing what Octoboard changed outside its own folders, while the
 clears what **Remove all** clears, in the same order and each as described in "Once confirmed" above:
 
 1. this computer's keys on remote servers, each key's line in the server's authorized keys and its private key in the
-   credential store, and the private keys left from keys taken back earlier;
+   credential store, and the private keys the credential store kept from keys taken back earlier, for remote daemons
+   still saved (one kept for a remote daemon since removed stays, as "Remove all" leaves it);
 2. Launch at login;
 3. the command-line link, which the Windows application never has;
 4. this computer's daemon's items, the accounts that share their agent's default configuration. The bundled daemon is
@@ -289,7 +293,10 @@ daemon answers on its loopback port, since the agents it took over still report 
 agent**, whoever asks (a session's tool, a hook): a new session, a resume or a relaunch is refused as a stopping
 daemon refuses it. Where that daemon ends by itself before it has answered (a crash, or ended from outside), none is
 started in its place: its items are reported as not known. Once the clearing is through it is asked to stop and
-given **30 seconds** to end what it took over before it is ended.
+given **30 seconds** to end what it took over before it is ended. Its stop first waits for a change of an account's
+sharing already at work on the account's directory to finish there, and starts no other; a daemon ended before that
+change is through leaves that directory half-changed (see "Sharing the default configuration" under "What stays among
+the agents' files" in `docs/product/what-remains-after-uninstalling.md`).
 
 **It runs only as the uninstaller starts it**. Started by hand, it refuses, clearing nothing and
 ending as a clean-up that could not run, where the file for what is left is named anywhere but in the installation's
@@ -305,7 +312,9 @@ Nobody is asked anything during it, and an item that cannot be removed is report
   known;
 - **past the 120 seconds** the clearing is left where it stands, and what is then still in effect is read, in up to
   15 seconds, and reported as left; a daemon not yet started by then is not started for the reading, and its items
-  are reported as not known. Where that reading finds nothing in effect, nothing is left;
+  are reported as not known. Where that reading finds nothing in effect, nothing is left. The account whose sharing
+  the daemon was turning off then goes on being changed until the daemon's stop, which waits for it up to the
+  daemon's 30 seconds;
 - **at 240 seconds** the clean-up is ended, whatever it is doing, its daemon with it. What it had found left by then
   is told as below; where it had not got that far, it counts as one that could not run.
 
@@ -330,10 +339,15 @@ setup runs in place included, which runs no clean-up but has the executable remo
   of its user on its host, to be removed there, or that file possibly left incomplete, to be restored from the copy
   the server kept, and its private key in this computer's credential store under its service and account; for Launch
   at login, that the entry is still in the system's startup list, with the system's reason; for an account, that it
-  still shares, with the daemon's reason; for a part that could not tell what it has, why (this computer's daemon not
+  still shares, with the daemon's reason, followed, where the daemon's change of it stopped part-way
+  (`account_sharing_failed`), by a line saying that the account's directory may be left half-changed and how to
+  restore it by hand: delete each link into the agent's default directory and rename its backup,
+  `<entry>.bak-<stamp>`, back to `<entry>`; for a part that could not tell what it has, why (this computer's daemon not
   starting, say, or the file of the saved remote daemons being unreadable, in which case no key is taken back).
   Where clearing ran out of time, a line says so, and that what follows was still in effect then and some of it may
-  have been removed since it was read; what was still in effect follows, or that it could not be read. The box holds
+  have been removed since it was read; what was still in effect follows, or that it could not be read, with the same
+  line on restoring an account's directory by hand after the accounts, where any is listed: its change may have been
+  under way when the time ran out. The box holds
   as many lines as fit with its heading, then says how many more there are, and ends with the path of the file that
   holds the full list:
   `uninstall-clean-up.log` in the `logs` folder of the daemon's data directory

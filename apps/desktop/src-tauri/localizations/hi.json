@@ -21,6 +21,7 @@
   "uninstallCleanUp.commandLine.inEffect": "कमांड-लाइन टूल: {path} पर उसका लिंक।",
   "uninstallCleanUp.accountSharing.left": "अकाउंट “{name}” ({agent}) अपने एजेंट की डिफ़ॉल्ट कॉन्फ़िगरेशन शेयर करता है। वह अब भी करता है: {message}",
   "uninstallCleanUp.accountSharing.inEffect": "अकाउंट “{name}” ({agent}) अपने एजेंट की डिफ़ॉल्ट कॉन्फ़िगरेशन शेयर करता है।",
+  "uninstallCleanUp.accountSharing.handRestore": "अगर किसी अकाउंट की शेयरिंग बंद की जा रही थी, तो उसकी डायरेक्टरी आधी बदली हुई रह सकती है: उसमें कुछ एंट्री अब भी उसके एजेंट की डिफ़ॉल्ट डायरेक्टरी के लिंक हो सकती हैं, और उनके बगल में अकाउंट की अपनी एंट्री “<entry>.bak-<stamp>” नाम से होती हैं। ऐसी एंट्री को हाथ से वापस लाने के लिए लिंक हटाएँ और उसके बैकअप का नाम फिर से “<entry>” कर दें।",
   "uninstallCleanUp.deviceKey.left": "“{name}” के लिए इस कंप्यूटर की कुंजी: {parts}।",
   "uninstallCleanUp.deviceKey.partSeparator": "; ",
   "uninstallCleanUp.deviceKey.lineLeft": "“{mark}” के निशान वाली उसकी पंक्ति अब भी {host} पर {user} की अधिकृत कुंजियों में है, जिसे वहीं हटाना होगा",

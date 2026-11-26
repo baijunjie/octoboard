@@ -730,6 +730,7 @@ fn launch_with(
             agent_session_id: None,
             notices: Vec::new(),
             first_message: None,
+            record_root: None,
         })
     }
 }

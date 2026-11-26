@@ -208,18 +208,22 @@ fn oauth_confirmed_in(logs: &Path) -> bool {
 }
 
 #[cfg(test)]
-#[test]
-fn oauth_completion_is_read_from_the_dated_log() {
-    let scratch = crate::test_support::ScratchDir::new("antigravity-oauth-log");
-    let log = scratch.join("cli-20000101_000000.log");
-    std::fs::write(&log, "[I browser.go] OAuth authorization is waiting\r\n").unwrap();
-    assert!(!oauth_confirmed_in(&scratch));
-    std::fs::write(
-        &log,
-        "[I oauth.go] OAuth: authenticated successfully as example@example.invalid\r\n",
-    )
-    .unwrap();
-    assert!(oauth_confirmed_in(&scratch));
+mod oauth_log_tests {
+    use super::*;
+
+    #[test]
+    fn oauth_completion_is_read_from_the_dated_log() {
+        let scratch = crate::test_support::ScratchDir::new("antigravity-oauth-log");
+        let log = scratch.join("cli-20000101_000000.log");
+        std::fs::write(&log, "[I browser.go] OAuth authorization is waiting\r\n").unwrap();
+        assert!(!oauth_confirmed_in(&scratch));
+        std::fs::write(
+            &log,
+            "[I oauth.go] OAuth: authenticated successfully as example@example.invalid\r\n",
+        )
+        .unwrap();
+        assert!(oauth_confirmed_in(&scratch));
+    }
 }
 
 #[cfg(all(test, unix))]

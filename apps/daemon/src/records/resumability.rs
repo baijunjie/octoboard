@@ -62,7 +62,7 @@ pub fn presence(
     for root in &roots {
         complete &= locator.index(session.agent, root).complete;
     }
-    complete &= locator.alternate_root_complete(session);
+    complete &= locator.alternate_roots_complete(session);
     for path in removable_record_paths(hints, locator, accounts, session) {
         match std::fs::symlink_metadata(&path) {
             Ok(meta) if meta.file_type().is_file() || meta.file_type().is_dir() => return Present,
@@ -189,9 +189,9 @@ fn locate_own_record(locator: &Locator, session: &Session) -> Result<Located, Re
     else {
         return Err(Resumability::Unknown);
     };
-    let alternate = locator.alternate_root(session);
-    let mut uncertain = alternate.is_err();
-    if let Ok(Some((dir, depth))) = &alternate {
+    let (alternates, known) = locator.alternate_roots(session);
+    let mut uncertain = !known;
+    for (dir, depth) in &alternates {
         let index = index_records_at(agent, dir, *depth);
         if index.records.contains_key(&agent_id.to_ascii_lowercase()) {
             return Ok(Located::Present);
@@ -224,7 +224,9 @@ fn locate_own_record(locator: &Locator, session: &Session) -> Result<Located, Re
     if !dirs
         .iter()
         .any(|dir| std::fs::symlink_metadata(root.join(dir)).is_ok())
-        && !matches!(&alternate, Ok(Some((dir, _))) if std::fs::symlink_metadata(dir).is_ok())
+        && !alternates
+            .iter()
+            .any(|(dir, _)| std::fs::symlink_metadata(dir).is_ok())
     {
         return Err(Resumability::Unknown);
     }

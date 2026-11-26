@@ -186,6 +186,23 @@ async fn sharing_is_refused_for_a_provider_without_the_capability() {
     }
 }
 
+/// Once the daemon has begun to stop, a change is refused with `daemon_shutting_down` before it
+/// is recorded, and the account's directory is left as it was: the stop would not wait for a
+/// change begun after it.
+#[tokio::test]
+async fn a_change_is_refused_once_the_daemon_has_begun_to_stop() {
+    let fixture = Fixture::new();
+    let (_default, account) = claude_setup(&fixture);
+    close_changes_on_disk(&fixture.state);
+    let err = fixture.share(AgentId::CLAUDE, true).await.unwrap_err();
+    assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN, "{err:#}");
+    assert!(format!("{err:#}").contains("shutting down"), "{err:#}");
+    let record = fixture.record(AgentId::CLAUDE);
+    assert!(!record.share_default_config && !record.share_default_config_incomplete);
+    assert!(!is_link(&account.join("settings.json")));
+    assert!(backups(&account, "settings.json").is_empty());
+}
+
 #[tokio::test]
 async fn turning_sharing_on_backs_up_configuration_and_carries_history_into_the_default() {
     let fixture = Fixture::new();
@@ -395,6 +412,7 @@ impl Launches {
                 agent_session_id: None,
                 notices: Vec::new(),
                 first_message: None,
+                record_root: None,
             })
         }
     }
@@ -2900,6 +2918,7 @@ async fn a_message_sent_to_a_session_being_restarted_is_held_for_its_resumed_pro
                     agent_session_id: None,
                     notices: Vec::new(),
                     first_message: None,
+                    record_root: None,
                 })
             },
         ));

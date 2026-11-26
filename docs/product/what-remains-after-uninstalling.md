@@ -49,7 +49,8 @@ the machine itself, never from a browser or a remote window, and acts on the ins
 - **in the desktop application's main window**, Settings' Cleanup section has a row, **Clean up before uninstalling**,
   that says how many of the items are in effect and has one action, **Remove all**, which counts them in its
   confirmation, on the application's items and on this computer's daemon's: it takes every installed key back from its
-  host and from the credential store, removes a private half the credential store kept from a key taken back earlier,
+  host and from the credential store, removes a private half the credential store kept from a key taken back earlier
+  for a remote daemon that is still saved (one kept for a remote daemon since removed is not looked for, and stays),
   turns Launch at login off (removing an entry turned off in the system's own list too), removes the command-line link
   and turns sharing off for every account that shares or whose last change of sharing is incomplete, the last through
   this computer's daemon. It also removes the Windows taskbar's jump list, which the application does not write again
@@ -72,7 +73,7 @@ runs" in `docs/product/clean-up-before-uninstalling.md`).
 
 Where it has removed everything, what the "What else stays" sections below list of those items — the command-line
 link, the login entry, this computer's keys on remote hosts and their private halves, private halves left from keys
-taken back earlier, and the jump list unless the application was started again — does not stay, and of "What stays
+taken back earlier for remote daemons still saved, and the jump list unless the application was started again — does not stay, and of "What stays
 among the agents' files" an account's links into the default directory and its backups do not either. On the server
 form, the rest of `octoboardd uninstall`, not the clean-up, removes what "The server form" lists under "What
 uninstalling removes". What its result names as not removed (for the Windows uninstaller's clean-up, its message box
@@ -129,8 +130,9 @@ Nothing runs when it is deleted, so nothing else is removed. Quit Octoboard firs
   `dev.octoboard.desktop.remote-daemon-key` and whose account is the saved daemon's id, one per saved remote daemon
   whose key is installed. When taking a key back, Octoboard asks Keychain to delete the private half even if the
   remote host cannot be reached. If Keychain reports a deletion error, Octoboard reports the item's service and
-  account so it can be removed in Keychain Access. Moving the application to the Trash does not perform a Keychain
-  clean-up.
+  account so it can be removed in Keychain Access; the private half then stays, and the clean-up before uninstalling
+  removes it later only while that remote daemon is still saved. Moving the application to the Trash does not perform
+  a Keychain clean-up.
 - **What macOS keeps under the application's identifier**, `dev.octoboard.desktop`, as for any application: the web
   view's data and caches in `~/Library/WebKit/dev.octoboard.desktop` and `~/Library/Caches/dev.octoboard.desktop`;
   where macOS created them, `~/Library/HTTPStorages/dev.octoboard.desktop`,
@@ -151,8 +153,8 @@ The application is uninstalled with its uninstaller (see "Uninstalling" in
 `docs/product/installing-the-desktop-app.md`). It removes the installed application, and, before that:
 
 - on an uninstall proper, everything the clean-up before uninstalling clears, which it has the application clear first:
-  this computer's keys on remote servers and their private halves, private halves left from keys taken back earlier,
-  the login entry, the links of accounts that share their agent's default configuration (with their backups restored)
+  this computer's keys on remote servers and their private halves, private halves left from keys taken back earlier
+  for remote daemons still saved, the login entry, the links of accounts that share their agent's default configuration (with their backups restored)
   and the jump list (see "The Windows uninstaller's clean-up" in `docs/product/clean-up-before-uninstalling.md`). What
   it could not clear stays, as "What else stays" below and "What stays among the agents'
   files" describe it, and is named at the end of an interactive uninstall and in
@@ -229,7 +231,8 @@ data" box is ticked; otherwise both stay. Where one stays, delete the folder.
 - **The private half of each such key**, where neither took it out, in the Credential Manager: a generic credential named
   `dev.octoboard.desktop.remote-daemon-key:<saved daemon id>`, one per saved remote daemon whose key is installed,
   and one for a saved daemon whose key was taken back where the Credential Manager did not remove its private half
-  then. Nothing uses it once the application is gone. To remove it, delete it under Windows Credentials in the Credential
+  then; the clean-up before uninstalling removes such a one only while that remote daemon is still saved, so one kept
+  for a remote daemon removed since stays. Nothing uses it once the application is gone. To remove it, delete it under Windows Credentials in the Credential
   Manager.
 - **The web view's data and caches**, which WebView2 keeps in `%LOCALAPPDATA%\dev.octoboard.desktop`, the
   application's local data directory, its `EBWebView` folder among them. They have no effect without the application.
@@ -256,6 +259,11 @@ nothing first. Where it goes through, it removes:
   reason was work that stopping would interrupt, `octoboardd uninstall --force` stops it regardless;
 - the systemd user unit `octoboardd.service`, the one the script wrote or the archive's own copied by hand, disabled,
   stopped and deleted, the user's manager reloaded;
+- the unit's drop-in directory, `octoboardd.service.d/` beside the unit (in `~/.config/systemd/user/`, under
+  `$XDG_CONFIG_HOME` where it is set), with every file in it, drop-ins the user wrote included: they are part of the
+  unit, which the command removes whole once they leave it running this `octoboardd`. A drop-in directory that is a
+  link, holds a directory or cannot be read stops the uninstall before anything is removed (see "Uninstalling the
+  server form" in `docs/product/daemon-command-line.md`);
 - lingering, turned off only where the install turned it on, as `~/.octoboard/install.lingering` records, and no other
   service of the user's is enabled;
 - `octoboardd.previous`, every `.octoboardd.*` file and last `octoboardd` itself, in the install directory: what an
@@ -327,6 +335,22 @@ copies in another account through account switching, as described below.
   uninstall` does as its first step, and the Windows uninstaller on an uninstall proper), undoes both; once Octoboard is removed, nothing of it does, and the links can be
   deleted by hand. On the server form this is what `octoboardd uninstall --keep-changes` leaves, and what the install
   script's own removal of an `octoboardd` from before the command may leave.
+
+  **An account's directory can also be left half-changed**, where turning its sharing off stopped part-way: some
+  entries still links into the default directory, the account's own beside them as `<entry>.bak-<stamp>`, a move of
+  conversation history across volumes left as a copy in both directories or as a hidden `.<name>.octoboard-copy-<number>`
+  being written. A change that fails part-way leaves it so (the clean-up names the account as still sharing, with the
+  daemon's reason). The daemon's stop does not cut a change short: once asked to stop it starts no change, and waits
+  for the one already at work on the account's directory to finish there. What can still cut one short is the daemon
+  being ended from outside: the Windows uninstaller's clean-up gives its daemon 30 seconds to stop before it ends it,
+  and ends it with everything else at its 240 seconds (see "The Windows uninstaller's clean-up" in
+  `docs/product/clean-up-before-uninstalling.md`), which a change moving much conversation history across volumes can
+  outlast. Its list then names the account as still in effect and says the directory may be half-changed. To restore
+  it by hand, in the account's directory delete each link that leads into the agent's default directory, and rename its
+  backup `<entry>.bak-<stamp>` back to `<entry>`; a `<entry>.bak-<stamp>/` beside a conversation-history directory
+  holds only the copies set aside when both directories had a file of the same name, and the history itself stays in
+  the default directory. A hidden `.<name>.octoboard-copy-<number>` in either directory is an unfinished copy and can be
+  deleted.
 - **Conversations an account switch copied** into the target account's directory stay there, beside the originals,
   as the agent's own (see "Carrying the conversation" in `docs/product/switching-session-accounts.md`).
 - **What else Octoboard's operations wrote into the agents' configuration** stays as it was left, the agent's or the

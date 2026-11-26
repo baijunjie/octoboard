@@ -3159,7 +3159,7 @@ in a scratch home and working directory, with a local stand-in answering the mod
 default account signed in (an Anthropic API key) through a development daemon with a data directory of its own,
 `anthropic/claude-haiku-4-5` answering: a console session and a project session it opened, a permission prompt, a
 question, an Octoboard tool call, a report to the parent, an instruction, an interrupt, a stop of the daemon and a
-resume, and a resume after an archive. Octoboard accepts 1.19.6, 2.3.2, 2.4.0 and 2.4.1. The differences measured on 2.x
+resume, and a resume after an archive. Octoboard launches any version (measured on 1.19.6, 2.3.2, 2.4.0 and 2.4.1; none is refused for being unmeasured). The differences measured on 2.x
 are in "OpenCode 2" below.
 
 **Windows 11 ARM64 (23H2, build 22631.6199).** npm 11.20.0 installed `opencode-ai` **1.19.6**
@@ -3855,8 +3855,8 @@ its postinstall script links or copies the selected platform binary there. Octob
 layouts and uses the package of the detected install for its registry check and npm update.
 
 - **Version and launch.** Installed npm and Homebrew versions are read from their manifest or Cellar path. An
-  unpackaged binary is asked for `--version`, which 2.x prints as `opencode v2.x.y`. Octoboard refuses any version
-  outside the measured list before writing OpenCode's launch files. All three 2.x builds take
+  unpackaged binary is asked for `--version`, which 2.x prints as `opencode v2.x.y`. The major version picks the
+  launch, server and record generation (1 or 2); no version is refused, and a format a newer version changed fails where it is read. All three 2.x builds take
   `opencode --server <url> --session <id>` to start the TUI on the private server. The server reads the launch's model
   from the inline configuration. Octoboard checks a resumed id at `GET /api/session/<id>` before starting the TUI,
   since `--session` by itself is also allowed to create a missing session in 2.x. When the host cannot run the

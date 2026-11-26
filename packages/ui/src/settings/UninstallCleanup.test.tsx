@@ -126,7 +126,7 @@ it("is one row that says what it is for and how many items are in effect, withou
   expect(said).toContain("Clean up before uninstalling");
   expect(said).toContain("Removes what the app’s features added outside its own folders, for when you are uninstalling");
   // Said once: one item is undone at its own switch.
-  expect(said).toContain("A single one is undone at its own feature’s switch.");
+  expect(said).toContain("To undo just one, turn off its own setting.");
   expect(said).toContain("4 items in effect");
   // Nothing of the items themselves is on the page.
   expect(container.querySelectorAll("ul, li")).toHaveLength(0);

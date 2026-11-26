@@ -740,6 +740,14 @@ fn register_launched(
             return Err(err);
         }
     }
+    // Kept for as long as the session, so that its records are still looked for there once the
+    // environment no longer selects the directory.
+    if let Some(root) = &launched.record_root {
+        if let Err(err) = state.store.add_session_record_root(session_id, root) {
+            state.release_launch_watch(session_id);
+            return Err(err.into());
+        }
+    }
     for notice in launched.notices {
         state.broadcast(notice.about(session_id));
     }

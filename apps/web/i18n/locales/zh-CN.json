@@ -173,7 +173,7 @@
   "workspaceIntroduction": "将你已有的编程智能体和账号集中到一个开发工作台。在同一智能体内切换账号，保留原有对话；也可以把任务交给另一提供商的智能体。选择一个智能体负责统筹，为多个项目分派任务并跟进进展。",
   "coordinationWalkthroughDescription": "以门店套餐促销为例：点餐、支付和门店经营涉及多个项目，需要协同开发。下图展示统筹智能体如何分派任务、接收汇报；选择一个项目，可以查看它的开发任务和示例报告。",
   "faqSetupCostsAnswer": "请先安装并配置你要使用的编程智能体命令行工具。{appName} 免费，并以 MIT 许可证开源；智能体及模型服务按你所选服务提供商的订阅或计费方式使用。如果智能体支持连接自行托管的模型，也可以沿用相应配置。",
-  "faqDataFlowAnswer": "{appName} 在本地保存应用数据，不会把代码或对话上传至自有服务器。Claude Code、Codex、Grok Build、Antigravity CLI、GitHub Copilot CLI、OpenCode、Qwen Code 和 Pi使用你自行订阅或配置的服务和账号，账号凭据与对话记录由这些工具管理。提示词、代码及相关上下文会由它们发送给你配置的服务提供商，并受相应服务提供商的政策约束。跨智能体协作时，任务说明、进展和相关上下文也会传递给参与协作的智能体。",
+  "faqDataFlowAnswer": "{appName} 在本地保存应用数据，不会把代码或对话上传至自有服务器。Claude Code、Codex、Grok Build、Antigravity CLI、GitHub Copilot CLI、OpenCode、Qwen Code 和 Pi 使用你自行订阅或配置的服务和账号，账号凭据与对话记录由这些工具管理。提示词、代码及相关上下文会由它们发送给你配置的服务提供商，并受相应服务提供商的政策约束。跨智能体协作时，任务说明、进展和相关上下文也会传递给参与协作的智能体。",
   "faqParallelWorkAnswer": "多个会话默认共用项目目录，同时修改同一文件可能冲突。并行开发时，可以让智能体使用独立的 Git worktree，并在合并前审查改动。",
   "faqCliResumeAnswer": "可以。项目文件仍在原目录，对话记录也由各智能体保存。只要原智能体保存的对话记录仍可用，就能通过它的命令行工具恢复该会话；使用额外账号时，需要以该账号的配置目录启动命令行工具。",
   "privacyRemoteHostsTitle": "远程连接与数据",

@@ -1370,6 +1370,7 @@ mod first_message {
                 agent_session_id: agent_session_id.map(str::to_string),
                 notices: Vec::new(),
                 first_message: first_message.map(str::to_string),
+                record_root: None,
             },
         )
     }
@@ -1557,6 +1558,44 @@ mod first_message {
     }
 }
 
+/// The records directory a launch's environment selected is kept with the session, beside those
+/// earlier launches selected, so that its records are still looked for once the environment
+/// selects another or none.
+#[tokio::test]
+async fn a_launch_keeps_the_records_directory_its_environment_selected() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-launch-record-root");
+    let earlier = dir.join("earlier records");
+    state
+        .store
+        .insert_session(&Session {
+            record_roots: vec![earlier.clone()],
+            ..project_session("s", AgentId::TEST, SessionStatus::Idle)
+        })
+        .unwrap();
+    let live =
+        crate::test_support::watched_live_session("s", AgentId::TEST, 80, 24, "sleep 30", None);
+    let selected = dir.join("selected records");
+    let claim = state.begin_launch("s").unwrap();
+    register_launched(
+        &state,
+        &claim,
+        "s",
+        term::Launch {
+            session: (*live).clone(),
+            agent_session_id: None,
+            notices: Vec::new(),
+            first_message: None,
+            record_root: Some(selected.clone()),
+        },
+    )
+    .unwrap();
+
+    assert_eq!(
+        state.session_record("s").unwrap().record_roots,
+        [earlier, selected]
+    );
+}
+
 mod notices_and_tool_listing {
     use std::time::Duration;
 
@@ -1600,6 +1639,7 @@ mod notices_and_tool_listing {
                 agent_session_id: None,
                 notices,
                 first_message: first_message.map(str::to_string),
+                record_root: None,
             },
         )
         .unwrap();
