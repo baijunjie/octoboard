@@ -41,6 +41,9 @@ import type { HoveredTerminalLink } from "./links/terminalLinks";
 /** The longest the loading state covers a connected terminal still waiting for its first output. */
 export const LOADING_LIMIT_MS = 10_000;
 
+/** Read once, when the controller is built: one object for every render. */
+const AGENT_TERMINAL_OPTIONS = { shiftEnterNewline: true };
+
 interface TerminalPaneProps {
   /** The session whose terminal should be shown, or `undefined` when none is selected or its record is gone
    * (`noSelection` tells which). */
@@ -286,6 +289,7 @@ export function TerminalPane({
     project: session?.project_id,
     viewFile: onViewFile,
     takesAttachments: true,
+    options: AGENT_TERMINAL_OPTIONS,
   });
   const syncSession = useCallback(() => {
     const controller = controllerRef.current;

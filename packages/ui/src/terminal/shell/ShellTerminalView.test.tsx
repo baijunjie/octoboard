@@ -39,7 +39,7 @@ const { FakeController } = vi.hoisted(() => {
       readonly callbacks: { onStatusChange: (status: TermStatus) => void; pasteImage?: unknown; dropFiles?: unknown },
       _theme: "light" | "dark",
       /** What the view built the controller with. */
-      readonly options: { fontSize?: number },
+      readonly options: { fontSize?: number; shiftEnterNewline?: boolean },
     ) {
       FakeController.last = this;
     }
@@ -124,6 +124,11 @@ function mount(shown = true, record: ShellTerminal = terminal) {
 }
 
 const landing = (container: HTMLElement) => Array.from(container.querySelectorAll("[data-region-landing]"));
+
+it("leaves Shift+Enter to xterm in a shell, which reads a carriage return", () => {
+  mount();
+  expect(FakeController.last.options.shiftEnterNewline).toBeFalsy();
+});
 
 it("lands F6 on the input while the shell is connected", () => {
   const { container } = mount();

@@ -35,15 +35,21 @@ arrow keys. `Ctrl+C` reaches the agent, and so do `Tab` and `Shift+Tab`. `F6` an
 keyboard focus to another region of the window (see "Moving focus between regions with F6" in
 `docs/product/moving-focus-between-regions.md`).
 
+`Shift+Enter` sends `Escape` followed by a carriage return (Meta+Enter) on every operating system, not the carriage
+return `Enter` sends, so a program can tell the two apart: Claude Code reads it as a newline in its prompt rather than
+a submit. The shell terminals in the Terminal panel do not map it (see "The shell terminal" in
+`docs/product/terminal-panel.md`).
+
 On macOS, the terminal sends conventional editing commands for these keys:
 
 - `Command+Left` / `Command+Right`: move to the start / end of the input line (`Ctrl+A` / `Ctrl+E`).
 - `Command+Backspace`: delete towards the start of the input line (`Ctrl+U`).
 - `Option+Left` / `Option+Right`: move backward / forward by a word (`Escape`, then `b` / `f`).
 
-These mappings apply with only the modifier shown, outside input-method composition. The running program decides
-how it interprets the commands, including where they move in a multiline prompt. Other Option combinations retain
-their normal character input.
+These mappings, and the `Shift+Enter` one, apply with only the modifier shown, and never to a key press that belongs
+to an input method: one made while it is composing, or one it reports as handled for it (key code 229). The running
+program decides how it interprets what is sent, including where the commands move in a multiline prompt. Other Option
+combinations retain their normal character input.
 
 **Typing waits while the session's messages are held.** While Octoboard holds the messages for a session — while it is
 being handed off (see "Messages for the original during a handoff" in `docs/product/handing-off-sessions.md`), while

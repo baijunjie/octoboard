@@ -148,7 +148,8 @@ The shown tab's terminal fills the panel under its tab row. It is live: keystrok
 "Moving focus between regions with F6" in `docs/product/moving-focus-between-regions.md`).
 
 The macOS editing keys follow "Typing and the mouse" in `docs/product/session-terminal.md`; the running shell or
-program decides how it interprets their commands.
+program decides how it interprets their commands. `Shift+Enter` is not mapped as it is in the session terminal: it
+sends a carriage return, the same as `Enter`.
 
 **`Escape` goes to the shell**, also while the right pane is only floating in, so programs that need it (vim, less,
 fzf) get it there too: from inside a shell terminal it does not send a floating pane away. A floating Terminal card is

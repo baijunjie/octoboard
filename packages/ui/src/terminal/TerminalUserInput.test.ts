@@ -42,7 +42,7 @@ type KeyboardCore = {
   _customKeyEventHandler: (event: KeyboardEvent) => boolean;
 };
 
-function editingTerminal(mac = true) {
+function editingTerminal(mac = true, shiftEnterNewline = false) {
   class Socket extends EventTarget {
     static readonly OPEN = 1;
     static readonly CONNECTING = 0;
@@ -55,7 +55,7 @@ function editingTerminal(mac = true) {
     open() { this.readyState = Socket.OPEN; this.dispatchEvent(new Event("open")); }
   }
   vi.stubGlobal("WebSocket", Socket);
-  const controller = new TerminalController({ onStatusChange: () => {} }, "dark", { gpu: false, host: mac ? MAC_HOST : WINDOWS_HOST });
+  const controller = new TerminalController({ onStatusChange: () => {} }, "dark", { gpu: false, shiftEnterNewline, host: mac ? MAC_HOST : WINDOWS_HOST });
   onTestFinished(() => {
     controller.dispose();
     vi.unstubAllGlobals();
@@ -117,6 +117,7 @@ describe("macOS editing through the real xterm and controller", () => {
     const { core, socket } = editingTerminal(mac);
     const keys: [string, KeyboardEventInit][] = [
       ["ArrowLeft", { metaKey: true, isComposing: true }],
+      ["ArrowLeft", { metaKey: true, keyCode: 229 }],
       ["ArrowLeft", { metaKey: true, shiftKey: true }],
       ["ArrowRight", { metaKey: true, ctrlKey: true }],
       ["Backspace", { metaKey: true, altKey: true }],
@@ -136,6 +137,70 @@ describe("macOS editing through the real xterm and controller", () => {
     }
     socket.open();
     expect(socket.sent.filter((frame) => ArrayBuffer.isView(frame))).toEqual([]);
+  });
+});
+
+describe("Shift+Enter through the real xterm and controller", () => {
+  const sentBytes = (socket: { sent: unknown[] }) =>
+    socket.sent.filter((frame): frame is Uint8Array => ArrayBuffer.isView(frame)).map((frame) => Array.from(frame));
+
+  it.each([true, false])("sends Escape and a carriage return once per keydown, repeats included, and nothing on keyup (macOS: %s)", (mac) => {
+    const { controller, core, socket } = editingTerminal(mac, true);
+    const xtermData = vi.fn();
+    controller.term.onData(xtermData);
+    for (const repeat of [false, true, true]) {
+      const down = editingKey("keydown", "Enter", { shiftKey: true, repeat });
+      expect(core._keyDown(down)).toBe(false);
+      expect(down.defaultPrevented).toBe(true);
+    }
+    const up = editingKey("keyup", "Enter", { shiftKey: true });
+    core._keyUp(up);
+    expect(up.defaultPrevented).toBe(true);
+    expect(xtermData).toHaveBeenCalledTimes(3);
+    socket.open();
+    expect(sentBytes(socket)).toEqual([[27, 13], [27, 13], [27, 13]]);
+  });
+
+  it("invalidates a program's copy when the key goes down, and not on keyup", async () => {
+    const { controller, core, socket } = editingTerminal(false, true);
+    socket.open();
+    const copy = () => new Promise<void>((resolve) => controller.term.write("\x1b]52;c;cGlja2Vk\x07", resolve));
+    await copy();
+    expect(controller.programCopiedText).toBe("picked");
+    const activity = () => (controller as unknown as { userActs: number }).userActs;
+    const before = activity();
+    core._keyDown(editingKey("keydown", "Enter", { shiftKey: true }));
+    expect(controller.programCopiedText).toBeUndefined();
+    expect(activity()).toBe(before + 1);
+    await copy();
+    core._keyUp(editingKey("keyup", "Enter", { shiftKey: true }));
+    expect(controller.programCopiedText).toBe("picked");
+    expect(activity()).toBe(before + 1);
+  });
+
+  it.each<[string, KeyboardEventInit]>([
+    ["plain Enter", {}],
+    ["Shift+Enter while composing", { shiftKey: true, isComposing: true }],
+  ])("leaves %s to xterm", (_name, modifiers) => {
+    const { core, socket } = editingTerminal(true, true);
+    const event = editingKey("keydown", "Enter", modifiers);
+    expect(core._customKeyEventHandler(event)).toBe(true);
+    expect(event.defaultPrevented).toBe(false);
+    socket.open();
+    expect(sentBytes(socket)).toEqual([]);
+  });
+
+  it("is left to xterm, which encodes it as a carriage return, by a controller without the option", () => {
+    const { core, socket } = editingTerminal(true);
+    const down = editingKey("keydown", "Enter", { shiftKey: true, keyCode: 13 });
+    expect(core._customKeyEventHandler(down)).toBe(true);
+    expect(down.defaultPrevented).toBe(false);
+    // A mounted terminal is out of reach in jsdom (xterm's renderer needs a canvas), so xterm's own encoding of
+    // the key is read from its keyboard service rather than from the bytes it would send.
+    const keyboard = (core as unknown as { _keyboardService: { evaluateKeyDown: (event: KeyboardEvent) => { key?: string } } })._keyboardService;
+    expect(keyboard.evaluateKeyDown(down).key).toBe("\r");
+    socket.open();
+    expect(sentBytes(socket)).toEqual([]);
   });
 });
 

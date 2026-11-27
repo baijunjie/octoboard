@@ -49,7 +49,7 @@ const { FakeController } = vi.hoisted(() => {
       pathLinks?: { open: (target: PathTarget) => Promise<void>; probe: (paths: string[]) => Promise<{ kind: string; view?: unknown }[]>; reveal?: unknown; openDefault?: unknown };
       pasteImage?: { takes: (sessionId: string) => boolean; save: (image: Blob, sessionId: string) => Promise<string | undefined>; read?: () => Promise<Blob | undefined> };
       dropFiles?: { upload: (files: { file: File; folder: boolean }[], sessionId: string) => Promise<string | undefined> };
-    }) {
+    }, _theme: "light" | "dark", readonly options: { shiftEnterNewline?: boolean }) {
       FakeController.last = this;
     }
     /** The image paste handlers the pane gave the controller, if any. */
@@ -183,6 +183,11 @@ const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 const isolatedTerminal = (container: HTMLElement) => container.querySelector("[data-region=terminal] > .isolate")!;
 /** The cover's spoken text: its region is the first status region the pane renders. */
 const status = (container: HTMLElement) => container.querySelector("[role=status]:not([data-slot=spinner])")?.textContent;
+
+it("builds the agent terminal's controller to send Shift+Enter as a newline", () => {
+  mount();
+  expect(FakeController.last.options.shiftEnterNewline).toBe(true);
+});
 
 it("keeps the loading cover up past the limit while the first connect hangs", () => {
   const { container } = mount();

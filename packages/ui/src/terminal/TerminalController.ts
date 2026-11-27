@@ -14,7 +14,7 @@ import { OSC_52, osc52ClipboardText } from "./osc52";
 import { installPathLinks, type PathAnswer, type PathLinkCache, type PathLinkTarget } from "./links/pathLinks";
 import { LinkClickReports } from "./links/linkClickReports";
 import { watchPointerForLinks } from "./links/pointerLinks";
-import { macEditingSequence } from "./terminalKeys";
+import { macEditingSequence, shiftEnterSequence } from "./terminalKeys";
 import { terminalFontSize } from "./terminalFontSize";
 import {
   brokenUrlLinkProvider,
@@ -74,6 +74,10 @@ export interface TerminalControllerOptions {
   /** Draws at this font size in pixels for the life of the terminal, rather than at the terminal font size setting
    * (`terminalFontSize`), which the view then does not follow. */
   fontSize?: number;
+  /** Sends Escape and a carriage return for `Shift+Enter` (`shiftEnterSequence`), which an agent's prompt reads as a
+   * newline; off, the key reaches the program as xterm encodes it, a carriage return like `Enter`, which is what a
+   * shell expects. Meant for the agent terminal. */
+  shiftEnterNewline?: boolean;
 }
 
 export interface TerminalControllerHandlers {
@@ -261,9 +265,9 @@ export class TerminalController {
   /** Whether the terminal has been fitted to its container at least once. */
   private fitted = false;
 
-  constructor(handlers: TerminalControllerHandlers, initialColorTheme: "light" | "dark", { gpu = true, fittedSizesOnly = false, host, fontSize }: TerminalControllerOptions) {
+  constructor(handlers: TerminalControllerHandlers, initialColorTheme: "light" | "dark", { gpu = true, fittedSizesOnly = false, shiftEnterNewline = false, host, fontSize }: TerminalControllerOptions) {
     this.handlers = handlers;
-    this.options = { gpu, fittedSizesOnly, host };
+    this.options = { gpu, fittedSizesOnly, shiftEnterNewline, host };
     // A click that opens a link is not the program's (see `LinkClickReports`).
     const opening = <A extends unknown[]>(open: (...args: A) => Promise<void>) => (...args: A) => {
       this.linkClicks.opened();
@@ -339,7 +343,9 @@ export class TerminalController {
     // it is the most-used key in a terminal, so it is intercepted here and its raw byte (ETX, 0x03) is
     // written directly, bypassing xterm's own key-to-data pipeline entirely.
     this.term.attachCustomKeyEventHandler((event) => {
-      const data = this.options.host.os === "macos" ? macEditingSequence(event) : undefined;
+      const data =
+        (this.options.shiftEnterNewline ? shiftEnterSequence(event) : undefined) ??
+        (this.options.host.os === "macos" ? macEditingSequence(event) : undefined);
       if (data !== undefined) {
         event.preventDefault();
         if (event.type === "keydown") this.term.input(data, true);
