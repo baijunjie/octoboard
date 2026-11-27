@@ -82,10 +82,17 @@ pub(crate) fn answered_as_probe(stream: &TcpStream) -> bool {
             Ok(_) => break false,
         }
     };
-    stream.set_read_timeout(None).unwrap();
     if probe {
+        // The rest of the request is read before the answer: a socket closed with bytes it has
+        // not read is reset on Windows, and the client then loses the answer.
+        let mut reader = BufReader::new(stream);
+        let mut line = String::new();
+        while reader.read_line(&mut line).is_ok_and(|read| read > 0) && line != "\r\n" {
+            line.clear();
+        }
         let _ = (&*stream).write_all(PROBE_ANSWER);
     }
+    stream.set_read_timeout(None).unwrap();
     probe
 }
 

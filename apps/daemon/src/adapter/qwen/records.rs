@@ -668,6 +668,15 @@ mod tests {
                 "{name}: {:?}",
                 status(&fixture.state)
             );
+            // The status moves before the cancel closes the turn.
+            let state = fixture.state.clone();
+            assert!(
+                within(PATIENCE, move || state
+                    .live_session("s")
+                    .is_some_and(|live| live.reported_cancels_settled() == 1))
+                .await,
+                "{name}: the cancel was not acted on"
+            );
             assert!(fixture.state.last_turn_abnormal("s"), "{name}");
             assert_eq!(
                 fixture.state.close_turn("s", true),

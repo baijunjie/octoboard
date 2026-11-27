@@ -245,6 +245,13 @@ impl LiveSession {
         self.signals.cancels_started()
     }
 
+    /// How many cancels the session's reports have had acted on, whether or not they closed a
+    /// turn: what a test waits on before it looks at the turn, as the status moves first.
+    #[cfg(test)]
+    pub(crate) fn reported_cancels_settled(&self) -> u64 {
+        self.signals.cancels_settled()
+    }
+
     /// The daemon's state and runtime, once the session is bound to them.
     fn bound(&self) -> Option<(Arc<AppState>, tokio::runtime::Handle)> {
         let observer = self.title.lock().expect("title observer lock poisoned");
