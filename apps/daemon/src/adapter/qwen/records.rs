@@ -620,6 +620,13 @@ mod tests {
         }
     }
 
+    /// Whether the session's turn has been closed within the patience: a cancel moves the status
+    /// to idle first and closes the turn after, so a test looks at the turn only once it has.
+    async fn turn_closes(state: &Arc<AppState>) -> bool {
+        let state = state.clone();
+        within(PATIENCE, move || !state.turn_is_open("s")).await
+    }
+
     async fn reaches_idle(state: &Arc<AppState>) -> bool {
         let state = state.clone();
         within(PATIENCE, move || {
@@ -646,6 +653,10 @@ mod tests {
                 reaches_idle(&fixture.state).await,
                 "{name}: {:?}",
                 status(&fixture.state)
+            );
+            assert!(
+                turn_closes(&fixture.state).await,
+                "{name}: the turn stayed open"
             );
             assert!(fixture.state.last_turn_abnormal("s"), "{name}");
             assert_eq!(
@@ -822,6 +833,7 @@ mod tests {
             "{:?}",
             status(&fixture.state)
         );
+        assert!(turn_closes(&fixture.state).await, "the turn stayed open");
         assert!(fixture.state.last_turn_abnormal("s"));
         assert_eq!(fixture.state.close_turn("s", true), TurnClose::NoTurn);
     }
