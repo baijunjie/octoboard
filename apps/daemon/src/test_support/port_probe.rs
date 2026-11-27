@@ -60,8 +60,8 @@ pub(crate) fn accept_past_probes(listener: &std::net::TcpListener) -> TcpStream 
 }
 
 /// Whether `stream`, a connection just accepted, opened with the probe's request, in which case
-/// it has been answered; otherwise nothing of it has been read. Leaves the connection blocking,
-/// with no read timeout.
+/// it has been answered; otherwise nothing of it has been read, and the connection is left
+/// blocking, with no read timeout.
 pub(crate) fn answered_as_probe(stream: &TcpStream) -> bool {
     // A connection accepted from a non-blocking listener can be non-blocking itself.
     stream.set_nonblocking(false).unwrap();
@@ -91,8 +91,11 @@ pub(crate) fn answered_as_probe(stream: &TcpStream) -> bool {
             line.clear();
         }
         let _ = (&*stream).write_all(PROBE_ANSWER);
+    } else {
+        // Only here: a probe's prober may have closed by now, and macOS refuses a socket option
+        // on a connection its peer has reset.
+        stream.set_read_timeout(None).unwrap();
     }
-    stream.set_read_timeout(None).unwrap();
     probe
 }
 
