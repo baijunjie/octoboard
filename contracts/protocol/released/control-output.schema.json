@@ -131,6 +131,10 @@
           "type": "boolean",
           "description": "The agent's CLI opens the page in the browser by itself and cannot be stopped from it (Grok\nBuild), so a client must not open it again, only offer to reopen it."
         },
+        "question": {
+          "description": "A question the login waits on. The login goes on once\n`answer_account_login_question` brings the user's answer.",
+          "$ref": "#/$defs/LoginQuestion"
+        },
         "failure": {
           "anyOf": [
             {
@@ -282,7 +286,7 @@
           "items": {
             "$ref": "#/$defs/QuotaWindow"
           },
-          "description": "Empty when the account has never been read. After a failed re-read, the last good windows\nstay (with their `fetched_at`) and `unavailable` says why the newer attempt failed."
+          "description": "Empty when the account has never been read, and always for a provider that declares no\nquota window. After a failed re-read, the last good windows stay (with their `fetched_at`)\nand `unavailable` says why the newer attempt failed."
         },
         "unavailable": {
           "anyOf": [
@@ -292,7 +296,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Why the reading is missing or stale, or that the account is not signed in or its directory\nis missing. For a provider that declares no quota window, `None` does not by itself mean\nsigned in: the provider may not be able to tell, and says nothing then."
         },
         "reset_credits": {
           "description": "The account's usable rate limit reset credits (Codex only); absent when it has none or the\nagent says nothing of them. Kept, like the windows, over a failed re-read.",
@@ -308,7 +313,7 @@
         "windows",
         "unavailable"
       ],
-      "description": "The plan quota of one account as the agent's own CLI last reported it. Runtime state of the\ndaemon: never stored and never part of an exported configuration."
+      "description": "The plan quota of one account as the agent's own CLI last reported it. For a provider that\ndeclares no quota window (`QuotaWindowNaming::kinds` empty) it is instead a reading of the\naccount's sign-in: no plan, no windows, the email when signed in, and the not-signed-in state\nin `unavailable` when signed out. Runtime state of the daemon: never stored and never part of\nan exported configuration."
     },
     "AccountSharing": {
       "type": "object",
@@ -517,6 +522,10 @@
         },
         "install_method": {
           "$ref": "#/$defs/CliInstallMethod"
+        },
+        "npm_package": {
+          "type": "string",
+          "description": "The package that installed the CLI when `install_method` is `npm`."
         },
         "latest_version": {
           "type": [
@@ -840,6 +849,14 @@
           "type": "boolean",
           "description": "Its accounts can share the default account's configuration."
         },
+        "owned_accounts": {
+          "type": "boolean",
+          "description": "Its accounts beyond the default can each be given a directory of their own, the agent's\nconfiguration directory for that account. False for an agent that cannot be pointed at a\nsecond one without changing something every program it starts would inherit: it has the\ndefault account only, and the daemon refuses to add, import or point another."
+        },
+        "login_flow": {
+          "type": "boolean",
+          "description": "Can sign an account in without a terminal (`AccountOps::login`); otherwise the user signs\nin with the agent's own CLI, and a login request is refused."
+        },
         "mcp_inventory": {
           "type": "boolean",
           "description": "Can list an account's MCP servers and platform connectors (`read_account_mcp_inventory`)."
@@ -857,7 +874,7 @@
         },
         "message_images": {
           "type": "boolean",
-          "description": "Takes images attached to a message (`send_message`'s `images`)."
+          "description": "Takes an image file as an attached image: images attached to a message (`send_message`'s\n`images`), and the path of an image saved for its session (`save_pasted_image`,\n`create_pasted_image_upload`), which a client pastes or drops into the session's terminal.\nWhere it does not, each of those requests is refused."
         },
         "slash_commands": {
           "type": "boolean",
@@ -872,6 +889,8 @@
         "native_app_scheme",
         "per_session_trust",
         "config_sharing",
+        "owned_accounts",
+        "login_flow",
         "mcp_inventory",
         "ends_command_groups_on_exit",
         "delivery",
@@ -2716,6 +2735,16 @@
       ],
       "description": "Where a conversation is held, as `locate_conversation_to_resume` reports it."
     },
+    "CreditPeriodName": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "plan",
+          "description": "\"Plan\"."
+        }
+      ],
+      "description": "A native name for a provider's credit pool."
+    },
     "DaemonUpdateAvailable": {
       "type": "object",
       "properties": {
@@ -3547,6 +3576,10 @@
           "type": "boolean",
           "description": "Whether the menu bar icon (the notification area icon on Windows) is shown, carried like\n`run_in_background`: only a client that has the icon (the desktop app) writes it, and only\nsuch a client applies it."
         },
+        "session_composer": {
+          "type": "boolean",
+          "description": "Whether the session composer is on (the message editor below a session's terminal), carried\nlike `run_in_background`: the client holds it, the daemon builds none and passes it through\nan import's reply as it came, and only a client that has the composer applies it."
+        },
         "keep_awake": {
           "type": "boolean",
           "description": "Whether the daemon holds its host awake (Prevent sleep, see `Settings.keep_awake`). The\ndaemon builds it when the General section is exported and applies it from an import,\nwhether or not this host can hold: the value is stored either way."
@@ -4311,6 +4344,13 @@
               "description": "The limits of a file a client attaches to a session (`create_attachment_upload`), sent\nby every daemon that takes attachments; absent from one that predates them, and a client\nthen offers no way to attach a file.",
               "$ref": "#/$defs/AttachmentLimits"
             },
+            "message_queues": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SessionMessageQueue"
+              },
+              "description": "The composer queue of every session that has queued messages, sent by every daemon\nthat keeps one; absent from one that predates it, and a client then offers no queue."
+            },
             "type": {
               "type": "string",
               "const": "snapshot"
@@ -4759,6 +4799,9 @@
             "message": {
               "type": "string"
             },
+            "standing": {
+              "type": "boolean"
+            },
             "type": {
               "type": "string",
               "const": "session_notice"
@@ -4771,7 +4814,7 @@
             "params",
             "message"
           ],
-          "description": "Something about a session the user has to be told, which no status field carries: an\ninjected capability that will not apply, a setting of theirs Octoboard had to work around.\nBroadcast once, when it is found; nothing stores it. `code` and `params` name the notice for\na client to word in its own language; `message` is the English text for a client that does\nnot know the code."
+          "description": "Something about a session the user has to be told, which no status field carries: an\ninjected capability that will not apply, a setting of theirs Octoboard had to work around.\nBroadcast once, when it is found. `code` and `params` name the notice for a client to word\nin its own language; `message` is the English text for a client that does not know the\ncode. A plain notice is stored nowhere. A `standing` one (absent when false) describes a\ncondition of the session's launch that lasts: the daemon keeps it on the session's record\n(`Session::standing_notices`) until it is withdrawn with `session_notice_withdrawn` or the\nprocess ends, and a client that knows the flag shows it from the record rather than from\nthis event."
         },
         {
           "type": "object",
@@ -4780,6 +4823,9 @@
               "type": "string"
             },
             "code": {
+              "type": "string"
+            },
+            "detail": {
               "type": "string"
             },
             "type": {
@@ -4792,7 +4838,7 @@
             "session",
             "code"
           ],
-          "description": "The `session_notice` with `code` about `session` that was broadcast last no longer holds: a\n`message_not_sent` whose message the agent has since reported sending. A client still\nshowing that notice drops it; one that is not ignores this."
+          "description": "The `session_notice` with `code` about `session` that was broadcast last no longer holds: a\n`message_not_sent` whose message the agent has since reported sending. A client still\nshowing that notice drops it; one that is not ignores this. With `detail`, only the notices\nof that code whose `detail` param is this no longer hold: a `message_not_taken` or\n`message_not_delivered` about one message among several, which the agent has since reported\nsending after all."
         },
         {
           "type": "object",
@@ -5850,6 +5896,54 @@
             "path"
           ],
           "description": "The reply to `save_attachment`: the absolute path, on the daemon host, of the file the\nattachment was saved as."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "message": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "queued_message_created"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "message"
+          ],
+          "description": "The reply to `create_queued_message`: `message` is the new queued message's id."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "messages": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/QueuedMessage"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "session_message_queue"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "messages"
+          ],
+          "description": "The session's composer queue changed: the whole queue, in order, empty once nothing is\nqueued (the session's messages sent, withdrawn, or dropped as it was archived or deleted)."
         },
         {
           "type": "object",
@@ -7329,6 +7423,10 @@
         "keep_awake": {
           "type": "boolean",
           "description": "Whether the host can be held awake (Prevent sleep, `Settings.keep_awake`): always on macOS\nand Windows, and on Linux only where logind answers on the system bus. When false, the\nsetting changes nothing there and a client does not offer it."
+        },
+        "application": {
+          "type": "boolean",
+          "description": "Whether the daemon is a desktop application's own: one started it and it follows that\napplication, so that what is done to the installation on this host (uninstalling it, the\nclean-up before that) is done in that application. False for a daemon that runs on its own\n(the server form). A fact of the daemon on its host, which the snapshot fills in."
         }
       },
       "required": [
@@ -7337,7 +7435,8 @@
         "file_links",
         "trash",
         "settings",
-        "keep_awake"
+        "keep_awake",
+        "application"
       ],
       "description": "The daemon host's own facts, which a client takes from the host and never from its own\nplatform, since the two may be different machines."
     },
@@ -8508,6 +8607,13 @@
       ],
       "description": "An MCP server configured for the account."
     },
+    "LoginAnswerKind": {
+      "type": "string",
+      "enum": [
+        "secret_text"
+      ],
+      "description": "The input a login question asks the user for."
+    },
     "LoginFailure": {
       "type": "object",
       "properties": {
@@ -8531,6 +8637,36 @@
       ],
       "description": "Why a login failed."
     },
+    "LoginQuestion": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Which of the provider's questions this is, in the provider's own vocabulary."
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The values the question's wording names (a path, say), by name."
+        },
+        "message": {
+          "type": "string",
+          "description": "The question in English, for the log; not for display."
+        },
+        "answer_kind": {
+          "description": "When present, the question takes masked text. The default is a yes/no question.",
+          "$ref": "#/$defs/LoginAnswerKind"
+        }
+      },
+      "required": [
+        "id",
+        "params",
+        "message"
+      ],
+      "description": "A question an agent's sign-in puts to the user. A client words it from its own copy for the\nprovider's `id` and shows it only if it supports that question and answer kind."
+    },
     "LoginStatus": {
       "oneOf": [
         {
@@ -8541,7 +8677,7 @@
         {
           "type": "string",
           "const": "waiting",
-          "description": "Waiting for the user to authorize in a browser: `authorization_url` and `device_code` say\nwhere and with what."
+          "description": "Waiting for the user: to authorize in a browser, where `authorization_url` and\n`device_code` say where and with what, or, while `question` is there, to answer it."
         },
         {
           "type": "string",
@@ -8602,11 +8738,6 @@
           "type": "string",
           "const": "timed_out",
           "description": "The CLI did not answer in time."
-        },
-        {
-          "type": "string",
-          "const": "unsupported_agent",
-          "description": "The agent has no way of listing its MCP servers."
         },
         {
           "type": "string",
@@ -8951,6 +9082,26 @@
         "message"
       ],
       "description": "Why `list_agent_models` has no list, as a coded message of the same shape as an `error`. It\ntravels inside a reply because failing to ask the agent must never fail the form that asked."
+    },
+    "NativeMemory": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "absent",
+          "description": "The agent keeps no memory of its own."
+        },
+        {
+          "type": "string",
+          "const": "switchable",
+          "description": "The agent keeps a memory of its own, which one launch can turn off."
+        },
+        {
+          "type": "string",
+          "const": "unswitchable",
+          "description": "The agent keeps a memory of its own, which no launch can turn off: it stays as the agent\nand the user set it."
+        }
+      ],
+      "description": "Whether an agent keeps a memory of its own across sessions, and whether one launch can turn\nit off without a change to the agent's or the user's configuration."
     },
     "OffersUnderCloneDir": {
       "type": "object",
@@ -9695,6 +9846,10 @@
           "$ref": "#/$defs/ModelDisplay",
           "description": "How a model id of the provider is shown."
         },
+        "native_memory": {
+          "$ref": "#/$defs/NativeMemory",
+          "description": "Whether the agent keeps a memory of its own across sessions, and whether one launch can\nturn it off: a client names, beside the memory setting, the agents whose own memory a\nsession launched while it is on has turned off and those whose own memory such a session\nleaves as the user set it in the agent, unable to turn it off."
+        },
         "settings": {
           "type": "array",
           "items": {
@@ -9713,6 +9868,7 @@
         "capabilities",
         "quota_windows",
         "model_display",
+        "native_memory",
         "settings"
       ],
       "description": "One registered provider, as `snapshot` carries it."
@@ -9853,6 +10009,127 @@
       ],
       "description": "Questions from the agent's own ask-the-user tool, answered together."
     },
+    "QueuedMessage": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "description": "The message's text; empty only for a message of images."
+        },
+        "images": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The images to attach, each an absolute path in the session's composer directory, for a\nprovider that declares `message_images`."
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Files given to the agent as paths, written after the text when the message is sent."
+        },
+        "command": {
+          "type": "boolean",
+          "description": "Whether `text` is a slash command for the session's agent to run as one of its own,\nsent as `send_command` sends one."
+        },
+        "mode": {
+          "$ref": "#/$defs/QueuedMode"
+        },
+        "state": {
+          "$ref": "#/$defs/QueuedMessageState"
+        },
+        "failure": {
+          "$ref": "#/$defs/QueuedMessageFailure"
+        },
+        "created_at": {
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "images",
+        "files",
+        "command",
+        "mode",
+        "state",
+        "created_at"
+      ],
+      "description": "One of the user's messages waiting in a session's composer queue."
+    },
+    "QueuedMessageFailure": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/QueuedMessageFailureKind"
+        },
+        "code": {
+          "type": "string",
+          "description": "The code of the delivery's notice (`not_delivered`) or of the refusal (`refused`), read as\nthe `session_notice` or `error` of that code is."
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "message": {
+          "type": "string",
+          "description": "The daemon's English text, for the log and an alert's details."
+        }
+      },
+      "required": [
+        "kind",
+        "code",
+        "params",
+        "message"
+      ],
+      "description": "What became of the last attempt to send a queued message, until it is edited or sent again."
+    },
+    "QueuedMessageFailureKind": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "not_delivered",
+          "description": "The session's delivery wrote the message and reported it as not carried out: the message\nis back in its place and switched to `manual`, since the agent may have taken it after all."
+        },
+        {
+          "type": "string",
+          "const": "refused",
+          "description": "Sending it was refused, nothing of it sent. Refused before delivery held it (a send now\nrefused at the hand-over), it keeps its mode; refused once delivery held it, or a message\nthe daemon sent at an idle refused for good, it is switched to `manual`."
+        }
+      ],
+      "description": "Why a queued message is back in the queue."
+    },
+    "QueuedMessageState": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "waiting",
+          "description": "In the queue, waiting by its mode."
+        },
+        {
+          "type": "string",
+          "const": "sending",
+          "description": "Handed to the session's message delivery and not yet written, or waiting for the session a\nsend now resumed to be able to take it. It cannot be edited. It can be withdrawn while it\nwaits on the resume or delivery holds it queued, not while it is being handed over or\nwritten."
+        }
+      ],
+      "description": "Where a queued message stands."
+    },
+    "QueuedMode": {
+      "type": "string",
+      "enum": [
+        "when_idle",
+        "manual"
+      ],
+      "description": "The mode a queued message waits in. Sending now is an action (`send_queued_message`), not a\nstored mode."
+    },
     "QuotaUnavailable": {
       "type": "object",
       "properties": {
@@ -9954,7 +10231,7 @@
           "items": {
             "$ref": "#/$defs/QuotaWindowKind"
           },
-          "description": "The kinds of window the provider reports at all."
+          "description": "The kinds of window the provider reports at all. Empty: Octoboard reads no plan quota for\nthe provider (`AccountOps::quota_probe` is `None`), and its accounts show none."
         },
         "session_window": {
           "$ref": "#/$defs/SessionWindowName",
@@ -9963,6 +10240,10 @@
         "weekly_all_models": {
           "type": "boolean",
           "description": "Whether an account-wide weekly window beside a model's own is named \"Weekly · all models\"."
+        },
+        "credit_period": {
+          "description": "A native name for the credit pool. When absent, its period determines the name.",
+          "$ref": "#/$defs/CreditPeriodName"
         }
       },
       "required": [
@@ -10657,6 +10938,26 @@
       ],
       "description": "One run of a scheduled task: what started it and what came of it. The daemon keeps the last\n[`SCHEDULED_TASK_RUNS_KEPT`] of each task, and drops them with the task."
     },
+    "SendMode": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "now",
+          "description": "Handed to the session's message delivery at once."
+        },
+        {
+          "type": "string",
+          "const": "when_idle",
+          "description": "Sent by the daemon once the session is idle, one message per idle, in queue order."
+        },
+        {
+          "type": "string",
+          "const": "manual",
+          "description": "Never sent automatically: it waits in the queue until the user sends it."
+        }
+      ],
+      "description": "How a new message of the session's composer is sent: the session's default (`Session.send_mode`)\nand the mode `create_queued_message` takes."
+    },
     "Session": {
       "type": "object",
       "properties": {
@@ -10755,6 +11056,13 @@
           "description": "What the session's agent is asking the user, while the session is shown waiting on them\nand the daemon has recognised the prompt from the agent's hooks and its screen together;\nanswered with `answer_interaction`. Absent otherwise, the prompt then answered in the\nterminal. Never stored: it is filled in on the record a client receives\n(`AppState::wire_session`).",
           "$ref": "#/$defs/PendingInteraction"
         },
+        "standing_notices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StandingNotice"
+          },
+          "description": "The standing notices of the session's running launch, in the order they were raised:\nthe conditions of that launch the user is told of for as long as they hold. Never stored:\nit is filled in on the record a client receives (`AppState::wire_session`), and absent\nwhen there are none, which it always is for a session with no process."
+        },
         "has_conversation": {
           "type": "boolean",
           "description": "Whether this session has a conversation on the agent's side: a turn taken, or one resumed\nat open. Until it has, the agent has stored no conversation to resume: `claude --resume`\non such an id fails outright with \"No conversation found\", and a session the user opened\nand never typed into is the common case of that. A resume therefore starts a fresh\nconversation rather than failing."
@@ -10828,6 +11136,10 @@
           "type": "boolean",
           "description": "Prevents archiving and deletion until the user unlocks the session."
         },
+        "send_mode": {
+          "$ref": "#/$defs/SendMode",
+          "description": "The default send mode of the session's composer for new messages. Only\n`set_session_send_mode` changes it."
+        },
         "started_at": {
           "type": "integer",
           "format": "int64"
@@ -10861,6 +11173,7 @@
         "compatibility",
         "pinned",
         "locked",
+        "send_mode",
         "started_at",
         "ended_at"
       ]
@@ -11036,6 +11349,25 @@
         "console",
         "project"
       ]
+    },
+    "SessionMessageQueue": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string"
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QueuedMessage"
+          }
+        }
+      },
+      "required": [
+        "session",
+        "messages"
+      ],
+      "description": "A session's composer queue, in queue order."
     },
     "SessionRecordPresence": {
       "type": "string",
@@ -11833,6 +12165,36 @@
         }
       ],
       "description": "One side of a change as `read_project_change` or `read_project_comparison_change` read it."
+    },
+    "StandingNotice": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "message": {
+          "type": "string",
+          "description": "The English text, for a client that does not know the code."
+        },
+        "at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "When it was raised, in milliseconds since the epoch: what tells a notice raised again,\nby a later launch say, from the one a client dismissed."
+        }
+      },
+      "required": [
+        "code",
+        "params",
+        "message",
+        "at"
+      ],
+      "description": "A `session_notice` that stands: a condition of the session's running launch the user is told\nof for as long as it holds (an enhancement of Octoboard's the launch runs without, say). Kept\nby the daemon in memory, never stored, and given on the record a client receives\n(`Session::standing_notices`). It goes when it is withdrawn (`session_notice_withdrawn`, by\n`code` and the `detail` param) or when the launch's process ends."
     },
     "StatSentiment": {
       "type": "string",
