@@ -48,10 +48,11 @@ the archive view about each row it lists that has a conversation, whether the ap
 **An archived session** is opened as it is, at once.
 
 **Any other session** — interrupted, or with a process that is **at rest** — is archived by the open and then opened.
-At rest is judged as for a handoff (see "What can be handed off" in `docs/product/handing-off-sessions.md`): at its
-prompt with nothing left running in the background, stopped on its account's usage limit (its usage-limit screen
-included), or interrupted. A session still starting, in the middle of a turn, waiting for the user for anything else,
-*dormant*, or at its prompt with work left running in the background is not opened until it is at rest.
+At rest is at its prompt with nothing left running in the background, stopped on its account's usage limit (its
+usage-limit screen included) with nothing left running in the background, or interrupted. A session still starting, in
+the middle of a turn, waiting for the user for anything else, *dormant*, or at its prompt with work left running in the
+background is not opened until it is at rest. Unlike a handoff (see "What can be handed off" in
+`docs/product/handing-off-sessions.md`), work left running in the background holds the open.
 
 In a session's action menu the item is disabled, in this order of precedence:
 

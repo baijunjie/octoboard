@@ -8,7 +8,8 @@
 //! followed back), the conversation (every user message and every reply, with tool output
 //! dropped; where the agent compacted its history and rewrote the record, its summary and the
 //! files holding the earlier part), the latest todo list, the files its edit calls named, for a
-//! project session each branch it is responsible for as git has it now, and the sessions it owns.
+//! project session each branch it is responsible for as git has it now, the sessions it owns, and
+//! the background tasks it left running, if any.
 //!
 //! Reading only: nothing is written to an agent's directories or to the user's repository, and a
 //! record that is missing or unreadable yields a package without the conversation, not a failure.
@@ -28,7 +29,7 @@ use anyhow::{bail, Result};
 use crate::branch_origin::session_branches::{self, BranchState, Worktree};
 use crate::hostfs::replace::{replace_file, Permissions};
 use crate::messaging::naming::one_line;
-use crate::protocol::{AgentId, Session, SessionKind, SessionStatus};
+use crate::protocol::{AgentId, BackgroundTask, Session, SessionKind, SessionStatus};
 use crate::records::conversation::{self, Conversation, Speaker, Todo};
 use crate::records::{conversation_branch, Branch, Locator};
 use crate::state::AppState;
@@ -81,6 +82,9 @@ pub struct Package {
     /// session that is responsible for none.
     pub branches: Result<Vec<BranchState>, String>,
     pub owned: Vec<Owned>,
+    /// The background tasks the original left running, as its agent last listed them; empty when
+    /// none or when the original was not at rest between turns.
+    pub background: Vec<BackgroundTask>,
 }
 
 /// Builds the package of `session`. `brief` is the brief the session was started with, when the
@@ -170,6 +174,7 @@ fn build_with(
         _ => Vec::new(),
     };
     let branches = session_branches::of_session(state, session).map_err(|err| format!("{err:#}"));
+    let background = state.shown_background_tasks(&session.id, state.status_for_switch(session));
 
     Ok(Package {
         session: Identity {
@@ -190,6 +195,7 @@ fn build_with(
         compaction,
         branches,
         owned,
+        background,
     })
 }
 
@@ -323,6 +329,10 @@ impl Package {
             ));
         }
 
+        if !self.background.is_empty() {
+            render_background(&mut out, &self.background);
+        }
+
         match &self.conversation {
             Err(reason) => out.push_str(&format!(
                 "\n## The conversation\n\nNot available: {reason}.\n"
@@ -330,6 +340,27 @@ impl Package {
             Ok(conversation) => render_conversation(&mut out, conversation, &self.compaction),
         }
         out
+    }
+}
+
+fn render_background(out: &mut String, tasks: &[BackgroundTask]) {
+    out.push_str(
+        "\n## Background tasks it left running\n\n\
+         The original was waiting for instructions with these tasks still running in the \
+         background, as its agent listed them. The original's process ended with the handoff, and \
+         a background shell or subagent may have ended with it; only what Octoboard carried over \
+         from the original's process keeps running. Check each task's state and output, and rerun \
+         what is needed:\n\n",
+    );
+    for task in tasks {
+        out.push_str(&format!("- id {}", one_line(&task.id)));
+        if let Some(kind) = &task.kind {
+            out.push_str(&format!(", type {}", one_line(kind)));
+        }
+        if let Some(description) = &task.description {
+            out.push_str(&format!(": {}", one_line(description)));
+        }
+        out.push('\n');
     }
 }
 

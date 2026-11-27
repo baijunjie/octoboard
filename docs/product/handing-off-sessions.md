@@ -19,22 +19,25 @@ user has turned it on, is switch a session to another account of the same agent 
 ## What can be handed off
 
 A console session or a project session, of either role and with any reporting relationship, can be handed off only
-while it is **at rest** and nothing under it can still send it something.
+while it is **at rest**.
 
-**At rest** is at its prompt with nothing left running in the background — paused, done or awaiting instructions (see
-"Which status a session shows" in `docs/product/session-statuses.md`) — or interrupted. A session whose turn stopped on
-its account's usage limit is at rest too, which is what a handoff is often for: also where the agent's usage-limit
-screen shows it *waiting for the user* (on the wire, `waiting_user` with `at_usage_limit`; see "What the statuses are
-derived from" in `docs/product/session-statuses.md`), unless work is still running in the background under it. Not at
-rest is a session still starting, in the middle of a turn, waiting for the user for anything else, *dormant*, or at
-its prompt with work left running in the background (*working in background*, or *paused* with such work): it would go
-on writing to its worktree while the receiving session starts on it.
+**At rest** is at its prompt — paused, done, awaiting instructions, *child sessions working* or *working in background*
+(see "Which status a session shows" in `docs/product/session-statuses.md`) — or interrupted. A session whose turn
+stopped on its account's usage limit is at rest too, which is what a handoff is often for: also where the agent's
+usage-limit screen shows it *waiting for the user* (on the wire, `waiting_user` with `at_usage_limit`; see "What the
+statuses are derived from" in `docs/product/session-statuses.md`). Not at rest is a session still starting, in the
+middle of a turn, waiting for the user for anything else, or *dormant*: it would go on writing to its worktree while
+the receiving session starts on it.
 
-**Nothing under it can still send it something** while no session bound to it is starting, working, waiting for the
-user (other than at a usage-limit screen), *dormant*, at its prompt with work left running in the background, or has a
-message queued to be written into it, which would start a turn (a queue held back while that session is itself being
-handed off, switched or restarted does not count). A report from such a session would reach a session that is being replaced. A session
-under it that is at its prompt with nothing left running, interrupted or archived does not hold the handoff.
+**Work left running in the background does not hold a handoff.** A session at its prompt with background tasks listed
+(*working in background*, *paused* with such work, or at its usage-limit screen over a turn that left such work) is
+handed off, and the handoff package lists those tasks for the receiving session (see "The handoff package" below).
+
+**Nor do the sessions under it.** Every session bound to it moves to the receiving session whatever it is doing —
+starting, working, waiting for the user or at its prompt with work running in the background included — and what such
+a session sends from then on reaches the receiving session; a message on its way to the original meanwhile is held and
+forwarded (see "Messages for the original during a handoff" below). The receiving session is told which of them are
+still at work (see "What the receiving session takes over" below).
 
 The processes the session's launch started that are still running are carried over to the session that takes its
 place rather than stopped, except what ends as the agent's process goes down, such as Claude Code's background shells (see
@@ -43,8 +46,6 @@ changed, when:
 
 - the session does not exist (`unknown_session`), is archived (`session_archived`; reopen it first), or is not at rest
   (`session_working`);
-- a session bound to it can still send it something (`session_child_active`, naming the first such session as
-  `child`);
 - it is being started, resumed, switched to another account, handed off already or having its owner changed
   (`session_already_starting`);
 - it is locked (`session_locked`; see "Locking a session" in `docs/product/sessions.md`);
@@ -84,17 +85,19 @@ deleted.
 
 A session's action menu offers **Hand off** right after Switch account (where that is offered), in the group before
 Rename, for a project session or a console session that is not archived, wherever that menu is offered. It is disabled
-while the session is locked, as Archive is, while it is not at rest or is *starting*, while a session bound to it can
-still send it something, as far as the window can tell from the sessions' statuses (see "What can be handed off"
-above; a message queued for such a session is the daemon's alone to judge), while no agent other than the session's
-own can be picked (see "Which agents the agent pickers list" in `docs/product/consoles.md`), while a switch of its
+while the session is locked, as Archive is, while it is not at rest or is *starting* (see "What can be handed off"
+above), while no agent other than the session's own can be picked (see "Which agents the agent pickers list" in `docs/product/consoles.md`), while a switch of its
 account holds it and while its own account's sharing is being changed; which of these show a reason under the item is
 in "Session rows" in `docs/product/sidebar-session-rows.md`.
 
 It opens the **handoff dialog**, titled "Hand off session", which opens with keyboard focus on its **Hand off**
 button, or on **Cancel** while Hand off cannot be pressed. Its first sentence names the session to be handed off; it
 then says that a new session of another agent takes over this session's place and this one is archived, and that
-the conversation does not carry over: the new session starts by reading a record of it. Then, under the heading
+the conversation does not carry over: the new session starts by reading a record of it. While the session has work
+running in the background, a warning follows at the top of the dialog's body, titled that background tasks may stop:
+it says how many background tasks the session has running, that they may end when it is handed off, and that the new
+session is told of them; the tasks themselves are not listed. One that appears after the dialog opened is announced.
+While the handoff request is under way the count stays as it was when it was sent. Then, under the heading
 **Moves to the new session**, it lists what moves:
 
 - the number of branches the session is responsible for, as the daemon's inspection of the session's branches finds
@@ -155,10 +158,11 @@ last change of sharing is incomplete (see "Starting a session on an account whos
 selected. A refusal or failure is shown as an error alert (see `docs/product/error-alerts.md`) and the dialog stays
 open for another try, except a failure after the work has moved, which closes the dialog (see "When a handoff fails").
 A session that is not at rest (`session_working`) is answered by saying that it is still working or waiting for the
-user, and to try again once it is waiting for instructions; one with a session under it that can still send it something
-(`session_child_active`), by saying that a session under it is still at work and may report to it, and to hand it off
-once its sessions are at rest; a receiving agent that is the session's own (`handoff_to_same_agent`), which the dialog cannot
-send, is shown as an unexpected failure.
+user, and to try again once it is waiting for instructions; a receiving agent that is the session's own
+(`handoff_to_same_agent`), which the dialog cannot send, is shown as an unexpected failure. `session_child_active` is
+no longer raised; the code stays reserved for a daemon of an earlier version that still sends it, and the window
+answers it by saying that a session under this one is still at work and may
+report to it, and to hand it off once its sessions are at rest.
 
 ## Handing off from an owner's tool
 
@@ -202,8 +206,8 @@ Refused before the user is asked, with the reason in prose (as a tool error) and
 - a session that is not the caller's — an independent one, one bound to another session, a console session, or the
   caller itself — with a reason naming who owns it, as for the other tools that act on a session of the caller's;
 - an `agent` the daemon does not serve, or an `account` that is not one of `agent`'s;
-- a session that is archived, not at rest, locked, or with a session bound to it that can still send it something,
-  and a receiving agent that is the session's own (see "What can be handed off" above);
+- a session that is archived, not at rest or locked, and a receiving agent that is the session's own (see "What can be
+  handed off" above);
 - what opening the receiving session would refuse (see "What can be handed off" above) — an agent that is not available
   or not added, a model or reasoning effort the agent does not offer, a change of sharing running for the receiving
   account, for a reporting session an owner that could not take it — except an account whose quota is used up or that is
@@ -256,9 +260,11 @@ longer available and to choose another; **Hand off session** cannot be pressed, 
 be changed, until the user picks.
 
 **Hand off session cannot be pressed either**, and an alert at the top of the dialog says why, while the session cannot
-be handed off from its menu: it is locked, it is not at rest, a session under it can still send it something, a
-switch of its account holds it, its own account's sharing is being changed, or it is still starting; when several
-hold, the alert names the first in that order. Nor while no agent other than the session's own can be picked.
+be handed off from its menu: it is locked, it is not at rest, a switch of its account holds it, its own account's
+sharing is being changed, or it is still starting; when several hold, the alert names the first in that order. Nor
+while no agent other than the session's own can be picked. While the session has work running in the background, the
+form is preceded by the handoff dialog's warning that background tasks may stop, with their count (see "Handing off
+from the window" above).
 Where the chosen account's last change of sharing is incomplete and no change of it is running, an amber warning mark
 inside the account picker of **Hand off to**, named that sharing may be incomplete, says so instead of
 asking again on confirming: its popover says that the account's last sharing change did not finish, so its
@@ -292,6 +298,12 @@ receiving session to read. It holds:
   project pane's Git mode compares it), the commits not in that branch (the first 50 listed) and the files changed
   since it forked (the first 200 listed);
 - **the sessions it owns**, archived ones included, each with its title, status and id;
+- **the background tasks it left running**, only when the original was at its prompt (its usage-limit screen over a
+  stopped turn included) with background tasks listed: each task's id, and its type and description where the agent
+  gave them, as its agent last listed them. The section says that the original's process ended with the handoff, that a
+  background shell or subagent may have ended with it while only the processes Octoboard carried over keep running
+  (see "Automatic stopping and its boundaries" in `docs/product/background-processes.md`), and that the reader should
+  check each task's state and output and rerun what is needed;
 - **its latest todo list**, as the agent's last update left it;
 - **the files its edits changed**, as its edit and write calls named them;
 - **the conversation**: the original's own conversation — every user message and every reply, in order, each set apart
@@ -352,7 +364,10 @@ this replaces what its role description says about being independent, how its re
 are its parent's to carry out go in `owner_items` — or that it has no owner and reports to the user. It lists the
 branches it now holds, each with its target branch where one is recorded (see "Target branches and fork points" in
 `docs/product/revert-gate.md`), or says that they could not be moved and still name the original; it also lists each
-session it now owns, with its status. Reports from moved child sessions that arrive during the handoff wait behind
+session it now owns, with its status as a handoff judges it (one waiting only at its usage-limit screen reads as at its
+prompt). When any of them is starting, working, waiting for the user, *dormant* or at its prompt with work running in
+the background, the prompt says that those are still at it and that their reports now reach the receiving session, not
+the original. Reports from moved child sessions that arrive during the handoff wait behind
 this prompt and are delivered once each. The prompt uses ordinary message delivery, including its startup and
 user-dialog holds (see "Messages held until a session can take them" in `docs/product/message-delivery.md`).
 

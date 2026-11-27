@@ -93,8 +93,9 @@ pub(crate) fn takeover_prompt(original: &Session, package: &Path, note: Option<&
          records:\n\n{path}\n\nRead that file first, all of it, before you do anything else. It \
          holds its whole conversation (every user message and every reply, with tool output left \
          out), its latest todo list, the files its edits changed, the git state of the branches \
-         it was responsible for, and the sessions it owned. Work out the goal, what was tried and \
-         what comes next from it, and carry on where the original stopped; do not start over. \
+         it was responsible for, the sessions it owned and any background tasks it left running. \
+         Work out the goal, what was tried and what comes next from it, and carry on where the \
+         original stopped; do not start over. \
          If the package names an earlier handoff package, read that one too, and so on back \
          along the chain, before you carry on.\n\n\
          Octoboard has moved the original's place to you: its owner, its branches and its \

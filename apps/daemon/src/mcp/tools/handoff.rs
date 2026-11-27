@@ -440,6 +440,51 @@ mod tests {
         assert_caller_not_told(&state, &caller);
     }
 
+    /// A session waiting for instructions with work in the background, and owning a session that is
+    /// at work, is handed off: the tool no longer refuses it, and the working session is the new
+    /// session's from then on.
+    #[tokio::test]
+    async fn a_handoff_is_not_refused_for_background_work_or_a_working_child() {
+        let (state, _dir) = shared_console_state("handoff-background-child");
+        state.store.set_auto_approve_handoffs(true).unwrap();
+        let _caller = running(&state, "a");
+        let _original = running(&state, "of-a");
+        state.apply_background_tasks_change(
+            "of-a",
+            crate::hooks::BackgroundTasksChange::Replace(vec![crate::protocol::BackgroundTask {
+                id: "dev-server".to_string(),
+                kind: Some("shell".to_string()),
+                description: None,
+            }]),
+        );
+        let mut child = project_session("working-child", "console-1", Some("of-a"));
+        child.status = SessionStatus::Working;
+        state.store.insert_session(&child).unwrap();
+        let (launches, started) = (Launches::default(), Started::default());
+
+        let result = handoff_session(
+            &state,
+            &state.session_record("a").unwrap(),
+            &arguments(json!({ "session": "of-a", "agent": "codex" })),
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .unwrap();
+
+        let receiving = result["session"].as_str().unwrap();
+        assert_eq!(result["owned_sessions"], json!(["working-child"]));
+        assert_eq!(
+            state
+                .store
+                .get_session("working-child")
+                .unwrap()
+                .unwrap()
+                .bound_to
+                .as_deref(),
+            Some(receiving)
+        );
+    }
+
     /// The new session takes the title the caller gives it, and, when it runs on the caller's own
     /// agent and no account is named, the caller's own account.
     #[tokio::test]

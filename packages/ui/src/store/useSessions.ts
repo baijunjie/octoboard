@@ -3,7 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import type { Session } from "../protocol";
 import { useDaemonStore } from "./react";
 import { topStatus } from "../sessions/order";
-import { hasChildThatCanReport, holdsAccountSwitch, isSummaryStatus, sessionShownStatusKind, type ShownStatusKind } from "../sessions/sessionStatus";
+import { holdsAccountSwitch, isSummaryStatus, sessionShownStatusKind, type ShownStatusKind } from "../sessions/sessionStatus";
 import { countWaiting, countWaitingInTree } from "../sessions/waiting";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 
@@ -92,12 +92,6 @@ export function useAccountSwitchHeld(session: Pick<Session, "id" | "switching_ac
 /** Whether any session, in any status, is bound to the session `ownerId`. */
 export function useHasBoundSessions(ownerId: string): boolean {
   return useDaemonStore((s) => indexSessions(s.sessions).boundOwnerIds.has(ownerId));
-}
-
-/** Whether a session bound to `ownerId` can still send it something without anyone acting first (see
- * `hasChildThatCanReport`), which keeps the owner from being handed off. */
-export function useChildCanReport(ownerId: string): boolean {
-  return useDaemonStore((s) => indexSessions(s.sessions).boundOwnerIds.has(ownerId) && hasChildThatCanReport(s.sessions.values(), ownerId));
 }
 
 /** The session `id` names, or none: it changes only when that one session does. */

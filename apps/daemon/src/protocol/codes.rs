@@ -542,14 +542,17 @@ pub mod error_code {
     /// neither must do it as a side effect.
     pub const SESSION_ARCHIVED: Code = Code("session_archived");
     /// A handoff, or a transfer of a session's branches, was asked for a session in the middle of a
-    /// turn, still starting, waiting for the user, showing its background agents or running work in
-    /// the background (a handoff only; a transfer's `from` is judged by its own rule), or an
-    /// `open_session_in_app` for such a session, which is opened once it is at rest or archived.
-    /// `params` names the `session`.
+    /// turn, still starting, waiting for the user or showing its background agents, or running work
+    /// in the background (a transfer's `from` is judged by its own rule; a handoff allows work in
+    /// the background), or an `open_session_in_app` for a session that is any of these, which is
+    /// opened once it is at rest or archived. `params` names the `session`.
     pub const SESSION_WORKING: Code = Code("session_working");
     /// A handoff was asked for a session that owns a session which can still send it something: it
     /// is at work, waiting for the user, running work in the background or has a message on its way.
-    /// `params` names the `session` and the `child`.
+    /// `params` names the `session` and the `child`. No longer raised: such a session is handed off,
+    /// and what its children report follows them to the receiving session. Kept, as a released code
+    /// is, for what an older daemon sends.
+    #[allow(dead_code)]
     pub const SESSION_CHILD_ACTIVE: Code = Code("session_child_active");
     /// A handoff was asked to the agent the session already runs on. `params` names the `session`
     /// and the `agent`.

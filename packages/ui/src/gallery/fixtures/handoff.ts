@@ -24,8 +24,8 @@ const sibling = sessionOf("s-handoff-sibling", console_.id, web.id, "Update the 
   agent_session_id: "5c2e9a44-7b0d-4e6f-8a31-0d4b1c7e92aa",
   started_at: minutesAgo(45),
 });
-// A bound session at work, which keeps its owner (`sibling`) from being handed off while it can still report to it; it
-// can itself still be unbound.
+// A bound session at work, which a handoff of its owner (`sibling`) does not wait for (it follows the receiving session);
+// it can itself still be unbound.
 const working = sessionOf("s-handoff-working", console_.id, web.id, "Fix the summary layout", "working", { bound_to: sibling.id, started_at: minutesAgo(20) });
 // A bound session whose launch has not finished: the menu cannot hand it off or unbind it yet, though it can be archived.
 const starting = sessionOf("s-handoff-starting", console_.id, web.id, "Set up the search index", "starting", { bound_to: sibling.id, started_at: minutesAgo(1) });
@@ -77,6 +77,30 @@ const startingState = snapshotState({
   consoles: [console_],
   projects: [web, api],
   sessions: [hub, coordinator, ...owned, ...hubOwned, bare, working, starting],
+  settings,
+});
+
+// Two independent project sessions that left work running in the background, kept out of `state` so they do not appear in
+// the other scenarios. `watching` is idle at its prompt with a dev server running, whose menu offers Hand off but not Open
+// in the agent's app. `limited` stopped at a usage-limit dialog (shown waiting for the user) with three tasks running,
+// which the handoff warning counts.
+const watching = sessionOf("s-handoff-watching", console_.id, api.id, "Serve the search preview", "idle", {
+  background_tasks: [{ id: "task-preview", type: "shell", description: "pnpm dev --port 5173" }],
+  started_at: minutesAgo(40),
+});
+const limited = sessionOf("s-handoff-limited", console_.id, web.id, "Re-run the ranking benchmarks", "waiting_user", {
+  at_usage_limit: true,
+  started_at: minutesAgo(55),
+  background_tasks: [
+    { id: "task-bench", type: "shell", description: "pnpm bench --watch --reporter=verbose" },
+    { id: "task-monitor", type: "monitor" },
+    { id: "b7c2e91a4f03" },
+  ],
+});
+const backgroundState = snapshotState({
+  consoles: [console_],
+  projects: [web, api],
+  sessions: [hub, coordinator, ...owned, ...hubOwned, bare, working, watching, limited],
   settings,
 });
 
@@ -270,14 +294,14 @@ export const handoffScenarios: Scenario[] = [
     steps: [openMenu(unknownStatus.title)],
   },
   {
-    id: "sidebar-session-menu-hand-off-blocked",
+    id: "sidebar-session-menu-background-tasks",
     group: GROUP,
     category: "normal",
-    title: "Menu of an idle session with a child at work, Hand off disabled, Open in the agent's app offered",
-    description: "Hand off is greyed out with its reason on a short line under the label, in place of a description: \"Child sessions working\", because a session under this one can still report to it (a session that is itself busy, waiting for the user or running work in the background says \"Session busy\"). Look at how much room the reason line takes in the menu. Open in Claude app is enabled with no reason line, although the session is idle and still has a process: a session at rest can be opened in the agent's app.",
-    state,
+    title: "Menu of an idle session with background tasks, Hand off offered, Open in the agent's app disabled",
+    description: "Hand off is enabled with no reason line, although the session left a dev server running in the background: a handoff lists the tasks for the new session instead of refusing. Open in Claude app is greyed out with \"Session busy\" on a short line under the label, in place of a description, since opening the conversation in the agent's app would stop that work. Look at how much room the reason line takes in the menu.",
+    state: backgroundState,
     nativeApps: ["claude", "codex"],
-    steps: [openMenu(sibling.title)],
+    steps: [openMenu(watching.title)],
   },
   {
     id: "sidebar-session-menu-open-in-app-working",
@@ -294,7 +318,7 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Menu of a locked session, Hand off disabled",
-    description: "Hand off and Archive are both greyed out with \"Session locked\" under their names although the session is idle; Archive shows the reason in place of its menu shortcut. Unlock stays available. A session that is busy (\"Session busy\"), has a child at work (\"Child sessions working\", see the menu of a session with a child at work) or has no other agent to hand off to (\"No other agent\") greys Hand off the same way, with its own reason.",
+    description: "Hand off and Archive are both greyed out with \"Session locked\" under their names although the session is idle; Archive shows the reason in place of its menu shortcut. Unlock stays available. A session that is busy (\"Session busy\") or has no other agent to hand off to (\"No other agent\") greys Hand off the same way, with its own reason.",
     state: lockedState,
     steps: [openMenu(locked.title)],
   },
@@ -307,6 +331,15 @@ export const handoffScenarios: Scenario[] = [
     state,
     sessionBranches: coordinatorBranches,
     steps: [...openHandoff(coordinator.title), (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
+  },
+  {
+    id: "dialog-handoff-background-tasks",
+    group: GROUP,
+    category: "normal",
+    title: "Hand off a session at its usage limit with background tasks running",
+    description: "Under the opening sentence, a warning alert titled \"Background tasks may stop\" says the session has 3 background tasks running, which may end when it is handed off, and that the new session is told of them; the tasks themselves are not listed. The Moves to the new session lines follow. The same warning stands under the question of a handoff the owner requests, for a session with background tasks.",
+    state: backgroundState,
+    steps: openHandoff(limited.title),
   },
   {
     id: "dialog-handoff-console-session",

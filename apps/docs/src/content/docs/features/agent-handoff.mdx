@@ -27,9 +27,9 @@ Different agents are good at different things, and each has its own usage limits
 
 <Steps>
 
-1. Wait until the session is at rest: at its prompt with nothing running in the background, done, or interrupted. A session stopped at its account's usage limit counts as at rest. An archived session has to be reopened first.
-2. Open the session's menu and choose <strong>Hand off</strong>. If it's greyed out, the line under it says why: <strong>Session busy</strong>, <strong>Child sessions working</strong> (a session under it can still report to it), <strong>Session locked</strong>, or <strong>No other agent</strong>.
-3. In the <strong>Hand off session</strong> dialog, read <strong>Moves to the new session</strong>: the branches, the sessions it owns and its place under its owner. It says so when nothing moves.
+1. Wait until the session is at rest: at its prompt, done, or interrupted. A session stopped at its account's usage limit counts as at rest, and so does one with work still running in the background. Sessions under it may still be working: their reports go to the new session. An archived session has to be reopened first.
+2. Open the session's menu and choose <strong>Hand off</strong>. If it's greyed out, the line under it says why: <strong>Session busy</strong>, <strong>Session locked</strong>, or <strong>No other agent</strong>.
+3. In the <strong>Hand off session</strong> dialog, read <strong>Moves to the new session</strong>: the branches, the sessions it owns and its place under its owner. It says so when nothing moves. If the session still has work running in the background, the warning <strong>Background tasks may stop</strong> says how many tasks: they may end when the original is archived, and the new session is told of them so it can check them and run them again.
 4. Under <strong>Hand off to</strong>, pick the agent and the account. The session's own agent isn't offered, and an account whose usage is used up can't be picked. Open <strong>Advanced</strong> to set the model, the reasoning effort and the compatibility switches, which start from what a new session of that agent would use.
 5. Press <strong>Hand off</strong>.
 

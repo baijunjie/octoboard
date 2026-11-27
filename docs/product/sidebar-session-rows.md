@@ -99,13 +99,12 @@ A session row's action menu offers:
 - **Hand off** — opens the handoff dialog, which moves the session's place to a new session of another agent (see
   "Handing off from the window" in `docs/product/handing-off-sessions.md`). Present for a project session's and a
   console session's row; an archived session has no such entry. Disabled while the session is locked, while it is not
-  at rest (see "What can be handed off" in `docs/product/handing-off-sessions.md`), while a session bound to it can
-  still send it something, while no agent other than its own can be picked, while the session is shown as switching
-  its account, while its own account is having its sharing changed, and while it is *starting*. The first four show a
-  reason under its name, "Session locked", "Session busy", "Child sessions working" and "No other agent", with a full
-  sentence as its description for assistive technology; the others show none. When several hold, the first in that
-  order is the one shown, so one that shows a reason always wins over one that does not; a session still starting with
-  a session under it that can still send it something shows "Session busy".
+  at rest (see "What can be handed off" in `docs/product/handing-off-sessions.md`), while no agent other than its own
+  can be picked, while the session is shown as switching its account, while its own account is having its sharing
+  changed, and while it is *starting*. The first three show a reason under its name, "Session locked", "Session busy"
+  and "No other agent", with a full sentence as its description for assistive technology; the others show none. When
+  several hold, the first in that order is the one shown, so one that shows a reason always wins over one that does
+  not. Neither work left running in the background nor sessions under it at work disable it.
 - **Open in Claude app** / **Open in Codex app** — opens the session's conversation in its agent's desktop
   application (see `docs/product/opening-a-session-in-its-agents-app.md`), with a window icon. Present, on a live or an
   archived session's row, only while the agent's application is installed on the daemon's host; Grok Build has none.

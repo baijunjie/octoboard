@@ -568,10 +568,11 @@ pub enum RequestBody {
     /// owns. `agent` is required and must differ from the session's own (moving to another account
     /// of the same agent is `switch_session_account`). `account`, `model` and `effort` are as in
     /// `open_session`. The session must exist, not be archived, locked or starting, and not be busy:
-    /// in the middle of a turn, waiting for the user (a usage-limit dialog is not a wait), showing
-    /// its background agents or running work in the background (`session_working`); nor may a
-    /// session it owns still be able to report to it (`session_child_active`). Answered with
-    /// `session_opened` for the receiving session once it is running and the place has moved. See
+    /// in the middle of a turn, waiting for the user (a usage-limit dialog is not a wait) or
+    /// showing its background agents (`session_working`). Work left running in the background, and
+    /// sessions it owns that are at work, do not stop it: the receiving session is told of the
+    /// tasks, and the owned sessions report to it from then on. Answered with `session_opened` for
+    /// the receiving session once it is running and the place has moved. See
     /// `crate::coordinator::handoff`.
     HandoffSession {
         session: String,

@@ -7,7 +7,7 @@ import { isAgentAdded, isAgentUnavailable, projectSessionAgent } from "../agents
 import { servedLabel } from "./fixtureProviders";
 import { type Agent, type ConsoleSessionColour, type Session, type SessionRecordPresence, type StandingNotice, type SubmittedValue } from "../protocol";
 import { CONSOLE_SESSION_COLOURS } from "../sessions/sessionColours";
-import { childCanReport, sessionIsBusy } from "../sessions/sessionStatus";
+import { sessionIsBusy, sessionStopsAHandoff } from "../sessions/sessionStatus";
 import { applyDaemonEvent } from "../store";
 import type { AccountGuards } from "./fixtureAccounts";
 import type { ProcessLedger } from "./fixtureProcesses";
@@ -187,11 +187,9 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       if (staged === "pending") return neverReplied();
       if (staged) return fail(staged);
       if (session.status === "archived") return fail({ code: "session_archived", params: { session: session.id }, message: "An archived session cannot be handed off" });
-      // As the daemon's `refuse_unless_it_can_be_handed_off`: a session still starting or busy, or with a session under it
-      // that can still report to it, is not handed off.
-      if (session.status === "starting" || sessionIsBusy(session)) return fail({ code: "session_working", params: { session: session.id }, message: "The session is in the middle of a turn" });
-      const child = Array.from(current.sessions.values()).find((candidate) => candidate.bound_to === session.id && childCanReport(candidate));
-      if (child) return fail({ code: "session_child_active", params: { session: session.id, child: child.id }, message: `${child.id} is still at work under ${session.id} and may report to it` });
+      // As the daemon's `refuse_unless_it_can_be_handed_off`: a session still starting or at its turn is not handed off;
+      // work left running in the background or a session at work under it does not stop it.
+      if (session.status === "starting" || sessionStopsAHandoff(session)) return fail({ code: "session_working", params: { session: session.id }, message: "The session is in the middle of a turn" });
       refuseLocked([session]);
       refuseIfSharingChanges(session.account_id);
       if (body.agent === session.agent) return fail({ code: "handoff_to_same_agent", params: { session: session.id, agent: servedLabel(session.agent) }, message: "The session already runs on that agent" });

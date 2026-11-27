@@ -295,8 +295,10 @@ Grok Build lists it only as the session's own turns end:
   and what was last listed shows again if it comes back to its prompt without a new turn end.
 
 **In every other respect it is like any other session at its prompt.** It takes a message straight away (see "Messages held
-until a session can take them" in `docs/product/message-delivery.md`). Unlike one *done*, it cannot be handed off until
-its background work is over (see "What can be handed off" in `docs/product/handing-off-sessions.md`). The session it
+until a session can take them" in `docs/product/message-delivery.md`). It can be handed off, the receiving session
+being told of the work it left running (see "What can be handed off" in `docs/product/handing-off-sessions.md`), but
+it is not opened in its agent's application until that work is over (see "When it can be used" in
+`docs/product/opening-a-session-in-its-agents-app.md`). The session it
 is bound to reads as *child sessions working* (see "Done,
 awaiting instructions and child sessions working" below). Unlike one *done* or *awaiting instructions* with no session under it,
 archiving it asks for confirmation first (see "Archiving, interruption and resuming" in
@@ -378,10 +380,9 @@ background, *interrupted* or *archived* do not count. It takes precedence over *
 
 **Done and child sessions working are sessions at their prompt in every respect but their glyph and name.** Each
 takes a message straight away (see
-"Messages held until a session can take them" in `docs/product/message-delivery.md`). A *done* session can be handed off;
-one with *child sessions working* only once no session under it can still send it something — one under it waiting
-only at its usage-limit screen does not hold it (see "What can be handed off" in
-`docs/product/handing-off-sessions.md`). Neither *done* nor *child sessions working* holds up a
+"Messages held until a session can take them" in `docs/product/message-delivery.md`). Both can be handed off, the
+sessions under one with *child sessions working* moving to the receiving session and reporting to it from then on (see
+"What can be handed off" in `docs/product/handing-off-sessions.md`). Neither *done* nor *child sessions working* holds up a
 quit by itself; for *child sessions working*, the busy sessions under it do (see "Quitting" in
 `docs/product/application-lifecycle.md`). Archiving one with an unarchived session under it asks for confirmation, as
 for any owner (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`).
@@ -472,8 +473,9 @@ session can take them" in `docs/product/message-delivery.md`), can be handed off
 `docs/product/handing-off-sessions.md`), is archived at once when nothing else asks for a confirmation (see "Archiving,
 interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`), and holds up no quit by itself (see
 "Quitting" in `docs/product/application-lifecycle.md`). A paused session that still has work running in the background is
-the exception: quitting asks for confirmation for it, as for *working in background*, it cannot be handed off, and its
-owner reads as *child sessions working*.
+the exception: quitting asks for confirmation for it, as for *working in background*, it is not opened in its agent's
+application until that work is over, and its owner reads as *child sessions working*; it can still be handed off, as
+*working in background* can.
 
 ## Dormant
 

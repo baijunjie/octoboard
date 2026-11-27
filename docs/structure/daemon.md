@@ -397,7 +397,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `sender_notes.rs` (the one way a session is told what became of messages it sent that were not carried out, or that
   ran after all; a composer's message among them is placed back in its queue), `untaken_messages.rs` (messages no turn took, told after a grace or at once when the process goes),
   `cleared_messages.rs` (messages cleared, dropped or given back at a cancel, written again or told).
-- `src/handoff/` — the handoff package built for a session another takes over: build, render and file. The
+- `src/handoff/` — the handoff package built for a session another takes over (its conversation, branches, owned sessions and background tasks): build, render and file. The
   `handoff_session` operation is `coordinator/handoff.rs`, which also judges when a session may be handed off
   (`refuse_unless_it_can_be_handed_off`).
 - `src/branch_origin/` — which session is responsible for a git branch: the record (`record.rs`, `target.rs`), the
@@ -1389,9 +1389,9 @@ helpers' doc comments.
 | Save, read, delete or announce an entry of a console's or a place's memory; check a draft against the entry rules | `coordinator::memory` (`src/coordinator/memory.rs`: `save_memory`, `read_memory`, `delete_memory`, the `*_and_announce` writes, `checked_draft`, `place_of`, `refuse_while_place_in_use`); a refusal is a `MemoryRefusal` that each caller words for itself |
 | Whether a launch turns an agent's own memory across sessions off | `adapter::turns_native_memory_off` (`src/adapter/mod.rs`) sets `LaunchSpec::native_memory_off` for every session while memory is on, for a provider whose descriptor declares its `native_memory` `NativeMemory::Switchable` (`src/providers/mod.rs`), which `ProviderInfo` also serves; the provider applies its own switch |
 | Call CoreFoundation on macOS | `src/platform/cf.rs` (`Object`, `string`, `url`), not a second set of declarations |
-| Whether a session with a process is at rest, or what it is busy with (a handoff and an open in the agent's application judge by it) | `AppState::what_it_is_doing` (`src/state/status.rs`) |
+| Whether a session with a process is at rest, or what it is busy with (an open in the agent's application judges by `AppState::what_it_is_doing`, a handoff by `AppState::what_stops_a_handoff`, which counts a session idle with background tasks as at rest) | `src/state/status.rs` |
 | Wait for a session whose process was ended to be recorded down | `coordinator::launch::wait_until_stopped` (`src/coordinator/launch.rs`), with its `stop_timeout` |
-| Whether a session may be handed off now | `refuse_unless_it_can_be_handed_off` and `child_can_still_send` (`src/coordinator/handoff.rs`); the `handoff_session` request and the MCP tool of the same name (`src/mcp/tools/handoff.rs`) both go through it |
+| Whether a session may be handed off now | `refuse_unless_it_can_be_handed_off` (`src/coordinator/handoff.rs`); the `handoff_session` request and the MCP tool of the same name (`src/mcp/tools/handoff.rs`) both go through it |
 | Codex's app-server handshake; reading a JSON-RPC reply | `src/adapter/codex/app_server.rs`; `src/agents/json_rpc.rs` |
 | Deliver a session's message through a provider's own server instead of its terminal | `MessageTransport` and `PrivateServer` (`src/session/term/mod.rs`); `send_message_with_id` tries the transport first and, while the session's conversation is not yet known, falls back to the terminal write, and returns the `Route` taken; starting its queue gives a `QueueStart`; a message the agent's queue refuses is `RefusedByAgent` and one the server holds is `HeldByServer`; Codex's is `src/adapter/codex/transport/` |
 | Whether a delivery error may still have reached the agent's own queue | `acceptance_uncertain` (`src/messaging/delivery.rs`; the coded error `message_acceptance_unconfirmed`) |

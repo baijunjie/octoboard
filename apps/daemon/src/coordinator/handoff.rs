@@ -66,12 +66,11 @@ pub struct Handoff {
 
 /// Hands `request.session` off and returns what moved: the receiving session, running in the
 /// original's place, with the original archived, and what it took over. Refused, with nothing
-/// changed, for a session that is missing, archived, locked or not at rest (`session_working`), one
-/// that owns a session that can still report to it (`session_child_active`), a receiving agent that
-/// is the session's own, and what opening the receiving session would refuse (an agent that is not
-/// available or not added, an account of another agent, a disabled account, an account whose plan
-/// quota is used up, an account the last quota reading found not logged in, a model or effort the
-/// agent does not offer, an owner that can no longer be reported to).
+/// changed, for a session that is missing, archived, locked or not at rest (`session_working`), a
+/// receiving agent that is the session's own, and what opening the receiving session would refuse
+/// (an agent that is not available or not added, an account of another agent, a disabled account,
+/// an account whose plan quota is used up, an account the last quota reading found not logged in,
+/// a model or effort the agent does not offer, an owner that can no longer be reported to).
 pub async fn handoff_session(state: &Arc<AppState>, request: Handoff) -> Result<Moved> {
     handoff_session_with(state, request, term::launch).await
 }
@@ -233,11 +232,12 @@ pub(crate) fn receiving_request(
 }
 
 /// Refuses, with nothing changed, a session that cannot be handed off now: archived, still
-/// starting, mid-turn, waiting for the user or running work in the background, or owning a session
-/// that can still send it something ([`child_can_still_send`]); then one locked, and a receiving
-/// agent that is its own. A session whose turn stopped on its account's usage limit is at rest:
-/// the dialog it shows is no wait. The `handoff_session` request and the MCP tool of the same name
-/// both ask this, so they refuse alike.
+/// starting, mid-turn, waiting for the user or showing its background agents; then one locked, and
+/// a receiving agent that is its own. A session whose turn stopped on its account's usage limit is
+/// at rest: the dialog it shows is no wait. So is an idle one with background tasks, which the
+/// package lists for the receiving session; a session it owns may be at work too, since its
+/// reports follow the binding to the receiving session. The `handoff_session` request and the MCP
+/// tool of the same name both ask this, so they refuse alike.
 pub(crate) fn refuse_unless_it_can_be_handed_off(
     state: &AppState,
     original: &Session,
@@ -253,7 +253,7 @@ pub(crate) fn refuse_unless_it_can_be_handed_off(
             &[("session", &original.id)],
         ));
     }
-    let doing = state.what_it_is_doing(original);
+    let doing = state.what_stops_a_handoff(original);
     if let Some(doing) = doing {
         return Err(CodedError::raised(
             error_code::SESSION_WORKING,
@@ -263,19 +263,6 @@ pub(crate) fn refuse_unless_it_can_be_handed_off(
                  has been interrupted"
             ),
             &[("session", &original.id)],
-        ));
-    }
-    if let Some(child) = state.store.list_sessions()?.into_iter().find(|child| {
-        child.bound_to.as_deref() == Some(&original.id) && child_can_still_send(state, child)
-    }) {
-        return Err(CodedError::raised(
-            error_code::SESSION_CHILD_ACTIVE,
-            format!(
-                "{} is still at work under {named} and may report to it: the report would reach a \
-                 session that is being replaced. Hand it off once its sessions are at rest",
-                label(&child)
-            ),
-            &[("session", &original.id), ("child", &child.id)],
         ));
     }
     ensure_unlocked([original.clone()])?;
@@ -504,12 +491,31 @@ async fn takeover_context(state: &Arc<AppState>, moved: &Moved) -> String {
              they are still named after it. The package lists them."
         )),
     }
+    // Judged as a handoff judges a session, by what it is shown doing: the stored status lacks
+    // what the screen shows (a view of its background agents, a prompt no hook reports).
+    let mut at_work = false;
     for session in &moved.owned {
+        let shown = state.status_for_switch(session);
+        at_work |= match shown {
+            SessionStatus::Starting
+            | SessionStatus::Working
+            | SessionStatus::WaitingUser
+            | SessionStatus::Dormant => true,
+            SessionStatus::Idle => !state.shown_background_tasks(&session.id, shown).is_empty(),
+            SessionStatus::Interrupted | SessionStatus::Archived => false,
+        };
         held.push_str(&format!(
             "\n- Your child session: {} ({}).",
             named_session(session),
-            status_word(session.status)
+            status_word(shown)
         ));
+    }
+    if at_work {
+        held.push_str(
+            "\n- Child sessions listed above as working, starting, waiting for the user, viewing \
+             their background agents or idle with background tasks running are still at it: their \
+             reports reach you now, not the original, so expect them.",
+        );
     }
     held
 }
@@ -642,29 +648,6 @@ async fn start_work(
             )
             .about(&id),
         );
-    }
-}
-
-/// Whether `child`, a session bound to the session being handed off, can still send it something
-/// (a report, information, a notice) without the session or the user acting first: it is starting,
-/// at work, waiting for the user (whose answer lets it go on; a usage-limit dialog is no such wait,
-/// as for the session itself), showing its background agents or running work in the background, or
-/// has a message queued. A queue held while the child is handed off, restarted for a change of its
-/// account's sharing or restarted for a switch or a change of model is not one a report is waiting
-/// in: nothing is written into it until the hold ends (`HoldKind::blocks_writes`). One at rest
-/// (idle with nothing pending, interrupted or archived) cannot.
-fn child_can_still_send(state: &AppState, child: &Session) -> bool {
-    let shown = state.status_for_switch(child);
-    match shown {
-        SessionStatus::Starting
-        | SessionStatus::Working
-        | SessionStatus::WaitingUser
-        | SessionStatus::Dormant => true,
-        SessionStatus::Idle => {
-            !state.shown_background_tasks(&child.id, shown).is_empty()
-                || (state.outbox.is_pending(&child.id) && !state.outbox.blocks_writes(&child.id))
-        }
-        SessionStatus::Interrupted | SessionStatus::Archived => false,
     }
 }
 

@@ -25,7 +25,6 @@ export type { AlertOptions, NoticeWithdrawal, NotificationRequest, WindowNotific
 export {
   useAccountSwitchHeld,
   useArchivedOwnerSessions,
-  useChildCanReport,
   useConsoleSessions,
   useConsoleStatus,
   useConsoleStatusCounts,

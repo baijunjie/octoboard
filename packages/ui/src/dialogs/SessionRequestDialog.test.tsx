@@ -452,8 +452,6 @@ function mountHandoffOf(target: ReturnType<typeof sessionOf>, ...others: ReturnT
 it.each<[string, SessionStatus, Partial<Session>]>([
   ["waiting for the user", "waiting_user", {}],
   ["showing its background agents", "dormant", {}],
-  ["running work in the background", "idle", { background_tasks: [{ id: "t" }] }],
-  ["stopped at its usage limit with work in the background", "waiting_user", { at_usage_limit: true, background_tasks: [{ id: "t" }] }],
 ])("a handoff of a session that is %s cannot be confirmed", (_name, status, extra) => {
   mountHandoffOf(sessionOf("s-held", "c-1", "p-1", "Old work", status, { account_id: "a-one", ...extra }));
   expect(dialogText()).toContain("still working or waiting for you");
@@ -472,28 +470,44 @@ it.each<[string, SessionStatus, Partial<Session>]>([
   ["waiting for the user", "waiting_user", {}],
   ["dormant", "dormant", {}],
   ["running work in the background", "idle", { background_tasks: [{ id: "t" }] }],
-  ["stopped at its usage limit with work in the background", "waiting_user", { at_usage_limit: true, background_tasks: [{ id: "t" }] }],
-])("a handoff of a session with a child that is %s cannot be confirmed, and says a session under it may report", (_name, status, extra) => {
-  mountHandoffOf(
-    sessionOf("s-held", "c-1", "p-1", "Old work", "idle", { account_id: "a-one" }),
-    sessionOf("s-child", "c-1", "p-1", "Child work", status, { bound_to: "s-held", ...extra }),
-  );
-  expect(dialogText()).toContain("A session under this one is still at work and may report to it");
-  expect(findButton("Hand off session")?.disabled).toBe(true);
-});
-
-it.each([
   ["idle with nothing running", "idle", {}],
   ["interrupted", "interrupted", {}],
   ["archived", "archived", {}],
-  ["stopped at its usage limit", "waiting_user", { at_usage_limit: true }],
-] as const)("a handoff of a session whose child is %s can be confirmed", (_name, status, extra) => {
+])("a handoff of a session whose child is %s can be confirmed", (_name, status, extra) => {
   mountHandoffOf(
     sessionOf("s-held", "c-1", "p-1", "Old work", "idle", { account_id: "a-one" }),
     sessionOf("s-child", "c-1", "p-1", "Child work", status, { bound_to: "s-held", ...extra }),
   );
-  expect(dialogText()).not.toContain("A session under this one is still at work");
+  expect(dialogText()).not.toContain("still working or waiting for you");
   expect(findButton("Hand off session")?.disabled).toBe(false);
+});
+
+it.each<[string, SessionStatus, Partial<Session>]>([
+  ["idle", "idle", {}],
+  ["stopped at its usage limit", "waiting_user", { at_usage_limit: true }],
+])("a handoff of a session that is %s with work in the background can be confirmed, and warns of the tasks", (_name, status, extra) => {
+  mountHandoffOf(sessionOf("s-held", "c-1", "p-1", "Old work", status, { account_id: "a-one", ...extra, background_tasks: [{ id: "t", description: "npm run dev" }] }));
+  expect(dialogText()).toContain("Background tasks may stop");
+  expect(dialogText()).toContain("This session has 1 background task running");
+  expect(dialogText()).not.toContain("npm run dev");
+  expect(dialogText()).not.toContain("still working or waiting for you");
+  expect(findButton("Hand off session")?.disabled).toBe(false);
+});
+
+it.each([["no list", undefined], ["an empty list", []]])("a handoff of a session with %s of background tasks shows no warning of tasks", (_name, tasks) => {
+  mountHandoffOf(sessionOf("s-held", "c-1", "p-1", "Old work", "idle", { account_id: "a-one", background_tasks: tasks }));
+  expect(dialogText()).not.toContain("Background tasks may stop");
+  expect(document.body.querySelector("li")).toBeNull();
+});
+
+it("a handoff request counts the background tasks without listing them", () => {
+  mountHandoffOf(sessionOf("s-held", "c-1", "p-1", "Old work", "idle", {
+    account_id: "a-one",
+    background_tasks: [{ id: "b1", type: "shell", description: "npm run dev" }, { id: "b2", type: "agent" }, { id: "b3" }],
+  }));
+  expect(dialogText()).toContain("This session has 3 background tasks running");
+  expect(dialogText()).not.toContain("npm run dev");
+  expect(document.body.querySelector("li")).toBeNull();
 });
 
 it("a handoff is not held back by a busy session that is bound to another session", () => {

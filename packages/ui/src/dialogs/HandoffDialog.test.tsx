@@ -30,6 +30,9 @@ const branch = (name: string): SessionBranchItem => ({
   kind: "branch", repository: "/r", branch: name, path: null, uncommitted: false, project: project.id, session: "s-1", state: "removable", detail: null,
 });
 
+/** While set, a `handoff_session` request is not answered until it settles. */
+let heldHandoff: Promise<void> | undefined;
+
 function mount(session: Session, others: Session[] = [], branches: SessionBranchItem[] | "fail" | "failTwice" | "gitMissing" = [], availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {}, added: Agent[] | null = null, accountQuotas: AccountQuota[] = [], settings: Partial<Settings> = {}, handoffError?: Error) {
   const sessions = new Map([session, ...others].map((s) => [s.id, s]));
   const initial: Partial<State> = {
@@ -49,6 +52,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
     if (body.type === "inspect_session_branches" && branches === "gitMissing") throw new CodedError("`git` was not found", "binary_not_found", { binary: "git" });
     if (body.type === "inspect_session_branches") return { type: "session_branches_inspected", id: null, items: branches };
     if (body.type === "handoff_session" && handoffError) throw handoffError;
+    if (body.type === "handoff_session" && heldHandoff) await heldHandoff;
     if (body.type === "handoff_session") return { type: "session_opened", id: null, session: sessionOf("s-new", parentConsole.id, session.project_id ?? undefined, session.title, "working", { agent: "codex" }) };
     return { type: "ack", id: null };
   });
@@ -62,7 +66,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
     act(() => root.unmount());
     container.remove();
   });
-  return { request, onClose, onHandedOff };
+  return { request, onClose, onHandedOff, daemon };
 }
 
 const settle = flushPromises;
@@ -85,6 +89,44 @@ it("says what moves for a project session, then hands off to another agent and s
   expect(sent).toMatchObject({ type: "handoff_session", session: "s-1", agent: "codex", account: null, terminal_appearance: "dark" });
   expect(onHandedOff).toHaveBeenCalledExactlyOnceWith("s-new");
   expect(onClose).toHaveBeenCalledOnce();
+});
+
+it("warns of the number of background tasks the session left running, lists none of them, and still hands off", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle", {
+    background_tasks: [{ id: "b1", type: "shell", description: "npm run dev" }, { id: "b2", type: "agent" }, { id: "b3" }],
+  });
+  const { request } = mount(session);
+  await settle();
+
+  const alert = document.body.querySelector('[data-slot="alert-root"]')?.textContent;
+  expect(alert).toContain("Background tasks may stop");
+  expect(alert).toContain("This session has 3 background tasks running");
+  expect(document.body.textContent).not.toContain("npm run dev");
+  expect(document.body.querySelector("li")).toBeNull();
+  await act(async () => buttons().find((b) => b.textContent === "Hand off")?.click());
+  await settle();
+  expect(request.mock.calls.some(([body]) => body.type === "handoff_session")).toBe(true);
+});
+
+it("keeps the background warning as it was while the handoff runs, though the session's tasks end", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle", { background_tasks: [{ id: "b1", description: "npm run dev" }] });
+  let release!: () => void;
+  heldHandoff = new Promise<void>((resolve) => { release = resolve; });
+  onTestFinished(() => { release(); heldHandoff = undefined; });
+  const { daemon } = mount(session);
+  await settle();
+  await act(async () => buttons().find((b) => b.textContent === "Hand off")?.click());
+  await settle();
+
+  act(() => daemon.store.setState((state) => ({ ...state, sessions: new Map([[session.id, { ...session, status: "archived" as const, background_tasks: undefined }]]) })));
+  await settle();
+  expect(document.body.querySelector('[data-slot="alert-root"]')?.textContent).toContain("This session has 1 background task running");
+});
+
+it("shows no background warning for a session with nothing running in the background", async () => {
+  mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle", { background_tasks: [] }));
+  await settle();
+  expect(document.body.querySelector('[data-slot="alert-root"]')).toBeNull();
 });
 
 it.each([

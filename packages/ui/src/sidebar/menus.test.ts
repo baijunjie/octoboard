@@ -266,37 +266,29 @@ describe("the Hand off entry", () => {
   });
 });
 
-describe("the Hand off entry and the sessions under the session", () => {
-  const handoff = (session: Session, childActive: boolean) =>
-    sessionMenu(t, {} as SidebarHandlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, childActive }).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Hand off") as { disabled?: boolean; reason?: { state: string }; description?: string };
+describe("the Hand off entry and what the session is doing", () => {
+  const handoff = (session: Session) =>
+    sessionMenu(t, {} as SidebarHandlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false }).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Hand off") as { disabled?: boolean; reason?: { state: string }; description?: string };
 
-  it("is disabled, saying why, while a session under it can still report to it", () => {
-    const entry = handoff(sessionOf("s", "c", "p", "Title", "idle"), true);
-    expect(entry.disabled).toBe(true);
-    expect(entry.reason).toEqual({ state: "Child sessions working" });
-    expect(entry.description).toBe("A session under this one is still at work and may report to it, so it cannot be handed off yet.");
+  it("says the session itself is busy, and that a locked one is locked", () => {
+    expect(handoff(sessionOf("s", "c", "p", "Title", "working")).reason).toEqual({ state: "Session busy" });
+    expect(handoff(sessionOf("s", "c", "p", "Title", "idle", { locked: true })).reason).toEqual({ state: "Session locked" });
   });
 
-  it("is not held back by sessions under it when none can report", () => {
-    const entry = handoff(sessionOf("s", "c", "p", "Title", "idle"), false);
-    expect(entry.disabled ?? false).toBe(false);
-    expect(entry.reason).toBeUndefined();
+  it("treats a session with work in the background, at a usage limit or idle, as at rest", () => {
+    const tasks = [{ id: "t" }];
+    for (const entry of [
+      handoff(sessionOf("s", "c", "p", "Title", "waiting_user", { at_usage_limit: true, background_tasks: tasks })),
+      handoff(sessionOf("s", "c", "p", "Title", "waiting_user", { at_usage_limit: true })),
+      handoff(sessionOf("s", "c", "p", "Title", "idle", { background_tasks: tasks })),
+    ]) {
+      expect(entry.disabled ?? false).toBe(false);
+      expect(entry.reason).toBeUndefined();
+    }
   });
 
-  it("says the session itself is busy before it says a child is", () => {
-    expect(handoff(sessionOf("s", "c", "p", "Title", "working"), true).reason).toEqual({ state: "Session busy" });
-    expect(handoff(sessionOf("s", "c", "p", "Title", "idle", { locked: true }), true).reason).toEqual({ state: "Session locked" });
-  });
-
-  it("treats a session stopped at its usage limit with work in the background as busy, and one without as at rest", () => {
-    const stopped = { status: "waiting_user", at_usage_limit: true } as const;
-    expect(handoff(sessionOf("s", "c", "p", "Title", stopped.status, { at_usage_limit: true, background_tasks: [{ id: "t" }] }), false).reason).toEqual({ state: "Session busy" });
-    expect(handoff(sessionOf("s", "c", "p", "Title", stopped.status, { at_usage_limit: true }), false).reason).toBeUndefined();
-  });
-
-  it("treats a session idle with work in the background as busy", () => {
-    expect(handoff(sessionOf("s", "c", "p", "Title", "idle", { background_tasks: [{ id: "t" }] }), false).reason).toEqual({ state: "Session busy" });
-    expect(handoff(sessionOf("s", "c", "p", "Title", "dormant"), false).reason).toEqual({ state: "Session busy" });
+  it("still treats a session showing its background agents as busy", () => {
+    expect(handoff(sessionOf("s", "c", "p", "Title", "dormant")).reason).toEqual({ state: "Session busy" });
   });
 });
 

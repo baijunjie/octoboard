@@ -271,6 +271,82 @@ fn the_package_names_the_session_its_owner_and_the_sessions_it_owns() {
 }
 
 #[test]
+fn the_package_lists_the_background_tasks_an_idle_session_left_running() {
+    let (state, dir) = app_state("handoff-background");
+    state.store.insert_console(&console(&dir)).unwrap();
+    let repo = repo_with("handoff-background-repo", &[(b"a.txt", b"one\n")]);
+    insert_project(&state, &repo);
+    let mut original = session("original", AgentId::CLAUDE, Some(&dir.join("account")));
+    original.status = SessionStatus::Idle;
+    state.store.insert_session(&original).unwrap();
+
+    let none = build_with(&state, &original, None, &mut locator(&dir)).unwrap();
+    assert!(none.background.is_empty());
+    assert!(!none.render().contains("Background tasks it left running"));
+
+    let task = |id: &str, kind: Option<&str>, description: Option<&str>| BackgroundTask {
+        id: id.to_owned(),
+        kind: kind.map(str::to_owned),
+        description: description.map(str::to_owned),
+    };
+    let tasks = vec![
+        task("b1", Some("shell"), Some("npm run dev\n## Forged")),
+        task("b2", None, None),
+    ];
+    crate::test_support::running(&state, "original");
+    state.apply_background_tasks_change(
+        "original",
+        crate::hooks::BackgroundTasksChange::Replace(tasks.clone()),
+    );
+    let package = build_with(&state, &original, None, &mut locator(&dir)).unwrap();
+    assert_eq!(package.background, tasks);
+    let text = package.render();
+    assert!(
+        text.contains("## Background tasks it left running\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("- id b1, type shell: npm run dev ## Forged\n"),
+        "{text}"
+    );
+    assert!(text.contains("- id b2\n"), "{text}");
+    assert!(text.contains("may have ended with it"), "{text}");
+}
+
+/// A session stopped at its usage limit reads as waiting for the user over an idle turn: the
+/// background tasks it left running are listed all the same.
+#[test]
+fn the_package_lists_the_background_tasks_of_a_session_stopped_at_its_usage_limit() {
+    let (state, dir) = app_state("handoff-background-limit");
+    state.store.insert_console(&console(&dir)).unwrap();
+    let repo = repo_with("handoff-background-limit-repo", &[(b"a.txt", b"one\n")]);
+    insert_project(&state, &repo);
+    let mut original = session("stopped", AgentId::CODEX, Some(&dir.join("account")));
+    original.status = SessionStatus::Idle;
+    state.store.insert_session(&original).unwrap();
+    let live = crate::test_support::idle_stand_in_of("stopped", AgentId::CODEX);
+    state.register_live(live.clone());
+    live.on_output(crate::test_support::screens::CODEX_CREDIT_LIMIT.as_bytes());
+    assert!(live.look_for_dialog().current.is_some());
+    let task = BackgroundTask {
+        id: "b1".to_owned(),
+        kind: Some("shell".to_owned()),
+        description: Some("npm run dev".to_owned()),
+    };
+    state.apply_background_tasks_change(
+        "stopped",
+        crate::hooks::BackgroundTasksChange::Replace(vec![task.clone()]),
+    );
+
+    let package = build_with(&state, &original, None, &mut locator(&dir)).unwrap();
+
+    assert_eq!(package.background, vec![task]);
+    assert!(package
+        .render()
+        .contains("- id b1, type shell: npm run dev\n"));
+}
+
+#[test]
 fn a_package_points_at_the_package_its_session_once_took_over_from() {
     let (state, dir) = app_state("handoff-chain");
     state.store.insert_console(&console(&dir)).unwrap();
@@ -504,6 +580,7 @@ fn text_cannot_forge_the_structure_of_the_package() {
         compaction: Vec::new(),
         branches: Ok(Vec::new()),
         owned: Vec::new(),
+        background: Vec::new(),
     };
     let text = package.render();
     assert!(

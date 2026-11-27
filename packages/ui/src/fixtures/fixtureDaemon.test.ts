@@ -7,7 +7,7 @@ import { currentLanguage, t } from "../i18n/language";
 import type { NotificationRequest, SessionRequest, State, WindowNotification } from "../store";
 import { broadcastNotification } from "../store/notifications";
 
-import type { Agent, ClientRequestBody, PageContent, Settings, SettingsSection } from "../protocol";
+import type { Agent, ClientRequestBody, PageContent, Session, Settings, SettingsSection } from "../protocol";
 import { exportedDocument } from "./fixtureConfiguration";
 import { SAMPLE_CLAUDE_MODELS, SAMPLE_CLAUDE_MODELS_PRO } from "./agentModels";
 import { fakeTimers } from "../test/clock";
@@ -444,6 +444,40 @@ describe("the fixture daemon's session handoff", () => {
     const plain = createFixtureDaemon(scenario);
     await expect(plain.request({ type: "handoff_session", session: coordinator.id, agent: "claude" })).rejects.toMatchObject({ code: "handoff_to_same_agent", params: { agent: "Claude Code" } });
     await expect(plain.request({ type: "handoff_session", session: coordinator.id, agent: "codex", account: "nobody" })).rejects.toMatchObject({ code: "unknown_account" });
+  });
+});
+
+describe("the fixture daemon's session handoff and what the session is doing", () => {
+  const tasks = [{ id: "dev-server", type: "shell" }];
+  const handoffOf = (sessions: Session[], id: string) =>
+    createFixtureDaemon({ state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions }) })
+      .request({ type: "handoff_session", session: id, agent: "codex" });
+
+  it.each<[string, Partial<Session> & Pick<Session, "status">]>([
+    ["starting", { status: "starting" }],
+    ["waiting for the user", { status: "waiting_user" }],
+    ["showing its background agents", { status: "dormant" }],
+    ["in the middle of a turn", { status: "working" }],
+  ])("refuses a session that is %s", async (_name, extra) => {
+    const session = sessionOf("busy", "c", "p", "Busy", extra.status, extra);
+    await expect(handoffOf([session], session.id)).rejects.toMatchObject({ code: "session_working", params: { session: session.id } });
+  });
+
+  it.each<[string, Partial<Session> & Pick<Session, "status">]>([
+    ["idle with work in the background", { status: "idle", background_tasks: tasks }],
+    ["waiting at a usage-limit dialog with work in the background", { status: "waiting_user", at_usage_limit: true, background_tasks: tasks }],
+  ])("hands off a session that is %s", async (_name, extra) => {
+    const session = sessionOf("rest", "c", "p", "Rest", extra.status, extra);
+    await expect(handoffOf([session], session.id)).resolves.toMatchObject({ type: "session_opened" });
+  });
+
+  it("hands off a session whatever the sessions under it are doing, and they follow it", async () => {
+    const owner = sessionOf("owner", "c", "p", "Owner", "idle");
+    const children = (["starting", "working", "waiting_user", "dormant"] as const).map((status) => sessionOf(`child-${status}`, "c", "p", status, status, { bound_to: owner.id }));
+    const daemon = createFixtureDaemon({ state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions: [owner, ...children] }) });
+    const reply = await daemon.request({ type: "handoff_session", session: owner.id, agent: "codex" });
+    if (reply.type !== "session_opened") throw new Error("expected session_opened");
+    for (const child of children) expect(daemon.store.getState().sessions.get(child.id)?.bound_to).toBe(reply.session.id);
   });
 });
 

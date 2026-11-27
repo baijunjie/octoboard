@@ -19,7 +19,8 @@ import type { Account, Agent, Console, Project, Session } from "../protocol";
 import { accountUsage } from "../quota/accountUsage";
 import { quotaUsedUpMessage } from "../quota/quotaCopy";
 import type { SessionRequest } from "../store";
-import { useAccountSwitchHeld, useChildCanReport, useDaemonStore, useProviders } from "../store";
+import { useAccountSwitchHeld, useDaemonStore, useProviders } from "../store";
+import { HandoffBackgroundWarning } from "./HandoffBackgroundWarning";
 import { useNow } from "../format/useNow";
 import { AgentAccountField } from "./AgentAccountField";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
@@ -226,7 +227,7 @@ export function SwitchRequestForm({ request, onReport }: { request: SwitchReques
  * with its account, and the model and reasoning effort, all as the user's own Hand off dialog has
  * them, starting on what the call asked for. Nothing the asking session wrote is shown. It cannot
  * be confirmed while the session cannot be handed off, which the Hand off menu item refuses for the
- * same reasons: it is busy or starting, a session under it can still report to it, it is locked, held by an account switch, or on an account
+ * same reasons: it is busy or starting, it is locked, held by an account switch, or on an account
  * whose sharing is changing. */
 export function HandoffRequestForm({ request, onReport }: { request: HandoffRequest; onReport: OnReport }): React.ReactElement | null {
   const parentConsole = useDaemonStore((s) => s.consoles.get(request.console));
@@ -234,9 +235,8 @@ export function HandoffRequestForm({ request, onReport }: { request: HandoffRequ
   const original = useDaemonStore((s) => s.sessions.get(request.target));
   const ownChanging = useDaemonStore((s) => sharingChangeRuns(s.accountSharing, original?.account_id ?? null));
   const switching = useAccountSwitchHeld(original);
-  const childActive = useChildCanReport(request.target);
   if (!parentConsole) return <NoEdits request={request} onReport={onReport} />;
-  return <HandoffFields request={request} onReport={onReport} console={parentConsole} project={project} original={original} switching={switching} ownChanging={ownChanging} childActive={childActive} />;
+  return <HandoffFields request={request} onReport={onReport} console={parentConsole} project={project} original={original} switching={switching} ownChanging={ownChanging} />;
 }
 
 /** The form of a handoff whose console the window does not know, which has nothing to change: the
@@ -246,7 +246,7 @@ function NoEdits({ request, onReport }: { request: HandoffRequest; onReport: OnR
   return null;
 }
 
-function HandoffFields({ request, onReport, console: parentConsole, project, original, switching, ownChanging, childActive }: {
+function HandoffFields({ request, onReport, console: parentConsole, project, original, switching, ownChanging }: {
   request: HandoffRequest;
   onReport: OnReport;
   console: Console;
@@ -255,8 +255,6 @@ function HandoffFields({ request, onReport, console: parentConsole, project, ori
   /** Whether an account switch holds the session (`holdsAccountSwitch`). */
   switching: boolean;
   ownChanging: boolean;
-  /** Whether a session under it can still report to it (`hasChildThatCanReport`). */
-  childActive: boolean;
 }): React.ReactElement {
   const t = useT();
   const { choice, blocked, presetGone, unavailable, overrides, agentOptions, setPickedAgent, account, launch } = useLaunchChoice(parentConsole, project, original?.agent, undefined, {
@@ -265,7 +263,7 @@ function HandoffFields({ request, onReport, console: parentConsole, project, ori
     effort: request.effort,
     compatibility: request.compatibility,
   }, request.kind === "project", { refuseUsedUp: true });
-  const sessionBlock = original && handoffBlock(t, original, { switching, ownChanging, childActive });
+  const sessionBlock = original && handoffBlock(t, original, { switching, ownChanging });
   const accounts = useDaemonStore((state) => state.settings.accounts);
   const sharing = useDaemonStore((state) => state.accountSharing);
   const incomplete = presetGone ? undefined : incompleteAccount(accounts, sharing, choice.account);
@@ -279,6 +277,7 @@ function HandoffFields({ request, onReport, console: parentConsole, project, ori
     <>
       <IncompleteSharingAnnouncer account={incomplete} />
       {sessionBlock && <ErrorAlert title={sessionBlock.detail} announce />}
+      <HandoffBackgroundWarning count={original?.background_tasks?.length ?? 0} />
       <AgentAccountField
         label={t("dialog.handoff.agent")}
         options={agentOptions}

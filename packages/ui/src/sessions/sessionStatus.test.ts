@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { sessionOf } from "../fixtures/builders";
 import type { Session, SessionStatus } from "../protocol";
 import type { ShownStatusKind } from "./sessionStatus";
-import { childCanReport, delegatingSessionIds, hasChildThatCanReport, hasNoProcess, holdsAccountSwitch, isLive, isSummaryStatus, sessionIsBusy, sessionIsWorking, sessionShownStatusKind, sessionStatusKind, showsSwitching, SUMMARY_STATUSES } from "./sessionStatus";
+import { delegatingSessionIds, hasNoProcess, holdsAccountSwitch, isLive, isSummaryStatus, sessionIsBusy, sessionIsWorking, sessionStopsAHandoff, sessionShownStatusKind, sessionStatusKind, showsSwitching, SUMMARY_STATUSES } from "./sessionStatus";
 
 const NONE: ReadonlySet<string> = new Set();
 const kindOf = (status: SessionStatus, extra: Partial<Session> = {}, delegating: ReadonlySet<string> = NONE) =>
@@ -216,49 +216,25 @@ describe("sessionIsBusy", () => {
   });
 });
 
-describe("childCanReport", () => {
-  it("is the notion hasChildThatCanReport uses: starting, or busy", () => {
-    expect(childCanReport({ status: "starting" })).toBe(true);
-    expect(childCanReport({ status: "working" })).toBe(true);
-    expect(childCanReport({ status: "idle" })).toBe(false);
-    expect(childCanReport({ status: "waiting_user", at_usage_limit: true })).toBe(false);
-    expect(childCanReport({ status: "waiting_user", at_usage_limit: true, background_tasks: [{ id: "t" }] })).toBe(true);
-  });
-});
-
-describe("hasChildThatCanReport", () => {
-  const child = (id: string, status: SessionStatus, extra: Partial<Session> = {}) => sessionOf(id, "c", "p", id, status, { bound_to: "owner", ...extra });
-
+describe("sessionStopsAHandoff", () => {
   it.each<[string, SessionStatus, Partial<Session>, boolean]>([
-    ["starting", "starting", {}, true],
     ["working", "working", {}, true],
     ["waiting for the user", "waiting_user", {}, true],
-    ["dormant", "dormant", {}, true],
-    ["idle with work in the background", "idle", { background_tasks: [{ id: "t" }] }, true],
+    ["showing its background agents", "dormant", {}, true],
+    ["idle with work in the background", "idle", { background_tasks: [{ id: "t" }] }, false],
     ["idle with nothing running", "idle", {}, false],
     ["interrupted", "interrupted", {}, false],
     ["archived", "archived", {}, false],
     ["waiting only for a usage-limit dialog", "waiting_user", { at_usage_limit: true }, false],
-    ["waiting only for a usage-limit dialog, with work in the background", "waiting_user", { at_usage_limit: true, background_tasks: [{ id: "t" }] }, true],
-  ])("finds a child that is %s: %s", (_name, status, extra, found) => {
-    expect(hasChildThatCanReport([child("a", status, extra)], "owner")).toBe(found);
+    ["waiting only for a usage-limit dialog, with work in the background", "waiting_user", { at_usage_limit: true, background_tasks: [{ id: "t" }] }, false],
+    ["waiting for the user and flagged not at a limit", "waiting_user", { at_usage_limit: false }, true],
+    ["working, whatever the limit flag says", "working", { at_usage_limit: true }, true],
+  ])("is %s: stops a handoff is %s", (_name, status, extra, stops) => {
+    expect(sessionStopsAHandoff(sessionOf("s", "c", "p", "T", status, extra))).toBe(stops);
   });
 
-  it("looks at the sessions bound to the owner only", () => {
-    const elsewhere = sessionOf("x", "c", "p", "x", "working", { bound_to: "other" });
-    const unbound = sessionOf("y", "c", "p", "y", "working");
-    const owner = sessionOf("owner", "c", "p", "owner", "working");
-    expect(hasChildThatCanReport([elsewhere, unbound, owner], "owner")).toBe(false);
-  });
-
-  it("is true when any one of several children can report, and false with none", () => {
-    expect(hasChildThatCanReport([child("a", "idle"), child("b", "archived"), child("c", "working")], "owner")).toBe(true);
-    expect(hasChildThatCanReport([child("a", "idle"), child("b", "interrupted")], "owner")).toBe(false);
-    expect(hasChildThatCanReport([], "owner")).toBe(false);
-  });
-
-  it("accepts any iterable of sessions", () => {
-    expect(hasChildThatCanReport(new Map([["a", child("a", "working")]]).values(), "owner")).toBe(true);
+  it("does not count a session that is still starting, which the handoff check refuses on its own", () => {
+    expect(sessionStopsAHandoff(sessionOf("s", "c", "p", "T", "starting"))).toBe(false);
   });
 });
 
@@ -273,14 +249,13 @@ describe("a status this client does not know (a newer daemon's)", () => {
     expect(sessionShownStatusKind(unknown(), NONE, NONE)).toBe("unknown");
   });
 
-  it("is neither live, nor without a process, nor at work, nor busy, nor able to report", () => {
+  it("is neither live, nor without a process, nor at work, nor busy, nor a stop to a handoff", () => {
     expect(isLive(FROM_A_NEWER_DAEMON)).toBe(false);
     expect(hasNoProcess(FROM_A_NEWER_DAEMON)).toBe(false);
     const withTasks = unknown({ background_tasks: [{ id: "b" }] });
     expect(sessionIsWorking(withTasks)).toBe(false);
     expect(sessionIsBusy(withTasks)).toBe(false);
-    expect(childCanReport(withTasks)).toBe(false);
-    expect(hasChildThatCanReport([unknown({ bound_to: "owner" })], "owner")).toBe(false);
+    expect(sessionStopsAHandoff(withTasks)).toBe(false);
   });
 
   it("is not reconnecting even where the daemon cannot reach its process, and is no summary status", () => {

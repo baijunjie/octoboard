@@ -6,7 +6,7 @@ import { accountQuotaOf } from "./accountQuotaOf";
 import { accountDisabled, accountSignedOutUnavailable, quotaSignedOut, sharingChangeRuns, type QuotaReadings } from "./choiceEntries";
 import { exhaustedQuotaWindow } from "./quotaFormat";
 import { sessionAccountName } from "../sessions/sessionLabel";
-import { sessionIsBusy } from "../sessions/sessionStatus";
+import { sessionStopsAHandoff } from "../sessions/sessionStatus";
 import type { Reason } from "../format/reason";
 
 /** One account a session can be moved to or is on, as the Switch account submenu lists it. */
@@ -51,22 +51,19 @@ export function switchEntryBlock(
 }
 
 /** Why a session cannot be handed off, or `undefined` when nothing keeps it: it is locked, it is busy (in the middle
- * of a turn, waiting for the user, showing its background agents or running work in the background, see
- * `sessionIsBusy`), one of its sessions can still report to it (`childActive`, see `hasChildThatCanReport`), an account
- * switch holds it (`switching`, see `holdsAccountSwitch`), its own account is changing its sharing (`ownChanging`), or
- * it is still starting, which the daemon refuses. The lasting holds (locked, a turn that can run for long, a session
- * at work under it) are checked first and come with a `reason` to draw under a menu item; the others end on their own,
- * come with none, and lose to a lasting hold. The Hand off menu item and the form of a handoff request share these
- * rules. */
+ * of a turn, waiting for the user or showing its background agents, see `sessionStopsAHandoff`; work left running in
+ * the background and a session at work under it do not keep it), an account switch holds it (`switching`, see
+ * `holdsAccountSwitch`), its own account is changing its sharing (`ownChanging`), or it is still starting, which the
+ * daemon refuses. The lasting holds (locked, a turn that can run for long) are checked first and come with a `reason`
+ * to draw under a menu item; the others end on their own, come with none, and lose to a lasting hold. The Hand off
+ * menu item and the form of a handoff request share these rules. */
 export function handoffBlock(
   t: Translate,
-  session: Pick<Session, "status" | "locked" | "background_tasks" | "at_usage_limit">,
-  { switching, ownChanging, childActive = false }: { switching: boolean; ownChanging: boolean; childActive?: boolean },
+  session: Pick<Session, "status" | "locked" | "at_usage_limit">,
+  { switching, ownChanging }: { switching: boolean; ownChanging: boolean },
 ): { detail: string; reason?: Reason } | undefined {
   if (session.locked) return { detail: t("accountChoice.handoff.locked"), reason: { state: t("accountChoice.sessionLocked.reason") } };
-  // A session still starting with a session at work under it is busy to the daemon, which refuses it as such.
-  if (sessionIsBusy(session) || (childActive && session.status === "starting")) return { detail: t("accountChoice.handoff.working"), reason: { state: t("accountChoice.handoff.working.reason") } };
-  if (childActive) return { detail: t("accountChoice.handoff.childActive"), reason: { state: t("accountChoice.handoff.childActive.reason") } };
+  if (sessionStopsAHandoff(session)) return { detail: t("accountChoice.handoff.working"), reason: { state: t("accountChoice.handoff.working.reason") } };
   if (switching) return { detail: t("accountChoice.switching.detail") };
   if (ownChanging) return { detail: t("accountChoice.ownSharingChange.detail") };
   if (session.status === "starting") return { detail: t("accountChoice.handoff.starting") };

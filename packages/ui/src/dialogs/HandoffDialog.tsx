@@ -20,6 +20,7 @@ import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { useFailureWhenBlocked } from "../components/dialog/useFailureWhenBlocked";
 import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
 import { useLaunchChoice } from "./useLaunchChoice";
+import { HandoffBackgroundWarning } from "./HandoffBackgroundWarning";
 import { useResponsibleBranches } from "./useBranchInspections";
 
 /**
@@ -102,6 +103,7 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
       onSubmit={submit}
     >
       <p className="text-sm"><Message id="dialog.handoff.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />{`${t("common.sentenceSeparator")}${t("dialog.handoff.message")}`}</p>
+      <HandoffBackground session={session} busy={busy} />
       <HandoffMoves session={session} busy={busy} />
       <AgentAccountField
         label={t("dialog.handoff.agent")}
@@ -128,6 +130,22 @@ function afterMoveReceiving(error: unknown): string | undefined {
   return isHandoffAfterMove(error) ? error.params.receiving_session || undefined : undefined;
 }
 
+/** The warning for the work the original has running in the background, read from the store as the dialog stays open and
+ * kept as it was while the handoff runs, since the daemon's archive would otherwise empty the count. */
+function HandoffBackground({ session, busy }: { session: Session; busy: boolean }): React.ReactElement {
+  const live = useDaemonStore((s) => s.sessions.get(session.id)?.background_tasks?.length ?? 0);
+  return <HandoffBackgroundWarning count={useHeldWhile(busy, live)} />;
+}
+
+/** `live`, kept as it was when `busy` began until `busy` ends: what the handoff's own rebinding and archive would
+ * otherwise change under the dialog while it runs. */
+function useHeldWhile<T>(busy: boolean, live: T): T {
+  const [held, setHeld] = useState<{ value: T }>();
+  if (busy && !held) setHeld({ value: live });
+  if (!busy && held) setHeld(undefined);
+  return held ? held.value : live;
+}
+
 /** What moves to the receiving session along with the original's place, from what the window
  * already knows: the sessions it owns (archived ones included) and its owner, and for a project
  * session the branches it is responsible for, which the daemon's inspection of the branches bound
@@ -149,15 +167,11 @@ function HandoffMoves({ session, busy }: { session: Session; busy: boolean }): R
   const handoffFrom = useHandoffAfterRemoval(() => dialogAround(rootRef));
   // The check fails after the dialog opened, so its mark is announced.
   const painted = useHasPainted();
-  const live = {
+  const { owned: ownedCount, ownerTitle, branches } = useHeldWhile(busy, {
     owned,
     ownerTitle: owner ? sessionDisplayTitle(t, owner) : undefined,
     branches: new Set(inspected.items.flatMap((item) => item.branch ? [item.branch] : [])).size,
-  };
-  const [frozen, setFrozen] = useState<typeof live>();
-  if (busy && !frozen) setFrozen(live);
-  if (!busy && frozen) setFrozen(undefined);
-  const { owned: ownedCount, ownerTitle, branches } = frozen ?? live;
+  });
   const lines = [
     inspected.pending ? <li key="checking">{t("dialog.handoff.movesChecking")}</li> : undefined,
     branches > 0 ? <li key="branches">{t("dialog.handoff.movesBranches", { count: branches })}</li> : undefined,

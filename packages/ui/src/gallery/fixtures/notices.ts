@@ -114,6 +114,8 @@ const resumeState = (requesting: string, request: SessionRequest, settings?: Set
 // Team.
 const ownedSession = sessionOf("s-owned-session", console_.id, web.id, "Verify the migration", "working", { bound_to: SAMPLE.consoleSession.id });
 const idleOwnedSession = { ...ownedSession, status: "idle" as const };
+// The same session idle with a dev server it left running, which a handoff warns may stop.
+const watchingOwnedSession = { ...idleOwnedSession, background_tasks: [{ id: "task-preview", type: "shell", description: "pnpm dev --port 5173" }] };
 const startingOwnedSession = { ...ownedSession, status: "starting" as const };
 const archivedOwnedSession = { ...ownedSession, status: "archived" as const };
 const moveAccounts: Account[] = [
@@ -324,8 +326,8 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "normal",
     title: "Request to hand off a session",
-    description: "The console session asks to hand off Verify the migration, which is idle, to a new Codex session on the account Team. Under the question the agent and account picker stands on Codex and Team, with the Advanced section open on the model GPT-5.6-Sol and the reasoning effort the call asked for, and under them Claude compatibility, the switch Codex has, reading On, the value the call asked for, with no badge. Below the form, a text disclosure \"Note written by the session\", opened here (its triangle turned down), shows the note the session passed with the call as plain text in a block of its own. Confirm reads Hand off session and is enabled.",
-    state: moveState({ ...handoffRequest, prompt: "Pick this up on Codex: the migration is half done. Start with the failing importer test, then re-run the ranking fixtures and report back to me when they pass." }, { target: idleOwnedSession }),
+    description: "The console session asks to hand off Verify the migration, which is idle with a dev server still running in the background, to a new Codex session on the account Team. Under the question, a warning alert titled \"Background tasks may stop\" says the session has 1 background task running, which may end when it is handed off, and that the new session is told of it, with no list of tasks; then the agent and account picker, which stands on Codex and Team, with the Advanced section open on the model GPT-5.6-Sol and the reasoning effort the call asked for, and under them Claude compatibility, the switch Codex has, reading On, the value the call asked for, with no badge. Below the form, a text disclosure \"Note written by the session\", opened here (its triangle turned down), shows the note the session passed with the call as plain text in a block of its own. Confirm reads Hand off session and is enabled.",
+    state: moveState({ ...handoffRequest, prompt: "Pick this up on Codex: the migration is half done. Start with the failing importer test, then re-run the ranking fixtures and report back to me when they pass." }, { target: watchingOwnedSession }),
     steps: [(ui) => ui.press(ui.t("dialog.agentSettings.advanced")), (ui) => ui.press(ui.t("dialog.sessionRequest.prompt.note"))],
   },
   {
