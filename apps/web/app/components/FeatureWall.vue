@@ -17,7 +17,6 @@ const { t } = useSiteCopy();
         <article v-for="key in group.features" :key="key" class="feature-card">
           <FeatureIllustration :feature="key" />
           <div class="feature-copy">
-            <span class="feature-card-mark" aria-hidden="true" />
             <h4>{{ t(`${key}FeatureTitle`) }}</h4>
             <p>{{ t(`${key}FeatureDescription`) }}</p>
           </div>
@@ -34,18 +33,22 @@ const { t } = useSiteCopy();
 .feature-group-heading .site-icon { width: 20px; height: 20px; color: var(--red); }
 .feature-group-heading h3 { font-size: 20px; }
 .feature-group-index { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; margin-inline-end: 8px; }
-.feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.feature-card { min-width: 0; overflow: hidden; background: #0d0d0d; border: 1px solid var(--edge); border-radius: 12px; }
-.feature-copy { padding: 28px; }
-.feature-card-mark { display: block; width: 20px; height: 2px; background: var(--red); margin-bottom: 24px; }
-.feature-card h4 { font-size: 19px; font-weight: 500; line-height: 1.5; }
-.feature-card p { color: var(--muted); font-size: 14px; line-height: 1.9; margin-top: 16px; }
+.feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(16px, 1.6vw, 26px); }
+.feature-card {
+  min-width: 0;
+  overflow: hidden;
+  background: #101012;
+  border: 1px solid #ffffff19;
+  border-radius: 14px;
+}
+.feature-copy { padding: clamp(20px, 2vw, 30px); }
+.feature-card h4 { font-size: clamp(19px, 1.45vw, 23px); font-weight: 550; line-height: 1.35; text-wrap: balance; }
+.feature-card p { color: var(--muted); font-size: 14px; line-height: 1.75; margin-top: 10px; }
 @media (max-width: 1050px) {
   .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 600px) {
   .feature-grid { grid-template-columns: minmax(0, 1fr); }
-  .feature-copy { padding: 24px; }
   .feature-wall { gap: 40px; }
 }
 </style>

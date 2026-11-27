@@ -117,15 +117,17 @@ The first numbered section presents 17 feature cards in three groups, in this or
   system; and browsing project files and Git diffs beside the session.
 
 Every card has a title, description and a focused visual, identified as illustrative sample data.
-Eleven visuals show focused application details: account sign-in status, a quota reading, the Start usage windows
-automatically setting switched on, the Prevent sleep setting switched on with When to prevent sleep set to While
-sessions work, two session statuses, two scheduled tasks as rows of the Scheduled tasks sidebar (name, schedule,
-target and time to the next run), project configuration files, a Git diff, a single process entry with Keep and
-Stop, the action to open a stopped Codex session, and two memory entries as rows of the memory dialog (summary, and
-who updated each and when). The waiting session appears before the working one, following
-the application's ordering. Six other visuals show account switching, quota
-recovery, shared account configuration, fresh and earlier sessions, agent handoff, and coordination across
-projects. The quota example shows waiting, confirmation of availability, and continuing work.
+Ten cards illustrate their features with wordless pixel art in the silver, black and red of the mechanical octopus
+logo. A dial marks the start of a usage window, a railway switch shows a conversation continuing on another account,
+and two mechanical claws pass a cartridge to illustrate an agent handoff. The other illustrations depict quota
+recovery, shared account configuration, continuing in a fresh session or in the agent's own app, cross-project
+coordination, project-specific configuration and keeping the computer awake.
+
+Seven cards show details from the application. The account and usage views show sign-in states, remaining quota and
+reset times. The memory view shows two entries with their summaries and who updated them and when. The sessions view
+lists a waiting session above a working one. The scheduled tasks view shows two tasks with their schedules, targets
+and next runs. The process view shows a development server with its listening port and the Keep and Stop actions.
+The code review view shows a Git diff.
 
 These visuals are static presentations: they accept no pointer or keyboard interaction and are hidden from
 assistive technology, which reads each card's title and description instead. Their accounts, tasks, files and
